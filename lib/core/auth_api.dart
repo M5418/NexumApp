@@ -1,43 +1,33 @@
+import 'package:dio/dio.dart';
 import 'api_client.dart';
 
 class AuthApi {
-  final ApiClient _api;
-  final TokenStore _store;
+  final _dio = ApiClient().dio;
 
-  AuthApi(this._api, this._store);
-
-  Future<bool> login(String email, String password) async {
-    final data = await _api.postJson('/auth/login', {
-      'email': email,
-      'password': password,
-    });
-    final token = (data['accessToken'] as String?) ?? '';
-    if (token.isEmpty) {
-      return false;
-    }
-    await _store.save(token);
-    return true;
+  Future<Map<String, dynamic>> signup(String email, String password) async {
+    final res = await _dio.post(
+      '/api/auth/signup',
+      data: {'email': email, 'password': password},
+    );
+    return Map<String, dynamic>.from(res.data);
   }
 
-  Future<bool> register(String email, String name, String password) async {
-    final data = await _api.postJson('/auth/register', {
-      'email': email,
-      'name': name,
-      'password': password,
-    });
-    final token = (data['accessToken'] as String?) ?? '';
-    if (token.isEmpty) {
-      return false;
-    }
-    await _store.save(token);
-    return true;
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    final res = await _dio.post(
+      '/api/auth/login',
+      data: {'email': email, 'password': password},
+    );
+    return Map<String, dynamic>.from(res.data);
   }
 
-  Future<Map<String, dynamic>> me() {
-    return _api.getJson('/users/me');
+  Future<Map<String, dynamic>> me() async {
+    final res = await _dio.get('/api/auth/me');
+    return Map<String, dynamic>.from(res.data);
   }
 
-  Future<void> logout() {
-    return _store.clear();
+  Future<void> logout() async {
+    try {
+      await _dio.post('/api/auth/logout');
+    } catch (_) {}
   }
 }

@@ -1,11 +1,10 @@
 import '../core/api_client.dart';
 
 class BooksApi {
-  final ApiClient _api;
-  BooksApi(this._api);
+  final _dio = ApiClient().dio;
 
-  /// Convenience factory using default TokenStore+ApiClient
-  factory BooksApi.create() => BooksApi(ApiClient(TokenStore()));
+  /// Convenience factory
+  factory BooksApi.create() => BooksApi();
 
   Future<Map<String, dynamic>> listBooks({
     int page = 1,
@@ -14,7 +13,7 @@ class BooksApi {
     String? category,
     String? q,
     bool? isPublished,
-  }) {
+  }) async {
     final query = <String, dynamic>{
       'page': page,
       'limit': limit,
@@ -23,11 +22,13 @@ class BooksApi {
       if (q != null) 'q': q,
       if (isPublished != null) 'isPublished': isPublished,
     };
-    return _api.getJson('/books', query: query);
+    final response = await _dio.get('/books', queryParameters: query);
+    return Map<String, dynamic>.from(response.data);
   }
 
-  Future<Map<String, dynamic>> getBook(int id) {
-    return _api.getJson('/books/$id');
+  Future<Map<String, dynamic>> getBook(int id) async {
+    final response = await _dio.get('/books/$id');
+    return Map<String, dynamic>.from(response.data);
   }
 
   Future<Map<String, dynamic>> createBook({
@@ -39,7 +40,7 @@ class BooksApi {
     List<String>? tags,
     double? price,
     bool isPublished = false,
-  }) {
+  }) async {
     final body = <String, dynamic>{
       'title': title,
       if (description != null) 'description': description,
@@ -50,7 +51,8 @@ class BooksApi {
       if (price != null) 'price': price,
       'isPublished': isPublished,
     };
-    return _api.postJson('/books', body);
+    final response = await _dio.post('/books', data: body);
+    return Map<String, dynamic>.from(response.data);
   }
 
   Future<Map<String, dynamic>> updateBook(
@@ -63,7 +65,7 @@ class BooksApi {
     List<String>? tags,
     double? price,
     bool? isPublished,
-  }) {
+  }) async {
     final body = <String, dynamic>{
       if (title != null) 'title': title,
       if (description != null) 'description': description,
@@ -74,10 +76,12 @@ class BooksApi {
       if (price != null) 'price': price,
       if (isPublished != null) 'isPublished': isPublished,
     };
-    return _api.putJson('/books/$id', body);
+    final response = await _dio.put('/books/$id', data: body);
+    return Map<String, dynamic>.from(response.data);
   }
 
-  Future<Map<String, dynamic>> deleteBook(int id) {
-    return _api.deleteJson('/books/$id');
+  Future<Map<String, dynamic>> deleteBook(int id) async {
+    final response = await _dio.delete('/books/$id');
+    return Map<String, dynamic>.from(response.data);
   }
 }

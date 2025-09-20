@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/api_client.dart';
 import 'core/auth_api.dart';
+import 'core/token_store.dart';
 import 'sign_in_page.dart';
 
 class AccountCenterPage extends StatefulWidget {
@@ -25,18 +26,21 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
 
   Future<void> _loadMe() async {
     try {
-      final store = TokenStore();
-      final api = ApiClient(store);
-      final auth = AuthApi(api, store);
-      final me = await auth.me();
-      final email = (me['email'] as String?) ?? '';
-      if (mounted) {
-        setState(() {
-          _email = email;
-        });
+      final authApi = AuthApi();
+      final response = await authApi.me();
+
+      if (response['ok'] == true && response['data'] != null) {
+        final email = response['data']['email'] as String? ?? '';
+        if (mounted) {
+          setState(() {
+            _email = email;
+          });
+        }
+      } else {
+        throw Exception('Failed to load user data');
       }
     } catch (_) {
-      final t = await TokenStore().read();
+      final t = await TokenStore.read();
       if (t == null || t.isEmpty) {
         if (mounted) {
           Navigator.of(context).pushReplacement(

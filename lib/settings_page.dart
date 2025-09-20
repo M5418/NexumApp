@@ -10,6 +10,7 @@ import 'security_login_page.dart';
 import 'notification_preferences_page.dart';
 import 'core/api_client.dart';
 import 'core/auth_api.dart';
+import 'core/token_store.dart';
 import 'sign_in_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -223,14 +224,28 @@ class SettingsPage extends StatelessWidget {
                     icon: Icons.exit_to_app,
                     title: 'Logout',
                     onTap: () async {
-                      final store = TokenStore();
-                      final api = ApiClient(store);
-                      final auth = AuthApi(api, store);
-                      await auth.logout();
-                      if (context.mounted) {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const SignInPage()),
-                        );
+                      try {
+                        final authApi = AuthApi();
+                        await authApi.logout();
+                        await TokenStore.clear();
+
+                        if (context.mounted) {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => const SignInPage(),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        // Even if logout fails, clear local token and redirect
+                        await TokenStore.clear();
+                        if (context.mounted) {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => const SignInPage(),
+                            ),
+                          );
+                        }
                       }
                     },
                     isLast: true,

@@ -23,7 +23,7 @@ import 'podcasts/podcasts_home_page.dart';
 import 'books/books_home_page.dart';
 import 'mentorship/mentorship_home_page.dart';
 import 'video_scroll_page.dart';
-import 'core/api_client.dart';
+import 'core/token_store.dart';
 import 'sign_in_page.dart';
 
 class HomeFeedPage extends StatefulWidget {
@@ -47,7 +47,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   Future<void> _ensureAuth() async {
-    final t = await TokenStore().read();
+    final t = await TokenStore.read();
     if (t == null || t.isEmpty) {
       if (mounted) {
         Navigator.of(context).pushReplacement(

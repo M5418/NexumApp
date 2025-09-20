@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'sign_up_page.dart';
 import 'forgot_password_page.dart';
-import 'core/api_client.dart';
 import 'core/auth_api.dart';
+import 'core/token_store.dart';
 import 'home_feed_page.dart';
 import 'theme_provider.dart';
 
@@ -50,23 +50,29 @@ class _SignInPageState extends State<SignInPage> {
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
-      final store = TokenStore();
-      final client = ApiClient(store);
-      final auth = AuthApi(client, store);
-      final ok = await auth.login(email, password);
+      final authApi = AuthApi();
 
-      if (ok) {
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeFeedPage()),
-          );
+      final response = await authApi.login(email, password);
+
+      if (response['ok'] == true && response['data'] != null) {
+        final token = response['data']['token'] as String?;
+        if (token != null) {
+          await TokenStore.write(token);
+
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const HomeFeedPage()),
+            );
+          }
+        } else {
+          throw Exception('No token received');
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Invalid email or password',
+                response['error'] ?? 'Invalid email or password',
                 style: GoogleFonts.inter(),
               ),
               backgroundColor: Colors.red,
