@@ -3,6 +3,9 @@ import '../core/api_client.dart';
 class BooksApi {
   final _dio = ApiClient().dio;
 
+  // Default constructor required for factory BooksApi.create()
+  BooksApi();
+
   /// Convenience factory
   factory BooksApi.create() => BooksApi();
 

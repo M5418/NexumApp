@@ -439,22 +439,6 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
     }
   }
 
-  List<Widget> _buildMentorAvatars(String fieldName) {
-    final mentors = MentorshipData.getMentors().take(3).toList();
-    return mentors.asMap().entries.map((entry) {
-      final index = entry.key;
-      final mentor = entry.value;
-      return Container(
-        margin: EdgeInsets.only(left: index > 0 ? 4 : 0),
-        child: CircleAvatar(
-          radius: 12,
-          backgroundImage: NetworkImage(mentor.avatar),
-          backgroundColor: Colors.grey[300],
-        ),
-      );
-    }).toList();
-  }
-
   Widget _buildUpcomingMeetings(
     Color surfaceColor,
     Color textColor,

@@ -8,7 +8,6 @@ import 'privacy_visibility_page.dart';
 import 'blocked_muted_accounts_page.dart';
 import 'security_login_page.dart';
 import 'notification_preferences_page.dart';
-import 'core/api_client.dart';
 import 'core/auth_api.dart';
 import 'core/token_store.dart';
 import 'sign_in_page.dart';

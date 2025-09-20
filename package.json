@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/package.json",
   "name": "nexum-backend",
   "version": "1.0.0",
   "description": "Nexum Express Backend API",

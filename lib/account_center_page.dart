@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'core/api_client.dart';
 import 'core/auth_api.dart';
 import 'core/token_store.dart';
 import 'sign_in_page.dart';

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'sign_in_page.dart';
 import 'profile_flow_start.dart';
+import 'core/auth_api.dart';
+import 'core/token_store.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -15,6 +17,19 @@ class _SignUpPageState extends State<SignUpPage> {
   bool _obscureConfirmPassword = true;
   String _selectedLanguage = 'English';
   bool _showLanguageDropdown = false;
+  bool _isLoading = false;
+
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
 
   final List<Map<String, String>> _languages = [
     {'name': 'English', 'flag': '🇺🇸'},
@@ -96,6 +111,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         const SizedBox(height: 32),
                         // Email Field
                         TextField(
+                          controller: _emailController,
                           decoration: InputDecoration(
                             hintText: 'Email',
                             hintStyle: GoogleFonts.inter(
@@ -134,6 +150,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         const SizedBox(height: 20),
                         // Password Field
                         TextField(
+                          controller: _passwordController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
                             hintText: 'Password',
@@ -186,6 +203,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         const SizedBox(height: 20),
                         // Confirm Password Field
                         TextField(
+                          controller: _confirmController,
                           obscureText: _obscureConfirmPassword,
                           decoration: InputDecoration(
                             hintText: 'Confirm Password',
@@ -284,16 +302,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           width: double.infinity,
                           height: 52,
                           child: ElevatedButton(
-                            onPressed: () {
-                              // Navigate to profile setup flow after sign up
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const ProfileFlowStart(),
-                                ),
-                              );
-                            },
+                            onPressed: _isLoading ? null : _handleSignUp,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFBFAE01),
                               shape: RoundedRectangleBorder(
@@ -301,14 +310,25 @@ class _SignUpPageState extends State<SignUpPage> {
                               ),
                               elevation: 0,
                             ),
-                            child: Text(
-                              'Sign Up',
-                              style: GoogleFonts.inter(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              ),
-                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.black,
+                                      ),
+                                    ),
+                                  )
+                                : Text(
+                                    'Sign Up',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                  ),
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -479,5 +499,58 @@ class _SignUpPageState extends State<SignUpPage> {
         ),
       ),
     );
+  }
+}
+
+extension on _SignUpPageState {
+  Future<void> _handleSignUp() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirm = _confirmController.text.trim();
+
+    if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
+      _showSnack('Please fill all fields');
+      return;
+    }
+    if (password.length < 8) {
+      _showSnack('Password must be at least 8 characters');
+      return;
+    }
+    if (password != confirm) {
+      _showSnack('Passwords do not match');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final api = AuthApi();
+      final res = await api.signup(email, password);
+      if (res['ok'] == true && res['data'] != null) {
+        final token = res['data']['token'] as String?;
+        if (token != null && token.isNotEmpty) {
+          await TokenStore.write(token);
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileFlowStart()),
+            );
+          }
+        } else {
+          _showSnack('Unexpected response: missing token');
+        }
+      } else {
+        _showSnack(res['error'] ?? 'Sign up failed');
+      }
+    } catch (e) {
+      _showSnack('Sign up failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSnack(String text) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(text, style: GoogleFonts.inter())));
   }
 }
