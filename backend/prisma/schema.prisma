@@ -1,15 +1,32 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id          BigInt   @id @default(autoincrement()) @db.BigInt
+  email       String   @unique
+  password_hash String
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+
+  uploads     Upload[]
+
+  @@map("users")
+}
+
+model Upload {
+  id         BigInt   @id @default(autoincrement()) @db.BigInt
+  user_id    BigInt?  @db.BigInt
+  user       User?    @relation(fields: [user_id], references: [id])
+  s3_key     String   @db.VarChar(512)
+  url        String?  @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([user_id])
+  @@map("uploads")
 }
