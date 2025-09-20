@@ -1,11 +1,10 @@
-const express = require('express');
-const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { PutObjectCommand } = require('@aws-sdk/client-s3');
-const { v4: uuidv4 } = require('uuid');
-const { z } = require('zod');
-const pool = require('../db/db');
-const { ok, fail } = require('../utils/response');
+import express from 'express';
+import { S3Client, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod';
+import pool from '../db/db.js';
+import { ok, fail } from '../utils/response.js';
 
 const router = express.Router();
 
@@ -145,4 +144,4 @@ router.get('/list', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

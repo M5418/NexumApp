@@ -1,4 +1,4 @@
-function ok(data, meta = null) {
+export function ok(data, meta = null) {
   const response = { ok: true, data };
   if (meta) {
     response.meta = meta;
@@ -6,11 +6,9 @@ function ok(data, meta = null) {
   return response;
 }
 
-function fail(res, message, code = 400) {
+export function fail(res, message, code = 400) {
   return res.status(code).json({
     ok: false,
     error: message
   });
 }
-
-module.exports = { ok, fail };
