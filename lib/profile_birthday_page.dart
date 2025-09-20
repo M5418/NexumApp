@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_gender_page.dart';
+import 'core/profile_api.dart';
 
 class ProfileBirthdayPage extends StatefulWidget {
   final String firstName;
@@ -19,6 +20,7 @@ class ProfileBirthdayPage extends StatefulWidget {
 class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
   DateTime? _selectedDate;
   final TextEditingController _dateController = TextEditingController();
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -49,6 +51,52 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
         _dateController.text =
             '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
       });
+    }
+  }
+
+  Future<void> _saveAndNext() async {
+    if (_selectedDate == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please select your birthday',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final b = _selectedDate!;
+    final birthday =
+        '${b.year.toString().padLeft(4, '0')}-${b.month.toString().padLeft(2, '0')}-${b.day.toString().padLeft(2, '0')}';
+
+    setState(() => _isSaving = true);
+    try {
+      await ProfileApi().update({'birthday': birthday});
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfileGenderPage(
+            firstName: widget.firstName,
+            lastName: widget.lastName,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save birthday. Try again.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -183,17 +231,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ProfileGenderPage(
-                        firstName: widget.firstName,
-                        lastName: widget.lastName,
-                      ),
-                    ),
-                  );
-                },
+                onPressed: _isSaving ? null : _saveAndNext,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFBFAE01),
                   shape: RoundedRectangleBorder(
@@ -218,3 +256,53 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
     );
   }
 }
+
+/*
+extension _ProfileBirthdayPageActions on _ProfileBirthdayPageState {
+  Future<void> _saveAndNext() async {
+    if (_selectedDate == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please select your birthday',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final b = _selectedDate!;
+    final birthday =
+        '${b.year.toString().padLeft(4, '0')}-${b.month.toString().padLeft(2, '0')}-${b.day.toString().padLeft(2, '0')}';
+
+    setState(() => _isSaving = true);
+    try {
+      await ProfileApi().update({'birthday': birthday});
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfileGenderPage(
+            firstName: widget.firstName,
+            lastName: widget.lastName,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save birthday. Try again.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+}
+*/

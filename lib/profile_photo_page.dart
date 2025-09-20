@@ -4,6 +4,7 @@ import 'profile_cover_page.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'core/profile_api.dart';
 
 class ProfilePhotoPage extends StatefulWidget {
   final String firstName;
@@ -163,7 +164,24 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
     }
   }
 
-  void _navigateToNext() {
+  void _navigateToNext() async {
+    // If user selected a photo, upload it and attach to profile
+    if (_hasSelectedPhoto && _photoPath != null) {
+      try {
+        await ProfileApi().uploadAndAttachProfilePhoto(File(_photoPath!));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Failed to upload profile photo. You can try again later.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(

@@ -4,6 +4,7 @@ import 'profile_completion_welcome.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'core/profile_api.dart';
 
 class ProfileCoverPage extends StatefulWidget {
   final String firstName;
@@ -163,7 +164,23 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
     }
   }
 
-  void _completeSetup() {
+  void _completeSetup() async {
+    // If user selected a cover, upload it and attach to profile
+    if (_hasSelectedCover && _coverPath != null) {
+      try {
+        await ProfileApi().uploadAndAttachCoverPhoto(File(_coverPath!));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Failed to upload cover photo. You can try again later.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
     // Navigate to welcome screen
     Navigator.pushReplacement(
       context,

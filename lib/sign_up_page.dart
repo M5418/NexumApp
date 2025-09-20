@@ -500,9 +500,7 @@ class _SignUpPageState extends State<SignUpPage> {
       ),
     );
   }
-}
 
-extension on _SignUpPageState {
   Future<void> _handleSignUp() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -554,3 +552,56 @@ extension on _SignUpPageState {
     ).showSnackBar(SnackBar(content: Text(text, style: GoogleFonts.inter())));
   }
 }
+
+/* extension on _SignUpPageState {
+  Future<void> _handleSignUp() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirm = _confirmController.text.trim();
+
+    if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
+      _showSnack('Please fill all fields');
+      return;
+    }
+    if (password.length < 8) {
+      _showSnack('Password must be at least 8 characters');
+      return;
+    }
+    if (password != confirm) {
+      _showSnack('Passwords do not match');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final api = AuthApi();
+      final res = await api.signup(email, password);
+      if (res['ok'] == true && res['data'] != null) {
+        final token = res['data']['token'] as String?;
+        if (token != null && token.isNotEmpty) {
+          await TokenStore.write(token);
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileFlowStart()),
+            );
+          }
+        } else {
+          _showSnack('Unexpected response: missing token');
+        }
+      } else {
+        _showSnack(res['error'] ?? 'Sign up failed');
+      }
+    } catch (e) {
+      _showSnack('Sign up failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSnack(String text) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(text, style: GoogleFonts.inter())));
+  }
+} */

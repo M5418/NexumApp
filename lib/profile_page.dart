@@ -11,6 +11,9 @@ import 'my_connections_page.dart';
 import 'edit_profil.dart';
 import 'monetization_page.dart';
 import 'premium_subscription_page.dart';
+import 'core/auth_api.dart';
+import 'core/token_store.dart';
+import 'sign_in_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -737,9 +740,26 @@ class _ProfilePageState extends State<ProfilePage> {
                       color: Colors.red,
                     ),
                   ),
-                  onTap: () {
+                  onTap: () async {
+                    // Close drawer first for better UX
                     Navigator.pop(context);
-                    // Add logout functionality here
+
+                    // Clear local auth state
+                    await TokenStore.clear();
+
+                    // Best-effort server-side logout (non-blocking if it fails)
+                    try {
+                      await AuthApi().logout();
+                    } catch (_) {}
+
+                    // Guard against using context after async gap
+                    if (!mounted) return;
+
+                    // Navigate to sign-in and clear back stack
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const SignInPage()),
+                      (route) => false,
+                    );
                   },
                 ),
                 const SizedBox(height: 20),

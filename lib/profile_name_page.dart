@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_birthday_page.dart';
+import 'core/profile_api.dart';
 
 class ProfileNamePage extends StatefulWidget {
   const ProfileNamePage({super.key});
@@ -13,6 +14,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -203,17 +205,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ProfileBirthdayPage(
-                        firstName: _firstNameController.text.trim(),
-                        lastName: _lastNameController.text.trim(),
-                      ),
-                    ),
-                  );
-                },
+                onPressed: _isSaving ? null : _saveAndNext,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFBFAE01),
                   shape: RoundedRectangleBorder(
@@ -236,5 +228,50 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveAndNext() async {
+    final first = _firstNameController.text.trim();
+    final last = _lastNameController.text.trim();
+    final username = _usernameController.text.trim();
+
+    if (first.isEmpty || last.isEmpty || username.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please fill all fields', style: GoogleFonts.inter()),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      await ProfileApi().update({
+        'first_name': first,
+        'last_name': last,
+        'username': username,
+      });
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              ProfileBirthdayPage(firstName: first, lastName: last),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save profile. Try again.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 }

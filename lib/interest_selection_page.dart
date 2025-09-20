@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'connect_friends_page.dart';
+import 'core/profile_api.dart';
 
 class InterestSelectionPage extends StatefulWidget {
   final List<String>? initialSelected;
@@ -27,6 +28,7 @@ class InterestSelectionPage extends StatefulWidget {
 class _InterestSelectionPageState extends State<InterestSelectionPage> {
   final Set<String> _selectedInterests = {};
   final int _maxInterests = 10;
+  bool _isSaving = false;
 
   final Map<String, List<String>> _interestCategories = {
     'Arts & Culture': [
@@ -520,6 +522,38 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
     });
   }
 
+  Future<void> _saveAndContinue() async {
+    if (_selectedInterests.isEmpty) return;
+    setState(() => _isSaving = true);
+    try {
+      await ProfileApi().update({
+        'interest_domains': _selectedInterests.toList(),
+      });
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ConnectFriendsPage(
+            firstName: widget.firstName,
+            lastName: widget.lastName,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save interests. Try again.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -735,26 +769,18 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: _selectedInterests.isNotEmpty
-                              ? () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ConnectFriendsPage(
-                                        firstName: widget.firstName,
-                                        lastName: widget.lastName,
-                                      ),
-                                    ),
-                                  );
-                                }
+                          onPressed: _selectedInterests.isNotEmpty && !_isSaving
+                              ? _saveAndContinue
                               : null,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _selectedInterests.isNotEmpty
+                            backgroundColor:
+                                _selectedInterests.isNotEmpty && !_isSaving
                                 ? const Color(0xFFBFAE01)
                                 : (isDarkMode
                                       ? const Color(0xFF333333)
                                       : const Color(0xFFE0E0E0)),
-                            foregroundColor: _selectedInterests.isNotEmpty
+                            foregroundColor:
+                                _selectedInterests.isNotEmpty && !_isSaving
                                 ? Colors.black
                                 : (isDarkMode ? Colors.grey : Colors.grey),
                             elevation: 0,
@@ -763,7 +789,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
                             ),
                           ),
                           child: Text(
-                            'Continue',
+                            _isSaving ? 'Saving...' : 'Continue',
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,

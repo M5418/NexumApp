@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_photo_page.dart';
+import 'core/profile_api.dart';
 
 class ProfileAddressPage extends StatefulWidget {
   final String firstName;
@@ -22,6 +23,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
   final TextEditingController _stateController = TextEditingController();
   final TextEditingController _postalCodeController = TextEditingController();
   String? _selectedCountry;
+  bool _isSaving = false;
 
   final List<String> _countries = [
     'United States',
@@ -499,24 +501,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _isFormValid
-                      ? () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ProfilePhotoPage(
-                                firstName: widget.firstName,
-                                lastName: widget.lastName,
-                              ),
-                            ),
-                          );
-                        }
-                      : null,
+                  onPressed: _isFormValid && !_isSaving ? _saveAndNext : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _isFormValid
+                    backgroundColor: (_isFormValid && !_isSaving)
                         ? const Color(0xFFBFAE01)
                         : const Color(0xFFCCCCCC),
-                    foregroundColor: _isFormValid
+                    foregroundColor: (_isFormValid && !_isSaving)
                         ? Colors.black
                         : const Color(0xFF666666),
                     elevation: 0,
@@ -525,7 +515,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                     ),
                   ),
                   child: Text(
-                    'Next',
+                    _isSaving ? 'Saving...' : 'Next',
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -538,5 +528,41 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveAndNext() async {
+    setState(() => _isSaving = true);
+    try {
+      await ProfileApi().update({
+        'street': _streetController.text.trim(),
+        'city': _cityController.text.trim(),
+        'state': _stateController.text.trim(),
+        'postal_code': _postalCodeController.text.trim(),
+        'country': _selectedCountry,
+      });
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfilePhotoPage(
+            firstName: widget.firstName,
+            lastName: widget.lastName,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save address. Try again.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 }

@@ -2,14 +2,14 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import pool from '../db/db.js';
+import pool from '../backend/src/db/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function runMigrations() {
   try {
-    const migrationsDir = path.join(__dirname, '../db/migrations');
+    const migrationsDir = path.join(__dirname, '../backend/src/db/migrations');
     const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
     
     console.log(`Found ${files.length} migration files`);

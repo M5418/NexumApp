@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'interest_selection_page.dart';
+import 'core/profile_api.dart';
 
 class StatusSelectionPage extends StatefulWidget {
   final String firstName;
@@ -20,6 +21,7 @@ class StatusSelectionPage extends StatefulWidget {
 
 class _StatusSelectionPageState extends State<StatusSelectionPage> {
   String? _selectedStatus;
+  bool _isSaving = false;
 
   void _selectStatus(String status) {
     setState(() {
@@ -27,13 +29,35 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
     });
   }
 
-  void _navigateNext() {
-    if (_selectedStatus != null) {
+  Future<void> _navigateNext() async {
+    if (_selectedStatus == null) return;
+    setState(() => _isSaving = true);
+    try {
+      await ProfileApi().update({'status': _selectedStatus});
+      if (!mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const InterestSelectionPage()),
+        MaterialPageRoute(
+          builder: (context) => InterestSelectionPage(
+            firstName: widget.firstName,
+            lastName: widget.lastName,
+            hasProfilePhoto: widget.hasProfilePhoto,
+            selectedStatus: _selectedStatus ?? '',
+          ),
+        ),
       );
-      debugPrint('Selected status: $_selectedStatus');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save status. Try again.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -144,14 +168,16 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _selectedStatus != null ? _navigateNext : null,
+                  onPressed: _selectedStatus != null && !_isSaving
+                      ? _navigateNext
+                      : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _selectedStatus != null
+                    backgroundColor: _selectedStatus != null && !_isSaving
                         ? const Color(0xFFBFAE01)
                         : (isDarkMode
                               ? const Color(0xFF333333)
                               : const Color(0xFFE0E0E0)),
-                    foregroundColor: _selectedStatus != null
+                    foregroundColor: _selectedStatus != null && !_isSaving
                         ? Colors.black
                         : (isDarkMode ? Colors.grey : Colors.grey),
                     elevation: 0,
@@ -160,7 +186,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                     ),
                   ),
                   child: Text(
-                    'Next',
+                    _isSaving ? 'Saving...' : 'Next',
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

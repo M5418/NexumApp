@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_address_page.dart';
+import 'core/profile_api.dart';
 
 class ProfileGenderPage extends StatefulWidget {
   final String firstName;
@@ -18,6 +19,7 @@ class ProfileGenderPage extends StatefulWidget {
 
 class _ProfileGenderPageState extends State<ProfileGenderPage> {
   String? _selectedGender;
+  bool _isSaving = false;
 
   final List<String> _genderOptions = ['Male', 'Female', 'Prefer not to say'];
 
@@ -152,17 +154,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ProfileAddressPage(
-                        firstName: widget.firstName,
-                        lastName: widget.lastName,
-                      ),
-                    ),
-                  );
-                },
+                onPressed: _isSaving ? null : _saveAndNext,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFBFAE01),
                   shape: RoundedRectangleBorder(
@@ -171,7 +163,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                   elevation: 0,
                 ),
                 child: Text(
-                  'Next',
+                  _isSaving ? 'Saving...' : 'Next',
                   style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -185,5 +177,43 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveAndNext() async {
+    if (_selectedGender == null || _selectedGender!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select a gender', style: GoogleFonts.inter()),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      await ProfileApi().update({'gender': _selectedGender});
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfileAddressPage(
+            firstName: widget.firstName,
+            lastName: widget.lastName,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save gender. Try again.',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 }
