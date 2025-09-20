@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import filesRoutes from './routes/files.js';
+import profileRoutes from './routes/profile.js';
 import authMiddleware from './middleware/auth.js';
 
 const app = express();
@@ -35,6 +36,7 @@ app.get('/healthz', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/files', authMiddleware, filesRoutes);
+app.use('/api/profile', authMiddleware, profileRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
