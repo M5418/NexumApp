@@ -3,21 +3,44 @@ import 'package:google_fonts/google_fonts.dart';
 import 'widgets/badge_icon.dart';
 import 'widgets/segmented_tabs.dart';
 import 'widgets/animated_navbar.dart';
+import 'core/users_api.dart';
 
 class MyConnectionUser {
+  final int id;
   final String name;
-  final String handle;
-  final String avatarUrl;
+  final String username;
+  final String? avatarUrl;
+  final String avatarLetter;
+  final String bio;
+  final String status;
   bool youConnectTo; // outbound: you connected to them
   bool theyConnectToYou; // inbound: they connected to you
 
   MyConnectionUser({
+    required this.id,
     required this.name,
-    required this.handle,
-    required this.avatarUrl,
+    required this.username,
+    this.avatarUrl,
+    required this.avatarLetter,
+    required this.bio,
+    required this.status,
     required this.youConnectTo,
     required this.theyConnectToYou,
   });
+
+  factory MyConnectionUser.fromJson(Map<String, dynamic> json) {
+    return MyConnectionUser(
+      id: json['id'],
+      name: json['name'] ?? 'User',
+      username: json['username'] ?? '@user',
+      avatarUrl: json['avatarUrl'],
+      avatarLetter: json['avatarLetter'] ?? 'U',
+      bio: json['bio'] ?? '',
+      status: json['status'] ?? '',
+      youConnectTo: false,
+      theyConnectToYou: false,
+    );
+  }
 }
 
 class MyConnectionsPage extends StatefulWidget {
@@ -31,58 +54,8 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _selectedTabIndex = 0;
-
-  final List<MyConnectionUser> _users = [
-    MyConnectionUser(
-      name: 'Aiden Nova',
-      handle: '@aidennova',
-      avatarUrl: 'https://picsum.photos/200/200?random=31',
-      youConnectTo: true,
-      theyConnectToYou: true,
-    ),
-    MyConnectionUser(
-      name: 'Aiden Vibe',
-      handle: '@aidenvibe',
-      avatarUrl: 'https://picsum.photos/200/200?random=32',
-      youConnectTo: true,
-      theyConnectToYou: true,
-    ),
-    MyConnectionUser(
-      name: 'Aiden Wolf',
-      handle: '@aidenwolf',
-      avatarUrl: 'https://picsum.photos/200/200?random=33',
-      youConnectTo: false,
-      theyConnectToYou: true,
-    ),
-    MyConnectionUser(
-      name: 'Aiden Skye',
-      handle: '@aidenskye',
-      avatarUrl: 'https://picsum.photos/200/200?random=34',
-      youConnectTo: false,
-      theyConnectToYou: true,
-    ),
-    MyConnectionUser(
-      name: 'Aiden Lux',
-      handle: '@aidenlux',
-      avatarUrl: 'https://picsum.photos/200/200?random=35',
-      youConnectTo: false,
-      theyConnectToYou: true,
-    ),
-    MyConnectionUser(
-      name: 'Aiden Blaze',
-      handle: '@aidenblaze',
-      avatarUrl: 'https://picsum.photos/200/200?random=36',
-      youConnectTo: true,
-      theyConnectToYou: true,
-    ),
-    MyConnectionUser(
-      name: 'Aiden Frost',
-      handle: '@aidenfrost',
-      avatarUrl: 'https://picsum.photos/200/200?random=37',
-      youConnectTo: true,
-      theyConnectToYou: true,
-    ),
-  ];
+  List<MyConnectionUser> _users = [];
+  bool _loading = true;
 
   @override
   void initState() {
@@ -95,12 +68,28 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
         });
       }
     });
+    _loadUsers();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUsers() async {
+    try {
+      final users = await UsersApi().list();
+      setState(() {
+        _users = users.map((user) => MyConnectionUser.fromJson(user)).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+      });
+      // TODO: Optionally show an error message to the user
+    }
   }
 
   @override
@@ -117,13 +106,15 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
             _buildAppBar(isDark),
             _buildTabSwitcher(isDark),
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildInboundList(isDark), // Connected to me
-                  _buildOutboundList(isDark), // I Connect
-                ],
-              ),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildInboundList(isDark), // Connected to me
+                        _buildOutboundList(isDark), // I Connect
+                      ],
+                    ),
             ),
           ],
         ),
@@ -274,9 +265,9 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     );
   }
 
-  // Inbound: users who connected to the current user
+  // Inbound: show all users for now (no server-side connection graph yet)
   Widget _buildInboundList(bool isDark) {
-    final inbound = _users.where((u) => u.theyConnectToYou).toList();
+    final inbound = _users;
     return _listContainer(
       isDark: isDark,
       child: ListView.separated(
@@ -296,9 +287,9 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     );
   }
 
-  // Outbound: users the current user connected to
+  // Outbound: show all users for now (no server-side connection graph yet)
   Widget _buildOutboundList(bool isDark) {
-    final outbound = _users.where((u) => u.youConnectTo).toList();
+    final outbound = _users;
     return _listContainer(
       isDark: isDark,
       child: ListView.separated(
@@ -347,7 +338,20 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
         children: [
           CircleAvatar(
             radius: 24,
-            backgroundImage: NetworkImage(user.avatarUrl),
+            backgroundImage:
+                (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
+                ? NetworkImage(user.avatarUrl!)
+                : null,
+            child: (user.avatarUrl == null || user.avatarUrl!.isEmpty)
+                ? Text(
+                    user.avatarLetter,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  )
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -364,7 +368,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  user.handle,
+                  user.username,
                   style: GoogleFonts.inter(fontSize: 13, color: secondaryText),
                 ),
               ],
