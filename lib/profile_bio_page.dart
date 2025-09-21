@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'status_selection_page.dart';
+import 'interest_selection_page.dart';
 import 'core/profile_api.dart';
 
 class ProfileBioPage extends StatefulWidget {
@@ -37,11 +37,9 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => StatusSelectionPage(
+          builder: (context) => InterestSelectionPage(
             firstName: widget.firstName,
             lastName: widget.lastName,
-            hasProfilePhoto:
-                false, // We'll update this based on actual data later
           ),
         ),
       );
@@ -195,10 +193,9 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => StatusSelectionPage(
+                                builder: (context) => InterestSelectionPage(
                                   firstName: widget.firstName,
                                   lastName: widget.lastName,
-                                  hasProfilePhoto: false,
                                 ),
                               ),
                             );

@@ -14,6 +14,8 @@ import 'premium_subscription_page.dart';
 import 'core/auth_api.dart';
 import 'core/token_store.dart';
 import 'sign_in_page.dart';
+import 'core/profile_api.dart';
+import 'dart:convert';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -24,15 +26,77 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
+  Map<String, dynamic>? _profile;
+  bool _loadingProfile = true;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
+    _loadProfile();
   }
 
   @override
   void dispose() {
     super.dispose();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final res = await ProfileApi().me();
+      final data = Map<String, dynamic>.from(res['data'] ?? {});
+      if (!mounted) return;
+      setState(() {
+        _profile = data;
+        _loadingProfile = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = 'Failed to load profile';
+        _loadingProfile = false;
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> _parseListOfMap(dynamic value) {
+    try {
+      if (value == null) return [];
+      if (value is String) {
+        final decoded = jsonDecode(value);
+        if (decoded is List) {
+          return decoded
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+        return [];
+      }
+      if (value is List) {
+        return value.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  List<String> _parseStringList(dynamic value) {
+    try {
+      if (value == null) return [];
+      if (value is String) {
+        final decoded = jsonDecode(value);
+        if (decoded is List) {
+          return decoded.map((e) => e.toString()).toList();
+        }
+        return [];
+      }
+      if (value is List) {
+        return value.map((e) => e.toString()).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
@@ -44,286 +108,555 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           final isDark = themeProvider.isDarkMode;
+          final p = _profile ?? {};
+          final String fullName =
+              ((p['first_name'] ?? '') as String).trim().isEmpty &&
+                  ((p['last_name'] ?? '') as String).trim().isEmpty
+              ? ((p['username'] ?? p['email'] ?? 'User') as String)
+              : '${p['first_name'] ?? ''} ${p['last_name'] ?? ''}'.trim();
+          final String? bioText = p['bio'] as String?;
+          final String coverUrl =
+              (p['cover_photo_url'] as String?) ??
+              'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop';
+          final String? profileUrl = p['profile_photo_url'] as String?;
+          final List<Map<String, dynamic>> experiences = _parseListOfMap(
+            p['professional_experiences'],
+          );
+          final List<Map<String, dynamic>> trainings = _parseListOfMap(
+            p['trainings'],
+          );
+          final List<String> interests = _parseStringList(
+            p['interest_domains'],
+          );
           return Scaffold(
             key: scaffoldKey,
             backgroundColor: isDark
                 ? const Color(0xFF0C0C0C)
                 : const Color(0xFFF1F4F8),
             endDrawer: _buildDrawer(),
-            body: SingleChildScrollView(
-              child: Column(
-                children: [
-                  // Profile Header with Cover Image
-                  Container(
-                    height: 200,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      image: DecorationImage(
-                        image: NetworkImage(
-                          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop',
-                        ),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            InkWell(
-                              onTap: () =>
-                                  scaffoldKey.currentState?.openEndDrawer(),
-                              child: Icon(
-                                Icons.more_horiz,
-                                color: isDark ? Colors.white70 : Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Main Profile Card
-                  Container(
-                    margin: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF000000) : Colors.white,
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark
-                              ? Colors.black.withValues(alpha: 0)
-                              : Colors.black.withValues(alpha: 10),
-                          blurRadius: 25,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
+            body: _loadingProfile
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
                     child: Column(
                       children: [
-                        // Profile Avatar and Stats
-                        Padding(
-                          padding: const EdgeInsets.all(20),
+                        // Profile Header with Cover Image
+                        Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: NetworkImage(coverUrl),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          child: SafeArea(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  InkWell(
+                                    onTap: () => scaffoldKey.currentState
+                                        ?.openEndDrawer(),
+                                    child: Icon(
+                                      Icons.more_horiz,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Main Profile Card
+                        Container(
+                          margin: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF000000)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(25),
+                            boxShadow: [
+                              BoxShadow(
+                                color: isDark
+                                    ? Colors.black.withValues(alpha: 0)
+                                    : Colors.black.withValues(alpha: 10),
+                                blurRadius: 25,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                           child: Column(
                             children: [
-                              // Avatar positioned to overlap cover
-                              Transform.translate(
-                                offset: const Offset(0, -50),
-                                child: Container(
-                                  width: 120,
-                                  height: 120,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isDark
-                                          ? const Color(0xFF1F1F1F)
-                                          : Colors.white,
-                                      width: 4,
-                                    ),
-                                  ),
-                                  child: const CircleAvatar(
-                                    radius: 58,
-                                    backgroundImage: NetworkImage(
-                                      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              // Stats Row
-                              Transform.translate(
-                                offset: const Offset(0, -30),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                              // Profile Avatar and Stats
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
                                   children: [
-                                    _buildStatColumn('2,8K', 'Connections'),
-                                    const SizedBox(width: 40),
-                                    _buildStatColumn('892', 'Connected'),
+                                    // Avatar positioned to overlap cover
+                                    Transform.translate(
+                                      offset: const Offset(0, -50),
+                                      child: Container(
+                                        width: 120,
+                                        height: 120,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: isDark
+                                                ? const Color(0xFF1F1F1F)
+                                                : Colors.white,
+                                            width: 4,
+                                          ),
+                                        ),
+                                        child: CircleAvatar(
+                                          radius: 58,
+                                          backgroundImage:
+                                              (profileUrl != null &&
+                                                  profileUrl.isNotEmpty)
+                                              ? NetworkImage(profileUrl)
+                                              : null,
+                                          child:
+                                              (profileUrl == null ||
+                                                  profileUrl.isEmpty)
+                                              ? Text(
+                                                  (fullName.isNotEmpty
+                                                          ? fullName.substring(
+                                                              0,
+                                                              1,
+                                                            )
+                                                          : '?')
+                                                      .toUpperCase(),
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 40,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : Colors.black,
+                                                  ),
+                                                )
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                    // Stats Row
+                                    Transform.translate(
+                                      offset: const Offset(0, -30),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          _buildStatColumn(
+                                            '2,8K',
+                                            'Connections',
+                                          ),
+                                          const SizedBox(width: 40),
+                                          _buildStatColumn('892', 'Connected'),
+                                        ],
+                                      ),
+                                    ),
+                                    // Name and Bio
+                                    Transform.translate(
+                                      offset: const Offset(0, -20),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                fullName,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isDark
+                                                      ? Colors.white70
+                                                      : Colors.black87,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const Icon(
+                                                Icons.verified,
+                                                color: Color(0xFFBFAE01),
+                                                size: 20,
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            bioText ?? '',
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : Colors.grey[600],
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Action Buttons
+                                    Transform.translate(
+                                      offset: const Offset(0, -10),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: ElevatedButton(
+                                              onPressed: () async {
+                                                // Map backend JSON to Edit page item types
+                                                final expItems = experiences
+                                                    .map(
+                                                      (e) => ExperienceItem(
+                                                        title:
+                                                            (e['title'] ?? '')
+                                                                .toString(),
+                                                        subtitle:
+                                                            (e['subtitle']
+                                                                    as String?)
+                                                                ?.toString(),
+                                                      ),
+                                                    )
+                                                    .toList();
+                                                final trainItems = trainings
+                                                    .map(
+                                                      (t) => TrainingItem(
+                                                        title:
+                                                            (t['title'] ?? '')
+                                                                .toString(),
+                                                        subtitle:
+                                                            (t['subtitle']
+                                                                    as String?)
+                                                                ?.toString(),
+                                                      ),
+                                                    )
+                                                    .toList();
+
+                                                await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        EditProfilPage(
+                                                          fullName: fullName,
+                                                          username:
+                                                              (p['username'] ??
+                                                                      '')
+                                                                  .toString(),
+                                                          bio: bioText ?? '',
+                                                          profilePhotoUrl:
+                                                              profileUrl,
+                                                          coverPhotoUrl:
+                                                              coverUrl,
+                                                          experiences: expItems,
+                                                          trainings: trainItems,
+                                                          interests: interests,
+                                                        ),
+                                                  ),
+                                                );
+                                                // Refresh profile data on return
+                                                await _loadProfile();
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(
+                                                  0xFFBFAE01,
+                                                ),
+                                                foregroundColor: isDark
+                                                    ? Colors.black
+                                                    : Colors.black,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 12,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(25),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                'Edit Profile',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isDark
+                                                      ? Colors.black
+                                                      : Colors.black,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        const MyConnectionsPage(),
+                                                  ),
+                                                );
+                                              },
+                                              style: OutlinedButton.styleFrom(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 12,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(25),
+                                                ),
+                                                side: BorderSide(
+                                                  color: isDark
+                                                      ? Colors.white70
+                                                      : Colors.grey[300]!,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                'My Connections',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isDark
+                                                      ? Colors.white70
+                                                      : Colors.black,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              border: Border.all(
+                                                color: isDark
+                                                    ? Colors.white70
+                                                    : Colors.grey[300]!,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(40),
+                                            ),
+                                            child: Icon(
+                                              Icons.person_add_outlined,
+                                              size: 20,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : Colors.black,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
-
-                              // Name and Bio
-                              Transform.translate(
-                                offset: const Offset(0, -20),
+                              // Professional Experiences Section
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
                                 child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
                                       children: [
+                                        Icon(
+                                          Icons.work,
+                                          size: 20,
+                                          color: isDark
+                                              ? Colors.white70
+                                              : Colors.black87,
+                                        ),
+                                        const SizedBox(width: 8),
                                         Text(
-                                          'Ludovic Carl',
+                                          'Professional Experiences',
                                           style: GoogleFonts.inter(
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w700,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
                                             color: isDark
                                                 ? Colors.white70
                                                 : Colors.black87,
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        const Icon(
-                                          Icons.verified,
-                                          color: Color(0xFFBFAE01),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    if (experiences.isEmpty)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          'No experiences added yet.',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.grey[600],
+                                          ),
+                                        ),
+                                      ),
+                                    if (experiences.isNotEmpty)
+                                      ...experiences.map(
+                                        (exp) => Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            (exp['title'] ?? '').toString(),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    const SizedBox(height: 20),
+                                  ],
+                                ),
+                              ),
+                              // Trainings Section
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.school,
                                           size: 20,
+                                          color: isDark
+                                              ? Colors.white70
+                                              : Colors.black87,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Trainings',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.black87,
+                                          ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Wellness enthusiast 💪 Lover of clean living, mindful habits, and healthy vibes ✨🌱',
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 14,
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Colors.grey[600],
-                                        height: 1.4,
+                                    const SizedBox(height: 12),
+                                    if (trainings.isEmpty)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          'No trainings added yet.',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.grey[600],
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              // Action Buttons
-                              Transform.translate(
-                                offset: const Offset(0, -10),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: () async {
-                                          await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => EditProfilPage(
-                                                fullName: 'Ludovic Carl',
-                                                username: 'ludovic.carl',
-                                                bio:
-                                                    'Wellness enthusiast 💪 Lover of clean living, mindful habits, and healthy vibes ✨🌱',
-                                                profilePhotoUrl:
-                                                    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-                                                coverPhotoUrl:
-                                                    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop',
-                                                experiences: [
-                                                  ExperienceItem(
-                                                    title:
-                                                        'Doctor In Physiopine',
-                                                  ),
-                                                  ExperienceItem(
-                                                    title: 'Coach Football',
-                                                  ),
-                                                ],
-                                                trainings: [
-                                                  TrainingItem(
-                                                    title: 'University of Pens',
-                                                    subtitle: 'Professor',
-                                                  ),
-                                                ],
-                                                interests: [
-                                                  'Aerospace',
-                                                  'Engineering',
-                                                  'Environment',
-                                                  'Technology',
-                                                  'Health & Wellness',
-                                                  'Sports',
-                                                  'Photography',
-                                                  'Travel',
-                                                  'Music',
-                                                  'Cooking',
-                                                ],
+                                    if (trainings.isNotEmpty)
+                                      ...trainings.map(
+                                        (tr) => Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Text(
+                                                (tr['title'] ?? '').toString(),
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isDark
+                                                      ? Colors.white70
+                                                      : Colors.black87,
+                                                ),
                                               ),
                                             ),
-                                          );
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(
-                                            0xFFBFAE01,
-                                          ),
-                                          foregroundColor: isDark
-                                              ? Colors.black
-                                              : Colors.black,
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 12,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              25,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'Edit Profile',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            color: isDark
-                                                ? Colors.black
-                                                : Colors.black,
-                                          ),
+                                            if ((tr['subtitle'] ?? '')
+                                                .toString()
+                                                .trim()
+                                                .isNotEmpty)
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  (tr['subtitle'] ?? '')
+                                                      .toString(),
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 14,
+                                                    color: isDark
+                                                        ? Colors.white70
+                                                        : Colors.grey[600],
+                                                  ),
+                                                ),
+                                              ),
+                                            const SizedBox(height: 8),
+                                          ],
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: OutlinedButton(
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  const MyConnectionsPage(),
-                                            ),
-                                          );
-                                        },
-                                        style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 12,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              25,
-                                            ),
-                                          ),
-                                          side: BorderSide(
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.grey[300]!,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'My Connections',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
+                                    const SizedBox(height: 20),
+                                  ],
+                                ),
+                              ),
+                              // Interest Section
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  0,
+                                  20,
+                                  20,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.favorite,
+                                          size: 20,
                                           color: isDark
                                               ? Colors.white70
-                                              : Colors.grey[300]!,
+                                              : Colors.black87,
                                         ),
-                                        borderRadius: BorderRadius.circular(40),
-                                      ),
-                                      child: Icon(
-                                        Icons.person_add_outlined,
-                                        size: 20,
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Colors.black,
-                                      ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Interest',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: interests.isNotEmpty
+                                          ? interests
+                                                .map(
+                                                  (i) => _buildInterestChip(i),
+                                                )
+                                                .toList()
+                                          : [
+                                              Text(
+                                                'No interests selected yet.',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14,
+                                                  color: isDark
+                                                      ? Colors.white70
+                                                      : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
                                     ),
                                   ],
                                 ),
@@ -331,188 +664,18 @@ class _ProfilePageState extends State<ProfilePage> {
                             ],
                           ),
                         ),
-
-                        // Professional Experiences Section
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.work,
-                                    size: 20,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Professional Experiences',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Doctor In Physiopine',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Coach Football',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                            ],
-                          ),
-                        ),
-
-                        // Trainings Section
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.school,
-                                    size: 20,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Trainings',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'University of Pens',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Professor',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                            ],
-                          ),
-                        ),
-
-                        // Interest Section
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.favorite,
-                                    size: 20,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Interest',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _buildInterestChip('Aerospace'),
-                                  _buildInterestChip('Engineering'),
-                                  _buildInterestChip('Environment'),
-                                  _buildInterestChip('Technology'),
-                                  _buildInterestChip('Health & Wellness'),
-                                  _buildInterestChip('Sports'),
-                                  _buildInterestChip('Photography'),
-                                  _buildInterestChip('Travel'),
-                                  _buildInterestChip('Music'),
-                                  _buildInterestChip('Cooking'),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
+                        // Tab Section
+                        _buildTabSection(),
                       ],
                     ),
                   ),
-
-                  // Tab Section
-                  _buildTabSection(),
-                ],
-              ),
-            ),
           );
         },
       ),
     );
   }
 
+  // Helper: Drawer menu
   Widget _buildDrawer() {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
@@ -741,21 +904,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   onTap: () async {
-                    // Close drawer first for better UX
                     Navigator.pop(context);
-
-                    // Clear local auth state
                     await TokenStore.clear();
-
-                    // Best-effort server-side logout (non-blocking if it fails)
                     try {
                       await AuthApi().logout();
                     } catch (_) {}
-
-                    // Guard against using context after async gap
                     if (!mounted) return;
-
-                    // Navigate to sign-in and clear back stack
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (_) => const SignInPage()),
                       (route) => false,
@@ -771,6 +925,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // Helper: Stats column
   Widget _buildStatColumn(String value, String label) {
     return Column(
       children: [
@@ -786,6 +941,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // Helper: Interest chip
   Widget _buildInterestChip(String label) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
@@ -807,6 +963,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // Helper: Tab section
   Widget _buildTabSection() {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
@@ -885,7 +1042,7 @@ class _ProfilePageState extends State<ProfilePage> {
           'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
         ],
         videoUrl: null,
-        counts: PostCounts(
+        counts: const PostCounts(
           likes: 156,
           comments: 34,
           shares: 22,
@@ -895,7 +1052,7 @@ class _ProfilePageState extends State<ProfilePage> {
         userReaction: null,
         isBookmarked: false,
         isRepost: true,
-        repostedBy: RepostedBy(
+        repostedBy: const RepostedBy(
           userName: 'You',
           userAvatarUrl:
               'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
@@ -915,7 +1072,7 @@ class _ProfilePageState extends State<ProfilePage> {
           'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&fit=crop',
         ],
         videoUrl: null,
-        counts: PostCounts(
+        counts: const PostCounts(
           likes: 89,
           comments: 12,
           shares: 8,
@@ -925,100 +1082,11 @@ class _ProfilePageState extends State<ProfilePage> {
         userReaction: ReactionType.like,
         isBookmarked: false,
         isRepost: true,
-        repostedBy: RepostedBy(
+        repostedBy: const RepostedBy(
           userName: 'You',
           userAvatarUrl:
               'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
           actionType: 'liked this',
-        ),
-      ),
-      Post(
-        id: '3',
-        userName: 'Fitness Journey',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            'Consistency beats perfection every single time. Keep showing up! 💪',
-        createdAt: DateTime.now().subtract(const Duration(hours: 6)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 234,
-          comments: 45,
-          shares: 18,
-          reposts: 0,
-          bookmarks: 89,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: 'You',
-          userAvatarUrl:
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-          actionType: 'commented on this',
-        ),
-      ),
-      Post(
-        id: '4',
-        userName: 'Healthy Habits',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            'The power of small daily actions. Transform your life one habit at a time ✨',
-        createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 167,
-          comments: 28,
-          shares: 31,
-          reposts: 0,
-          bookmarks: 54,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: 'You',
-          userAvatarUrl:
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-          actionType: 'shared this',
-        ),
-      ),
-      Post(
-        id: '5',
-        userName: 'Nature Therapy',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text: 'Spending time in nature is the best medicine for the soul 🌿',
-        createdAt: DateTime.now().subtract(const Duration(hours: 10)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 198,
-          comments: 67,
-          shares: 25,
-          reposts: 0,
-          bookmarks: 78,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: 'You',
-          userAvatarUrl:
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-          actionType: 'reposted this',
         ),
       ),
     ];
@@ -1030,21 +1098,11 @@ class _ProfilePageState extends State<ProfilePage> {
       itemBuilder: (context, index) {
         return PostCard(
           post: activities[index],
-          onReactionChanged: (postId, reaction) {
-            // Handle reaction change
-          },
-          onBookmarkToggle: (postId) {
-            // Handle bookmark toggle
-          },
-          onShare: (postId) {
-            // Handle share
-          },
-          onComment: (postId) {
-            // Handle comment
-          },
-          onRepost: (postId) {
-            // Handle repost
-          },
+          onReactionChanged: (postId, reaction) {},
+          onBookmarkToggle: (postId) {},
+          onShare: (postId) {},
+          onComment: (postId) {},
+          onRepost: (postId) {},
         );
       },
     );
@@ -1064,7 +1122,7 @@ class _ProfilePageState extends State<ProfilePage> {
           'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
         ],
         videoUrl: null,
-        counts: PostCounts(
+        counts: const PostCounts(
           likes: 89,
           comments: 12,
           shares: 5,
@@ -1089,7 +1147,7 @@ class _ProfilePageState extends State<ProfilePage> {
           'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop',
         ],
         videoUrl: null,
-        counts: PostCounts(
+        counts: const PostCounts(
           likes: 156,
           comments: 28,
           shares: 12,
@@ -1098,105 +1156,6 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         userReaction: ReactionType.like,
         isBookmarked: true,
-        isRepost: false,
-        repostedBy: null,
-      ),
-      Post(
-        id: '8',
-        userName: 'Ludovic Carl',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            'Healthy breakfast to start the week right! 🥗✨ What\'s your go-to morning meal?',
-        createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 234,
-          comments: 67,
-          shares: 18,
-          reposts: 0,
-          bookmarks: 89,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: false,
-        repostedBy: null,
-      ),
-      Post(
-        id: '9',
-        userName: 'Ludovic Carl',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            'Nature walk therapy session complete 🌿 Sometimes the best medicine is fresh air',
-        createdAt: DateTime.now().subtract(const Duration(hours: 12)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 178,
-          comments: 34,
-          shares: 22,
-          reposts: 0,
-          bookmarks: 56,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: false,
-        repostedBy: null,
-      ),
-      Post(
-        id: '10',
-        userName: 'Ludovic Carl',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text: 'Yoga flow complete! Finding balance in both body and mind 🕉️',
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1506629905607-d9c297d3d04b?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 145,
-          comments: 19,
-          shares: 8,
-          reposts: 0,
-          bookmarks: 32,
-        ),
-        userReaction: ReactionType.heart,
-        isBookmarked: true,
-        isRepost: false,
-        repostedBy: null,
-      ),
-      Post(
-        id: '11',
-        userName: 'Ludovic Carl',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            'Grateful for another day to grow and learn. What are you grateful for today? 🙏',
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 267,
-          comments: 89,
-          shares: 35,
-          reposts: 0,
-          bookmarks: 78,
-        ),
-        userReaction: null,
-        isBookmarked: false,
         isRepost: false,
         repostedBy: null,
       ),
@@ -1209,21 +1168,11 @@ class _ProfilePageState extends State<ProfilePage> {
       itemBuilder: (context, index) {
         return HomePostCard(
           post: posts[index],
-          onReactionChanged: (postId, reaction) {
-            // Handle reaction change
-          },
-          onBookmarkToggle: (postId) {
-            // Handle bookmark toggle
-          },
-          onShare: (postId) {
-            // Handle share
-          },
-          onComment: (postId) {
-            // Handle comment
-          },
-          onRepost: (postId) {
-            // Handle repost
-          },
+          onReactionChanged: (postId, reaction) {},
+          onBookmarkToggle: (postId) {},
+          onShare: (postId) {},
+          onComment: (postId) {},
+          onRepost: (postId) {},
         );
       },
     );
@@ -1331,20 +1280,6 @@ class _ProfilePageState extends State<ProfilePage> {
       'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop',
       'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=300&fit=crop',
       'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1506629905607-d9c297d3d04b?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1493770348161-369560ae357d?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1540206395-68808572332f?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop',
     ];
 
     return GridView.count(

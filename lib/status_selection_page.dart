@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'interest_selection_page.dart';
+import 'profile_experience_page.dart';
 import 'core/profile_api.dart';
 
 class StatusSelectionPage extends StatefulWidget {
@@ -38,11 +38,9 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => InterestSelectionPage(
+          builder: (context) => ProfileExperiencePage(
             firstName: widget.firstName,
             lastName: widget.lastName,
-            hasProfilePhoto: widget.hasProfilePhoto,
-            selectedStatus: _selectedStatus ?? '',
           ),
         ),
       );
