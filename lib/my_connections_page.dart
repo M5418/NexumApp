@@ -4,12 +4,15 @@ import 'widgets/badge_icon.dart';
 import 'widgets/segmented_tabs.dart';
 import 'widgets/animated_navbar.dart';
 import 'core/users_api.dart';
+import 'core/connections_api.dart';
+import 'other_user_profile_page.dart';
 
 class MyConnectionUser {
   final int id;
   final String name;
   final String username;
   final String? avatarUrl;
+  final String? coverUrl;
   final String avatarLetter;
   final String bio;
   final String status;
@@ -21,6 +24,7 @@ class MyConnectionUser {
     required this.name,
     required this.username,
     this.avatarUrl,
+    this.coverUrl,
     required this.avatarLetter,
     required this.bio,
     required this.status,
@@ -34,11 +38,14 @@ class MyConnectionUser {
       name: json['name'] ?? 'User',
       username: json['username'] ?? '@user',
       avatarUrl: json['avatarUrl'],
+      coverUrl: json['coverUrl'],
       avatarLetter: json['avatarLetter'] ?? 'U',
       bio: json['bio'] ?? '',
       status: json['status'] ?? '',
-      youConnectTo: false,
-      theyConnectToYou: false,
+      youConnectTo:
+          false, // Default - can be updated later with connection status
+      theyConnectToYou:
+          false, // Default - can be updated later with connection status
     );
   }
 }
@@ -80,8 +87,14 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
   Future<void> _loadUsers() async {
     try {
       final users = await UsersApi().list();
+      final status = await ConnectionsApi().status();
+      final mapped = users.map((u) => MyConnectionUser.fromJson(u)).toList();
+      for (final u in mapped) {
+        u.youConnectTo = status.outbound.contains(u.id);
+        u.theyConnectToYou = status.inbound.contains(u.id);
+      }
       setState(() {
-        _users = users.map((user) => MyConnectionUser.fromJson(user)).toList();
+        _users = mapped;
         _loading = false;
       });
     } catch (e) {
@@ -265,9 +278,9 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     );
   }
 
-  // Inbound: show all users for now (no server-side connection graph yet)
+  // Inbound: users who connected to the current user
   Widget _buildInboundList(bool isDark) {
-    final inbound = _users;
+    final inbound = _users.where((u) => u.theyConnectToYou).toList();
     return _listContainer(
       isDark: isDark,
       child: ListView.separated(
@@ -287,9 +300,9 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     );
   }
 
-  // Outbound: show all users for now (no server-side connection graph yet)
+  // Outbound: users the current user connected to
   Widget _buildOutboundList(bool isDark) {
-    final outbound = _users;
+    final outbound = _users.where((u) => u.youConnectTo).toList();
     return _listContainer(
       isDark: isDark,
       child: ListView.separated(
@@ -332,51 +345,71 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
 
   Widget _connectionTile(MyConnectionUser user, bool isDark) {
     final secondaryText = const Color(0xFF666666);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundImage:
-                (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
-                ? NetworkImage(user.avatarUrl!)
-                : null,
-            child: (user.avatarUrl == null || user.avatarUrl!.isEmpty)
-                ? Text(
-                    user.avatarLetter,
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtherUserProfilePage(
+              userId: user.id.toString(),
+              userName: user.name,
+              userAvatarUrl: user.avatarUrl ?? '',
+              userBio: user.bio,
+              userCoverUrl: user.coverUrl ?? '',
+              isConnected: user.youConnectTo,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundImage:
+                  (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
+                  ? NetworkImage(user.avatarUrl!)
+                  : null,
+              child: (user.avatarUrl == null || user.avatarUrl!.isEmpty)
+                  ? Text(
+                      user.avatarLetter,
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user.name,
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: isDark ? Colors.white : Colors.black,
                     ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.name,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black,
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  user.username,
-                  style: GoogleFonts.inter(fontSize: 13, color: secondaryText),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    user.username,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: secondaryText,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          _actionButton(user, isDark),
-        ],
+            const SizedBox(width: 12),
+            _actionButton(user, isDark),
+          ],
+        ),
       ),
     );
   }
@@ -401,10 +434,30 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     }
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        final api = ConnectionsApi();
+        final next = !user.youConnectTo;
         setState(() {
-          user.youConnectTo = true;
+          user.youConnectTo = next;
         });
+        try {
+          if (next) {
+            await api.connect(user.id);
+          } else {
+            await api.disconnect(user.id);
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              user.youConnectTo = !next;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to ${next ? 'connect' : 'disconnect'}'),
+              ),
+            );
+          }
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

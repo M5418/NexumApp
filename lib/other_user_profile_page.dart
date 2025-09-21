@@ -5,12 +5,14 @@ import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
 import 'models/post.dart';
 import 'theme_provider.dart';
+import 'core/connections_api.dart';
 
 class OtherUserProfilePage extends StatefulWidget {
   final String userId;
   final String userName;
   final String userAvatarUrl;
   final String userBio;
+  final String userCoverUrl;
   final bool isConnected;
 
   const OtherUserProfilePage({
@@ -19,6 +21,7 @@ class OtherUserProfilePage extends StatefulWidget {
     required this.userName,
     required this.userAvatarUrl,
     required this.userBio,
+    this.userCoverUrl = '',
     this.isConnected = false,
   });
 
@@ -58,13 +61,16 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                   Container(
                     height: 200,
                     width: double.infinity,
-                    decoration: const BoxDecoration(
-                      image: DecorationImage(
-                        image: NetworkImage(
-                          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop',
-                        ),
-                        fit: BoxFit.cover,
-                      ),
+                    decoration: BoxDecoration(
+                      image: (widget.userCoverUrl.isNotEmpty)
+                          ? DecorationImage(
+                              image: NetworkImage(widget.userCoverUrl),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                      color: widget.userCoverUrl.isEmpty
+                          ? (isDark ? Colors.black : Colors.grey[300])
+                          : null,
                     ),
                     child: SafeArea(
                       child: Padding(
@@ -200,10 +206,54 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                   children: [
                                     Expanded(
                                       child: ElevatedButton(
-                                        onPressed: () {
+                                        onPressed: () async {
+                                          final api = ConnectionsApi();
+                                          final next = !_isConnected;
                                           setState(() {
-                                            _isConnected = !_isConnected;
+                                            _isConnected = next;
                                           });
+                                          final targetId = int.tryParse(
+                                            widget.userId,
+                                          );
+                                          if (targetId == null) {
+                                            if (mounted) {
+                                              setState(() {
+                                                _isConnected = !next;
+                                              });
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Cannot connect: missing numeric user id',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                            return;
+                                          }
+                                          try {
+                                            if (next) {
+                                              await api.connect(targetId);
+                                            } else {
+                                              await api.disconnect(targetId);
+                                            }
+                                          } catch (e) {
+                                            if (mounted) {
+                                              setState(() {
+                                                _isConnected = !next;
+                                              });
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Failed to ${next ? 'connect' : 'disconnect'}',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          }
                                         },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: _isConnected

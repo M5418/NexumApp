@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../other_user_profile_page.dart';
+import '../core/connections_api.dart';
 
 class ConnectionCard extends StatefulWidget {
+  final int userId;
   final String coverUrl;
   final String avatarUrl;
   final String fullName;
@@ -13,6 +15,7 @@ class ConnectionCard extends StatefulWidget {
 
   const ConnectionCard({
     super.key,
+    required this.userId,
     required this.coverUrl,
     required this.avatarUrl,
     required this.fullName,
@@ -51,10 +54,11 @@ class _ConnectionCardState extends State<ConnectionCard> {
           context,
           MaterialPageRoute(
             builder: (context) => OtherUserProfilePage(
-              userId: widget.fullName.toLowerCase().replaceAll(' ', '_'),
+              userId: widget.userId.toString(),
               userName: widget.fullName,
               userAvatarUrl: widget.avatarUrl,
               userBio: widget.bio,
+              userCoverUrl: widget.coverUrl,
               isConnected: isConnected,
             ),
           ),
@@ -181,8 +185,32 @@ class _ConnectionCardState extends State<ConnectionCard> {
                           width: double.infinity,
                           height: 36,
                           child: ElevatedButton(
-                            onPressed: () {
-                              _toggleConnection();
+                            onPressed: () async {
+                              final api = ConnectionsApi();
+                              final next = !isConnected;
+                              setState(() {
+                                isConnected = next;
+                              });
+                              try {
+                                if (next) {
+                                  await api.connect(widget.userId);
+                                } else {
+                                  await api.disconnect(widget.userId);
+                                }
+                              } catch (e) {
+                                setState(() {
+                                  isConnected = !next;
+                                });
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Failed to ${next ? 'connect' : 'disconnect'}',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: isConnected

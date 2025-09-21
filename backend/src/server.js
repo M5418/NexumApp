@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.js';
 import filesRoutes from './routes/files.js';
 import profileRoutes from './routes/profile.js';
 import usersRoutes from './routes/users.js';
+import connectionsRoutes from './routes/connections.js';
 import authMiddleware from './middleware/auth.js';
 
 const app = express();
@@ -39,6 +40,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/files', authMiddleware, filesRoutes);
 app.use('/api/profile', authMiddleware, profileRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
+app.use('/api/connections', authMiddleware, connectionsRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

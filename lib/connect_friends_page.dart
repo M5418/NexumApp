@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'home_feed_page.dart';
 import 'core/users_api.dart';
+import 'core/connections_api.dart';
 
 class ConnectFriendsPage extends StatefulWidget {
   final String firstName;
@@ -28,8 +29,14 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
   Future<void> _loadUsers() async {
     try {
       final users = await UsersApi().list();
+      final status = await ConnectionsApi().status();
       setState(() {
         _friends = users;
+        _connectionStatus.clear();
+        for (final u in users) {
+          final id = (u['id'] as num).toInt();
+          _connectionStatus[id] = status.outbound.contains(id);
+        }
         _loading = false;
       });
     } catch (e) {
@@ -40,16 +47,30 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadUsers();
-  }
-
-  void _toggleConnection(int userId) {
+  Future<void> _toggleConnection(int userId) async {
+    final api = ConnectionsApi();
+    final next = !(_connectionStatus[userId] ?? false);
     setState(() {
-      _connectionStatus[userId] = !(_connectionStatus[userId] ?? false);
+      _connectionStatus[userId] = next;
     });
+    try {
+      if (next) {
+        await api.connect(userId);
+      } else {
+        await api.disconnect(userId);
+      }
+    } catch (e) {
+      setState(() {
+        _connectionStatus[userId] = !next;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to ${next ? 'connect' : 'disconnect'}'),
+          ),
+        );
+      }
+    }
   }
 
   void _completeAccountCreation() {
@@ -58,6 +79,12 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
       MaterialPageRoute(builder: (_) => const HomeFeedPage()),
       (route) => false,
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
   }
 
   @override

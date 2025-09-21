@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,8 +6,11 @@ import 'widgets/connection_card.dart';
 import 'widgets/message_invite_card.dart';
 import 'search_page.dart';
 import 'notification_page.dart';
+import 'core/users_api.dart';
+import 'core/connections_api.dart';
 
 class User {
+  final int id;
   final String fullName;
   final String bio;
   final String avatarUrl;
@@ -16,6 +18,7 @@ class User {
   final bool isConnected;
 
   User({
+    required this.id,
     required this.fullName,
     required this.bio,
     required this.avatarUrl,
@@ -37,115 +40,54 @@ class ConnectionsPage extends StatefulWidget {
 class _ConnectionsPageState extends State<ConnectionsPage> {
   List<User> users = [];
   User? activeInviteUser;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _generateSampleData();
+    _loadUsers();
   }
 
-  void _generateSampleData() {
-    final random = Random();
+  Future<void> _loadUsers() async {
+    try {
+      final usersData = await UsersApi().list();
+      final status = await ConnectionsApi().status();
+      final mapped = usersData.map((m) {
+        final id = (m['id'] as num).toInt();
+        final name = (m['name'] as String?)?.trim();
+        final username = (m['username'] as String?)?.trim();
+        final email = (m['email'] as String?)?.trim();
+        final fullName = (name != null && name.isNotEmpty)
+            ? name
+            : (username ?? email ?? 'User');
+        return User(
+          id: id,
+          fullName: fullName,
+          bio: (m['bio'] as String?) ?? '',
+          avatarUrl: (m['avatarUrl'] as String?)?.trim() ?? '',
+          coverUrl: (m['coverUrl'] as String?)?.trim() ?? '',
+          isConnected: status.outbound.contains(id),
+        );
+      }).toList();
 
-    final firstNames = [
-      'Alex',
-      'Sarah',
-      'Michael',
-      'Emma',
-      'David',
-      'Jessica',
-      'James',
-      'Ashley',
-      'Robert',
-      'Amanda',
-      'John',
-      'Jennifer',
-      'William',
-      'Lisa',
-      'Richard',
-      'Michelle',
-      'Thomas',
-      'Kimberly',
-      'Christopher',
-      'Amy',
-      'Daniel',
-      'Angela',
-      'Matthew',
-      'Brenda',
-    ];
-
-    final lastNames = [
-      'Johnson',
-      'Williams',
-      'Brown',
-      'Jones',
-      'Garcia',
-      'Miller',
-      'Davis',
-      'Rodriguez',
-      'Martinez',
-      'Hernandez',
-      'Lopez',
-      'Gonzalez',
-      'Wilson',
-      'Anderson',
-      'Thomas',
-      'Taylor',
-      'Moore',
-      'Jackson',
-      'Martin',
-      'Lee',
-      'Perez',
-      'Thompson',
-      'White',
-      'Harris',
-    ];
-
-    final bios = [
-      'Co-Founder Nexum',
-      'Product Designer',
-      'Software Engineer',
-      'Photographer',
-      'Aviation Enthusiast',
-      'Marketing Director',
-      'Data Scientist',
-      'UX Researcher',
-      'Investment Analyst',
-      'Startup Mentor',
-      'Tech Entrepreneur',
-      'Creative Director',
-      'Business Strategist',
-      'Mobile Developer',
-      'Growth Hacker',
-      'Content Creator',
-      'Digital Nomad',
-      'Innovation Lead',
-      'Brand Manager',
-      'Full Stack Developer',
-    ];
-
-    users = List.generate(20, (index) {
-      final firstName = firstNames[random.nextInt(firstNames.length)];
-      final lastName = lastNames[random.nextInt(lastNames.length)];
-      final bio = bios[random.nextInt(bios.length)];
-
-      return User(
-        fullName: '$firstName $lastName',
-        bio: bio,
-        avatarUrl: 'https://picsum.photos/200/200?random=${index + 100}',
-        coverUrl: 'https://picsum.photos/400/200?random=${index + 200}',
-        isConnected: random.nextBool(),
-      );
-    });
-
-    // Shuffle the list
-    users.shuffle();
-  }
-
-  void _refreshData() {
-    setState(() {
-      _generateSampleData();
-    });
+      setState(() {
+        users = List<User>.from(mapped);
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+      });
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to load users')),
+            );
+          }
+        });
+      }
+    }
   }
 
   void _showInviteCard(User user) {
@@ -158,6 +100,10 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
     setState(() {
       activeInviteUser = null;
     });
+  }
+
+  Future<void> _refreshData() async {
+    await _loadUsers();
   }
 
   @override
@@ -234,32 +180,40 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         children: [
           // Main content
           RefreshIndicator(
-            onRefresh: () async {
-              _refreshData();
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 155 / 240,
-                ),
-                itemCount: users.length,
-                itemBuilder: (context, index) {
-                  final user = users[index];
-                  return ConnectionCard(
-                    coverUrl: user.coverUrl,
-                    avatarUrl: user.avatarUrl,
-                    fullName: user.fullName,
-                    bio: user.bio,
-                    initialConnectionStatus: user.isConnected,
-                    onMessage: () => _showInviteCard(user),
-                  );
-                },
-              ),
-            ),
+            onRefresh: _refreshData,
+            child: _loading
+                ? ListView(
+                    children: const [
+                      SizedBox(height: 200),
+                      Center(child: CircularProgressIndicator()),
+                      SizedBox(height: 200),
+                    ],
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: GridView.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 155 / 240,
+                          ),
+                      itemCount: users.length,
+                      itemBuilder: (context, index) {
+                        final user = users[index];
+                        return ConnectionCard(
+                          userId: user.id,
+                          coverUrl: user.coverUrl,
+                          avatarUrl: user.avatarUrl,
+                          fullName: user.fullName,
+                          bio: user.bio,
+                          initialConnectionStatus: user.isConnected,
+                          onMessage: () => _showInviteCard(user),
+                        );
+                      },
+                    ),
+                  ),
           ),
 
           // Blur overlay when invite card is active
