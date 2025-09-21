@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import pool from '../db/db.js';
 import { ok, fail } from '../utils/response.js';
+import { generateId } from '../utils/id-generator.js';
 
 const router = express.Router();
 
@@ -73,24 +74,47 @@ router.patch('/', async (req, res) => {
       return fail(res, 'no_fields', 400);
     }
 
-    const cols = ['user_id', ...fields];
-    const placeholders = Array(cols.length).fill('?').join(',');
-    const updates = fields.map((f) => `${f}=VALUES(${f})`).join(', ');
-    const values = [
-      req.user.id,
-      ...fields.map((f) => {
-        if (['professional_experiences', 'trainings', 'interest_domains'].includes(f) && data[f] != null) {
-          return JSON.stringify(data[f]);
-        }
-        return data[f];
-      }),
-    ];
+    // Check if profile exists
+    const [existingProfile] = await pool.execute(
+      'SELECT id FROM profiles WHERE user_id = ?',
+      [req.user.id]
+    );
 
-    const sql = `INSERT INTO profiles (${cols.join(',')})
-                 VALUES (${placeholders})
-                 ON DUPLICATE KEY UPDATE ${updates}`;
+    if (existingProfile.length === 0) {
+      // Create new profile with custom ID
+      const profileId = generateId();
+      const cols = ['id', 'user_id', ...fields];
+      const placeholders = Array(cols.length).fill('?').join(',');
+      const values = [
+        profileId,
+        req.user.id,
+        ...fields.map((f) => {
+          if (['professional_experiences', 'trainings', 'interest_domains'].includes(f) && data[f] != null) {
+            return JSON.stringify(data[f]);
+          }
+          return data[f];
+        }),
+      ];
 
-    await pool.execute(sql, values);
+      const sql = `INSERT INTO profiles (${cols.join(',')}) VALUES (${placeholders})`;
+      await pool.execute(sql, values);
+    } else {
+      // Update existing profile
+      const updates = fields.map((f) => `${f} = ?`).join(', ');
+      const values = [
+        ...fields.map((f) => {
+          if (['professional_experiences', 'trainings', 'interest_domains'].includes(f) && data[f] != null) {
+            return JSON.stringify(data[f]);
+          }
+          return data[f];
+        }),
+        req.user.id
+      ];
+
+      const sql = `UPDATE profiles SET ${updates} WHERE user_id = ?`;
+      await pool.execute(sql, values);
+    }
+
     return res.json(ok({}));
   } catch (error) {
     if (error instanceof z.ZodError) {

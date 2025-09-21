@@ -11,6 +11,7 @@ import 'create_post_page.dart';
 import 'conversations_page.dart';
 import 'profile_page.dart';
 import 'post_page.dart';
+import 'core/posts_api.dart';
 import 'data/sample_data.dart';
 import 'models/post.dart';
 import 'theme_provider.dart';
@@ -57,11 +58,28 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
-  void _loadData() {
-    setState(() {
-      _posts = SampleData.getSamplePosts();
-      _stories = SampleData.getSampleStories();
-    });
+  Future<void> _loadData() async {
+    try {
+      final posts = await PostsApi().listFeed(limit: 20, offset: 0);
+      if (!mounted) return;
+      setState(() {
+        _posts = posts;
+        // Restore stories UI with sample data for now
+        _stories = SampleData.getSampleStories();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _posts = [];
+        _stories = SampleData.getSampleStories();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load feed', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _onNavTabChange(int index) {
@@ -72,12 +90,16 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       }
     });
 
-    // Handle navigation for create post only
     if (index == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const CreatePostPage()),
-      );
+      () async {
+        final created = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const CreatePostPage()),
+        );
+        if (created == true) {
+          await _loadData();
+        }
+      }();
     } else if (index == 5) {
       Navigator.push(
         context,

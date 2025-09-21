@@ -6,6 +6,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'widgets/circle_icon_button.dart';
 import 'widgets/media_thumb.dart';
 import 'widgets/tag_chip.dart';
+import 'dart:io';
+import 'core/files_api.dart';
+import 'core/posts_api.dart';
 
 class CreatePostPage extends StatefulWidget {
   const CreatePostPage({super.key});
@@ -22,7 +25,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final List<String> _taggedUsers = [];
   final int _maxCommunities = 3;
 
-  bool get _canPost => _titleController.text.trim().isNotEmpty;
+  bool _posting = false;
+
+  bool get _canPost =>
+      (!_posting) &&
+      (_titleController.text.trim().isNotEmpty ||
+          _bodyController.text.trim().isNotEmpty ||
+          _mediaItems.isNotEmpty);
 
   @override
   void dispose() {
@@ -152,6 +161,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         contentPadding: EdgeInsets.zero,
       ),
       maxLines: 1,
+      onChanged: (_) => setState(() {}),
     );
   }
 
@@ -438,16 +448,27 @@ class _CreatePostPageState extends State<CreatePostPage> {
                   borderRadius: BorderRadius.circular(27),
                 ),
                 child: Center(
-                  child: Text(
-                    'Post',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: _canPost
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.5),
-                    ),
-                  ),
+                  child: _posting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          'Post',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: _canPost
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.5),
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -936,14 +957,55 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  void _publishPost() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Posted', style: GoogleFonts.inter()),
-        backgroundColor: const Color(0xFFBFAE01),
-      ),
-    );
-    Navigator.pop(context);
+  Future<void> _publishPost() async {
+    setState(() => _posting = true);
+    try {
+      // Upload local image files (if any) and collect media descriptors
+      final mediaPayload = <Map<String, dynamic>>[];
+      for (final item in _mediaItems) {
+        if (item.type == MediaType.image && item.imageUrl != null) {
+          final f = File(item.imageUrl!);
+          if (await f.exists()) {
+            final uploaded = await FilesApi().uploadFile(f);
+            mediaPayload.add({
+              'media_type': 'image',
+              's3_key': uploaded['key'],
+              'url': uploaded['url'],
+            });
+          }
+        }
+        // Note: video flow can be added similarly when implemented
+      }
+
+      final content = [
+        _titleController.text.trim(),
+        _bodyController.text.trim(),
+      ].where((e) => e.isNotEmpty).join('\n\n');
+
+      final res = await PostsApi().create(
+        content: content,
+        media: mediaPayload.isEmpty ? null : mediaPayload,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Posted', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to publish post', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _posting = false);
+    }
   }
 }
 

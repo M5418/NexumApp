@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import pool from '../db/db.js';
 import { ok, fail } from '../utils/response.js';
+import { generateUserId } from '../utils/id-generator.js';
 import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
@@ -34,16 +35,17 @@ router.post('/signup', async (req, res) => {
       return fail(res, 'email_already_exists', 409);
     }
     
+    // Generate custom 12-character ID
+    const userId = generateUserId();
+    
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
     
-    // Insert user
-    const [result] = await pool.execute(
-      'INSERT INTO users (email, password_hash) VALUES (?, ?)',
-      [email, passwordHash]
+    // Insert user with custom ID
+    await pool.execute(
+      'INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)',
+      [userId, email, passwordHash]
     );
-    
-    const userId = result.insertId;
     
     // Generate JWT
     const token = jwt.sign(

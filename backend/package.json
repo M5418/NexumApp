@@ -12,7 +12,12 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "sql:migrate": "node ../scripts/migrate.js"
+    "sql:migrate": "node ../scripts/migrate.js",
+    "db:init": "node scripts/init-db.js",
+    "db:setup": "npm run db:init && npm run prisma:generate",
+    "migrate:string-ids": "node scripts/migrate-to-string-ids.js",
+    "db:views": "node scripts/apply-views.js",
+    "test": "node scripts/test-api.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.490.0",
