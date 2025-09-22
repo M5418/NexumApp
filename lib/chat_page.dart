@@ -4,15 +4,26 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'models/message.dart';
 import 'widgets/message_bubble.dart';
 import 'widgets/chat_input.dart';
-import 'widgets/attachment_dropdown_menu.dart';
 import 'widgets/message_actions_sheet.dart';
 import 'package:flutter/services.dart';
+import 'core/messages_api.dart';
+import 'core/conversations_api.dart';
+import 'core/audio_recorder.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'core/profile_api.dart';
 
 class ChatPage extends StatefulWidget {
   final ChatUser otherUser;
   final bool? isDarkMode;
+  final String? conversationId;
 
-  const ChatPage({super.key, required this.otherUser, this.isDarkMode});
+  const ChatPage({
+    super.key,
+    required this.otherUser,
+    this.isDarkMode,
+    this.conversationId,
+  });
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -21,20 +32,134 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final ScrollController _scrollController = ScrollController();
   final List<Message> _messages = [];
-  String? _replyToMessage;
+  Message? _replyToMessage;
   final Set<String> _starredIds = <String>{};
   final Map<String, String> _messageReactions = <String, String>{};
+  final MessagesApi _messagesApi = MessagesApi();
+  final ConversationsApi _conversationsApi = ConversationsApi();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSampleMessages();
+    _initLoad();
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  void _initLoad() {
+    if (widget.conversationId != null && widget.conversationId!.isNotEmpty) {
+      _loadMessages();
+      _markRead();
+    } else {
+      _loadSampleMessages();
+    }
+  }
+
+  Future<void> _loadMessages() async {
+    try {
+      setState(() {
+        _messages.clear();
+        _messageReactions.clear();
+      });
+      final records = await _messagesApi.list(widget.conversationId!);
+      final mapped = records.map(_toUiMessage).toList();
+      setState(() {
+        _messages.addAll(mapped);
+        for (final r in records) {
+          if (r.myReaction != null) {
+            _messageReactions[r.id] = r.myReaction!;
+          }
+        }
+      });
+      _scrollToBottom();
+    } catch (e) {
+      // Handle error silently or add proper error handling
+    }
+  }
+
+  Future<void> _markRead() async {
+    try {
+      await _conversationsApi.markRead(widget.conversationId!);
+    } catch (_) {}
+  }
+
+  Message _toUiMessage(MessageRecord r) {
+    final isFromCurrentUser = r.senderId != widget.otherUser.id;
+    String? senderAvatar = isFromCurrentUser
+        ? null
+        : widget.otherUser.avatarUrl;
+    final attachments = r.attachments.map((a) {
+      final t = a.type;
+      final mediaType = t == 'image'
+          ? MediaType.image
+          : t == 'video'
+          ? MediaType.video
+          : t == 'voice'
+          ? MediaType.voice
+          : MediaType.document;
+      return MediaAttachment(
+        id: a.id,
+        url: a.url,
+        type: mediaType,
+        thumbnailUrl: a.thumbnail,
+        duration: a.durationSec != null
+            ? Duration(seconds: a.durationSec!)
+            : null,
+        fileSize: a.fileSize,
+        fileName: a.fileName,
+      );
+    }).toList();
+
+    ReplyTo? replyTo;
+    if (r.replyTo != null) {
+      final replyData = r.replyTo!;
+      replyTo = ReplyTo(
+        messageId: (replyData['message_id'] ?? '').toString(),
+        senderName: (replyData['sender_name'] ?? 'User').toString(),
+        content: (replyData['content'] ?? '').toString(),
+        type: _mapStringToMessageType(replyData['type']?.toString() ?? 'text'),
+        mediaUrl: null, // Could be enhanced to include media URL from reply
+      );
+    }
+
+    return Message(
+      id: r.id,
+      senderId: r.senderId,
+      senderName: isFromCurrentUser ? 'You' : widget.otherUser.name,
+      senderAvatar: senderAvatar,
+      content: r.text ?? '',
+      type: r.type == 'text'
+          ? MessageType.text
+          : r.type == 'image'
+          ? MessageType.image
+          : r.type == 'video'
+          ? MessageType.video
+          : r.type == 'voice'
+          ? MessageType.voice
+          : MessageType.file,
+      attachments: attachments,
+      timestamp: r.createdAt,
+      status: r.readAt != null ? MessageStatus.read : MessageStatus.sent,
+      replyTo: replyTo,
+      isFromCurrentUser: isFromCurrentUser,
+    );
+  }
+
+  MessageType _mapStringToMessageType(String type) {
+    switch (type) {
+      case 'text':
+        return MessageType.text;
+      case 'image':
+        return MessageType.image;
+      case 'video':
+        return MessageType.video;
+      case 'voice':
+        return MessageType.voice;
+      case 'file':
+        return MessageType.file;
+      default:
+        return MessageType.text;
+    }
   }
 
   void _loadSampleMessages() {
@@ -651,32 +776,122 @@ class _ChatPageState extends State<ChatPage> {
     _messageReactions['24'] = '🔥'; // multiple videos (sent)
   }
 
-  void _sendMessage(String content) {
-    final newMessage = Message(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      senderId: 'current_user',
-      senderName: 'You',
-      content: content,
-      type: MessageType.text,
-      timestamp: DateTime.now(),
-      status: MessageStatus.sent,
-      isFromCurrentUser: true,
-      replyTo: _replyToMessage != null
-          ? ReplyTo(
-              messageId: 'reply_id',
-              senderName: widget.otherUser.name,
-              content: _replyToMessage!,
-              type: MessageType.text,
-            )
-          : null,
-    );
+  Future<void> _sendMessage(String content) async {
+    final ctx = context;
+    try {
+      final record = await _messagesApi.sendText(
+        conversationId: widget.conversationId,
+        otherUserId: widget.conversationId == null ? widget.otherUser.id : null,
+        text: content,
+        replyToMessageId: _replyToMessage?.id,
+      );
+      final msg = _toUiMessage(record).copyWith(
+        replyTo: _replyToMessage != null
+            ? ReplyTo(
+                messageId: _replyToMessage!.id,
+                senderName: _replyToMessage!.senderName,
+                content: _replyToMessage!.content,
+                type: _replyToMessage!.type,
+                mediaUrl: _replyToMessage!.attachments.isNotEmpty
+                    ? _replyToMessage!.attachments.first.url
+                    : null,
+              )
+            : null,
+      );
+      setState(() {
+        _messages.add(msg);
+        _replyToMessage = null;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(
+          ctx,
+        ).showSnackBar(SnackBar(content: Text('Failed to send: $e')));
+      }
+    }
+  }
 
-    setState(() {
-      _messages.add(newMessage);
-      _replyToMessage = null;
-    });
+  Future<void> _handleVoiceRecord() async {
+    try {
+      if (!_isRecording) {
+        // Start recording
+        final path = await _audioRecorder.startRecording();
+        if (path != null) {
+          setState(() {
+            _isRecording = true;
+          });
+          debugPrint('🎤 Started recording: $path');
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to start recording')),
+          );
+        }
+      } else {
+        // Stop recording and send
+        final result = await _audioRecorder.stopRecording();
+        setState(() {
+          _isRecording = false;
+        });
 
-    _scrollToBottom();
+        if (result != null) {
+          debugPrint(
+            '🎤 Recording stopped: ${result.duration.inSeconds}s, ${result.fileSize} bytes',
+          );
+          await _sendVoiceMessage(result);
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isRecording = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Recording error: $e')));
+    }
+  }
+
+  Future<void> _sendVoiceMessage(VoiceRecordingResult recording) async {
+    try {
+      // Show loading indicator
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Uploading voice message...')),
+      );
+
+      // Upload audio file
+      final audioUrl = await _audioRecorder.uploadVoiceFile(recording.filePath);
+      if (audioUrl == null) {
+        throw Exception('Failed to upload voice file');
+      }
+
+      // Send voice message
+      final record = await _messagesApi.sendVoice(
+        conversationId: widget.conversationId,
+        otherUserId: widget.conversationId == null ? widget.otherUser.id : null,
+        audioUrl: audioUrl,
+        durationSec: recording.duration.inSeconds,
+        fileSize: recording.fileSize,
+        replyToMessageId: _replyToMessage?.id,
+      );
+
+      final msg = _toUiMessage(record);
+      setState(() {
+        _messages.add(msg);
+        _replyToMessage = null;
+      });
+      _scrollToBottom();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send voice message: $e')),
+      );
+    }
   }
 
   void _scrollToBottom() {
@@ -698,29 +913,236 @@ class _ChatPageState extends State<ChatPage> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => AttachmentDropdownMenu(
-        isDark: isDark,
-        onSendVideos: () {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Send Video')));
-        },
-        onSendFiles: () {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Share File')));
-        },
+      builder: (_) => _buildAttachmentBottomSheet(isDark),
+    );
+  }
+
+  Widget _buildAttachmentBottomSheet(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFF666666).withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Options
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildAttachmentOption(
+                icon: Icons.camera_alt,
+                label: 'Camera',
+                color: const Color(0xFF34C759),
+                onTap: () => _pickMedia(ImageSource.camera),
+                isDark: isDark,
+              ),
+              _buildAttachmentOption(
+                icon: Icons.photo_library,
+                label: 'Gallery',
+                color: const Color(0xFF007AFF),
+                onTap: () => _pickMedia(ImageSource.gallery),
+                isDark: isDark,
+              ),
+              _buildAttachmentOption(
+                icon: Icons.videocam,
+                label: 'Video',
+                color: const Color(0xFFFF9500),
+                onTap: () => _pickVideo(),
+                isDark: isDark,
+              ),
+              _buildAttachmentOption(
+                icon: Icons.description,
+                label: 'File',
+                color: const Color(0xFFFF3B30),
+                onTap: () => _pickFile(),
+                isDark: isDark,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
       ),
     );
   }
 
-  void _handleVoiceRecord() {
-    // Handle voice recording
+  Widget _buildAttachmentOption({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickMedia(ImageSource source) async {
+    final ctx = context;
+    Navigator.pop(context);
+    try {
+      final ImagePicker picker = ImagePicker();
+      final List<XFile> images = await picker.pickMultipleMedia();
+
+      if (images.isNotEmpty) {
+        await _sendMediaWithText(images);
+      }
+    } catch (e) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(
+          ctx,
+        ).showSnackBar(SnackBar(content: Text('Failed to pick images: $e')));
+      }
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    final ctx = context;
+    Navigator.pop(context);
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
+
+      if (video != null) {
+        await _sendMediaWithText([video]);
+      }
+    } catch (e) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(
+          ctx,
+        ).showSnackBar(SnackBar(content: Text('Failed to pick video: $e')));
+      }
+    }
+  }
+
+  Future<void> _pickFile() async {
+    final ctx = context;
+    Navigator.pop(context);
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      const SnackBar(content: Text('File picker not implemented yet')),
+    );
+  }
+
+  Future<void> _sendMediaWithText(List<XFile> mediaFiles) async {
+    // Show dialog to add text with media
+    final textController = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Caption'),
+        content: TextField(
+          controller: textController,
+          decoration: const InputDecoration(
+            hintText: 'Add a caption (optional)...',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, textController.text),
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      await _uploadAndSendMedia(mediaFiles, result);
+    }
+  }
+
+  Future<void> _uploadAndSendMedia(
+    List<XFile> mediaFiles,
+    String caption,
+  ) async {
+    try {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Uploading media...')));
+
+      final profileApi = ProfileApi();
+      final attachments = <Map<String, dynamic>>[];
+
+      for (final mediaFile in mediaFiles) {
+        final file = File(mediaFile.path);
+        final url = await profileApi.uploadFile(file);
+
+        final isVideo =
+            mediaFile.path.toLowerCase().contains('.mp4') ||
+            mediaFile.path.toLowerCase().contains('.mov');
+
+        attachments.add({
+          'type': isVideo ? 'video' : 'image',
+          'url': url,
+          'fileName': mediaFile.name,
+          'fileSize': await file.length(),
+        });
+      }
+
+      final record = await _messagesApi.sendTextWithMedia(
+        conversationId: widget.conversationId,
+        otherUserId: widget.conversationId == null ? widget.otherUser.id : null,
+        text: caption,
+        attachments: attachments,
+        replyToMessageId: _replyToMessage?.id,
+      );
+
+      final msg = _toUiMessage(record);
+      setState(() {
+        _messages.add(msg);
+        _replyToMessage = null;
+      });
+      _scrollToBottom();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to send media: $e')));
+    }
   }
 
   void _replyToMessageHandler(Message message) {
     setState(() {
-      _replyToMessage = message.content;
+      _replyToMessage = message;
     });
   }
 
@@ -814,7 +1236,7 @@ class _ChatPageState extends State<ChatPage> {
             onSendMessage: _sendMessage,
             onVoiceRecord: _handleVoiceRecord,
             onAttachment: _showAttachmentOptions,
-            replyToMessage: _replyToMessage,
+            replyToMessage: _replyToMessage?.content,
             onCancelReply: _cancelReply,
           ),
         ],

@@ -1,25 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'widgets/segmented_tabs.dart';
+import 'core/invitations_api.dart';
+import 'chat_page.dart';
+import 'models/message.dart';
 
-// Invitation models and actions
-enum BulkAction { accept, reject, delete, cancel }
-
-class Invitation {
-  final String id;
-  final String name;
-  final String handle;
-  final String avatarUrl;
-  final String message;
-
-  Invitation({
-    required this.id,
-    required this.name,
-    required this.handle,
-    required this.avatarUrl,
-    required this.message,
-  });
+// String extension for capitalize
+extension StringExtension on String {
+  String capitalize() {
+    return "${this[0].toUpperCase()}${substring(1)}";
+  }
 }
+
+// Invitation actions
+enum BulkAction { accept, reject, delete, cancel }
 
 class InvitationPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -38,60 +32,10 @@ class _InvitationPageState extends State<InvitationPage>
   BulkAction? _currentAction;
   final Set<String> _selectedIds = <String>{};
 
-  // Sample data
-  final List<Invitation> _received = [
-    Invitation(
-      id: 'r1',
-      name: 'Aiden Blaze',
-      handle: '@aidenblaze',
-      avatarUrl: 'https://picsum.photos/200/200?random=18',
-      message:
-          'Good morning Sir! It\'s pleasure to reach out to you! Could you please give me an answer I had a great business idea that I want us to talk about',
-    ),
-    Invitation(
-      id: 'r2',
-      name: 'Aiden Blaze',
-      handle: '@aidenblaze',
-      avatarUrl: 'https://picsum.photos/200/200?random=28',
-      message:
-          'Good morning Sir! It\'s pleasure to reach out to you! Could you please give me an answer I had a great business idea that I want us to talk about',
-    ),
-    Invitation(
-      id: 'r3',
-      name: 'Aiden Blaze',
-      handle: '@aidenblaze',
-      avatarUrl: 'https://picsum.photos/200/200?random=38',
-      message:
-          'Good morning Sir! It\'s pleasure to reach out to you! Could you please give me an answer I had a great business idea that I want us to talk about',
-    ),
-  ];
+  List<Invitation> _received = [];
+  List<Invitation> _sent = [];
 
-  final List<Invitation> _sent = [
-    Invitation(
-      id: 's1',
-      name: 'Aiden Blaze',
-      handle: '@aidenblaze',
-      avatarUrl: 'https://picsum.photos/200/200?random=48',
-      message:
-          'Good morning Sir! It\'s pleasure to reach out to you! Could you please give me an answer I had a great business idea that I want us to talk about',
-    ),
-    Invitation(
-      id: 's2',
-      name: 'Aiden Blaze',
-      handle: '@aidenblaze',
-      avatarUrl: 'https://picsum.photos/200/200?random=58',
-      message:
-          'Good morning Sir! It\'s pleasure to reach out to you! Could you please give me an answer I had a great business idea that I want us to talk about',
-    ),
-    Invitation(
-      id: 's3',
-      name: 'Aiden Blaze',
-      handle: '@aidenblaze',
-      avatarUrl: 'https://picsum.photos/200/200?random=68',
-      message:
-          'Good morning Sir! It\'s pleasure to reach out to you! Could you please give me an answer I had a great business idea that I want us to talk about',
-    ),
-  ];
+  final InvitationsApi _api = InvitationsApi();
 
   @override
   void initState() {
@@ -107,6 +51,7 @@ class _InvitationPageState extends State<InvitationPage>
         });
       }
     });
+    _loadInvitations();
   }
 
   @override
@@ -302,7 +247,21 @@ class _InvitationPageState extends State<InvitationPage>
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundImage: NetworkImage(item.avatarUrl),
+                  backgroundImage: item.sender.avatarUrl != null
+                      ? NetworkImage(item.sender.avatarUrl!)
+                      : null,
+                  child: item.sender.avatarUrl == null
+                      ? Text(
+                          item.sender.name.isNotEmpty
+                              ? item.sender.name[0].toUpperCase()
+                              : 'U',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        )
+                      : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -313,7 +272,7 @@ class _InvitationPageState extends State<InvitationPage>
                         children: [
                           Expanded(
                             child: Text(
-                              item.name,
+                              isSent ? item.receiver.name : item.sender.name,
                               style: GoogleFonts.inter(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -348,7 +307,7 @@ class _InvitationPageState extends State<InvitationPage>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        item.handle,
+                        isSent ? item.receiver.username : item.sender.username,
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           color: const Color(0xFF666666),
@@ -356,7 +315,7 @@ class _InvitationPageState extends State<InvitationPage>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        item.message,
+                        item.invitationContent,
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: const Color(0xFF666666),
@@ -436,28 +395,130 @@ class _InvitationPageState extends State<InvitationPage>
     });
   }
 
-  void _applySingle(BulkAction action, String id) {
-    setState(() {
-      if (_selectedTabIndex == 0) {
-        _received.removeWhere((e) => e.id == id);
-      } else {
-        _sent.removeWhere((e) => e.id == id);
+  Future<void> _applySingle(BulkAction action, String id) async {
+    try {
+      switch (action) {
+        case BulkAction.accept:
+          // Capture the invitation before it's removed by reload
+          Invitation? invitation;
+          try {
+            invitation = _received.firstWhere((e) => e.id == id);
+          } catch (_) {
+            invitation = null;
+          }
+
+          final conversationId = await _api.acceptInvitation(id);
+
+          if (mounted && conversationId != null && invitation != null) {
+            final other = ChatUser(
+              id: invitation.senderId,
+              name: invitation.sender.name,
+              avatarUrl: invitation.sender.avatarUrl,
+            );
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ChatPage(
+                  otherUser: other,
+                  isDarkMode: widget.isDarkMode,
+                  conversationId: conversationId,
+                ),
+              ),
+            );
+          }
+          break;
+        case BulkAction.reject:
+          await _api.refuseInvitation(id);
+          break;
+        case BulkAction.delete:
+          await _api.deleteInvitation(id);
+          break;
+        case BulkAction.cancel:
+          await _api.deleteInvitation(id);
+          break;
       }
-    });
+
+      // Reload invitations after action
+      await _loadInvitations();
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${action.name.capitalize()} successful',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: const Color(0xFF4CAF50),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to ${action.name}: ${e.toString()}',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  void _applyBulk() {
-    final ids = Set<String>.from(_selectedIds);
-    setState(() {
-      if (_selectedTabIndex == 0) {
-        _received.removeWhere((e) => ids.contains(e.id));
-      } else {
-        _sent.removeWhere((e) => ids.contains(e.id));
+  Future<void> _applyBulk() async {
+    if (_selectedIds.isEmpty) return;
+
+    try {
+      final futures = _selectedIds.map((id) {
+        switch (_currentAction!) {
+          case BulkAction.accept:
+            return _api.acceptInvitation(id);
+          case BulkAction.reject:
+            return _api.refuseInvitation(id);
+          case BulkAction.delete:
+            return _api.deleteInvitation(id);
+          case BulkAction.cancel:
+            return _api.deleteInvitation(id);
+        }
+      });
+
+      await Future.wait(futures);
+
+      // Reload invitations after bulk action
+      await _loadInvitations();
+
+      setState(() {
+        _selectionMode = false;
+        _currentAction = null;
+        _selectedIds.clear();
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Bulk ${_currentAction!.name.capitalize()} successful',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: const Color(0xFF4CAF50),
+          ),
+        );
       }
-      _selectionMode = false;
-      _currentAction = null;
-      _selectedIds.clear();
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to apply bulk action: ${e.toString()}',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildBulkActionBar(bool isDark) {
@@ -524,5 +585,28 @@ class _InvitationPageState extends State<InvitationPage>
         ],
       ),
     );
+  }
+
+  Future<void> _loadInvitations() async {
+    try {
+      final received = await _api.getReceivedInvitations();
+      final sent = await _api.getSentInvitations();
+      setState(() {
+        _received = received;
+        _sent = sent;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to load invitations: ${e.toString()}',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

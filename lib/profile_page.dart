@@ -28,7 +28,6 @@ class _ProfilePageState extends State<ProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   Map<String, dynamic>? _profile;
   bool _loadingProfile = true;
-  String? _loadError;
 
   @override
   void initState() {
@@ -53,7 +52,6 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _loadError = 'Failed to load profile';
         _loadingProfile = false;
       });
     }
@@ -905,15 +903,17 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   onTap: () async {
                     Navigator.pop(context);
+                    final ctx = context;
                     await TokenStore.clear();
                     try {
                       await AuthApi().logout();
                     } catch (_) {}
-                    if (!mounted) return;
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (_) => const SignInPage()),
-                      (route) => false,
-                    );
+                    if (ctx.mounted) {
+                      Navigator.of(ctx).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const SignInPage()),
+                        (route) => false,
+                      );
+                    }
                   },
                 ),
                 const SizedBox(height: 20),

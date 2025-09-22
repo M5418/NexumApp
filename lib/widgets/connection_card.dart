@@ -5,7 +5,7 @@ import '../other_user_profile_page.dart';
 import '../core/connections_api.dart';
 
 class ConnectionCard extends StatefulWidget {
-  final int userId;
+  final String userId;
   final String coverUrl;
   final String avatarUrl;
   final String fullName;
@@ -37,12 +37,6 @@ class _ConnectionCardState extends State<ConnectionCard> {
     isConnected = widget.initialConnectionStatus;
   }
 
-  void _toggleConnection() {
-    setState(() {
-      isConnected = !isConnected;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -54,7 +48,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
           context,
           MaterialPageRoute(
             builder: (context) => OtherUserProfilePage(
-              userId: widget.userId.toString(),
+              userId: widget.userId,
               userName: widget.fullName,
               userAvatarUrl: widget.avatarUrl,
               userBio: widget.bio,
@@ -186,6 +180,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
                           height: 36,
                           child: ElevatedButton(
                             onPressed: () async {
+                              final ctx = context;
                               final api = ConnectionsApi();
                               final next = !isConnected;
                               setState(() {
@@ -201,8 +196,8 @@ class _ConnectionCardState extends State<ConnectionCard> {
                                 setState(() {
                                   isConnected = !next;
                                 });
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
                                     SnackBar(
                                       content: Text(
                                         'Failed to ${next ? 'connect' : 'disconnect'}',

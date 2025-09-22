@@ -6,8 +6,11 @@ import filesRoutes from './routes/files.js';
 import profileRoutes from './routes/profile.js';
 import usersRoutes from './routes/users.js';
 import connectionsRoutes from './routes/connections.js';
+import invitationsRoutes from './routes/invitations.js';
 import authMiddleware from './middleware/auth.js';
-import postsRoutes from './routes/posts.js';
+import postsRoutes from './routes/posts-simplified.js';
+import conversationsRoutes from './routes/conversations.js';
+import messagesRoutes from './routes/messages.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -43,6 +46,9 @@ app.use('/api/profile', authMiddleware, profileRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
 app.use('/api/connections', authMiddleware, connectionsRoutes);
 app.use('/api/posts', authMiddleware, postsRoutes);
+app.use('/api/invitations', authMiddleware, invitationsRoutes);
+app.use('/api/conversations', authMiddleware, conversationsRoutes);
+app.use('/api/messages', authMiddleware, messagesRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

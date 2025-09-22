@@ -27,6 +27,11 @@ class ProfileApi {
     return url;
   }
 
+  // Generic file upload (returns public URL)
+  Future<String> uploadFile(File file) async {
+    return _uploadToS3(file);
+  }
+
   Future<String> _uploadToS3(File file) async {
     final ext = _extensionOf(file.path);
     final contentType = _contentTypeForExt(ext);
@@ -74,6 +79,14 @@ class ProfileApi {
         return 'image/png';
       case 'webp':
         return 'image/webp';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'aac':
+        return 'audio/aac';
       default:
         return 'application/octet-stream';
     }

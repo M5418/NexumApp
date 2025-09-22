@@ -10,7 +10,7 @@ import 'core/users_api.dart';
 import 'core/connections_api.dart';
 
 class User {
-  final int id;
+  final String id;
   final String fullName;
   final String bio;
   final String avatarUrl;
@@ -49,40 +49,80 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   }
 
   Future<void> _loadUsers() async {
+    debugPrint('🔍 ConnectionsPage: Starting to load users...');
     try {
       final usersData = await UsersApi().list();
+      debugPrint(
+        '🔍 ConnectionsPage: Received ${usersData.length} users from API',
+      );
+
       final status = await ConnectionsApi().status();
+      debugPrint(
+        '🔍 ConnectionsPage: Connection status - Outbound: ${status.outbound.length}, Inbound: ${status.inbound.length}',
+      );
+
       final mapped = usersData.map((m) {
-        final id = (m['id'] as num).toInt();
+        final id = (m['id'] as String?)?.trim();
         final name = (m['name'] as String?)?.trim();
         final username = (m['username'] as String?)?.trim();
         final email = (m['email'] as String?)?.trim();
-        final fullName = (name != null && name.isNotEmpty)
-            ? name
-            : (username ?? email ?? 'User');
-        return User(
-          id: id,
+
+        // Improved name fallback logic
+        String fullName = 'User';
+        if (name != null && name.isNotEmpty) {
+          fullName = name;
+        } else if (username != null && username.isNotEmpty) {
+          fullName = username.replaceAll('@', '');
+        } else if (email != null && email.isNotEmpty) {
+          fullName = email.split('@')[0];
+        }
+
+        final user = User(
+          id: id ?? '',
           fullName: fullName,
           bio: (m['bio'] as String?) ?? '',
           avatarUrl: (m['avatarUrl'] as String?)?.trim() ?? '',
           coverUrl: (m['coverUrl'] as String?)?.trim() ?? '',
           isConnected: status.outbound.contains(id),
         );
+
+        debugPrint(
+          '🔍 ConnectionsPage: Mapped user - ID: ${user.id}, Name: ${user.fullName}, Connected: ${user.isConnected}',
+        );
+        return user;
       }).toList();
 
-      setState(() {
-        users = List<User>.from(mapped);
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _loading = false;
-      });
       if (mounted) {
+        setState(() {
+          users = List<User>.from(mapped);
+          _loading = false;
+        });
+        debugPrint(
+          '🔍 ConnectionsPage: Successfully loaded ${users.length} users',
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ ConnectionsPage: Error loading users: $e');
+      if (mounted) {
+        setState(() {
+          users = []; // Ensure users list is empty on error
+          _loading = false;
+        });
+
+        // Show more detailed error message
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to load users')),
+              SnackBar(
+                content: Text('Failed to load users: ${e.toString()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: () => _loadUsers(),
+                ),
+              ),
             );
           }
         });
@@ -229,11 +269,15 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
             ),
             Center(
               child: MessageInviteCard(
+                receiverId: activeInviteUser!.id,
                 fullName: activeInviteUser!.fullName,
                 bio: activeInviteUser!.bio,
                 avatarUrl: activeInviteUser!.avatarUrl,
                 coverUrl: activeInviteUser!.coverUrl,
                 onClose: _closeInviteCard,
+                onInvitationSent: (invitation) {
+                  debugPrint('Invitation sent: ${invitation.id}');
+                },
               ),
             ),
           ],

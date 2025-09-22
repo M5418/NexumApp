@@ -290,15 +290,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                         right: 80,
                         top: 80,
                         bottom: 0,
-                        child: Container(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              ReactionPicker(
-                                onReactionSelected: _onReactionSelected,
-                              ),
-                            ],
-                          ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ReactionPicker(
+                              onReactionSelected: _onReactionSelected,
+                            ),
+                          ],
                         ),
                       ),
                     ],

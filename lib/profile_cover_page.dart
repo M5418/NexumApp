@@ -47,17 +47,41 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
                 title: Text('Take Photo', style: GoogleFonts.inter()),
-                onTap: () {
+                onTap: () async {
+                  final ctx = context;
                   Navigator.pop(context);
-                  _pickCover(ImageSource.camera);
+                  try {
+                    await _pickCover(ImageSource.camera);
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(
+                          content: Text('Unexpected error occurred.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
                 title: Text('Choose from Gallery', style: GoogleFonts.inter()),
-                onTap: () {
+                onTap: () async {
+                  final ctx = context;
                   Navigator.pop(context);
-                  _pickCover(ImageSource.gallery);
+                  try {
+                    await _pickCover(ImageSource.gallery);
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(
+                          content: Text('Unexpected error occurred.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 },
               ),
               if (_coverPath != null || _hasSelectedCover)
@@ -165,33 +189,38 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
   }
 
   void _completeSetup() async {
+    final ctx = context;
     // If user selected a cover, upload it and attach to profile
     if (_hasSelectedCover && _coverPath != null) {
       try {
         await ProfileApi().uploadAndAttachCoverPhoto(File(_coverPath!));
       } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Failed to upload cover photo. You can try again later.',
+        if (ctx.mounted) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to upload cover photo. You can try again later.',
+              ),
+              backgroundColor: Colors.red,
             ),
-            backgroundColor: Colors.red,
-          ),
-        );
+          );
+        }
+        return;
       }
     }
     // Navigate to welcome screen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProfileCompletionWelcome(
-          firstName: widget.firstName,
-          lastName: widget.lastName,
-          hasProfilePhoto: widget.hasProfilePhoto,
+    if (ctx.mounted) {
+      Navigator.pushReplacement(
+        ctx,
+        MaterialPageRoute(
+          builder: (context) => ProfileCompletionWelcome(
+            firstName: widget.firstName,
+            lastName: widget.lastName,
+            hasProfilePhoto: widget.hasProfilePhoto,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override

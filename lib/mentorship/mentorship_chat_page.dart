@@ -211,7 +211,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
     );
   }
 
-  void _handleVoiceRecord() {
+  Future<void> _handleVoiceRecord() async {
     // Handle voice recording
   }
 

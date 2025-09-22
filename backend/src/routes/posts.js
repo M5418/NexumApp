@@ -90,6 +90,17 @@ async function hydrateCountsAndFlags(rows, meId) {
   const userIds = rows.map(r => r.user_id);
   const authorMap = await getAuthorMap(userIds);
 
+  // Get repost author information for posts that are reposts
+  const repostRows = rows.filter(r => r.repost_of);
+  const repostAuthorMap = {};
+  if (repostRows.length > 0) {
+    const repostUserIds = repostRows.map(r => r.user_id);
+    const repostAuthors = await getAuthorMap(repostUserIds);
+    for (const row of repostRows) {
+      repostAuthorMap[row.id] = repostAuthors[row.user_id];
+    }
+  }
+
   const [likedByMe] = await pool.query(
     `SELECT post_id FROM post_likes WHERE user_id = ? AND post_id IN (${placeholders})`, [meId, ...postIds]);
   const [bookmarkedByMe] = await pool.query(
@@ -120,6 +131,7 @@ async function hydrateCountsAndFlags(rows, meId) {
     updated_at: r.updated_at,
     media: mediaMap[r.id] || [],
     author: authorMap[r.user_id] || { name: 'User', username: null, avatarUrl: null },
+    repost_author: repostAuthorMap[r.id] || null,
     counts: {
       likes: likeMap[r.id] || 0,
       comments: commentMap[r.id] || 0,

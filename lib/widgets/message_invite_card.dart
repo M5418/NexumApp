@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../core/invitations_api.dart';
 
 class MessageInviteCard extends StatefulWidget {
+  final String receiverId;
   final String fullName;
   final String bio;
   final String avatarUrl;
   final String coverUrl;
   final VoidCallback onClose;
+  final Function(Invitation)? onInvitationSent;
 
   const MessageInviteCard({
     super.key,
+    required this.receiverId,
     required this.fullName,
     required this.bio,
     required this.avatarUrl,
     required this.coverUrl,
     required this.onClose,
+    this.onInvitationSent,
   });
 
   @override
@@ -24,6 +29,7 @@ class MessageInviteCard extends StatefulWidget {
 
 class _MessageInviteCardState extends State<MessageInviteCard> {
   final TextEditingController _messageController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -31,25 +37,75 @@ class _MessageInviteCardState extends State<MessageInviteCard> {
     super.dispose();
   }
 
-  void _sendInvitation() {
+  Future<void> _sendInvitation() async {
     if (_messageController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Message required', style: GoogleFonts.inter()),
           duration: const Duration(seconds: 2),
+          backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    // Show success message and close
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Invitation sent', style: GoogleFonts.inter()),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-    widget.onClose();
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final invitation = await InvitationsApi().sendInvitation(
+        receiverId: widget.receiverId,
+        invitationContent: _messageController.text.trim(),
+      );
+
+      if (mounted) {
+        widget.onInvitationSent?.call(invitation);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Invitation sent successfully!',
+              style: GoogleFonts.inter(),
+            ),
+            duration: const Duration(seconds: 2),
+            backgroundColor: const Color(0xFF4CAF50),
+          ),
+        );
+
+        // Close after a short delay
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          widget.onClose();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage = 'Failed to send invitation';
+        if (e.toString().contains('invitation_already_exists')) {
+          errorMessage =
+              'An invitation already exists between you and this user';
+        } else if (e.toString().contains('receiver_not_found')) {
+          errorMessage = 'User not found';
+        } else if (e.toString().contains('cannot_invite_self')) {
+          errorMessage = 'You cannot send an invitation to yourself';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage, style: GoogleFonts.inter()),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -293,12 +349,17 @@ class _MessageInviteCardState extends State<MessageInviteCard> {
                       color: cardColor,
                     ),
                     child: IconButton(
-                      onPressed: _sendInvitation,
-                      icon: const Icon(
-                        Icons.send,
-                        color: Color(0xFF666666),
-                        size: 20,
-                      ),
+                      onPressed: _isLoading ? null : _sendInvitation,
+                      icon: _isLoading
+                          ? const CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF666666),
+                            )
+                          : const Icon(
+                              Icons.send,
+                              color: Color(0xFF666666),
+                              size: 20,
+                            ),
                       padding: EdgeInsets.zero,
                     ),
                   ),

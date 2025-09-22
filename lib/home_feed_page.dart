@@ -49,6 +49,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   Future<void> _ensureAuth() async {
     final t = await TokenStore.read();
+    debugPrint('🔑 JWT Token: $t'); // Debug: Print token
     if (t == null || t.isEmpty) {
       if (mounted) {
         Navigator.of(context).pushReplacement(

@@ -228,7 +228,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _filteredBooks.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final b = _filteredBooks[index];
           return GestureDetector(

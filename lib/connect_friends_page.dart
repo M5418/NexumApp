@@ -20,34 +20,74 @@ class ConnectFriendsPage extends StatefulWidget {
 
 class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
   // Track connection status for each friend
-  final Map<int, bool> _connectionStatus = {};
+  final Map<String, bool> _connectionStatus = {};
 
   // Loaded from backend
   List<Map<String, dynamic>> _friends = [];
   bool _loading = true;
 
   Future<void> _loadUsers() async {
+    debugPrint('🔍 ConnectFriendsPage: Starting to load users...');
     try {
       final users = await UsersApi().list();
+      debugPrint(
+        '🔍 ConnectFriendsPage: Received ${users.length} users from API',
+      );
+
       final status = await ConnectionsApi().status();
-      setState(() {
-        _friends = users;
-        _connectionStatus.clear();
-        for (final u in users) {
-          final id = (u['id'] as num).toInt();
-          _connectionStatus[id] = status.outbound.contains(id);
-        }
-        _loading = false;
-      });
+      debugPrint(
+        '🔍 ConnectFriendsPage: Connection status - Outbound: ${status.outbound.length}, Inbound: ${status.inbound.length}',
+      );
+
+      if (mounted) {
+        setState(() {
+          _friends = users;
+          _connectionStatus.clear();
+          for (final u in users) {
+            final id = u['id'] as String;
+            final isConnected = status.outbound.contains(id);
+            _connectionStatus[id] = isConnected;
+            debugPrint(
+              '🔍 ConnectFriendsPage: User ${u['name']} (ID: $id) - Connected: $isConnected',
+            );
+          }
+          _loading = false;
+        });
+        debugPrint(
+          '🔍 ConnectFriendsPage: Successfully loaded ${_friends.length} users',
+        );
+      }
     } catch (e) {
-      setState(() {
-        _loading = false;
-      });
-      // TODO: Optionally show an error message to the user
+      debugPrint('❌ ConnectFriendsPage: Error loading users: $e');
+      if (mounted) {
+        setState(() {
+          _friends = []; // Ensure friends list is empty on error
+          _connectionStatus.clear();
+          _loading = false;
+        });
+
+        // Show error message with retry option
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to load friends: ${e.toString()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: () => _loadUsers(),
+                ),
+              ),
+            );
+          }
+        });
+      }
     }
   }
 
-  Future<void> _toggleConnection(int userId) async {
+  Future<void> _toggleConnection(String userId) async {
     final api = ConnectionsApi();
     final next = !(_connectionStatus[userId] ?? false);
     setState(() {
@@ -170,7 +210,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                         itemCount: _friends.length,
                         itemBuilder: (context, index) {
                           final user = _friends[index];
-                          final int userId = (user['id'] as num).toInt();
+                          final String userId = user['id'] as String;
                           final bool isConnected =
                               _connectionStatus[userId] ?? false;
 

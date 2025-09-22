@@ -1,8 +1,8 @@
 import 'api_client.dart';
 
 class ConnectionsStatus {
-  final Set<int> inbound; // they connected to you
-  final Set<int> outbound; // you connected to them
+  final Set<String> inbound; // they connected to you
+  final Set<String> outbound; // you connected to them
 
   ConnectionsStatus({required this.inbound, required this.outbound});
 }
@@ -17,16 +17,16 @@ class ConnectionsApi {
     final outboundList = (data['outbound'] as List? ?? const [])
         .cast<dynamic>();
     return ConnectionsStatus(
-      inbound: inboundList.map((e) => (e as num).toInt()).toSet(),
-      outbound: outboundList.map((e) => (e as num).toInt()).toSet(),
+      inbound: inboundList.map((e) => e.toString()).toSet(),
+      outbound: outboundList.map((e) => e.toString()).toSet(),
     );
   }
 
-  Future<void> connect(int userId) async {
+  Future<void> connect(String userId) async {
     await _dio.post('/api/connections/$userId');
   }
 
-  Future<void> disconnect(int userId) async {
+  Future<void> disconnect(String userId) async {
     await _dio.delete('/api/connections/$userId');
   }
 }

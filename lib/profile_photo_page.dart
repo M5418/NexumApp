@@ -165,33 +165,38 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
   }
 
   void _navigateToNext() async {
+    final ctx = context;
     // If user selected a photo, upload it and attach to profile
     if (_hasSelectedPhoto && _photoPath != null) {
       try {
         await ProfileApi().uploadAndAttachProfilePhoto(File(_photoPath!));
       } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Failed to upload profile photo. You can try again later.',
+        if (ctx.mounted) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to upload profile photo. You can try again later.',
+              ),
+              backgroundColor: Colors.red,
             ),
-            backgroundColor: Colors.red,
-          ),
-        );
+          );
+        }
+        return;
       }
     }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProfileCoverPage(
-          firstName: widget.firstName,
-          lastName: widget.lastName,
-          hasProfilePhoto: _hasSelectedPhoto,
+    if (ctx.mounted) {
+      Navigator.push(
+        ctx,
+        MaterialPageRoute(
+          builder: (context) => ProfileCoverPage(
+            firstName: widget.firstName,
+            lastName: widget.lastName,
+            hasProfilePhoto: _hasSelectedPhoto,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -407,7 +412,40 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _navigateToNext,
+                  onPressed: () async {
+                    final ctx = context;
+                    try {
+                      // If user selected a photo, upload it and attach to profile
+                      if (_hasSelectedPhoto && _photoPath != null) {
+                        await ProfileApi().uploadAndAttachProfilePhoto(
+                          File(_photoPath!),
+                        );
+                      }
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Failed to upload profile photo. You can try again later.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                    if (ctx.mounted) {
+                      Navigator.push(
+                        ctx,
+                        MaterialPageRoute(
+                          builder: (context) => ProfileCoverPage(
+                            firstName: widget.firstName,
+                            lastName: widget.lastName,
+                            hasProfilePhoto: _hasSelectedPhoto,
+                          ),
+                        ),
+                      );
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFBFAE01),
                     foregroundColor: Colors.black,

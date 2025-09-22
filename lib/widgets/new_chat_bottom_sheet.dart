@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/message.dart';
 import '../chat_page.dart';
 import '../conversations_page.dart';
+import '../core/users_api.dart';
+import '../core/conversations_api.dart';
 
 class NewChatBottomSheet extends StatefulWidget {
   final bool isDarkMode;
@@ -21,12 +23,15 @@ class NewChatBottomSheet extends StatefulWidget {
 class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
   final TextEditingController _searchController = TextEditingController();
   List<UserItem> _filteredUsers = [];
+  bool _loadingUsers = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _filteredUsers = widget.availableUsers;
     _searchController.addListener(_filterUsers);
+    _loadUsers();
   }
 
   @override
@@ -52,24 +57,85 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
     });
   }
 
-  void _startNewChat(UserItem user) {
-    Navigator.pop(context); // Close bottom sheet
+  Future<void> _loadUsers() async {
+    try {
+      setState(() {
+        _loadingUsers = true;
+        _error = null;
+      });
+      final api = UsersApi();
+      final raw = await api.list();
+      final users = raw.map((u) {
+        final id = (u['id'] ?? '').toString();
+        final name = (u['name'] ?? 'User').toString();
+        final avatarUrl = u['avatarUrl']?.toString() ?? '';
+        final bio = (u['bio'] ?? '').toString();
+        return UserItem(
+          id: id,
+          name: name,
+          avatarUrl: avatarUrl.isEmpty ? '' : avatarUrl,
+          bio: bio,
+          isOnline: false,
+          mutualConnections: 0,
+        );
+      }).toList();
+      setState(() {
+        _filteredUsers = users;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) setState(() => _loadingUsers = false);
+    }
+  }
 
-    // Convert UserItem to ChatUser for navigation
-    final chatUser = ChatUser(
-      id: user.id,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      isOnline: user.isOnline,
-    );
+  void _startNewChat(UserItem user) async {
+    final ctx = context;
+    try {
+      Navigator.pop(ctx);
+      if (ctx.mounted) {
+        // Convert UserItem to ChatUser for navigation
+        final chatUser = ChatUser(
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          isOnline: user.isOnline,
+        );
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            ChatPage(otherUser: chatUser, isDarkMode: widget.isDarkMode),
-      ),
-    );
+        final convApi = ConversationsApi();
+        convApi
+            .createOrGet(user.id)
+            .then((convId) {
+              if (ctx.mounted) {
+                Navigator.push(
+                  ctx,
+                  MaterialPageRoute(
+                    builder: (ctx) => ChatPage(
+                      otherUser: chatUser,
+                      isDarkMode: widget.isDarkMode,
+                      conversationId: convId,
+                    ),
+                  ),
+                );
+              }
+            })
+            .catchError((e) {
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text('Failed to start chat: $e')),
+                );
+              }
+            });
+      }
+    } catch (e) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(
+          ctx,
+        ).showSnackBar(SnackBar(content: Text('Failed to start chat: $e')));
+      }
+    }
   }
 
   @override
@@ -154,13 +220,17 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
           Expanded(
             child: _filteredUsers.isEmpty
                 ? Center(
-                    child: Text(
-                      'No users found',
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: const Color(0xFF666666),
-                      ),
-                    ),
+                    child: _loadingUsers
+                        ? const CircularProgressIndicator()
+                        : Text(
+                            _error != null
+                                ? 'Failed to load users'
+                                : 'No users found',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              color: const Color(0xFF666666),
+                            ),
+                          ),
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 20),

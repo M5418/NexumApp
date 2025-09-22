@@ -982,7 +982,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         _bodyController.text.trim(),
       ].where((e) => e.isNotEmpty).join('\n\n');
 
-      final res = await PostsApi().create(
+      await PostsApi().create(
         content: content,
         media: mediaPayload.isEmpty ? null : mediaPayload,
       );

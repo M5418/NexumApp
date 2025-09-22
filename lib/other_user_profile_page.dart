@@ -3,9 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
+import 'widgets/message_invite_card.dart';
 import 'models/post.dart';
 import 'theme_provider.dart';
 import 'core/connections_api.dart';
+import 'core/conversations_api.dart';
+import 'chat_page.dart';
+import 'models/message.dart' hide MediaType;
 
 class OtherUserProfilePage extends StatefulWidget {
   final String userId;
@@ -32,6 +36,7 @@ class OtherUserProfilePage extends StatefulWidget {
 class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   late bool _isConnected;
+  final ConversationsApi _conversationsApi = ConversationsApi();
 
   @override
   void initState() {
@@ -207,44 +212,27 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                     Expanded(
                                       child: ElevatedButton(
                                         onPressed: () async {
+                                          final ctx = context;
                                           final api = ConnectionsApi();
                                           final next = !_isConnected;
                                           setState(() {
                                             _isConnected = next;
                                           });
-                                          final targetId = int.tryParse(
-                                            widget.userId,
-                                          );
-                                          if (targetId == null) {
-                                            if (mounted) {
-                                              setState(() {
-                                                _isConnected = !next;
-                                              });
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'Cannot connect: missing numeric user id',
-                                                  ),
-                                                ),
-                                              );
-                                            }
-                                            return;
-                                          }
                                           try {
                                             if (next) {
-                                              await api.connect(targetId);
+                                              await api.connect(widget.userId);
                                             } else {
-                                              await api.disconnect(targetId);
+                                              await api.disconnect(
+                                                widget.userId,
+                                              );
                                             }
                                           } catch (e) {
-                                            if (mounted) {
+                                            if (ctx.mounted) {
                                               setState(() {
                                                 _isConnected = !next;
                                               });
                                               ScaffoldMessenger.of(
-                                                context,
+                                                ctx,
                                               ).showSnackBar(
                                                 SnackBar(
                                                   content: Text(
@@ -285,9 +273,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: OutlinedButton(
-                                        onPressed: () {
-                                          // Navigate to message page
-                                        },
+                                        onPressed: _handleMessageUser,
                                         style: OutlinedButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(
                                             vertical: 12,
@@ -500,6 +486,74 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _handleMessageUser() async {
+    final ctx = context;
+    try {
+      // Check if conversation already exists
+      final conversationId = await _conversationsApi.checkConversationExists(
+        widget.userId,
+      );
+
+      if (!ctx.mounted) return;
+
+      if (conversationId != null) {
+        // Conversation exists - navigate to chat
+        final chatUser = ChatUser(
+          id: widget.userId,
+          name: widget.userName,
+          avatarUrl: widget.userAvatarUrl,
+        );
+
+        Navigator.push(
+          ctx,
+          MaterialPageRoute(
+            builder: (_) => ChatPage(
+              otherUser: chatUser,
+              isDarkMode: false,
+              conversationId: conversationId,
+            ),
+          ),
+        );
+      } else {
+        // No conversation - show invite bottom sheet
+        if (ctx.mounted) {
+          _showMessageBottomSheet(ctx);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error handling message user: $e');
+      // Fallback to invite sheet on error
+      if (ctx.mounted) {
+        _showMessageBottomSheet(ctx);
+      }
+    }
+  }
+
+  void _showMessageBottomSheet(BuildContext ctx) {
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: MessageInviteCard(
+          receiverId: widget.userId,
+          fullName: widget.userName,
+          bio: widget.userBio,
+          avatarUrl: widget.userAvatarUrl,
+          coverUrl: widget.userCoverUrl,
+          onClose: () => Navigator.pop(ctx),
+          onInvitationSent: (invitation) {
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(ctx).showSnackBar(
+              SnackBar(content: Text('Invitation sent to ${widget.userName}')),
+            );
+          },
+        ),
       ),
     );
   }

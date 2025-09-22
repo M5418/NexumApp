@@ -4,7 +4,7 @@ import 'dart:async';
 
 class ChatInput extends StatefulWidget {
   final Function(String) onSendMessage;
-  final VoidCallback onVoiceRecord;
+  final Future<void> Function() onVoiceRecord;
   final VoidCallback onAttachment;
   final String? replyToMessage;
   final VoidCallback? onCancelReply;
@@ -115,6 +115,22 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
       widget.onSendMessage(text);
       _controller.clear();
     }
+  }
+
+  void _startRecording() async {
+    setState(() {
+      _isRecording = true;
+    });
+    _startRecordingAnimation();
+    await widget.onVoiceRecord();
+  }
+
+  void _stopRecording() async {
+    setState(() {
+      _isRecording = false;
+    });
+    _stopRecordingAnimation();
+    await widget.onVoiceRecord();
   }
 
   @override
@@ -268,19 +284,12 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                         behavior: HitTestBehavior.opaque,
                         onLongPressStart: (_) {
                           if (!_isRecording) {
-                            setState(() {
-                              _isRecording = true;
-                            });
-                            _startRecordingAnimation();
-                            widget.onVoiceRecord();
+                            _startRecording();
                           }
                         },
                         onLongPressEnd: (_) {
                           if (_isRecording) {
-                            setState(() {
-                              _isRecording = false;
-                            });
-                            _stopRecordingAnimation();
+                            _stopRecording();
                           }
                         },
                         child: _isRecording

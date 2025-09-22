@@ -8,7 +8,7 @@ import 'core/connections_api.dart';
 import 'other_user_profile_page.dart';
 
 class MyConnectionUser {
-  final int id;
+  final String id;
   final String name;
   final String username;
   final String? avatarUrl;
@@ -34,7 +34,7 @@ class MyConnectionUser {
 
   factory MyConnectionUser.fromJson(Map<String, dynamic> json) {
     return MyConnectionUser(
-      id: json['id'],
+      id: (json['id'] as String?)?.trim() ?? '',
       name: json['name'] ?? 'User',
       username: json['username'] ?? '@user',
       avatarUrl: json['avatarUrl'],
@@ -85,23 +85,63 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
   }
 
   Future<void> _loadUsers() async {
+    debugPrint('🔍 MyConnectionsPage: Starting to load users...');
     try {
       final users = await UsersApi().list();
+      debugPrint(
+        '🔍 MyConnectionsPage: Received ${users.length} users from API',
+      );
+
       final status = await ConnectionsApi().status();
+      debugPrint(
+        '🔍 MyConnectionsPage: Connection status - Outbound: ${status.outbound.length}, Inbound: ${status.inbound.length}',
+      );
+
       final mapped = users.map((u) => MyConnectionUser.fromJson(u)).toList();
+
       for (final u in mapped) {
         u.youConnectTo = status.outbound.contains(u.id);
         u.theyConnectToYou = status.inbound.contains(u.id);
+        debugPrint(
+          '🔍 MyConnectionsPage: User ${u.name} (ID: ${u.id}) - YouConnect: ${u.youConnectTo}, TheyConnect: ${u.theyConnectToYou}',
+        );
       }
-      setState(() {
-        _users = mapped;
-        _loading = false;
-      });
+
+      if (mounted) {
+        setState(() {
+          _users = mapped;
+          _loading = false;
+        });
+        debugPrint(
+          '🔍 MyConnectionsPage: Successfully loaded ${_users.length} users',
+        );
+      }
     } catch (e) {
-      setState(() {
-        _loading = false;
-      });
-      // TODO: Optionally show an error message to the user
+      debugPrint('❌ MyConnectionsPage: Error loading users: $e');
+      if (mounted) {
+        setState(() {
+          _users = []; // Ensure users list is empty on error
+          _loading = false;
+        });
+
+        // Show error message with retry option
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to load connections: ${e.toString()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: () => _loadUsers(),
+                ),
+              ),
+            );
+          }
+        });
+      }
     }
   }
 
@@ -351,7 +391,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
           context,
           MaterialPageRoute(
             builder: (_) => OtherUserProfilePage(
-              userId: user.id.toString(),
+              userId: user.id,
               userName: user.name,
               userAvatarUrl: user.avatarUrl ?? '',
               userBio: user.bio,

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../models/message.dart';
 import '../image_swipe_page.dart';
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends StatefulWidget {
   final Message message;
   final bool showTimestamp;
   final VoidCallback? onReply;
@@ -20,10 +21,68 @@ class MessageBubble extends StatelessWidget {
     this.onLongPress,
   });
 
+  @override
+  State<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble> {
+  AudioPlayer? _audioPlayer;
+  bool _isPlaying = false;
+  Duration _currentPosition = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+  static String? _currentlyPlayingMessageId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.message.type == MessageType.voice) {
+      _initAudioPlayer();
+    }
+  }
+
+  void _initAudioPlayer() {
+    _audioPlayer = AudioPlayer();
+    _audioPlayer!.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+          if (state == PlayerState.playing) {
+            _currentlyPlayingMessageId = widget.message.id;
+          } else if (state == PlayerState.stopped ||
+              state == PlayerState.completed) {
+            if (_currentlyPlayingMessageId == widget.message.id) {
+              _currentlyPlayingMessageId = null;
+            }
+          }
+        });
+      }
+    });
+    _audioPlayer!.onPositionChanged.listen((position) {
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+        });
+      }
+    });
+    _audioPlayer!.onDurationChanged.listen((duration) {
+      if (mounted) {
+        setState(() {
+          _totalDuration = duration;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer?.dispose();
+    super.dispose();
+  }
+
   List<String> _getAllChatMedia() {
     final List<String> allMedia = [];
 
-    for (final msg in allMessages) {
+    for (final msg in widget.allMessages) {
       if (msg.type == MessageType.image || msg.type == MessageType.video) {
         for (final attachment in msg.attachments) {
           if (attachment.type == MediaType.image) {
@@ -49,30 +108,18 @@ class MessageBubble extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onLongPress: onLongPress,
+      onLongPress: widget.onLongPress,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 16),
-        child: Row(
-          mainAxisAlignment: message.isFromCurrentUser
-              ? MainAxisAlignment.end
-              : MainAxisAlignment.start,
+        margin: EdgeInsets.only(
+          left: widget.message.isFromCurrentUser ? 60 : 16,
+          right: widget.message.isFromCurrentUser ? 16 : 60,
+          bottom: 4,
+        ),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Flexible(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 280),
-                child: Column(
-                  crossAxisAlignment: message.isFromCurrentUser
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
-                  children: [
-                    _buildMessageContent(context, isDark),
-
-                    if (showTimestamp) _buildTimestamp(isDark),
-                  ],
-                ),
-              ),
-            ),
+            _buildMessageContent(context, isDark),
+            if (widget.showTimestamp) _buildTimestamp(isDark),
           ],
         ),
       ),
@@ -80,7 +127,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildMessageContent(BuildContext context, bool isDark) {
-    switch (message.type) {
+    switch (widget.message.type) {
       case MessageType.text:
         return _buildTextMessage(isDark);
       case MessageType.image:
@@ -98,7 +145,7 @@ class MessageBubble extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: message.isFromCurrentUser
+        color: widget.message.isFromCurrentUser
             ? const Color(0xFF007AFF)
             : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
         borderRadius: BorderRadius.circular(20),
@@ -106,12 +153,12 @@ class MessageBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (message.replyTo != null) _buildReplyPreview(isDark),
+          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
           Text(
-            message.content,
+            widget.message.content,
             style: GoogleFonts.inter(
               fontSize: 16,
-              color: message.isFromCurrentUser
+              color: widget.message.isFromCurrentUser
                   ? Colors.white
                   : (isDark ? Colors.white : Colors.black),
             ),
@@ -122,7 +169,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildImageMessage(BuildContext context, bool isDark) {
-    final bubbleColor = message.isFromCurrentUser
+    final bubbleColor = widget.message.isFromCurrentUser
         ? const Color(0xFF007AFF)
         : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
 
@@ -130,7 +177,7 @@ class MessageBubble extends StatelessWidget {
       onTap: () async {
         final allChatMedia = _getAllChatMedia();
         final initialIndex = _getInitialMediaIndex(
-          message.attachments.first.url,
+          widget.message.attachments.first.url,
         );
 
         final result = await Navigator.push(
@@ -144,8 +191,10 @@ class MessageBubble extends StatelessWidget {
         );
 
         // Handle reply action from ImageSwipePage
-        if (result != null && result['action'] == 'reply' && onReply != null) {
-          onReply!();
+        if (result != null &&
+            result['action'] == 'reply' &&
+            widget.onReply != null) {
+          widget.onReply!();
         }
       },
       child: Container(
@@ -157,24 +206,24 @@ class MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (message.replyTo != null) _buildReplyPreview(isDark),
-            if (message.replyTo != null) const SizedBox(height: 4),
-            if (message.attachments.length == 1)
-              _buildSingleImage(message.attachments.first)
-            else if (message.attachments.length == 2)
+            if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+            if (widget.message.replyTo != null) const SizedBox(height: 4),
+            if (widget.message.attachments.length == 1)
+              _buildSingleImage(widget.message.attachments.first)
+            else if (widget.message.attachments.length == 2)
               _buildTwoImages()
-            else if (message.attachments.length == 3)
-              _buildTripleMosaic(message.attachments)
+            else if (widget.message.attachments.length == 3)
+              _buildTripleMosaic(widget.message.attachments)
             else
-              _buildGridMosaic(message.attachments),
+              _buildGridMosaic(widget.message.attachments),
 
-            if (message.content.isNotEmpty) ...[
+            if (widget.message.content.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
-                message.content,
+                widget.message.content,
                 style: GoogleFonts.inter(
                   fontSize: 16,
-                  color: message.isFromCurrentUser
+                  color: widget.message.isFromCurrentUser
                       ? Colors.white
                       : (isDark ? Colors.white : Colors.black),
                 ),
@@ -187,7 +236,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildVideoMessage(bool isDark) {
-    final bubbleColor = message.isFromCurrentUser
+    final bubbleColor = widget.message.isFromCurrentUser
         ? const Color(0xFF007AFF)
         : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
 
@@ -200,30 +249,30 @@ class MessageBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (message.replyTo != null) _buildReplyPreview(isDark),
-          if (message.replyTo != null) const SizedBox(height: 4),
-          if (message.attachments.length == 1)
+          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+          if (widget.message.replyTo != null) const SizedBox(height: 4),
+          if (widget.message.attachments.length == 1)
             _buildMediaTile(
-              message.attachments.first,
+              widget.message.attachments.first,
               width: 270,
               height: 140,
               radius: 16,
               isVideo: true,
             )
-          else if (message.attachments.length == 2)
+          else if (widget.message.attachments.length == 2)
             _buildTwoImages()
-          else if (message.attachments.length == 3)
-            _buildTripleMosaic(message.attachments)
+          else if (widget.message.attachments.length == 3)
+            _buildTripleMosaic(widget.message.attachments)
           else
-            _buildVideosGridMosaic(message.attachments),
+            _buildVideosGridMosaic(widget.message.attachments),
 
-          if (message.content.isNotEmpty) ...[
+          if (widget.message.content.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              message.content,
+              widget.message.content,
               style: GoogleFonts.inter(
                 fontSize: 16,
-                color: message.isFromCurrentUser
+                color: widget.message.isFromCurrentUser
                     ? Colors.white
                     : (isDark ? Colors.white : Colors.black),
               ),
@@ -235,10 +284,21 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildVoiceMessage(bool isDark) {
+    final attachment = widget.message.attachments.isNotEmpty
+        ? widget.message.attachments.first
+        : null;
+
+    if (attachment == null) return const SizedBox.shrink();
+
+    final duration = attachment.duration ?? _totalDuration;
+    final progress = _totalDuration.inMilliseconds > 0
+        ? _currentPosition.inMilliseconds / _totalDuration.inMilliseconds
+        : 0.0;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: message.isFromCurrentUser
+        color: widget.message.isFromCurrentUser
             ? const Color(0xFF007AFF)
             : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
         borderRadius: BorderRadius.circular(20),
@@ -247,41 +307,73 @@ class MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (message.replyTo != null) _buildReplyPreview(isDark),
-          if (message.replyTo != null) const SizedBox(height: 6),
+          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+          if (widget.message.replyTo != null) const SizedBox(height: 6),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.play_arrow,
-                color: message.isFromCurrentUser
-                    ? Colors.white
-                    : const Color(0xFF007AFF),
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 100,
-                height: 20,
-                child: CustomPaint(
-                  painter: WaveformPainter(
-                    color: message.isFromCurrentUser
+              GestureDetector(
+                onTap: _togglePlayback,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: widget.message.isFromCurrentUser
+                        ? Colors.white.withValues(alpha: 51)
+                        : const Color(0xFF007AFF).withValues(alpha: 26),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: widget.message.isFromCurrentUser
                         ? Colors.white
                         : const Color(0xFF007AFF),
+                    size: 20,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              if (message.attachments.first.duration != null)
-                Text(
-                  _formatDuration(message.attachments.first.duration!),
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: message.isFromCurrentUser
-                        ? Colors.white70
-                        : const Color(0xFF666666),
-                  ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(1.5),
+                        color:
+                            (widget.message.isFromCurrentUser
+                                    ? Colors.white
+                                    : Colors.grey)
+                                .withValues(alpha: 77),
+                      ),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: Colors.transparent,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          widget.message.isFromCurrentUser
+                              ? Colors.white
+                              : const Color(0xFF007AFF),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatDuration(
+                        _totalDuration.inMilliseconds > 0
+                            ? _totalDuration
+                            : duration,
+                      ),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: widget.message.isFromCurrentUser
+                            ? Colors.white.withValues(alpha: 204)
+                            : Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
+              ),
             ],
           ),
         ],
@@ -289,13 +381,42 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  Future<void> _togglePlayback() async {
+    if (_audioPlayer == null) return;
+
+    final attachment = widget.message.attachments.isNotEmpty
+        ? widget.message.attachments.first
+        : null;
+
+    if (attachment == null) return;
+
+    try {
+      if (_isPlaying) {
+        await _audioPlayer!.pause();
+      } else {
+        // Stop any other currently playing voice message
+        if (_currentlyPlayingMessageId != null &&
+            _currentlyPlayingMessageId != widget.message.id) {
+          // This would ideally stop other players, but for now we'll just play this one
+        }
+        await _audioPlayer!.play(UrlSource(attachment.url));
+      }
+    } catch (e) {
+      debugPrint('❌ Audio playback error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to play audio: $e')));
+    }
+  }
+
   Widget _buildFileMessage(bool isDark) {
-    final attachment = message.attachments.first;
+    final attachment = widget.message.attachments.first;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: message.isFromCurrentUser
+        color: widget.message.isFromCurrentUser
             ? const Color(0xFF007AFF)
             : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
         borderRadius: BorderRadius.circular(20),
@@ -304,22 +425,22 @@ class MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (message.replyTo != null) _buildReplyPreview(isDark),
-          if (message.replyTo != null) const SizedBox(height: 6),
+          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+          if (widget.message.replyTo != null) const SizedBox(height: 6),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: message.isFromCurrentUser
+                  color: widget.message.isFromCurrentUser
                       ? Colors.white.withValues(alpha: 51)
                       : const Color(0xFF007AFF).withValues(alpha: 51),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   Icons.description,
-                  color: message.isFromCurrentUser
+                  color: widget.message.isFromCurrentUser
                       ? Colors.white
                       : const Color(0xFF007AFF),
                   size: 24,
@@ -335,7 +456,7 @@ class MessageBubble extends StatelessWidget {
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: message.isFromCurrentUser
+                        color: widget.message.isFromCurrentUser
                             ? Colors.white
                             : (isDark ? Colors.white : Colors.black),
                       ),
@@ -347,7 +468,7 @@ class MessageBubble extends StatelessWidget {
                         _formatFileSize(attachment.fileSize!),
                         style: GoogleFonts.inter(
                           fontSize: 12,
-                          color: message.isFromCurrentUser
+                          color: widget.message.isFromCurrentUser
                               ? Colors.white70
                               : const Color(0xFF666666),
                         ),
@@ -363,7 +484,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildReplyPreview(bool isDark) {
-    if (message.replyTo == null) return const SizedBox.shrink();
+    if (widget.message.replyTo == null) return const SizedBox.shrink();
 
     return Container(
       width: double.infinity,
@@ -380,7 +501,9 @@ class MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            message.isFromCurrentUser ? 'You' : message.senderName,
+            widget.message.isFromCurrentUser
+                ? 'You'
+                : widget.message.senderName,
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -389,7 +512,7 @@ class MessageBubble extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            message.replyTo!.content,
+            widget.message.replyTo!.content,
             style: GoogleFonts.inter(fontSize: 12, color: Colors.black87),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -439,19 +562,19 @@ class MessageBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildMediaTile(
-          message.attachments[0],
+          widget.message.attachments[0],
           width: 270,
           height: 140,
           radius: 16,
-          isVideo: message.attachments[0].type == MediaType.video,
+          isVideo: widget.message.attachments[0].type == MediaType.video,
         ),
         const SizedBox(height: spacing),
         _buildMediaTile(
-          message.attachments[1],
+          widget.message.attachments[1],
           width: 270,
           height: 140,
           radius: 16,
-          isVideo: message.attachments[1].type == MediaType.video,
+          isVideo: widget.message.attachments[1].type == MediaType.video,
         ),
       ],
     );
@@ -664,17 +787,17 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Text(
-        '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}',
+        '${widget.message.timestamp.hour.toString().padLeft(2, '0')}:${widget.message.timestamp.minute.toString().padLeft(2, '0')}',
         style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
       ),
     );
   }
 
   String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return "$twoDigitMinutes:$twoDigitSeconds";
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
   }
 
   String _formatFileSize(int bytes) {
