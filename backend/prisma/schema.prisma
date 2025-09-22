@@ -8,19 +8,37 @@ datasource db {
 }
 
 model User {
-  id              String          @id @db.VarChar(12)
-  email           String          @unique(map: "email") @db.VarChar(255)
-  password_hash   String          @db.VarChar(255)
-  created_at      DateTime?       @default(now()) @db.Timestamp(0)
-  connectionsFrom Connection[]    @relation("from_connections")
-  connectionsTo   Connection[]    @relation("to_connections")
-  post_comments   post_comments[]
-  posts           posts[]
-  profile         Profile?
-  uploads         Upload[]
-  sent_invitations Invitation[]   @relation("sent_invitations")
+  id            String    @id @db.VarChar(12)
+  email         String    @unique(map: "email") @db.VarChar(255)
+  password_hash String    @db.VarChar(255)
+  created_at    DateTime? @default(now()) @db.Timestamp(0)
+
+  // Connections
+  connectionsFrom Connection[] @relation("from_connections")
+  connectionsTo   Connection[] @relation("to_connections")
+
+  // Posts and comments
+  post_comments post_comments[]
+  posts         posts[]
+
+  // Profile and uploads
+  profile Profile?
+  uploads Upload[]
+
+  // Invitations
+  sent_invitations     Invitation[] @relation("sent_invitations")
   received_invitations Invitation[] @relation("received_invitations")
-  conversations   Conversation[]
+
+  // Conversations (two separate relations to the same model)
+  conversationsAsUserA Conversation[] @relation("userA_conversations")
+  conversationsAsUserB Conversation[] @relation("userB_conversations")
+
+  // Chat messages inverse relations
+  sentMessages     ChatMessage[] @relation("chat_sender")
+  receivedMessages ChatMessage[] @relation("chat_receiver")
+
+  // Chat reactions inverse relation
+  chatReactions ChatReaction[]
 
   @@map("users")
 }
@@ -222,31 +240,31 @@ enum media_type {
 }
 
 model Conversation {
-  id                 String            @id @db.VarChar(12)
-  user_a_id          String            @db.VarChar(12)
-  user_b_id          String            @db.VarChar(12)
-  last_message_type  chat_message_type?
-  last_message_text  String?           @db.Text
-  last_message_at    DateTime?         @db.Timestamp(0)
+  id                  String             @id @db.VarChar(12)
+  user_a_id           String             @db.VarChar(12)
+  user_b_id           String             @db.VarChar(12)
+  last_message_type   chat_message_type?
+  last_message_text   String?            @db.Text
+  last_message_at     DateTime?          @db.Timestamp(0)
   // per-user state
-  user_a_last_read_at DateTime?        @db.Timestamp(0)
-  user_b_last_read_at DateTime?        @db.Timestamp(0)
-  user_a_muted       Boolean           @default(false)
-  user_b_muted       Boolean           @default(false)
-  user_a_deleted     Boolean           @default(false)
-  user_b_deleted     Boolean           @default(false)
-  created_at         DateTime?         @default(now()) @db.Timestamp(0)
-  updated_at         DateTime?         @default(now()) @updatedAt @db.Timestamp(0)
+  user_a_last_read_at DateTime?          @db.Timestamp(0)
+  user_b_last_read_at DateTime?          @db.Timestamp(0)
+  user_a_muted        Boolean            @default(false)
+  user_b_muted        Boolean            @default(false)
+  user_a_deleted      Boolean            @default(false)
+  user_b_deleted      Boolean            @default(false)
+  created_at          DateTime?          @default(now()) @db.Timestamp(0)
+  updated_at          DateTime?          @default(now()) @updatedAt @db.Timestamp(0)
 
   // Relations
-  userA              User              @relation(fields: [user_a_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "conversations_fk_user_a")
-  userB              User              @relation(fields: [user_b_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "conversations_fk_user_b")
-  messages           ChatMessage[]
+  userA    User          @relation("userA_conversations", fields: [user_a_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "conversations_fk_user_a")
+  userB    User          @relation("userB_conversations", fields: [user_b_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "conversations_fk_user_b")
+  messages ChatMessage[]
 
+  @@unique([user_a_id, user_b_id], map: "conversations_unique_pair")
   @@index([user_a_id], map: "conversations_user_a")
   @@index([user_b_id], map: "conversations_user_b")
   @@index([last_message_at], map: "conversations_last_message_at")
-  @@unique([user_a_id, user_b_id], map: "conversations_unique_pair")
   @@map("conversations")
 }
 
@@ -262,11 +280,11 @@ model ChatMessage {
   updated_at      DateTime?         @default(now()) @updatedAt @db.Timestamp(0)
 
   // Relations
-  conversation    Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_messages_fk_conversation")
-  sender          User              @relation("chat_sender", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_messages_fk_sender")
-  receiver        User              @relation("chat_receiver", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_messages_fk_receiver")
-  attachments     ChatAttachment[]
-  reactions       ChatReaction[]
+  conversation Conversation     @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_messages_fk_conversation")
+  sender       User             @relation("chat_sender", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_messages_fk_sender")
+  receiver     User             @relation("chat_receiver", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_messages_fk_receiver")
+  attachments  ChatAttachment[]
+  reactions    ChatReaction[]
 
   @@index([conversation_id], map: "chat_messages_conversation")
   @@index([sender_id], map: "chat_messages_sender")
@@ -276,34 +294,34 @@ model ChatMessage {
 }
 
 model ChatAttachment {
-  id          String      @id @db.VarChar(12)
-  message_id  String      @db.VarChar(12)
+  id          String     @id @db.VarChar(12)
+  message_id  String     @db.VarChar(12)
   type        media_type
-  url         String      @db.Text
-  thumbnail   String?     @db.Text
+  url         String     @db.Text
+  thumbnail   String?    @db.Text
   durationSec Int?
   fileSize    Int?
-  fileName    String?     @db.VarChar(255)
-  created_at  DateTime?   @default(now()) @db.Timestamp(0)
+  fileName    String?    @db.VarChar(255)
+  created_at  DateTime?  @default(now()) @db.Timestamp(0)
 
   // Relations
-  message     ChatMessage @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_attachments_fk_message")
+  message ChatMessage @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_attachments_fk_message")
 
   @@index([message_id], map: "chat_attachments_message")
   @@map("chat_attachments")
 }
 
 model ChatReaction {
-  id         String      @id @db.VarChar(12)
-  message_id String      @db.VarChar(12)
-  user_id    String      @db.VarChar(12)
-  emoji      String      @db.VarChar(16)
-  created_at DateTime?   @default(now()) @db.Timestamp(0)
-  updated_at DateTime?   @default(now()) @updatedAt @db.Timestamp(0)
+  id         String    @id @db.VarChar(12)
+  message_id String    @db.VarChar(12)
+  user_id    String    @db.VarChar(12)
+  emoji      String    @db.VarChar(16)
+  created_at DateTime? @default(now()) @db.Timestamp(0)
+  updated_at DateTime? @default(now()) @updatedAt @db.Timestamp(0)
 
   // Relations
-  message    ChatMessage @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_reactions_fk_message")
-  user       User        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_reactions_fk_user")
+  message ChatMessage @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_reactions_fk_message")
+  user    User        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_reactions_fk_user")
 
   @@unique([message_id, user_id], map: "chat_reactions_unique")
   @@index([user_id], map: "chat_reactions_user")
