@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
        FROM conversations c
        LEFT JOIN profiles p ON p.user_id = (CASE WHEN c.user_a_id = ? THEN c.user_b_id ELSE c.user_a_id END)
        WHERE (c.user_a_id = ? AND c.user_a_deleted = 0) OR (c.user_b_id = ? AND c.user_b_deleted = 0)
-       ORDER BY c.last_message_at DESC NULLS LAST`,
+       ORDER BY (c.last_message_at IS NULL), c.last_message_at DESC`,
       [userId, userId, userId, userId, userId]
     );
 

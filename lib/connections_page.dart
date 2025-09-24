@@ -16,6 +16,7 @@ class User {
   final String avatarUrl;
   final String coverUrl;
   final bool isConnected;
+  final bool theyConnectToYou;
 
   User({
     required this.id,
@@ -24,6 +25,7 @@ class User {
     required this.avatarUrl,
     required this.coverUrl,
     this.isConnected = false,
+    this.theyConnectToYou = false,
   });
 }
 
@@ -84,10 +86,11 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
           avatarUrl: (m['avatarUrl'] as String?)?.trim() ?? '',
           coverUrl: (m['coverUrl'] as String?)?.trim() ?? '',
           isConnected: status.outbound.contains(id),
+          theyConnectToYou: status.inbound.contains(id),
         );
 
         debugPrint(
-          '🔍 ConnectionsPage: Mapped user - ID: ${user.id}, Name: ${user.fullName}, Connected: ${user.isConnected}',
+          '🔍 ConnectionsPage: Mapped user - ID: ${user.id}, Name: ${user.fullName}, Connected: ${user.isConnected}, They Connect To You: ${user.theyConnectToYou}',
         );
         return user;
       }).toList();
@@ -150,9 +153,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   Widget build(BuildContext context) {
     final isDark =
         widget.isDarkMode ?? Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark
-        ? const Color(0xFF0C0C0C)
-        : const Color(0xFFF1F4F8);
+    final backgroundColor =
+        isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final appBarColor = isDark ? Colors.black : Colors.white;
 
     return Scaffold(
@@ -234,11 +236,11 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                     child: GridView.builder(
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 16,
-                            childAspectRatio: 155 / 240,
-                          ),
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: 155 / 240,
+                      ),
                       itemCount: users.length,
                       itemBuilder: (context, index) {
                         final user = users[index];
@@ -249,6 +251,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                           fullName: user.fullName,
                           bio: user.bio,
                           initialConnectionStatus: user.isConnected,
+                          theyConnectToYou: user.theyConnectToYou,
                           onMessage: () => _showInviteCard(user),
                         );
                       },

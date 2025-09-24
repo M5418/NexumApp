@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'sign_up_page.dart';
@@ -20,6 +21,16 @@ class _SignInPageState extends State<SignInPage> {
   bool _isLoading = false;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefill default dev credentials in debug mode only
+    if (kDebugMode) {
+      _emailController.text = 'test04@gmail.com';
+      _passwordController.text = 'Test04@!';
+    }
+  }
 
   @override
   void dispose() {
@@ -69,10 +80,28 @@ class _SignInPageState extends State<SignInPage> {
         }
       } else {
         if (mounted) {
+          final err = (response['error'] as String?) ?? 'invalid_credentials';
+          String msg;
+          switch (err) {
+            case 'invalid_credentials':
+              msg = 'Invalid email or password';
+              break;
+            case 'validation_error':
+              msg = 'Please enter a valid email and password';
+              break;
+            case 'internal_error':
+              msg = 'Server error. Please try again later.';
+              break;
+            case 'network_error':
+              msg = 'Cannot reach server. Check API base URL and that the backend is running.';
+              break;
+            default:
+              msg = err;
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                response['error'] ?? 'Invalid email or password',
+                msg,
                 style: GoogleFonts.inter(),
               ),
               backgroundColor: Colors.red,

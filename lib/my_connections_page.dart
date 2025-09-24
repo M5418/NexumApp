@@ -150,9 +150,8 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0C0C0C)
-          : const Color(0xFFF1F4F8),
+      backgroundColor:
+          isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       body: SafeArea(
         child: Column(
           children: [
@@ -397,6 +396,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
               userBio: user.bio,
               userCoverUrl: user.coverUrl ?? '',
               isConnected: user.youConnectTo,
+              theyConnectToYou: user.theyConnectToYou,
             ),
           ),
         );
@@ -409,8 +409,8 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
               radius: 24,
               backgroundImage:
                   (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
-                  ? NetworkImage(user.avatarUrl!)
-                  : null,
+                      ? NetworkImage(user.avatarUrl!)
+                      : null,
               child: (user.avatarUrl == null || user.avatarUrl!.isEmpty)
                   ? Text(
                       user.avatarLetter,
@@ -506,7 +506,9 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
-          'Connect',
+          (user.theyConnectToYou && !user.youConnectTo)
+              ? 'Connect Back'
+              : 'Connect',
           style: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: FontWeight.w600,

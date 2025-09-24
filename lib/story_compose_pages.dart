@@ -7,6 +7,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 
+import 'core/files_api.dart';
+import 'core/stories_api.dart';
+
+// Extracted reusable widgets
+import 'widgets/story_editor_toolbar.dart';
+import 'widgets/story_media_viewer.dart';
+import 'widgets/music_chip.dart';
+import 'widgets/media_nav_bar.dart';
+
 enum StoryComposeType { image, video, text, mixed }
 
 // ======================= Type Picker (bottom sheet) =======================
@@ -250,43 +259,6 @@ class _MusicPickerSheet extends StatelessWidget {
   }
 }
 
-class _ToolIcon extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _ToolIcon({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const double kSize = 56;
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: kSize,
-            height: kSize,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 26),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: const Color(0xFFBFAE01), size: 26),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: GoogleFonts.inter(color: Colors.white, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ========================= Mixed Media Story Composer =========================
 class MixedMediaStoryComposerPage extends StatefulWidget {
   const MixedMediaStoryComposerPage({super.key});
@@ -329,19 +301,15 @@ class _MixedMediaStoryComposerPageState
 
   Future<void> _pickMedia() async {
     try {
-      // Pick multiple media (images and videos together in one interface)
       final mediaFiles = await _picker.pickMultipleMedia(limit: 10);
-
       if (mediaFiles.isEmpty) return;
 
       final newItems = <MediaItem>[];
 
-      // Process each selected media file
       for (final media in mediaFiles) {
         final isVideo = media.mimeType?.startsWith('video/') ?? false;
 
         if (isVideo) {
-          // Initialize video controller for videos
           final controller = VideoPlayerController.file(File(media.path));
           try {
             await controller.initialize();
@@ -357,7 +325,6 @@ class _MixedMediaStoryComposerPageState
             controller.dispose();
           }
         } else {
-          // Add image
           newItems.add(MediaItem(file: media, isVideo: false));
         }
       }
@@ -369,12 +336,11 @@ class _MixedMediaStoryComposerPageState
         _currentIndex = 0;
       });
 
-      // Auto-play first video if it exists
       if (newItems.isNotEmpty && newItems[0].isVideo) {
         newItems[0].videoController?.play();
       }
     } catch (e) {
-      // Fallback to single media picker if pickMultipleMedia fails
+      // Fallback to single media
       final media = await _picker.pickMedia();
       if (media == null) return;
 
@@ -469,7 +435,6 @@ class _MixedMediaStoryComposerPageState
   }
 
   void _onPageChanged(int index) {
-    // Pause all videos
     for (final item in _mediaItems) {
       if (item.isVideo) {
         item.videoController?.pause();
@@ -480,33 +445,96 @@ class _MixedMediaStoryComposerPageState
       _currentIndex = index;
     });
 
-    // Play current video if it's a video
     if (_mediaItems[index].isVideo) {
       _mediaItems[index].videoController?.play();
     }
   }
 
+  Future<File> _writeBytesToTemp(Uint8List bytes, {String ext = 'jpg'}) async {
+    final dir = await Directory.systemTemp.createTemp('nexum_story_');
+    final file =
+        File('${dir.path}/story_${DateTime.now().millisecondsSinceEpoch}.$ext');
+    await file.writeAsBytes(bytes);
+    return file;
+  }
+
   Future<void> _post() async {
-    final imageCount = _mediaItems.where((item) => !item.isVideo).length;
-    final videoCount = _mediaItems.where((item) => item.isVideo).length;
-
-    String message = '';
-    if (imageCount > 0 && videoCount > 0) {
-      message =
-          '$imageCount image(s) and $videoCount video(s) posted as stories (UI only)';
-    } else if (imageCount > 0) {
-      message = '$imageCount image stories posted (UI only)';
-    } else {
-      message = '$videoCount video stories posted (UI only)';
+    if (_mediaItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No media selected', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Uploading...', style: GoogleFonts.inter())),
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.inter()),
-        backgroundColor: const Color(0xFFBFAE01),
-      ),
-    );
-    Navigator.pop(context);
+      final filesApi = FilesApi();
+      final storiesApi = StoriesApi();
+      final List<Map<String, dynamic>> items = [];
+
+      for (final item in _mediaItems) {
+        if (item.isVideo) {
+          // Upload video
+          final f = File(item.file.path);
+          final up = await filesApi.uploadFile(f);
+          items.add({
+            'media_type': 'video',
+            'media_url': up['url'],
+            'privacy': 'public',
+          });
+        } else {
+          // Upload image (prefer edited bytes)
+          File f;
+          if (item.editedImageBytes != null) {
+            f = await _writeBytesToTemp(item.editedImageBytes!, ext: 'jpg');
+          } else {
+            f = File(item.file.path);
+          }
+          final up = await filesApi.uploadFile(f);
+
+          String? audioUrl;
+          String? audioTitle;
+          if (_selectedTrack != null) {
+            // Replace with real music URL when catalog is available
+            audioUrl =
+                'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+            audioTitle = _selectedTrack!.title;
+          }
+
+          items.add({
+            'media_type': 'image',
+            'media_url': up['url'],
+            if (audioUrl != null) 'audio_url': audioUrl,
+            if (audioTitle != null) 'audio_title': audioTitle,
+            'privacy': 'public',
+          });
+        }
+      }
+
+      await storiesApi.createStoriesBatch(items);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Story posted!', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to post story', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _pickMusic() async {
@@ -561,74 +589,30 @@ class _MixedMediaStoryComposerPageState
                     ? _PickMixedMediaPlaceholder(onPick: _pickMedia)
                     : Column(
                         children: [
-                          // Media counter and navigation
                           if (_mediaItems.length > 1)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '${_currentIndex + 1} of ${_mediaItems.length}',
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      IconButton(
-                                        onPressed: _currentIndex > 0
-                                            ? () {
-                                                setState(() => _currentIndex--);
-                                                _pageController.previousPage(
-                                                  duration: const Duration(
-                                                    milliseconds: 300,
-                                                  ),
-                                                  curve: Curves.easeInOut,
-                                                );
-                                              }
-                                            : null,
-                                        icon: Icon(
-                                          Icons.arrow_back_ios,
-                                          color: _currentIndex > 0
-                                              ? Colors.white
-                                              : Colors.grey,
-                                          size: 20,
-                                        ),
-                                      ),
-                                      IconButton(
-                                        onPressed:
-                                            _currentIndex <
-                                                _mediaItems.length - 1
-                                            ? () {
-                                                setState(() => _currentIndex++);
-                                                _pageController.nextPage(
-                                                  duration: const Duration(
-                                                    milliseconds: 300,
-                                                  ),
-                                                  curve: Curves.easeInOut,
-                                                );
-                                              }
-                                            : null,
-                                        icon: Icon(
-                                          Icons.arrow_forward_ios,
-                                          color:
-                                              _currentIndex <
-                                                  _mediaItems.length - 1
-                                              ? Colors.white
-                                              : Colors.grey,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                            MediaNavBar(
+                              currentIndex: _currentIndex,
+                              total: _mediaItems.length,
+                              onPrev: _currentIndex > 0
+                                  ? () {
+                                      setState(() => _currentIndex--);
+                                      _pageController.previousPage(
+                                        duration:
+                                            const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    }
+                                  : null,
+                              onNext: _currentIndex < _mediaItems.length - 1
+                                  ? () {
+                                      setState(() => _currentIndex++);
+                                      _pageController.nextPage(
+                                        duration:
+                                            const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    }
+                                  : null,
                             ),
 
                           // Media PageView
@@ -641,11 +625,16 @@ class _MixedMediaStoryComposerPageState
                                   onPageChanged: _onPageChanged,
                                   itemBuilder: (context, index) {
                                     final item = _mediaItems[index];
-                                    return Container(
-                                      margin: const EdgeInsets.all(16),
-                                      child: item.isVideo
-                                          ? _buildVideoPlayer(item)
-                                          : _buildImageViewer(item),
+                                    return StoryMediaViewer(
+                                      isVideo: item.isVideo,
+                                      videoController: item.videoController,
+                                      imageFile: item.isVideo
+                                          ? null
+                                          : File(item.file.path),
+                                      editedImageBytes: item.editedImageBytes,
+                                      fileName: item.isVideo
+                                          ? item.file.path.split('/').last
+                                          : null,
                                     );
                                   },
                                 ),
@@ -656,50 +645,11 @@ class _MixedMediaStoryComposerPageState
                                     left: 12,
                                     right: 12,
                                     top: 12,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(
-                                          alpha: 153,
-                                        ),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.music_note,
-                                            color: Colors.white,
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              '${_selectedTrack!.title} — ${_selectedTrack!.artist}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: GoogleFonts.inter(
-                                                color: Colors.white,
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          GestureDetector(
-                                            onTap: () => setState(
-                                              () => _selectedTrack = null,
-                                            ),
-                                            child: const Icon(
-                                              Icons.close,
-                                              color: Colors.white,
-                                              size: 16,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                    child: MusicChip(
+                                      title: _selectedTrack!.title,
+                                      artist: _selectedTrack!.artist,
+                                      onClear: () =>
+                                          setState(() => _selectedTrack = null),
                                     ),
                                   ),
 
@@ -713,9 +663,8 @@ class _MixedMediaStoryComposerPageState
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 153,
-                                      ),
+                                      color:
+                                          Colors.black.withValues(alpha: 153),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
@@ -759,8 +708,7 @@ class _MixedMediaStoryComposerPageState
                                     width: 8,
                                     height: 8,
                                     margin: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
+                                        horizontal: 4),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: index == _currentIndex
@@ -776,115 +724,155 @@ class _MixedMediaStoryComposerPageState
               ),
             ),
 
-            // Toolbar - Only show editing tools if media is uploaded
+            // Bottom editor toolbar
             if (_mediaItems.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 77),
-                      blurRadius: 10,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Edit button - only show for images
-                    if (!_mediaItems[_currentIndex].isVideo)
-                      _ToolIcon(
-                        icon: Icons.edit,
-                        label: 'Edit',
-                        onTap: _editCurrentImage,
-                      )
-                    else
-                      const SizedBox(width: 56), // Placeholder for spacing
-                    _ToolIcon(
-                      icon: Icons.music_note,
-                      label: 'Music',
-                      onTap: _pickMusic,
-                    ),
-                    _ToolIcon(
-                      icon: Icons.perm_media,
-                      label: 'Choose',
-                      onTap: _pickMedia,
-                    ),
-                    if (_mediaItems.length > 1)
-                      _ToolIcon(
-                        icon: Icons.delete_outline,
-                        label: 'Remove',
-                        onTap: _removeCurrentMedia,
-                      ),
-                    _ToolIcon(
-                      icon: Icons.refresh,
-                      label: 'Reset',
-                      onTap: () => setState(() {
-                        for (final item in _mediaItems) {
-                          item.editedImageBytes = null;
-                        }
-                        _selectedTrack = null;
-                      }),
-                    ),
-                  ],
-                ),
+              StoryEditorToolbar(
+                isImage: !_mediaItems[_currentIndex].isVideo,
+                canRemove: _mediaItems.length > 1,
+                onEdit: !_mediaItems[_currentIndex].isVideo
+                    ? _editCurrentImage
+                    : null,
+                onPickMusic: _pickMusic,
+                onPickMedia: _pickMedia,
+                onRemove: _mediaItems.length > 1 ? _removeCurrentMedia : null,
+                onReset: () => setState(() {
+                  for (final item in _mediaItems) {
+                    item.editedImageBytes = null;
+                  }
+                  _selectedTrack = null;
+                }),
               ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildVideoPlayer(MediaItem item) {
-    if (item.videoController == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
+// ========================= Text Story Composer =========================
+class TextStoryComposerPage extends StatefulWidget {
+  const TextStoryComposerPage({super.key});
+
+  @override
+  State<TextStoryComposerPage> createState() => _TextStoryComposerPageState();
+}
+
+class _TextStoryComposerPageState extends State<TextStoryComposerPage> {
+  final _controller = TextEditingController();
+  Color _bgColor = const Color(0xFFE74C3C);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _postText() async {
+    if (_controller.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Write something', style: GoogleFonts.inter())),
+      );
+      return;
+    }
+    try {
+      final hex =
+          '#${_bgColor.value.toRadixString(16).padLeft(8, '0').toUpperCase()}';
+      await StoriesApi().createStory(
+        mediaType: 'text',
+        textContent: _controller.text.trim(),
+        backgroundColor: hex,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Story posted!', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to post story', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
       );
     }
+  }
 
-    return Stack(
-      children: [
-        AspectRatio(
-          aspectRatio: item.videoController!.value.aspectRatio == 0
-              ? 9 / 16
-              : item.videoController!.value.aspectRatio,
-          child: VideoPlayer(item.videoController!),
-        ),
-        Positioned(
-          left: 8,
-          bottom: 8,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 153),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              item.file.path.split('/').last,
-              style: GoogleFonts.inter(
-                color: Colors.white.withValues(alpha: 179),
-                fontSize: 12,
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Text Story', style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: _postText,
+            child: Text('Post',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+          )
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Container(
+              color: _bgColor,
+              padding: const EdgeInsets.all(24),
+              alignment: Alignment.center,
+              child: TextField(
+                controller: _controller,
+                maxLines: null,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                    fontSize: 22, color: Colors.white, height: 1.3),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Type your story...',
+                ),
               ),
             ),
           ),
-        ),
-      ],
+          Container(
+            height: 60,
+            color: isDark ? Colors.black : Colors.white,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              children: [
+                for (final c in [
+                  0xFFE74C3C,
+                  0xFF2ECC71,
+                  0xFF3498DB,
+                  0xFFF1C40F,
+                  0xFF9B59B6,
+                  0xFF34495E,
+                  0xFF1ABC9C
+                ])
+                  GestureDetector(
+                    onTap: () => setState(() => _bgColor = Color(c)),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
+                      decoration: BoxDecoration(
+                          color: Color(c),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.black12)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
-  }
-
-  Widget _buildImageViewer(MediaItem item) {
-    final hasEditedVersion = item.editedImageBytes != null;
-    return hasEditedVersion
-        ? Image.memory(item.editedImageBytes!, fit: BoxFit.contain)
-        : Image.file(File(item.file.path), fit: BoxFit.contain);
   }
 }
 
+// ========================= Placeholder (pick media) =========================
 class _PickMixedMediaPlaceholder extends StatelessWidget {
   final VoidCallback onPick;
   const _PickMixedMediaPlaceholder({required this.onPick});

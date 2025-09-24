@@ -135,12 +135,12 @@ class _BooksHomePageState extends State<BooksHomePage> {
   }
 
   List<String> get _languages => [
-    'All',
-    'English',
-    'French',
-    'Arabic',
-    'Spanish',
-  ];
+        'All',
+        'English',
+        'French',
+        'Arabic',
+        'Spanish',
+      ];
 
   List<Book> get _filteredBooks => _selectedLanguage == 'All'
       ? _books
@@ -228,13 +228,13 @@ class _BooksHomePageState extends State<BooksHomePage> {
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _filteredBooks.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final b = _filteredBooks[index];
+        separatorBuilder: (ctx, idx) => const SizedBox(height: 10),
+        itemBuilder: (ctx, idx) {
+          final b = _filteredBooks[idx];
           return GestureDetector(
             onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => BookDetailsPage(book: b)),
+              ctx,
+              MaterialPageRoute(builder: (ctx) => BookDetailsPage(book: b)),
             ),
             child: Container(
               width: 360,
@@ -266,7 +266,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                           child: Image.network(
                             b.coverUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorBuilder: (ctx, error, stackTrace) => Container(
                               color: isDark
                                   ? const Color(0xFF111111)
                                   : const Color(0xFFEAEAEA),
@@ -364,9 +364,9 @@ class _BooksHomePageState extends State<BooksHomePage> {
                             ),
                             GestureDetector(
                               onTap: () => Navigator.push(
-                                context,
+                                ctx,
                                 MaterialPageRoute(
-                                  builder: (_) => BookPlayPage(book: b),
+                                  builder: (ctx) => BookPlayPage(book: b),
                                 ),
                               ),
                               child: Container(

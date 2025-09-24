@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
+import 'core/stories_api.dart' as backend;
 
 import 'widgets/share_bottom_sheet.dart';
 
@@ -45,16 +46,20 @@ class StoryItem {
 }
 
 class StoryUser {
+  final String userId;
   final String name;
   final String handle;
   final String avatarUrl;
   final List<StoryItem> items;
+  final List<String?> itemIds;
 
   const StoryUser({
+    required this.userId,
     required this.name,
     required this.handle,
     required this.avatarUrl,
     required this.items,
+    required this.itemIds,
   });
 }
 
@@ -77,11 +82,13 @@ class _StoryFrame {
   final int userIndex;
   final int itemIndex;
   final StoryItem item;
+  final String? storyId;
   const _StoryFrame({
     required this.user,
     required this.userIndex,
     required this.itemIndex,
     required this.item,
+    required this.storyId,
   });
 }
 
@@ -89,10 +96,12 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
 
-  late final List<StoryUser> _users;
-  late final List<_StoryFrame> _frames;
+  List<StoryUser> _users = [];
+  List<_StoryFrame> _frames = [];
   int _currentIndex = 0;
+  bool _loading = true;
 
+  final backend.StoriesApi _storiesApi = backend.StoriesApi();
   VideoPlayerController? _videoController;
   AudioPlayer? _audioPlayer;
   bool _isMuted = false;
@@ -105,20 +114,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   @override
   void initState() {
     super.initState();
-    _users = _buildUsersFromRings(widget.rings);
-    _frames = _flattenFrames(_users);
-    _currentIndex = _initialFrameIndexFromRingIndex(
-      widget.initialRingIndex,
-      widget.rings,
-      _users,
-      _frames,
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _pageController.jumpToPage(_currentIndex);
-      _startPlaybackForFrame(_frames[_currentIndex]);
-    });
+    _initFromBackend();
   }
 
   @override
@@ -128,6 +124,97 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     _progressController?.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _initFromBackend() async {
+    try {
+      final filtered = widget.rings
+          .where((r) => (r['isMine'] as bool?) != true)
+          .toList();
+
+      // Fetch all users' stories in parallel
+      final responses = await Future.wait(
+        filtered.map((r) => _storiesApi.getUserStories(r['userId'] as String)),
+      );
+
+      final users = <StoryUser>[];
+      for (final resp in responses) {
+        final u = resp.user; // backend.StoryUser
+        final items = <StoryItem>[];
+        final ids = <String?>[];
+        for (final it in resp.items) {
+          switch (it.mediaType) {
+            case 'image':
+              items.add(StoryItem.image(
+                imageUrl: it.mediaUrl,
+                audioUrl: it.audioUrl,
+                audioTitle: it.audioTitle,
+              ));
+              ids.add(it.id);
+              break;
+            case 'video':
+              items.add(StoryItem.video(videoUrl: it.mediaUrl));
+              ids.add(it.id);
+              break;
+            case 'text':
+              Color? bg;
+              if (it.backgroundColor != null) {
+                bg = _parseHexColor(it.backgroundColor!);
+              }
+              items.add(StoryItem.text(text: it.textContent, backgroundColor: bg));
+              ids.add(it.id);
+              break;
+            default:
+              break;
+          }
+        }
+        users.add(
+          StoryUser(
+            userId: u.id,
+            name: u.name,
+            handle: '@${u.username}',
+            avatarUrl: u.avatarUrl ??
+                'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+            items: items,
+            itemIds: ids,
+          ),
+        );
+      }
+
+      _users = users;
+      _frames = _flattenFrames(_users);
+      _currentIndex = _initialFrameIndexFromRingIndex(
+        widget.initialRingIndex,
+        widget.rings,
+        _users,
+        _frames,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _frames.isEmpty) return;
+        _pageController.jumpToPage(_currentIndex);
+        _startPlaybackForFrame(_frames[_currentIndex]);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _users = [];
+        _frames = [];
+        _loading = false;
+      });
+    }
+  }
+
+  Color _parseHexColor(String hex) {
+    String h = hex.replaceAll('#', '');
+    if (h.length == 6) {
+      h = 'FF$h';
+    }
+    return Color(int.parse(h, radix: 16));
   }
 
   void _disposePlayers() {
@@ -145,53 +232,20 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     }
   }
 
-  List<StoryUser> _buildUsersFromRings(List<Map<String, dynamic>> rings) {
-    final filtered = rings
-        .where((r) => (r['isMine'] as bool?) != true)
-        .toList();
-    return List<StoryUser>.generate(filtered.length, (i) {
-      final r = filtered[i];
-      final name = (r['label'] as String?) ?? 'User';
-      final avatar =
-          (r['imageUrl'] as String?) ??
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face';
-      final handle = '@${name.toLowerCase().replaceAll(' ', '')}';
-
-      final items = <StoryItem>[
-        StoryItem.image(
-          imageUrl:
-              'https://images.unsplash.com/photo-1542736667-069246bdbc74?w=1080&fit=crop',
-          audioUrl:
-              'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-          audioTitle: 'SoundHelix Song 1',
-        ),
-        const StoryItem.text(
-          text:
-              "Energy's rising ✨🕺\nPartyPlanet Crew is taking over the night 🎶\nLet's vibe, dance, and shine together ✨",
-          backgroundColor: Color(0xFFE74C3C),
-        ),
-        const StoryItem.video(
-          videoUrl:
-              'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        ),
-      ];
-
-      return StoryUser(
-        name: name,
-        handle: handle,
-        avatarUrl: avatar,
-        items: items,
-      );
-    });
-  }
-
   List<_StoryFrame> _flattenFrames(List<StoryUser> users) {
     final res = <_StoryFrame>[];
     for (var i = 0; i < users.length; i++) {
       final u = users[i];
       for (var j = 0; j < u.items.length; j++) {
+        final sid = (u.itemIds.length > j) ? u.itemIds[j] : null;
         res.add(
-          _StoryFrame(user: u, userIndex: i, itemIndex: j, item: u.items[j]),
+          _StoryFrame(
+            user: u,
+            userIndex: i,
+            itemIndex: j,
+            item: u.items[j],
+            storyId: sid,
+          ),
         );
       }
     }
@@ -254,6 +308,11 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         await p.setVolume(_isMuted ? 0.0 : 1.0);
         await p.play(UrlSource(audioUrl));
       }
+    }
+    // Mark as viewed in backend if possible
+    final sid = frame.storyId;
+    if (sid != null) {
+      unawaited(_storiesApi.markStoryViewed(sid));
     }
     _startProgressForFrame(frame);
   }
@@ -368,12 +427,24 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       unawaited(a.resume());
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+              ),
+            )
+          : _frames.isEmpty
+              ? Center(
+                  child: Text(
+                    'No stories to show',
+                    style: GoogleFonts.inter(color: Colors.white),
+                  ),
+                )
+              : SafeArea(
         bottom: false,
         child: NotificationListener<OverscrollNotification>(
           onNotification: (n) {
@@ -726,8 +797,19 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                     fontSize: 14,
                   ),
                 ),
-                onSubmitted: (_) =>
-                    _snack('Comment sent (UI only)', const Color(0xFFBFAE01)),
+                onSubmitted: (_) async {
+                  final text = _commentController.text.trim();
+                  if (text.isEmpty || _frames.isEmpty) return;
+                  final sid = _frames[_currentIndex].storyId;
+                  if (sid == null) return;
+                  try {
+                    await _storiesApi.replyToStory(sid, text);
+                    _commentController.clear();
+                    _snack('Reply sent', const Color(0xFFBFAE01));
+                  } catch (e) {
+                    _snack('Failed to reply', Colors.red);
+                  }
+                },
               ),
             ),
           ),

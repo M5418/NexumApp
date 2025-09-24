@@ -66,9 +66,8 @@ class _InvitationPageState extends State<InvitationPage>
     final isDark = widget.isDarkMode ?? theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0C0C0C)
-          : const Color(0xFFF1F4F8),
+      backgroundColor:
+          isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       body: SafeArea(
         child: Column(
           children: [
@@ -103,9 +102,8 @@ class _InvitationPageState extends State<InvitationPage>
   }
 
   Widget _buildAppBar(bool isDark) {
-    final String title = _selectedTabIndex == 0
-        ? 'Invitations'
-        : 'Invitations Sent';
+    final String title =
+        _selectedTabIndex == 0 ? 'Invitations' : 'Invitations Sent';
     return Container(
       height: 80,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -592,8 +590,9 @@ class _InvitationPageState extends State<InvitationPage>
       final received = await _api.getReceivedInvitations();
       final sent = await _api.getSentInvitations();
       setState(() {
-        _received = received;
-        _sent = sent;
+        // Show only pending invitations so accepted/refused disappear
+        _received = received.where((i) => i.status == 'pending').toList();
+        _sent = sent.where((i) => i.status == 'pending').toList();
       });
     } catch (e) {
       if (mounted) {

@@ -11,6 +11,7 @@ import authMiddleware from './middleware/auth.js';
 import postsRoutes from './routes/posts-simplified.js';
 import conversationsRoutes from './routes/conversations.js';
 import messagesRoutes from './routes/messages.js';
+import storiesRoutes from './routes/stories.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -49,6 +50,7 @@ app.use('/api/posts', authMiddleware, postsRoutes);
 app.use('/api/invitations', authMiddleware, invitationsRoutes);
 app.use('/api/conversations', authMiddleware, conversationsRoutes);
 app.use('/api/messages', authMiddleware, messagesRoutes);
+app.use('/api/stories', authMiddleware, storiesRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

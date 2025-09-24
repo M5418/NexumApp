@@ -18,6 +18,7 @@ class OtherUserProfilePage extends StatefulWidget {
   final String userBio;
   final String userCoverUrl;
   final bool isConnected;
+  final bool theyConnectToYou;
 
   const OtherUserProfilePage({
     super.key,
@@ -27,6 +28,7 @@ class OtherUserProfilePage extends StatefulWidget {
     required this.userBio,
     this.userCoverUrl = '',
     this.isConnected = false,
+    this.theyConnectToYou = false,
   });
 
   @override
@@ -55,9 +57,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
           final isDark = themeProvider.isDarkMode;
           return Scaffold(
             key: scaffoldKey,
-            backgroundColor: isDark
-                ? const Color(0xFF0C0C0C)
-                : const Color(0xFFF1F4F8),
+            backgroundColor:
+                isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
             endDrawer: _buildDrawer(isDark),
             body: SingleChildScrollView(
               child: Column(
@@ -262,7 +263,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                         child: Text(
                                           _isConnected
                                               ? 'Disconnect'
-                                              : 'Connect',
+                                              : (widget.theyConnectToYou
+                                                  ? 'Connect Back'
+                                                  : 'Connect'),
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w500,
@@ -654,9 +657,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
               indicatorSize: TabBarIndicatorSize.tab,
               dividerColor: Colors.transparent,
               labelColor: isDark ? Colors.grey[300] : Colors.white,
-              unselectedLabelColor: isDark
-                  ? const Color(0xFF666666)
-                  : const Color(0xFF666666),
+              unselectedLabelColor:
+                  isDark ? const Color(0xFF666666) : const Color(0xFF666666),
               labelStyle: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,

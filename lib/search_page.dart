@@ -318,7 +318,7 @@ class _SearchPageState extends State<SearchPage> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       itemCount: users.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final u = users[index];
         return _UserRowTile(
@@ -354,7 +354,7 @@ class _SearchPageState extends State<SearchPage> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       itemCount: communities.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final c = communities[index];
         return CommunityCard(
@@ -363,7 +363,7 @@ class _SearchPageState extends State<SearchPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => CommunityPage(communityName: c.name),
+                builder: (context) => CommunityPage(communityName: c.name),
               ),
             );
           },

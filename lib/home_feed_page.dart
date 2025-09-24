@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'widgets/story_ring.dart';
+import 'widgets/story_ring.dart' as story_widget;
 import 'widgets/post_card.dart';
 import 'widgets/badge_icon.dart';
 import 'widgets/animated_navbar.dart';
@@ -12,7 +12,7 @@ import 'conversations_page.dart';
 import 'profile_page.dart';
 import 'post_page.dart';
 import 'core/posts_api.dart';
-import 'data/sample_data.dart';
+import 'core/stories_api.dart' as stories_api;
 import 'models/post.dart';
 import 'theme_provider.dart';
 import 'search_page.dart';
@@ -26,6 +26,7 @@ import 'mentorship/mentorship_home_page.dart';
 import 'video_scroll_page.dart';
 import 'core/token_store.dart';
 import 'sign_in_page.dart';
+import 'core/auth_api.dart';
 
 class HomeFeedPage extends StatefulWidget {
   const HomeFeedPage({super.key});
@@ -37,19 +38,21 @@ class HomeFeedPage extends StatefulWidget {
 class _HomeFeedPageState extends State<HomeFeedPage> {
   int _selectedNavIndex = 0;
   List<Post> _posts = [];
-  List<Map<String, dynamic>> _stories = [];
+  List<stories_api.StoryRing> _storyRings = [];
   int _conversationsInitialTabIndex = 0; // 0: Chats, 1: Communities
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
     _ensureAuth();
+    _loadCurrentUserId();
     _loadData();
   }
 
   Future<void> _ensureAuth() async {
     final t = await TokenStore.read();
-    debugPrint('🔑 JWT Token: $t'); // Debug: Print token
+    debugPrint('ðŸ”‘ JWT Token: $t'); // Debug: Print token
     if (t == null || t.isEmpty) {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -59,20 +62,40 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
+  Future<void> _loadCurrentUserId() async {
+    try {
+      final res = await AuthApi().me();
+      if (res['ok'] == true && res['data'] != null) {
+        _currentUserId = res['data']['id'] as String?;
+      } else {
+        _currentUserId = null;
+      }
+    } catch (_) {
+      _currentUserId = null;
+    }
+  }
+
   Future<void> _loadData() async {
     try {
-      final posts = await PostsApi().listFeed(limit: 20, offset: 0);
+      // Load posts and stories in parallel
+      final futures = await Future.wait([
+        PostsApi().listFeed(limit: 20, offset: 0),
+        stories_api.StoriesApi().getRings()
+      ]);
+
+      final posts = futures[0] as List<Post>;
+      final rings = futures[1] as List<stories_api.StoryRing>;
+
       if (!mounted) return;
       setState(() {
         _posts = posts;
-        // Restore stories UI with sample data for now
-        _stories = SampleData.getSampleStories();
+        _storyRings = rings;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _posts = [];
-        _stories = SampleData.getSampleStories();
+        _storyRings = [];
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -244,25 +267,24 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         final isDark = themeProvider.isDarkMode;
-        final backgroundColor = isDark
-            ? const Color(0xFF0C0C0C)
-            : const Color(0xFFF1F4F8);
+        final backgroundColor =
+            isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
         return Scaffold(
           backgroundColor: backgroundColor,
           body: _selectedNavIndex == 1
               ? ConnectionsPage(isDarkMode: isDark, onThemeToggle: () {})
               : _selectedNavIndex == 3
-              ? ConversationsPage(
-                  isDarkMode: isDark,
-                  onThemeToggle: () {},
-                  initialTabIndex: _conversationsInitialTabIndex,
-                )
-              : _selectedNavIndex == 4
-              ? const ProfilePage()
-              : _selectedNavIndex == 5
-              ? const VideoScrollPage()
-              : _buildHomeFeed(context, isDark, backgroundColor),
+                  ? ConversationsPage(
+                      isDarkMode: isDark,
+                      onThemeToggle: () {},
+                      initialTabIndex: _conversationsInitialTabIndex,
+                    )
+                  : _selectedNavIndex == 4
+                      ? const ProfilePage()
+                      : _selectedNavIndex == 5
+                          ? const VideoScrollPage()
+                          : _buildHomeFeed(context, isDark, backgroundColor),
           bottomNavigationBar: AnimatedNavbar(
             selectedIndex: _selectedNavIndex,
             onTabChange: _onNavTabChange,
@@ -270,55 +292,55 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           ),
           floatingActionButton:
               (_selectedNavIndex == 0 || _selectedNavIndex == 1)
-              ? FloatingActionButton(
-                  heroTag: 'toolsFabMain',
-                  onPressed: () => ToolsOverlay.show(
-                    context,
-                    onCommunities: () {
-                      // Switch bottom nav to Conversations and preselect Communities tab
-                      setState(() {
-                        _conversationsInitialTabIndex = 1;
-                        _selectedNavIndex = 3;
-                      });
-                    },
-                    onPodcasts: () {
-                      Navigator.push(
+                  ? FloatingActionButton(
+                      heroTag: 'toolsFabMain',
+                      onPressed: () => ToolsOverlay.show(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const PodcastsHomePage(),
-                        ),
-                      );
-                    },
-                    onBooks: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const BooksHomePage(),
-                        ),
-                      );
-                    },
-                    onMentorship: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const MentorshipHomePage(),
-                        ),
-                      );
-                    },
-                    onVideos: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const VideoScrollPage(),
-                        ),
-                      );
-                    },
-                  ),
-                  backgroundColor: const Color(0xFFBFAE01),
-                  foregroundColor: Colors.black,
-                  child: const Icon(Icons.widgets_outlined),
-                )
-              : null,
+                        onCommunities: () {
+                          // Switch bottom nav to Conversations and preselect Communities tab
+                          setState(() {
+                            _conversationsInitialTabIndex = 1;
+                            _selectedNavIndex = 3;
+                          });
+                        },
+                        onPodcasts: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PodcastsHomePage(),
+                            ),
+                          );
+                        },
+                        onBooks: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const BooksHomePage(),
+                            ),
+                          );
+                        },
+                        onMentorship: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MentorshipHomePage(),
+                            ),
+                          );
+                        },
+                        onVideos: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const VideoScrollPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      backgroundColor: const Color(0xFFBFAE01),
+                      foregroundColor: Colors.black,
+                      child: const Icon(Icons.widgets_outlined),
+                    )
+                  : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         );
       },
@@ -417,20 +439,22 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           physics: const BouncingScrollPhysics(),
-                          itemCount: _stories.length,
+                          itemCount: _storyRings.length,
                           itemBuilder: (context, index) {
-                            final story = _stories[index];
+                            final ring = _storyRings[index];
+                            final isMine = ring.userId == _currentUserId;
+
                             return Container(
                               width: 70,
                               margin: EdgeInsets.only(
-                                right: index < _stories.length - 1 ? 16 : 0,
+                                right: index < _storyRings.length - 1 ? 16 : 0,
                               ),
-                              child: StoryRing(
-                                imageUrl: story['imageUrl'] as String?,
-                                label: story['label'] as String,
-                                isMine: story['isMine'] as bool,
-                                isSeen: story['isSeen'] as bool,
-                                onAddTap: (story['isMine'] as bool? ?? false)
+                              child: story_widget.StoryRing(
+                                imageUrl: ring.thumbnailUrl,
+                                label: ring.name,
+                                isMine: isMine,
+                                isSeen: !ring.hasUnseen,
+                                onAddTap: isMine
                                     ? () {
                                         StoryTypePicker.show(
                                           context,
@@ -446,36 +470,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                         );
                                       }
                                     : null,
-                                onTap: () {
-                                  final isMine =
-                                      story['isMine'] as bool? ?? false;
-                                  if (isMine) {
-                                    StoryTypePicker.show(
-                                      context,
-                                      onSelected: (type) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => _composerPage(type),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  } else {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => StoryViewerPage(
-                                          rings: _stories,
-                                          initialRingIndex: index,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                            );
-                          },
+                                onTap: () async {                                   if (isMine) {                                     StoryTypePicker.show(                                       context,                                       onSelected: (type) async {                                         await Navigator.push(                                           context,                                           MaterialPageRoute(builder: (_) => _composerPage(type)),                                         );                                         await _loadData(); // refresh rings after composing                                       },                                     );                                   } else {                                     await Navigator.push(                                       context,                                       MaterialPageRoute(                                         builder: (_) => StoryViewerPage(                                           rings: _storyRings.map((r) => {                                                 'userId': r.userId,                                                 'imageUrl': r.thumbnailUrl,                                                 'label': r.name,                                                 'isMine': r.userId == _currentUserId,                                                 'isSeen': !r.hasUnseen,                                               }).toList(),                                           initialRingIndex: index,                                         ),                                       ),                                     );                                     await _loadData(); // refresh rings after viewing                                   }                                 },
                         ),
                       ),
                     ),

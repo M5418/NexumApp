@@ -14,7 +14,7 @@ const s3Client = new S3Client({
 });
 
 const BUCKET = process.env.S3_BUCKET || 'nexum-uploads';
-const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'mp4'];
 
 // Validation schemas
 const presignSchema = z.object({
@@ -33,7 +33,8 @@ function getContentType(ext) {
     'jpeg': 'image/jpeg',
     'png': 'image/png',
     'webp': 'image/webp',
-    'pdf': 'application/pdf'
+    'pdf': 'application/pdf',
+    'mp4': 'video/mp4'
   };
   return types[ext.toLowerCase()] || 'application/octet-stream';
 }

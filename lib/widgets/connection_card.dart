@@ -11,6 +11,7 @@ class ConnectionCard extends StatefulWidget {
   final String fullName;
   final String bio;
   final bool initialConnectionStatus;
+  final bool theyConnectToYou;
   final VoidCallback? onMessage;
 
   const ConnectionCard({
@@ -21,6 +22,7 @@ class ConnectionCard extends StatefulWidget {
     required this.fullName,
     required this.bio,
     this.initialConnectionStatus = false,
+    this.theyConnectToYou = false,
     this.onMessage,
   });
 
@@ -54,6 +56,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
               userBio: widget.bio,
               userCoverUrl: widget.coverUrl,
               isConnected: isConnected,
+              theyConnectToYou: widget.theyConnectToYou,
             ),
           ),
         );
@@ -226,7 +229,11 @@ class _ConnectionCardState extends State<ConnectionCard> {
                               ),
                             ),
                             child: Text(
-                              isConnected ? 'Disconnect' : 'Connect',
+                              isConnected
+                                  ? 'Disconnect'
+                                  : (widget.theyConnectToYou
+                                      ? 'Connect Back'
+                                      : 'Connect'),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
