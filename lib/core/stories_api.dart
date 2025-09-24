@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 
 class StoryRing {
@@ -134,7 +135,7 @@ class StoriesApi {
           .map((ring) => StoryRing.fromJson(ring as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('🔴 StoriesApi.getRings error: $e');
+      debugPrint('🔴 StoriesApi.getRings error: $e');
       rethrow;
     }
   }
@@ -145,7 +146,7 @@ class StoriesApi {
       final data = response.data['data'] as Map<String, dynamic>;
       return UserStoriesResponse.fromJson(data);
     } catch (e) {
-      print('🔴 StoriesApi.getUserStories error: $e');
+      debugPrint('🔴 StoriesApi.getUserStories error: $e');
       rethrow;
     }
   }
@@ -154,7 +155,7 @@ class StoriesApi {
     try {
       await _dio.post('/api/stories/$storyId/view');
     } catch (e) {
-      print('🔴 StoriesApi.markStoryViewed error: $e');
+      debugPrint('🔴 StoriesApi.markStoryViewed error: $e');
       rethrow;
     }
   }
@@ -166,7 +167,7 @@ class StoriesApi {
       final data = response.data['data'] as Map<String, dynamic>;
       return data['conversation_id'] as String;
     } catch (e) {
-      print('🔴 StoriesApi.replyToStory error: $e');
+      debugPrint('🔴 StoriesApi.replyToStory error: $e');
       rethrow;
     }
   }
@@ -204,7 +205,7 @@ class StoriesApi {
       final response = await _dio.post('/api/stories', data: payload);
       return response.data['data'] as Map<String, dynamic>;
     } catch (e) {
-      print('🔴 StoriesApi.createStory error: $e');
+      debugPrint('🔴 StoriesApi.createStory error: $e');
       rethrow;
     }
   }
@@ -217,7 +218,7 @@ class StoriesApi {
       final data = response.data['data'] as Map<String, dynamic>;
       return (data['stories'] as List).cast<Map<String, dynamic>>();
     } catch (e) {
-      print('🔴 StoriesApi.createStoriesBatch error: $e');
+      debugPrint('🔴 StoriesApi.createStoriesBatch error: $e');
       rethrow;
     }
   }
@@ -226,7 +227,7 @@ class StoriesApi {
     try {
       await _dio.delete('/api/stories/$storyId');
     } catch (e) {
-      print('🔴 StoriesApi.deleteStory error: $e');
+      debugPrint('🔴 StoriesApi.deleteStory error: $e');
       rethrow;
     }
   }
@@ -235,7 +236,7 @@ class StoriesApi {
     try {
       await _dio.post('/api/stories/mute/$userId');
     } catch (e) {
-      print('🔴 StoriesApi.muteUserStories error: $e');
+      debugPrint('🔴 StoriesApi.muteUserStories error: $e');
       rethrow;
     }
   }
@@ -244,7 +245,7 @@ class StoriesApi {
     try {
       await _dio.post('/api/stories/unmute/$userId');
     } catch (e) {
-      print('🔴 StoriesApi.unmuteUserStories error: $e');
+      debugPrint('🔴 StoriesApi.unmuteUserStories error: $e');
       rethrow;
     }
   }

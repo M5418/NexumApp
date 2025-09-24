@@ -776,7 +776,7 @@ class _TextStoryComposerPageState extends State<TextStoryComposerPage> {
     }
     try {
       final hex =
-          '#${_bgColor.value.toRadixString(16).padLeft(8, '0').toUpperCase()}';
+          '#${_bgColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
       await StoriesApi().createStory(
         mediaType: 'text',
         textContent: _controller.text.trim(),

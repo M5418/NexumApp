@@ -17,6 +17,7 @@ import 'models/post.dart';
 import 'theme_provider.dart';
 import 'search_page.dart';
 import 'notification_page.dart';
+
 import 'story_viewer_page.dart';
 import 'story_compose_pages.dart';
 import 'widgets/tools_overlay.dart';
@@ -52,7 +53,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   Future<void> _ensureAuth() async {
     final t = await TokenStore.read();
-    debugPrint('ðŸ”‘ JWT Token: $t'); // Debug: Print token
+    debugPrint('🔐 JWT Token: $t'); // Debug: Print token
     if (t == null || t.isEmpty) {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -254,9 +255,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   // Map story compose type to its page (ensures non-null return)
   Widget _composerPage(StoryComposeType type) {
     switch (type) {
+      case StoryComposeType.text:
+        return const TextStoryComposerPage();
       case StoryComposeType.image:
       case StoryComposeType.video:
-      case StoryComposeType.text:
       case StoryComposeType.mixed:
         return const MixedMediaStoryComposerPage();
     }
@@ -450,27 +452,72 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                 right: index < _storyRings.length - 1 ? 16 : 0,
                               ),
                               child: story_widget.StoryRing(
-                                imageUrl: ring.thumbnailUrl,
-                                label: ring.name,
+                                imageUrl: ring.thumbnailUrl ?? ring.avatarUrl,
+                                label: isMine
+                                    ? 'Your Story'
+                                    : (ring.name.isNotEmpty
+                                        ? ring.name
+                                        : '@${ring.username}'),
                                 isMine: isMine,
                                 isSeen: !ring.hasUnseen,
                                 onAddTap: isMine
                                     ? () {
                                         StoryTypePicker.show(
                                           context,
-                                          onSelected: (type) {
-                                            Navigator.push(
+                                          onSelected: (type) async {
+                                            await Navigator.push(
                                               context,
                                               MaterialPageRoute(
                                                 builder: (_) =>
                                                     _composerPage(type),
                                               ),
                                             );
+                                            await _loadData(); // refresh rings after composing
                                           },
                                         );
                                       }
                                     : null,
-                                onTap: () async {                                   if (isMine) {                                     StoryTypePicker.show(                                       context,                                       onSelected: (type) async {                                         await Navigator.push(                                           context,                                           MaterialPageRoute(builder: (_) => _composerPage(type)),                                         );                                         await _loadData(); // refresh rings after composing                                       },                                     );                                   } else {                                     await Navigator.push(                                       context,                                       MaterialPageRoute(                                         builder: (_) => StoryViewerPage(                                           rings: _storyRings.map((r) => {                                                 'userId': r.userId,                                                 'imageUrl': r.thumbnailUrl,                                                 'label': r.name,                                                 'isMine': r.userId == _currentUserId,                                                 'isSeen': !r.hasUnseen,                                               }).toList(),                                           initialRingIndex: index,                                         ),                                       ),                                     );                                     await _loadData(); // refresh rings after viewing                                   }                                 },
+                                onTap: () async {
+                                  if (isMine) {
+                                    StoryTypePicker.show(
+                                      context,
+                                      onSelected: (type) async {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                _composerPage(type),
+                                          ),
+                                        );
+                                        await _loadData(); // refresh rings after composing
+                                      },
+                                    );
+                                  } else {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => StoryViewerPage(
+                                          rings: _storyRings
+                                              .map((r) => {
+                                                    'userId': r.userId,
+                                                    'imageUrl': r.thumbnailUrl ??
+                                                        r.avatarUrl,
+                                                    'label': r.name,
+                                                    'isMine': r.userId ==
+                                                        _currentUserId,
+                                                    'isSeen': !r.hasUnseen,
+                                                  })
+                                              .toList(),
+                                          initialRingIndex: index,
+                                        ),
+                                      ),
+                                    );
+                                    await _loadData(); // refresh rings after viewing
+                                  }
+                                },
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
