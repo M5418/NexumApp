@@ -67,7 +67,10 @@ class ProfileApi {
     final data = Map<String, dynamic>.from(body['data'] ?? {});
     final putUrl = data['putUrl'] as String;
     final key = data['key'] as String;
-    final publicUrl = data['publicUrl'] as String;
+    // Prefer signed GET url if present (works when bucket is private)
+    final readUrl = (data['readUrl'] ?? '').toString();
+    final publicUrl = (data['publicUrl'] ?? '').toString();
+    final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
 
     // 2) Upload to S3 via presigned PUT
     final contentType = _contentTypeForExt(resolvedExt);
@@ -91,12 +94,12 @@ class ProfileApi {
 
     // 3) Confirm upload (optional auditing) - non-blocking
     try {
-      await _dio.post('/api/files/confirm', data: {'key': key, 'url': publicUrl});
+      await _dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
     } catch (_) {
       // Ignore failures here; upload already succeeded.
     }
 
-    return publicUrl;
+    return bestUrl;
   }
 
   // Best-effort detection of common image/video types used by the app.
@@ -134,7 +137,7 @@ class ProfileApi {
         b[7] == 0x70) {
       return 'mp4';
     }
-    // WebM: EBML header 1A 45 DF A3 (we don't upload webm by default, map to mp4 if needed)
+    // WebM: EBML header 1A 45 DF A3 (map to mp4 read if needed)
     if (b.length >= 4 &&
         b[0] == 0x1A &&
         b[1] == 0x45 &&

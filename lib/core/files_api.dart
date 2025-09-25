@@ -17,7 +17,9 @@ class FilesApi {
     final data = Map<String, dynamic>.from(body['data'] ?? {});
     final putUrl = data['putUrl'] as String;
     final key = data['key'] as String;
-    final publicUrl = data['publicUrl'] as String;
+    final readUrl = (data['readUrl'] ?? '').toString();
+    final publicUrl = (data['publicUrl'] ?? '').toString();
+    final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
 
     // 2) upload to S3 via presigned URL
     final bytes = await file.readAsBytes();
@@ -33,10 +35,12 @@ class FilesApi {
       ),
     );
 
-    // 3) confirm
-    await _dio.post('/api/files/confirm', data: {'key': key, 'url': publicUrl});
+    // 3) confirm (non-blocking)
+    try {
+      await _dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
+    } catch (_) {}
 
-    return {'key': key, 'url': publicUrl};
+    return {'key': key, 'url': bestUrl};
   }
 
   String _extensionOf(String path) {
