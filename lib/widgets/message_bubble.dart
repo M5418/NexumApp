@@ -37,10 +37,14 @@ class _MessageBubbleState extends State<MessageBubble> {
   @override
   void initState() {
     super.initState();
-    if (widget.message.type == MessageType.voice ||
-        widget.message.attachments.any((a) => a.type == MediaType.voice)) {
+    if (_hasVoice()) {
       _initAudioPlayer();
     }
+  }
+
+  bool _hasVoice() {
+    return widget.message.type == MessageType.voice ||
+        widget.message.attachments.any((a) => a.type == MediaType.voice);
   }
 
   void _initAudioPlayer() {
@@ -174,8 +178,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     final hasMedia = attachments.any(
         (a) => a.type == MediaType.image || a.type == MediaType.video);
     final hasFiles = attachments.any((a) => a.type == MediaType.document);
-    final hasVoice = attachments.any((a) => a.type == MediaType.voice) ||
-        widget.message.type == MessageType.voice;
+    final hasVoice = _hasVoice();
 
     if (hasVoice) {
       return _buildVoiceMessage(isDark);
@@ -556,11 +559,36 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  Widget _buildVoiceMessage(bool isDark) {
-    final attachment = widget.message.attachments.isNotEmpty
-        ? widget.message.attachments.first
-        : null;
+  // Helper: find a usable voice attachment. If attachments are missing but the
+  // message is a voice type, try to synthesize a minimal attachment from content if it is a URL.
+  MediaAttachment? _getVoiceAttachment() {
+    if (widget.message.attachments.isNotEmpty) {
+      final voice = widget.message.attachments
+          .firstWhere((a) => a.type == MediaType.voice, orElse: () => widget.message.attachments.first);
+      return voice.type == MediaType.voice ? voice : null;
+    }
 
+    if (widget.message.type == MessageType.voice &&
+        widget.message.content.isNotEmpty) {
+      final uri = Uri.tryParse(widget.message.content);
+      if (uri != null && uri.hasScheme && uri.hasAuthority) {
+        return MediaAttachment(
+          id: 'temp-${widget.message.id}',
+          url: widget.message.content,
+          type: MediaType.voice,
+          duration: null,
+          fileSize: null,
+          fileName: 'voice_message.m4a',
+        );
+      }
+    }
+    return null;
+  }
+
+  Widget _buildVoiceMessage(bool isDark) {
+    final attachment = _getVoiceAttachment();
+
+    // Always render a voice bubble; if we lack a valid attachment/url, show a disabled UI
     if (attachment == null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -570,14 +598,37 @@ class _MessageBubbleState extends State<MessageBubble> {
               : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(
-          widget.message.content,
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            color: widget.message.isFromCurrentUser
-                ? Colors.white
-                : (isDark ? Colors.white : Colors.black),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: widget.message.isFromCurrentUser
+                    ? Colors.white.withValues(alpha: 51)
+                    : const Color(0xFF007AFF).withValues(alpha: 26),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.mic_off,
+                color: widget.message.isFromCurrentUser
+                    ? Colors.white
+                    : const Color(0xFF007AFF),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Voice message',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: widget.message.isFromCurrentUser
+                    ? Colors.white
+                    : (isDark ? Colors.white : Colors.black),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -678,10 +729,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       return;
     }
 
-    final attachment = widget.message.attachments.isNotEmpty
-        ? widget.message.attachments.first
-        : null;
-
+    final attachment = _getVoiceAttachment();
     if (attachment == null) {
       return;
     }

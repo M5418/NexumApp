@@ -15,7 +15,7 @@ const s3Client = new S3Client({
 });
 
 const BUCKET = process.env.S3_BUCKET || 'nexum-uploads';
-const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'mp4'];
+const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'mp4', 'm4a', 'mp3', 'wav', 'aac'];
 
 // Validation schemas
 const presignSchema = z.object({
@@ -36,6 +36,11 @@ function getContentType(ext) {
     webp: 'image/webp',
     pdf: 'application/pdf',
     mp4: 'video/mp4',
+    // Audio
+    m4a: 'audio/mp4',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    aac: 'audio/aac',
   };
   return types[ext.toLowerCase()] || 'application/octet-stream';
 }
@@ -69,18 +74,16 @@ router.post('/presign-upload', async (req, res) => {
       Bucket: BUCKET,
       Key: key,
       ContentType: contentType,
-      // Do not add ACL headers here because many buckets have Object Ownership "bucket owner enforced".
-      // If ACL is required in your account, the client would also need to include x-amz-acl in the PUT.
     });
 
     const putUrl = await getSignedUrl(s3Client, putCmd, { expiresIn: 3600 });
 
-    // Public path-style URL (may be private depending on bucket policy)
+    // Public-style URL (may not be accessible if bucket private)
     const publicUrl = `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`;
 
-    // Also provide a signed GET url to ensure immediate readability even when bucket is private
+    // Signed GET URL for immediate playback/private buckets
     const getCmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-    const signedGetTtl = parseInt(process.env.S3_SIGNED_GET_TTL || '604800', 10); // up to 7 days
+    const signedGetTtl = parseInt(process.env.S3_SIGNED_GET_TTL || '604800', 10);
     const readUrl = await getSignedUrl(s3Client, getCmd, { expiresIn: signedGetTtl });
 
     res.json(
@@ -105,7 +108,6 @@ router.post('/confirm', async (req, res) => {
   try {
     const { key, url } = confirmSchema.parse(req.body);
 
-    // Insert into uploads table
     await pool.execute('INSERT INTO uploads (user_id, s3_key, url) VALUES (?, ?, ?)', [
       req.user.id,
       key,

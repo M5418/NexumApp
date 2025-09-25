@@ -29,21 +29,29 @@ class ProfileApi {
     return url;
   }
 
-  // Generic file upload (returns public URL) for mobile/desktop.
-  // Reads the file as bytes and defers to uploadBytes (single upload path).
+  // Generic file upload
   Future<String> uploadFile(File file) async {
     final ext = _extensionOf(file.path);
     final bytes = await file.readAsBytes();
     return uploadBytes(bytes, ext: ext);
   }
 
-  // Web-friendly upload using raw bytes. Avoids forbidden headers like Content-Length on web.
-  // Also auto-detects the right extension/Content-Type from bytes when needed
-  // to prevent browser decode errors.
+  // Web-friendly upload using raw bytes
   Future<String> uploadBytes(Uint8List bytes, {required String ext}) async {
-    // Normalize/auto-detect extension for correctness
     String resolvedExt = _normalizeExt(ext);
-    const allowed = {'jpg', 'jpeg', 'png', 'webp', 'pdf', 'mp4'};
+    const allowed = {
+      'jpg',
+      'jpeg',
+      'png',
+      'webp',
+      'pdf',
+      'mp4',
+      // audio
+      'm4a',
+      'mp3',
+      'wav',
+      'aac',
+    };
 
     if (!allowed.contains(resolvedExt)) {
       final sniffed = _detectExtFromBytes(bytes);
@@ -51,9 +59,8 @@ class ProfileApi {
         resolvedExt = sniffed;
       }
     }
-    // Map jpeg -> jpg to keep consistent key/content-type
     if (resolvedExt == 'jpeg') resolvedExt = 'jpg';
-    // Final fallback to jpg for unknown image blobs
+    // Final fallback for unknown blobs (prefer jpg)
     if (!allowed.contains(resolvedExt)) {
       resolvedExt = 'jpg';
     }
@@ -67,7 +74,6 @@ class ProfileApi {
     final data = Map<String, dynamic>.from(body['data'] ?? {});
     final putUrl = data['putUrl'] as String;
     final key = data['key'] as String;
-    // Prefer signed GET url if present (works when bucket is private)
     final readUrl = (data['readUrl'] ?? '').toString();
     final publicUrl = (data['publicUrl'] ?? '').toString();
     final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
@@ -78,7 +84,6 @@ class ProfileApi {
 
     await s3.put(
       putUrl,
-      // On web we pass raw bytes directly and DO NOT set Content-Length.
       data: kIsWeb ? bytes : Stream.fromIterable(bytes.map((b) => [b])),
       options: Options(
         headers: kIsWeb
@@ -92,17 +97,14 @@ class ProfileApi {
       ),
     );
 
-    // 3) Confirm upload (optional auditing) - non-blocking
+    // 3) Confirm upload (best-effort)
     try {
       await _dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
-    } catch (_) {
-      // Ignore failures here; upload already succeeded.
-    }
+    } catch (_) {}
 
     return bestUrl;
   }
 
-  // Best-effort detection of common image/video types used by the app.
   String? _detectExtFromBytes(Uint8List b) {
     if (b.length >= 8 &&
         b[0] == 0x89 &&
@@ -116,20 +118,19 @@ class ProfileApi {
       return 'png';
     }
     if (b.length >= 2 && b[0] == 0xFF && b[1] == 0xD8) {
-      return 'jpg'; // jpeg
+      return 'jpg';
     }
     if (b.length >= 12 &&
-        b[0] == 0x52 && // R
-        b[1] == 0x49 && // I
-        b[2] == 0x46 && // F
-        b[3] == 0x46 && // F
-        b[8] == 0x57 && // W
-        b[9] == 0x45 && // E
-        b[10] == 0x42 && // B
+        b[0] == 0x52 &&
+        b[1] == 0x49 &&
+        b[2] == 0x46 &&
+        b[3] == 0x46 &&
+        b[8] == 0x57 &&
+        b[9] == 0x45 &&
+        b[10] == 0x42 &&
         b[11] == 0x50) {
       return 'webp';
     }
-    // MP4/QuickTime: 'ftyp' at bytes 4-7 in ISO Base Media File Format
     if (b.length >= 12 &&
         b[4] == 0x66 &&
         b[5] == 0x74 &&
@@ -137,7 +138,6 @@ class ProfileApi {
         b[7] == 0x70) {
       return 'mp4';
     }
-    // WebM: EBML header 1A 45 DF A3 (map to mp4 read if needed)
     if (b.length >= 4 &&
         b[0] == 0x1A &&
         b[1] == 0x45 &&
@@ -171,11 +171,20 @@ class ProfileApi {
       case 'mp4':
         return 'video/mp4';
 
-      // Docs (supported by files route, not used for chat media here)
+      // Audio
+      case 'm4a':
+        return 'audio/mp4';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'aac':
+        return 'audio/aac';
+
+      // Docs
       case 'pdf':
         return 'application/pdf';
 
-      // Fallback
       default:
         return 'application/octet-stream';
     }

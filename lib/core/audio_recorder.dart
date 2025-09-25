@@ -1,6 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart' as rec;
 import 'profile_api.dart';
@@ -15,9 +14,9 @@ class AudioRecorder {
   DateTime? _recordingStartTime;
 
   Future<bool> hasPermission() async {
+    if (kIsWeb) return true;
     final status = await Permission.microphone.status;
     if (status.isGranted) return true;
-
     final result = await Permission.microphone.request();
     return result.isGranted;
   }
@@ -28,10 +27,24 @@ class AudioRecorder {
         throw Exception('Microphone permission denied');
       }
 
-      final directory = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      _currentRecordingPath = '${directory.path}/voice_$timestamp.m4a';
       _recordingStartTime = DateTime.now();
+      final ts = DateTime.now().millisecondsSinceEpoch;
+
+      if (kIsWeb) {
+        _currentRecordingPath = 'voice_$ts.m4a';
+        await _recorder.start(
+          const rec.RecordConfig(
+            encoder: rec.AudioEncoder.aacLc,
+            bitRate: 128000,
+            sampleRate: 44100,
+          ),
+          path: _currentRecordingPath!,
+        );
+        return _currentRecordingPath;
+      }
+
+      final directory = Directory.systemTemp;
+      _currentRecordingPath = '${directory.path}/voice_$ts.m4a';
 
       await _recorder.start(
         const rec.RecordConfig(
@@ -52,7 +65,12 @@ class AudioRecorder {
   Future<VoiceRecordingResult?> stopRecording() async {
     try {
       final path = await _recorder.stop();
-      if (path == null || _recordingStartTime == null) return null;
+
+      if (kIsWeb || path == null || _recordingStartTime == null) {
+        _currentRecordingPath = null;
+        _recordingStartTime = null;
+        return null;
+      }
 
       final file = File(path);
       if (!await file.exists()) return null;
@@ -77,7 +95,7 @@ class AudioRecorder {
   Future<void> cancelRecording() async {
     try {
       await _recorder.stop();
-      if (_currentRecordingPath != null) {
+      if (!kIsWeb && _currentRecordingPath != null) {
         final file = File(_currentRecordingPath!);
         if (await file.exists()) {
           await file.delete();
@@ -97,6 +115,11 @@ class AudioRecorder {
 
   Future<String?> uploadVoiceFile(String filePath) async {
     try {
+      if (kIsWeb) {
+        debugPrint('⚠️ AudioRecorder: uploadVoiceFile is not supported on Web');
+        return null;
+      }
+
       final file = File(filePath);
       if (!await file.exists()) return null;
 

@@ -39,7 +39,6 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
     super.initState();
     _controller.addListener(_onTextChanged);
 
-    // Initialize animation controllers
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -50,7 +49,6 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
       vsync: this,
     );
 
-    // Create animations
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
       CurvedAnimation(parent: _pulseController!, curve: Curves.easeInOut),
     );
@@ -85,9 +83,7 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
 
   void _startRecordingTimer() {
     _recordingDuration = Duration.zero;
-    _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (
-      timer,
-    ) {
+    _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       setState(() {
         _recordingDuration = Duration(milliseconds: timer.tick * 100);
       });
@@ -122,7 +118,7 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
       _isRecording = true;
     });
     _startRecordingAnimation();
-    await widget.onVoiceRecord();
+    await widget.onVoiceRecord(); // toggles start in ChatPage
   }
 
   void _stopRecording() async {
@@ -130,7 +126,7 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
       _isRecording = false;
     });
     _stopRecordingAnimation();
-    await widget.onVoiceRecord();
+    await widget.onVoiceRecord(); // toggles stop + upload + send in ChatPage
   }
 
   @override
@@ -162,17 +158,14 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Reply preview
             if (widget.replyToMessage != null) _buildReplyPreview(isDark),
 
-            // Input area
             Padding(
               padding: const EdgeInsets.all(16),
               child: IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Add attachment button
                     if (!_isRecording)
                       GestureDetector(
                         onTap: widget.onAttachment,
@@ -181,9 +174,7 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                           height: 36,
                           margin: const EdgeInsets.only(bottom: 4),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF2C2C2E)
-                                : Colors.white,
+                            color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: const Color(0xFF666666).withAlpha(51),
@@ -200,7 +191,6 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
 
                     if (!_isRecording) const SizedBox(width: 12),
 
-                    // Text input
                     Expanded(
                       child: _isRecording
                           ? const SizedBox.shrink()
@@ -211,14 +201,10 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                                     maxHeight: 200,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: isDark
-                                        ? const Color(0xFF2C2C2E)
-                                        : Colors.white,
+                                    color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                      color: const Color(
-                                        0xFF666666,
-                                      ).withAlpha(51),
+                                      color: const Color(0xFF666666).withAlpha(51),
                                       width: 0.5,
                                     ),
                                   ),
@@ -239,14 +225,11 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                                     ),
                                     style: GoogleFonts.inter(
                                       fontSize: 16,
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black,
+                                      color: isDark ? Colors.white : Colors.black,
                                     ),
                                     maxLines: 8,
                                     minLines: 1,
-                                    textCapitalization:
-                                        TextCapitalization.sentences,
+                                    textCapitalization: TextCapitalization.sentences,
                                     onSubmitted: (_) => _sendMessage(),
                                   ),
                                 ),
@@ -277,7 +260,6 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
 
                     const SizedBox(width: 12),
 
-                    // Mic area with fixed width
                     SizedBox(
                       width: _isRecording ? 200 : 36,
                       child: GestureDetector(
@@ -297,7 +279,6 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                                 mainAxisSize: MainAxisSize.min,
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  // Recording timer
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
@@ -331,11 +312,8 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  // Animated mic button
                                   AnimatedBuilder(
-                                    animation:
-                                        _pulseAnimation ??
-                                        const AlwaysStoppedAnimation(1.0),
+                                    animation: _pulseAnimation ?? const AlwaysStoppedAnimation(1.0),
                                     builder: (context, child) {
                                       return Transform.scale(
                                         scale: _pulseAnimation?.value ?? 1.0,
@@ -347,25 +325,16 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                                                 animation: _rippleAnimation!,
                                                 builder: (context, child) {
                                                   return Container(
-                                                    width:
-                                                        60 *
-                                                        _rippleAnimation!.value,
-                                                    height:
-                                                        60 *
-                                                        _rippleAnimation!.value,
+                                                    width: 60 * _rippleAnimation!.value,
+                                                    height: 60 * _rippleAnimation!.value,
                                                     decoration: BoxDecoration(
                                                       shape: BoxShape.circle,
-                                                      color:
-                                                          const Color(
-                                                            0xFF007AFF,
-                                                          ).withValues(
-                                                            alpha:
-                                                                (25 *
-                                                                        (1 -
-                                                                            _rippleAnimation!.value))
-                                                                    .round()
-                                                                    .toDouble(),
-                                                          ),
+                                                      color: const Color(0xFF007AFF).withValues(
+                                                        alpha:
+                                                            (25 * (1 - _rippleAnimation!.value))
+                                                                .round()
+                                                                .toDouble(),
+                                                      ),
                                                     ),
                                                   );
                                                 },
@@ -378,9 +347,8 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                                                 shape: BoxShape.circle,
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: const Color(
-                                                      0xFF007AFF,
-                                                    ).withValues(alpha: 77),
+                                                    color: const Color(0xFF007AFF)
+                                                        .withValues(alpha: 77),
                                                     blurRadius: 8,
                                                     spreadRadius: 2,
                                                   ),
@@ -400,29 +368,25 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                                 ],
                               )
                             : (_hasText
-                                  ? const SizedBox.shrink()
-                                  : Container(
-                                      width: 36,
-                                      height: 36,
-                                      margin: const EdgeInsets.only(bottom: 4),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? const Color(0xFF2C2C2E)
-                                            : Colors.white,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: const Color(
-                                            0xFF666666,
-                                          ).withValues(alpha: 51),
-                                          width: 0.5,
-                                        ),
+                                ? const SizedBox.shrink()
+                                : Container(
+                                    width: 36,
+                                    height: 36,
+                                    margin: const EdgeInsets.only(bottom: 4),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: const Color(0xFF666666).withValues(alpha: 51),
+                                        width: 0.5,
                                       ),
-                                      child: const Icon(
-                                        Icons.mic,
-                                        color: Color(0xFF666666),
-                                        size: 20,
-                                      ),
-                                    )),
+                                    ),
+                                    child: const Icon(
+                                      Icons.mic,
+                                      color: Color(0xFF666666),
+                                      size: 20,
+                                    ),
+                                  )),
                       ),
                     ),
                   ],
@@ -457,9 +421,7 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(1.5),
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,7 +447,6 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
               ],
             ),
           ),
-
           GestureDetector(
             onTap: widget.onCancelReply,
             child: Container(
@@ -495,117 +456,6 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                 color: Color(0xFF666666),
                 size: 16,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class AttachmentBottomSheet extends StatelessWidget {
-  final VoidCallback onCamera;
-  final VoidCallback onGallery;
-  final VoidCallback onDocument;
-  final VoidCallback onLocation;
-
-  const AttachmentBottomSheet({
-    super.key,
-    required this.onCamera,
-    required this.onGallery,
-    required this.onDocument,
-    required this.onLocation,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle bar
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: const Color(0xFF666666).withAlpha(77),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Options
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildAttachmentOption(
-                icon: Icons.camera_alt,
-                label: 'Camera',
-                color: const Color(0xFF34C759),
-                onTap: onCamera,
-                isDark: isDark,
-              ),
-              _buildAttachmentOption(
-                icon: Icons.photo_library,
-                label: 'Gallery',
-                color: const Color(0xFF007AFF),
-                onTap: onGallery,
-                isDark: isDark,
-              ),
-              _buildAttachmentOption(
-                icon: Icons.description,
-                label: 'Document',
-                color: const Color(0xFFFF9500),
-                onTap: onDocument,
-                isDark: isDark,
-              ),
-              _buildAttachmentOption(
-                icon: Icons.location_on,
-                label: 'Location',
-                color: const Color(0xFFFF3B30),
-                onTap: onLocation,
-                isDark: isDark,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAttachmentOption({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-    required bool isDark,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: isDark ? Colors.white : Colors.black,
             ),
           ),
         ],

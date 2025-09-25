@@ -51,24 +51,20 @@ router.get('/:conversationId', async (req, res) => {
     const userId = req.user?.id;
     const { conversationId } = req.params;
 
-    // Sanitize and clamp limit
     const limitRaw = parseInt(req.query.limit || '50', 10);
     const limit = Number.isFinite(limitRaw)
       ? Math.min(Math.max(limitRaw, 1), 100)
       : 50;
 
-    // Validate parameters
     if (!userId) return fail(res, 'user_not_authenticated', 401);
     if (!conversationId) return fail(res, 'conversation_id_required', 400);
 
-    // Ensure user belongs to conversation
     const [convRows] = await pool.execute(
       'SELECT * FROM conversations WHERE id = ? AND (user_a_id = ? OR user_b_id = ?) LIMIT 1',
       [conversationId, userId, userId]
     );
     if (convRows.length === 0) return fail(res, 'conversation_not_found', 404);
 
-    // Inline LIMIT to avoid prepared statement issues with LIMIT ?
     const sqlMessages = `
       SELECT m.*,
              reply_msg.id as reply_id,
@@ -117,7 +113,7 @@ router.get('/:conversationId', async (req, res) => {
       }, {});
     }
 
-    // Latest reaction by anyone (so the other user sees a reaction)
+    // Latest reaction by anyone
     let anyReactions = {};
     if (messageIds.length > 0) {
       const placeholders = messageIds.map(() => '?').join(',');
@@ -138,7 +134,6 @@ router.get('/:conversationId', async (req, res) => {
       }, {});
     }
 
-    // Output reversed to ascending by created_at
     const messages = rows
       .reverse()
       .map((m) => ({
@@ -171,7 +166,7 @@ router.get('/:conversationId', async (req, res) => {
           fileName: a.fileName,
         })),
         my_reaction: myReactions[m.id] || null,
-        reaction: anyReactions[m.id] || null, // latest reaction by anyone
+        reaction: anyReactions[m.id] || null,
       }));
 
     return res.json(ok({ messages }));
@@ -181,7 +176,7 @@ router.get('/:conversationId', async (req, res) => {
   }
 });
 
-// Send a message (text/media)
+// Send a message (text/media/voice)
 router.post('/', async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -220,14 +215,34 @@ router.post('/', async (req, res) => {
       [id, conversationId, userId, receiverId, body.type, text, body.reply_to_message_id || null]
     );
 
-    const attachments = body.attachments || [];
-    for (const att of attachments) {
+    // Persist attachments (image, video, voice, document)
+    const attachmentsIn = body.attachments || [];
+    const attachmentsOut = [];
+    for (const att of attachmentsIn) {
       const attId = generateId();
       await pool.execute(
         `INSERT INTO chat_attachments (id, message_id, type, url, thumbnail, durationSec, fileSize, fileName, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [attId, id, att.type, att.url, att.thumbnail || null, att.durationSec || null, att.fileSize || null, att.fileName || null]
+        [
+          attId,
+          id,
+          att.type,
+          att.url,
+          att.thumbnail || null,
+          att.durationSec || null,
+          att.fileSize || null,
+          att.fileName || null,
+        ]
       );
+      attachmentsOut.push({
+        id: attId,
+        type: att.type,
+        url: att.url,
+        thumbnail: att.thumbnail || null,
+        durationSec: att.durationSec || null,
+        fileSize: att.fileSize || null,
+        fileName: att.fileName || null,
+      });
     }
 
     await pool.execute(
@@ -237,12 +252,12 @@ router.post('/', async (req, res) => {
       [
         body.type,
         text ||
-          (attachments.length > 0
-            ? attachments[0].type === 'image'
+          (attachmentsIn.length > 0
+            ? attachmentsIn[0].type === 'image'
               ? 'Photo'
-              : attachments[0].type === 'video'
+              : attachmentsIn[0].type === 'video'
               ? 'Video'
-              : attachments[0].type === 'voice'
+              : attachmentsIn[0].type === 'voice'
               ? 'Voice message'
               : 'File'
             : null),
@@ -260,7 +275,7 @@ router.post('/', async (req, res) => {
           type: body.type,
           text,
           created_at: new Date(),
-          attachments,
+          attachments: attachmentsOut, // return persisted attachment records with IDs
           my_reaction: null,
           reaction: null,
         },
@@ -317,7 +332,7 @@ router.post('/:messageId/react', async (req, res) => {
   }
 });
 
-// Mark a single message as read if it's addressed to current user
+// Mark a single message as read
 router.post('/:messageId/read', async (req, res) => {
   try {
     const userId = req.user?.id;
