@@ -51,6 +51,7 @@ class ProfileApi {
       'mp3',
       'wav',
       'aac',
+      'webm', // added for web voice notes
     };
 
     if (!allowed.contains(resolvedExt)) {
@@ -60,7 +61,6 @@ class ProfileApi {
       }
     }
     if (resolvedExt == 'jpeg') resolvedExt = 'jpg';
-    // Final fallback for unknown blobs (prefer jpg)
     if (!allowed.contains(resolvedExt)) {
       resolvedExt = 'jpg';
     }
@@ -106,6 +106,7 @@ class ProfileApi {
   }
 
   String? _detectExtFromBytes(Uint8List b) {
+    // PNG
     if (b.length >= 8 &&
         b[0] == 0x89 &&
         b[1] == 0x50 &&
@@ -117,9 +118,11 @@ class ProfileApi {
         b[7] == 0x0A) {
       return 'png';
     }
+    // JPEG
     if (b.length >= 2 && b[0] == 0xFF && b[1] == 0xD8) {
       return 'jpg';
     }
+    // WEBP
     if (b.length >= 12 &&
         b[0] == 0x52 &&
         b[1] == 0x49 &&
@@ -131,6 +134,7 @@ class ProfileApi {
         b[11] == 0x50) {
       return 'webp';
     }
+    // MP4/QuickTime: 'ftyp' at 4-7
     if (b.length >= 12 &&
         b[4] == 0x66 &&
         b[5] == 0x74 &&
@@ -138,12 +142,13 @@ class ProfileApi {
         b[7] == 0x70) {
       return 'mp4';
     }
+    // WebM (EBML) 1A 45 DF A3
     if (b.length >= 4 &&
         b[0] == 0x1A &&
         b[1] == 0x45 &&
         b[2] == 0xDF &&
         b[3] == 0xA3) {
-      return 'mp4';
+      return 'webm';
     }
     return null;
   }
@@ -180,6 +185,8 @@ class ProfileApi {
         return 'audio/wav';
       case 'aac':
         return 'audio/aac';
+      case 'webm':
+        return 'audio/webm';
 
       // Docs
       case 'pdf':

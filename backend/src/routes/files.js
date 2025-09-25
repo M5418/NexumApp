@@ -15,7 +15,19 @@ const s3Client = new S3Client({
 });
 
 const BUCKET = process.env.S3_BUCKET || 'nexum-uploads';
-const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'mp4', 'm4a', 'mp3', 'wav', 'aac'];
+const ALLOWED_EXTENSIONS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'pdf',
+  'mp4',
+  'm4a',
+  'mp3',
+  'wav',
+  'aac',
+  'webm', // added for web audio
+];
 
 // Validation schemas
 const presignSchema = z.object({
@@ -30,17 +42,24 @@ const confirmSchema = z.object({
 // Helper function to get content type
 function getContentType(ext) {
   const types = {
+    // Images
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
     png: 'image/png',
     webp: 'image/webp',
+
+    // Docs
     pdf: 'application/pdf',
+
+    // Video
     mp4: 'video/mp4',
+
     // Audio
     m4a: 'audio/mp4',
     mp3: 'audio/mpeg',
     wav: 'audio/wav',
     aac: 'audio/aac',
+    webm: 'audio/webm', // opus/webm used by Flutter web recording
   };
   return types[ext.toLowerCase()] || 'application/octet-stream';
 }
