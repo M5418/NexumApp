@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/message.dart';
-import '../chat_page.dart';
 import '../conversations_page.dart';
 import '../core/users_api.dart';
 import '../core/conversations_api.dart';
@@ -94,40 +93,23 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
   void _startNewChat(UserItem user) async {
     final ctx = context;
     try {
-      Navigator.pop(ctx);
-      if (ctx.mounted) {
-        // Convert UserItem to ChatUser for navigation
-        final chatUser = ChatUser(
-          id: user.id,
-          name: user.name,
-          avatarUrl: user.avatarUrl,
-          isOnline: user.isOnline,
-        );
+      // Convert UserItem to ChatUser for parent navigation
+      final chatUser = ChatUser(
+        id: user.id,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+        isOnline: user.isOnline,
+      );
 
-        final convApi = ConversationsApi();
-        convApi
-            .createOrGet(user.id)
-            .then((convId) {
-              if (ctx.mounted) {
-                Navigator.push(
-                  ctx,
-                  MaterialPageRoute(
-                    builder: (ctx) => ChatPage(
-                      otherUser: chatUser,
-                      isDarkMode: widget.isDarkMode,
-                      conversationId: convId,
-                    ),
-                  ),
-                );
-              }
-            })
-            .catchError((e) {
-              if (ctx.mounted) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  SnackBar(content: Text('Failed to start chat: $e')),
-                );
-              }
-            });
+      final convApi = ConversationsApi();
+      final convId = await convApi.createOrGet(user.id);
+
+      // Pop the bottom sheet and return data to caller so it can navigate
+      if (ctx.mounted) {
+        Navigator.pop(ctx, {
+          'conversationId': convId,
+          'user': chatUser,
+        });
       }
     } catch (e) {
       if (ctx.mounted) {

@@ -8,6 +8,8 @@ import 'core/auth_api.dart';
 import 'core/token_store.dart';
 import 'home_feed_page.dart';
 import 'theme_provider.dart';
+import 'core/api_client.dart';
+import 'services/auth_service.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -69,7 +71,13 @@ class _SignInPageState extends State<SignInPage> {
         final token = response['data']['token'] as String?;
         if (token != null) {
           await TokenStore.write(token);
-
+          // Ensure Authorization header is set immediately for subsequent requests
+          ApiClient().dio.options.headers['Authorization'] = 'Bearer $token';
+          
+          // Notify AuthService that user is logged in
+          AuthService().setLoggedIn(token);
+          await AuthService().refreshUser();
+          
           if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (_) => const HomeFeedPage()),

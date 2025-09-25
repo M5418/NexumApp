@@ -28,6 +28,7 @@ import 'video_scroll_page.dart';
 import 'core/token_store.dart';
 import 'sign_in_page.dart';
 import 'core/auth_api.dart';
+import 'package:dio/dio.dart';
 
 class HomeFeedPage extends StatefulWidget {
   const HomeFeedPage({super.key});
@@ -77,37 +78,52 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   Future<void> _loadData() async {
+    List<Post> posts = [];
+    List<stories_api.StoryRing> rings = [];
+    String? errMsg;
+
     try {
-      // Load posts and stories in parallel
-      final futures = await Future.wait([
-        PostsApi().listFeed(limit: 20, offset: 0),
-        stories_api.StoriesApi().getRings()
-      ]);
-
-      final posts = futures[0] as List<Post>;
-      final rings = futures[1] as List<stories_api.StoryRing>;
-
-      if (!mounted) return;
-      setState(() {
-        _posts = posts;
-        _storyRings = rings;
-      });
+      posts = await PostsApi().listFeed(limit: 20, offset: 0);
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _posts = [];
-        _storyRings = [];
-      });
+      errMsg = 'Posts failed: ${_toError(e)}';
+    }
+
+    try {
+      rings = await stories_api.StoriesApi().getRings();
+    } catch (e) {
+      final s = 'Stories failed: ${_toError(e)}';
+      errMsg = errMsg == null ? s : '$errMsg | $s';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _posts = posts;
+      _storyRings = rings;
+    });
+
+    if (errMsg != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to load feed', style: GoogleFonts.inter()),
+          content: Text(errMsg, style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
     }
   }
 
-  void _onNavTabChange(int index) {
+  String _toError(Object e) {
+    if (e is DioException) {
+      final code = e.response?.statusCode;
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        final reason = (data['error'] ?? data['message'] ?? data).toString();
+        return 'HTTP ${code ?? 'error'}: $reason';
+      }
+      return 'HTTP ${code ?? 'error'}';
+    }
+    return e.toString();
+  }
+    void _onNavTabChange(int index) {
     setState(() {
       _selectedNavIndex = index;
       if (index != 3) {

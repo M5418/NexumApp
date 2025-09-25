@@ -24,7 +24,9 @@ class _AppWrapperState extends State<AppWrapper> {
 
   Future<void> _initializeAuth() async {
     await _authService.initialize();
-
+    if (_authService.isLoggedIn) {
+      await _authService.refreshUser();
+    }
     if (mounted) {
       setState(() {
         _isInitializing = false;
@@ -38,9 +40,8 @@ class _AppWrapperState extends State<AppWrapper> {
 
     if (_isInitializing) {
       return Scaffold(
-        backgroundColor: themeProvider.isDarkMode
-            ? const Color(0xFF0C0C0C)
-            : const Color(0xFFF1F4F8),
+        backgroundColor:
+            themeProvider.isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
         body: const Center(
           child: CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),

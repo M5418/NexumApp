@@ -11,6 +11,7 @@ class MessageBubble extends StatefulWidget {
   final VoidCallback? onReply;
   final VoidCallback? onLongPress;
   final List<Message> allMessages;
+  final String? reactionEmoji;
 
   const MessageBubble({
     super.key,
@@ -19,6 +20,7 @@ class MessageBubble extends StatefulWidget {
     this.showTimestamp = false,
     this.onReply,
     this.onLongPress,
+    this.reactionEmoji,
   });
 
   @override
@@ -35,7 +37,8 @@ class _MessageBubbleState extends State<MessageBubble> {
   @override
   void initState() {
     super.initState();
-    if (widget.message.type == MessageType.voice) {
+    if (widget.message.type == MessageType.voice ||
+        widget.message.attachments.any((a) => a.type == MediaType.voice)) {
       _initAudioPlayer();
     }
   }
@@ -83,14 +86,15 @@ class _MessageBubbleState extends State<MessageBubble> {
     final List<String> allMedia = [];
 
     for (final msg in widget.allMessages) {
-      if (msg.type == MessageType.image || msg.type == MessageType.video) {
-        for (final attachment in msg.attachments) {
-          if (attachment.type == MediaType.image) {
-            allMedia.add(attachment.url);
-          } else if (attachment.type == MediaType.video &&
-              attachment.thumbnailUrl != null) {
-            allMedia.add(attachment.thumbnailUrl!);
-          }
+      if (msg.attachments.isEmpty) {
+        continue;
+      }
+      for (final attachment in msg.attachments) {
+        if (attachment.type == MediaType.image) {
+          allMedia.add(attachment.url);
+        } else if (attachment.type == MediaType.video &&
+            attachment.thumbnailUrl != null) {
+          allMedia.add(attachment.thumbnailUrl!);
         }
       }
     }
@@ -113,12 +117,29 @@ class _MessageBubbleState extends State<MessageBubble> {
         margin: EdgeInsets.only(
           left: widget.message.isFromCurrentUser ? 60 : 16,
           right: widget.message.isFromCurrentUser ? 16 : 60,
-          bottom: 4,
+          bottom: widget.reactionEmoji != null ? 16 : 4,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildMessageContent(context, isDark),
+            Align(
+              alignment: widget.message.isFromCurrentUser
+                  ? Alignment.centerRight
+                  : Alignment.centerLeft,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _buildMessageContent(context, isDark),
+                  if (widget.reactionEmoji != null)
+                    Positioned(
+                      bottom: -8,
+                      right: widget.message.isFromCurrentUser ? 0 : null,
+                      left: widget.message.isFromCurrentUser ? null : 0,
+                      child: _buildReactionPill(isDark, widget.reactionEmoji!),
+                    ),
+                ],
+              ),
+            ),
             if (widget.showTimestamp) _buildTimestamp(isDark),
           ],
         ),
@@ -126,7 +147,47 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  Widget _buildReactionPill(bool isDark, String emoji) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 26),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Text(
+        emoji,
+        style: const TextStyle(fontSize: 14),
+      ),
+    );
+  }
+
+  // Prefer rendering attachments if present, regardless of message.type.
   Widget _buildMessageContent(BuildContext context, bool isDark) {
+    final attachments = widget.message.attachments;
+    final hasMedia = attachments.any(
+        (a) => a.type == MediaType.image || a.type == MediaType.video);
+    final hasFiles = attachments.any((a) => a.type == MediaType.document);
+    final hasVoice = attachments.any((a) => a.type == MediaType.voice) ||
+        widget.message.type == MessageType.voice;
+
+    if (hasVoice) {
+      return _buildVoiceMessage(isDark);
+    }
+    if (hasMedia) {
+      return _buildMixedMediaMessage(context, isDark);
+    }
+    if (hasFiles) {
+      return _buildFilesMessage(isDark);
+    }
+
+    // Fallback to original type-specific renderers
     switch (widget.message.type) {
       case MessageType.text:
         return _buildTextMessage(isDark);
@@ -165,6 +226,115 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
         ],
       ),
+    );
+  }
+
+  // Mixed images + videos renderer with counts row
+  Widget _buildMixedMediaMessage(BuildContext context, bool isDark) {
+    final bubbleColor = widget.message.isFromCurrentUser
+        ? const Color(0xFF007AFF)
+        : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
+
+    final media = widget.message.attachments
+        .where((a) => a.type == MediaType.image || a.type == MediaType.video)
+        .toList();
+
+    return GestureDetector(
+      onTap: () async {
+        if (media.isEmpty) {
+          return;
+        }
+        final allChatMedia = _getAllChatMedia();
+        final firstUrl = media.first.type == MediaType.video &&
+                media.first.thumbnailUrl != null
+            ? media.first.thumbnailUrl!
+            : media.first.url;
+        final initialIndex = _getInitialMediaIndex(firstUrl);
+
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ImageSwipePage(
+              mediaUrls: allChatMedia,
+              initialIndex: initialIndex,
+            ),
+          ),
+        );
+
+        if (result != null &&
+            result['action'] == 'reply' &&
+            widget.onReply != null) {
+          widget.onReply!();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+            if (widget.message.replyTo != null) const SizedBox(height: 4),
+            if (media.length == 1)
+              _buildMediaTile(
+                media.first,
+                width: 270,
+                height: 140,
+                radius: 16,
+                isVideo: media.first.type == MediaType.video,
+              )
+            else if (media.length == 2)
+              _buildTwoMedia(media)
+            else if (media.length == 3)
+              _buildTripleMosaic(media)
+            else
+              _buildGridMosaic(media),
+
+            const SizedBox(height: 4),
+            _buildMediaCountsRow(widget.message.attachments, isDark),
+
+            if (widget.message.content.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                widget.message.content,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: widget.message.isFromCurrentUser
+                      ? Colors.white
+                      : (isDark ? Colors.white : Colors.black),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTwoMedia(List<MediaAttachment> items) {
+    const double spacing = 4;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildMediaTile(
+          items[0],
+          width: 270,
+          height: 140,
+          radius: 16,
+          isVideo: items[0].type == MediaType.video,
+        ),
+        const SizedBox(height: spacing),
+        _buildMediaTile(
+          items[1],
+          width: 270,
+          height: 140,
+          radius: 16,
+          isVideo: items[1].type == MediaType.video,
+        ),
+      ],
     );
   }
 
@@ -217,6 +387,9 @@ class _MessageBubbleState extends State<MessageBubble> {
             else
               _buildGridMosaic(widget.message.attachments),
 
+            const SizedBox(height: 4),
+            _buildMediaCountsRow(widget.message.attachments, isDark),
+
             if (widget.message.content.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
@@ -266,6 +439,9 @@ class _MessageBubbleState extends State<MessageBubble> {
           else
             _buildVideosGridMosaic(widget.message.attachments),
 
+          const SizedBox(height: 4),
+          _buildMediaCountsRow(widget.message.attachments, isDark),
+
           if (widget.message.content.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
@@ -283,12 +459,128 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  Widget _buildFilesMessage(bool isDark) {
+    final files = widget.message.attachments
+        .where((a) => a.type == MediaType.document)
+        .toList();
+    final bubbleColor = widget.message.isFromCurrentUser
+        ? const Color(0xFF007AFF)
+        : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bubbleColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+          if (widget.message.replyTo != null) const SizedBox(height: 6),
+          for (final f in files) ...[
+            _buildSingleFileRow(f, isDark),
+            if (f != files.last) const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 6),
+          _buildMediaCountsRow(widget.message.attachments, isDark),
+          if (widget.message.content.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              widget.message.content,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: widget.message.isFromCurrentUser
+                    ? Colors.white
+                    : (isDark ? Colors.white : Colors.black),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSingleFileRow(MediaAttachment attachment, bool isDark) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: widget.message.isFromCurrentUser
+                ? Colors.white.withValues(alpha: 51)
+                : const Color(0xFF007AFF).withValues(alpha: 51),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            Icons.description,
+            color: widget.message.isFromCurrentUser
+                ? Colors.white
+                : const Color(0xFF007AFF),
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                attachment.fileName ?? 'Document',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: widget.message.isFromCurrentUser
+                      ? Colors.white
+                      : (isDark ? Colors.white : Colors.black),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (attachment.fileSize != null)
+                Text(
+                  _formatFileSize(attachment.fileSize!),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: widget.message.isFromCurrentUser
+                        ? Colors.white70
+                        : const Color(0xFF666666),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildVoiceMessage(bool isDark) {
     final attachment = widget.message.attachments.isNotEmpty
         ? widget.message.attachments.first
         : null;
 
-    if (attachment == null) return const SizedBox.shrink();
+    if (attachment == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: widget.message.isFromCurrentUser
+              ? const Color(0xFF007AFF)
+              : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          widget.message.content,
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            color: widget.message.isFromCurrentUser
+                ? Colors.white
+                : (isDark ? Colors.white : Colors.black),
+          ),
+        ),
+      );
+    }
 
     final duration = attachment.duration ?? _totalDuration;
     final progress = _totalDuration.inMilliseconds > 0
@@ -382,13 +674,17 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Future<void> _togglePlayback() async {
-    if (_audioPlayer == null) return;
+    if (_audioPlayer == null) {
+      return;
+    }
 
     final attachment = widget.message.attachments.isNotEmpty
         ? widget.message.attachments.first
         : null;
 
-    if (attachment == null) return;
+    if (attachment == null) {
+      return;
+    }
 
     try {
       if (_isPlaying) {
@@ -397,13 +693,15 @@ class _MessageBubbleState extends State<MessageBubble> {
         // Stop any other currently playing voice message
         if (_currentlyPlayingMessageId != null &&
             _currentlyPlayingMessageId != widget.message.id) {
-          // This would ideally stop other players, but for now we'll just play this one
+          // Ideally stop other players; for now, this one will play
         }
         await _audioPlayer!.play(UrlSource(attachment.url));
       }
     } catch (e) {
       debugPrint('❌ Audio playback error: $e');
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to play audio: $e')));
@@ -484,7 +782,9 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildReplyPreview(bool isDark) {
-    if (widget.message.replyTo == null) return const SizedBox.shrink();
+    if (widget.message.replyTo == null) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       width: double.infinity,
@@ -724,9 +1024,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                           attachments[row * 2 + col].type == MediaType.video,
                       overlayText:
                           (row * 2 + col == displayCount - 1 &&
-                              total > displayCount)
-                          ? '+${total - displayCount}'
-                          : null,
+                                  total > displayCount)
+                              ? '+${total - displayCount}'
+                              : null,
                     ),
                   if (col == 0) const SizedBox(width: spacing),
                 ],
@@ -769,9 +1069,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                       isVideo: true,
                       overlayText:
                           (row * 2 + col == displayCount - 1 &&
-                              total > displayCount)
-                          ? '+${total - displayCount}'
-                          : null,
+                                  total > displayCount)
+                              ? '+${total - displayCount}'
+                              : null,
                     ),
                   if (col == 0) const SizedBox(width: spacing),
                 ],
@@ -783,12 +1083,50 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  Widget _buildMediaCountsRow(
+      List<MediaAttachment> attachments, bool isDark) {
+    final images =
+        attachments.where((a) => a.type == MediaType.image).length;
+    final videos =
+        attachments.where((a) => a.type == MediaType.video).length;
+    final voices =
+        attachments.where((a) => a.type == MediaType.voice).length;
+    final files =
+        attachments.where((a) => a.type == MediaType.document).length;
+
+    final parts = <String>[];
+    if (images > 0) parts.add('$images image${images > 1 ? 's' : ''}');
+    if (videos > 0) parts.add('$videos video${videos > 1 ? 's' : ''}');
+    if (voices > 0) parts.add('$voices voice${voices > 1 ? 's' : ''}');
+    if (files > 0) parts.add('$files file${files > 1 ? 's' : ''}');
+
+    if (parts.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Text(
+      parts.join(' • '),
+      style: GoogleFonts.inter(
+        fontSize: 12,
+        color: widget.message.isFromCurrentUser
+            ? Colors.white70
+            : const Color(0xFF666666),
+      ),
+    );
+  }
+
   Widget _buildTimestamp(bool isDark) {
+    final align = widget.message.isFromCurrentUser
+        ? Alignment.centerRight
+        : Alignment.centerLeft;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Text(
-        '${widget.message.timestamp.hour.toString().padLeft(2, '0')}:${widget.message.timestamp.minute.toString().padLeft(2, '0')}',
-        style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
+      child: Align(
+        alignment: align,
+        child: Text(
+          '${widget.message.timestamp.hour.toString().padLeft(2, '0')}:${widget.message.timestamp.minute.toString().padLeft(2, '0')}',
+          style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
+        ),
       ),
     );
   }
@@ -801,8 +1139,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    if (bytes < 1024) {
+      return '${bytes}B';
+    }
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    }
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
   }
 }

@@ -9,8 +9,9 @@ import 'blocked_muted_accounts_page.dart';
 import 'security_login_page.dart';
 import 'notification_preferences_page.dart';
 import 'core/auth_api.dart';
-import 'core/token_store.dart';
-import 'sign_in_page.dart';
+import 'core/api_client.dart';
+import 'services/auth_service.dart';
+import 'app_wrapper.dart';
 
 class SettingsPage extends StatelessWidget {
   final bool? isDarkMode;
@@ -223,28 +224,21 @@ class SettingsPage extends StatelessWidget {
                     icon: Icons.exit_to_app,
                     title: 'Logout',
                     onTap: () async {
-                      try {
-                        final authApi = AuthApi();
-                        await authApi.logout();
-                        await TokenStore.clear();
+                      // Try to invalidate server-side session (ignore errors)
+                      try { await AuthApi().logout(); } catch (_) {}
 
-                        if (context.mounted) {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => const SignInPage(),
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        // Even if logout fails, clear local token and redirect
-                        await TokenStore.clear();
-                        if (context.mounted) {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => const SignInPage(),
-                            ),
-                          );
-                        }
+                      // Clear local auth state and token
+                      await AuthService().signOut();
+
+                      // Remove Authorization header from shared Dio client
+                      ApiClient().dio.options.headers.remove('Authorization');
+
+                      // Reset navigation to AppWrapper so it decides SignIn vs Home
+                      if (context.mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (_) => const AppWrapper()),
+                          (route) => false,
+                        );
                       }
                     },
                     isLast: true,

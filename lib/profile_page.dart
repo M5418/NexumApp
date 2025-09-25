@@ -16,6 +16,7 @@ import 'core/token_store.dart';
 import 'sign_in_page.dart';
 import 'core/profile_api.dart';
 import 'dart:convert';
+import 'dart:io';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -97,6 +98,26 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  int _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  String _formatCount(dynamic v) {
+    final n = _toInt(v);
+    if (n >= 1000000) {
+      final m = (n / 1000000);
+      return '${m.toStringAsFixed(m >= 10 ? 0 : 1)}M';
+    }
+    if (n >= 1000) {
+      final k = (n / 1000);
+      return '${k.toStringAsFixed(k >= 10 ? 0 : 1)}K';
+    }
+    return n.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -107,11 +128,17 @@ class _ProfilePageState extends State<ProfilePage> {
         builder: (context, themeProvider, child) {
           final isDark = themeProvider.isDarkMode;
           final p = _profile ?? {};
-          final String fullName =
-              ((p['first_name'] ?? '') as String).trim().isEmpty &&
-                  ((p['last_name'] ?? '') as String).trim().isEmpty
-              ? ((p['username'] ?? p['email'] ?? 'User') as String)
-              : '${p['first_name'] ?? ''} ${p['last_name'] ?? ''}'.trim();
+          final String fullName = (() {
+            final fn = (p['full_name'] ?? '').toString().trim();
+            if (fn.isNotEmpty) return fn;
+            final f = (p['first_name'] ?? '').toString().trim();
+            final l = (p['last_name'] ?? '').toString().trim();
+            if (f.isNotEmpty || l.isNotEmpty) return ('$f $l').trim();
+            // Avoid showing email as the main display name; fall back to generic label
+            return 'User';
+          })();
+          final String username = (p['username'] ?? '').toString().trim();
+          final String atUsername = username.isNotEmpty ? '@$username' : '';
           final String? bioText = p['bio'] as String?;
           final String coverUrl =
               (p['cover_photo_url'] as String?) ??
@@ -246,11 +273,13 @@ class _ProfilePageState extends State<ProfilePage> {
                                             MainAxisAlignment.center,
                                         children: [
                                           _buildStatColumn(
-                                            '2,8K',
+                                            _formatCount(p['connections_total_count']),
                                             'Connections',
                                           ),
                                           const SizedBox(width: 40),
-                                          _buildStatColumn('892', 'Connected'),
+                                          _buildStatColumn(
+                                              _formatCount(p['connections_inbound_count']),
+                                              'Connected'),
                                         ],
                                       ),
                                     ),
@@ -281,6 +310,19 @@ class _ProfilePageState extends State<ProfilePage> {
                                               ),
                                             ],
                                           ),
+                                          if (atUsername.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                atUsername,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14,
+                                                  color: isDark
+                                                      ? Colors.white70
+                                                      : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ),
                                           const SizedBox(height: 8),
                                           Text(
                                             bioText ?? '',
@@ -332,28 +374,73 @@ class _ProfilePageState extends State<ProfilePage> {
                                                     )
                                                     .toList();
 
-                                                await Navigator.push(
+                                                final result = await Navigator.push<ProfileEditResult>(
                                                   context,
                                                   MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        EditProfilPage(
-                                                          fullName: fullName,
-                                                          username:
-                                                              (p['username'] ??
-                                                                      '')
-                                                                  .toString(),
-                                                          bio: bioText ?? '',
-                                                          profilePhotoUrl:
-                                                              profileUrl,
-                                                          coverPhotoUrl:
-                                                              coverUrl,
-                                                          experiences: expItems,
-                                                          trainings: trainItems,
-                                                          interests: interests,
-                                                        ),
+                                                    builder: (_) => EditProfilPage(
+                                                      fullName: fullName,
+                                                      username: (p['username'] ?? '').toString(),
+                                                      bio: bioText ?? '',
+                                                      profilePhotoUrl: profileUrl,
+                                                      coverPhotoUrl: coverUrl,
+                                                      experiences: expItems,
+                                                      trainings: trainItems,
+                                                      interests: interests,
+                                                    ),
                                                   ),
                                                 );
-                                                // Refresh profile data on return
+
+                                                if (result != null) {
+                                                  final api = ProfileApi();
+
+                                                  // 1) Photos: upload new or clear removed
+                                                  try {
+                                                    if (result.profileImagePath != null && result.profileImagePath!.isNotEmpty) {
+                                                      await api.uploadAndAttachProfilePhoto(File(result.profileImagePath!));
+                                                    } else if ((result.profileImageUrl == null || result.profileImageUrl!.isEmpty) && (p['profile_photo_url'] != null)) {
+                                                      await api.update({'profile_photo_url': null});
+                                                    }
+
+                                                    if (result.coverImagePath != null && result.coverImagePath!.isNotEmpty) {
+                                                      await api.uploadAndAttachCoverPhoto(File(result.coverImagePath!));
+                                                    } else if ((result.coverImageUrl == null || result.coverImageUrl!.isEmpty) && (p['cover_photo_url'] != null)) {
+                                                      await api.update({'cover_photo_url': null});
+                                                    }
+                                                  } catch (_) {}
+
+                                                  // 2) Profile fields: username, bio, experiences, trainings, interests
+                                                  final updates = <String, dynamic>{};
+
+                                                  final newUsername = result.username.trim();
+                                                  if (newUsername.isNotEmpty && newUsername != (p['username'] ?? '')) {
+                                                    updates['username'] = newUsername;
+                                                  }
+                                                  updates['bio'] = result.bio;
+
+                                                  // professional_experiences expects [{title}]
+                                                  updates['professional_experiences'] = result.experiences
+                                                      .map((e) => {
+                                                            'title': e.title,
+                                                          })
+                                                      .toList();
+
+                                                  // trainings expects [{title, subtitle?}]
+                                                  updates['trainings'] = result.trainings
+                                                      .map((t) {
+                                                        final m = <String, dynamic>{'title': t.title};
+                                                        if ((t.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = t.subtitle;
+                                                        return m;
+                                                      })
+                                                      .toList();
+
+                                                  updates['interest_domains'] = result.interests;
+
+                                                  try {
+                                                    await api.update(updates);
+                                                  } catch (_) {}
+                                                }
+
+                                                // Refresh profile data after possible updates
                                                 await _loadProfile();
                                               },
                                               style: ElevatedButton.styleFrom(

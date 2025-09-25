@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
 import 'api_client.dart';
 
@@ -16,26 +18,27 @@ class ProfileApi {
   }
 
   Future<String> uploadAndAttachProfilePhoto(File file) async {
-    final url = await _uploadToS3(file);
+    final url = await uploadFile(file);
     await update({'profile_photo_url': url});
     return url;
   }
 
   Future<String> uploadAndAttachCoverPhoto(File file) async {
-    final url = await _uploadToS3(file);
+    final url = await uploadFile(file);
     await update({'cover_photo_url': url});
     return url;
   }
 
-  // Generic file upload (returns public URL)
+  // Generic file upload (returns public URL) for mobile/desktop.
+  // Reads the file as bytes and defers to uploadBytes (single upload path).
   Future<String> uploadFile(File file) async {
-    return _uploadToS3(file);
+    final ext = _extensionOf(file.path);
+    final bytes = await file.readAsBytes();
+    return uploadBytes(bytes, ext: ext);
   }
 
-  Future<String> _uploadToS3(File file) async {
-    final ext = _extensionOf(file.path);
-    final contentType = _contentTypeForExt(ext);
-
+  // Web-friendly upload using raw bytes. Avoids forbidden headers like Content-Length on web.
+  Future<String> uploadBytes(Uint8List bytes, {required String ext}) async {
     // 1) Presign
     final pres = await _dio.post(
       '/api/files/presign-upload',
@@ -47,19 +50,32 @@ class ProfileApi {
     final key = data['key'] as String;
     final publicUrl = data['publicUrl'] as String;
 
-    // 2) Upload to S3 via presigned PUT using a clean Dio (no auth headers)
-    final bytes = await file.readAsBytes();
+    // 2) Upload to S3 via presigned PUT
+    final contentType = _contentTypeForExt(ext);
     final s3 = Dio();
+
     await s3.put(
       putUrl,
-      data: Stream.fromIterable(bytes.map((b) => [b])),
+      // On web we pass raw bytes directly and DO NOT set Content-Length.
+      data: kIsWeb ? bytes : Stream.fromIterable(bytes.map((b) => [b])),
       options: Options(
-        headers: {'Content-Type': contentType, 'Content-Length': bytes.length},
+        headers: kIsWeb
+            ? {
+                'Content-Type': contentType,
+              }
+            : {
+                'Content-Type': contentType,
+                'Content-Length': bytes.length,
+              },
       ),
     );
 
-    // 3) Confirm upload (optional for audit)
-    await _dio.post('/api/files/confirm', data: {'key': key, 'url': publicUrl});
+    // 3) Confirm upload (optional auditing) - non-blocking
+    try {
+      await _dio.post('/api/files/confirm', data: {'key': key, 'url': publicUrl});
+    } catch (_) {
+      // Ignore failures here; upload already succeeded.
+    }
 
     return publicUrl;
   }
@@ -72,6 +88,7 @@ class ProfileApi {
 
   String _contentTypeForExt(String ext) {
     switch (ext.toLowerCase()) {
+      // Images
       case 'jpg':
       case 'jpeg':
         return 'image/jpeg';
@@ -79,6 +96,20 @@ class ProfileApi {
         return 'image/png';
       case 'webp':
         return 'image/webp';
+
+      // Video
+      case 'mp4':
+        return 'video/mp4';
+      case 'mov':
+        return 'video/quicktime';
+      case 'webm':
+        return 'video/webm';
+      case 'mkv':
+        return 'video/x-matroska';
+      case 'avi':
+        return 'video/x-msvideo';
+
+      // Audio
       case 'm4a':
         return 'audio/mp4';
       case 'mp3':
@@ -87,6 +118,8 @@ class ProfileApi {
         return 'audio/wav';
       case 'aac':
         return 'audio/aac';
+
+      // Fallback
       default:
         return 'application/octet-stream';
     }

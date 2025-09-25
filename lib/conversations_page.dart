@@ -122,7 +122,7 @@ class _ConversationsPageState extends State<ConversationsPage>
     // Note: we guarded mounted after the await before calling this
   }
 
-  void _navigateToChat(ChatItem chatItem) {
+  Future<void> _navigateToChat(ChatItem chatItem) async {
     final chatUser = ChatUser(
       id: chatItem.id,
       name: chatItem.name,
@@ -130,7 +130,7 @@ class _ConversationsPageState extends State<ConversationsPage>
       isOnline: true,
     );
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ChatPage(
@@ -140,6 +140,10 @@ class _ConversationsPageState extends State<ConversationsPage>
         ),
       ),
     );
+
+    // Refresh conversations after returning (updates unread counts)
+    if (!mounted) return;
+    await _loadConversations();
   }
 
   // ignore: unused_element
@@ -163,13 +167,34 @@ class _ConversationsPageState extends State<ConversationsPage>
     final isDark =
         widget.isDarkMode ?? Theme.of(context).brightness == Brightness.dark;
 
-    showModalBottomSheet(
+    showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) =>
           NewChatBottomSheet(isDarkMode: isDark, availableUsers: []),
-    );
+    ).then((result) async {
+      if (!mounted) return;
+      if (result == null) return;
+      final convId = (result['conversationId'] ?? '').toString();
+      final user = result['user'];
+      if (convId.isEmpty || user == null) return;
+
+      // Navigate to chat page
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatPage(
+            otherUser: user,
+            isDarkMode: widget.isDarkMode,
+            conversationId: convId,
+          ),
+        ),
+      );
+
+      // Refresh conversations after returning
+      await _loadConversations();
+    });
   }
 
   void _showConversationActions(ChatItem item) {
@@ -308,176 +333,174 @@ class _ConversationsPageState extends State<ConversationsPage>
                       child: _loadingConversations
                           ? const Center(child: CircularProgressIndicator())
                           : _errorConversations != null
-                          ? Center(child: Text(_errorConversations!))
-                          : ListView.separated(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              itemCount: _chats.length,
-                              separatorBuilder: (context, index) => Divider(
-                                height: 1,
-                                thickness: 0.5,
-                                color: const Color(
-                                  0xFF666666,
-                                ).withValues(alpha: 0.1),
-                                indent: 64,
-                              ),
-                              itemBuilder: (context, index) {
-                                return GestureDetector(
-                                  onTap: () => _navigateToChat(_chats[index]),
-                                  onLongPress: () =>
-                                      _showConversationActions(_chats[index]),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 24,
-                                          backgroundColor: index % 2 == 0
-                                              ? const Color(0xFF007AFF)
-                                              : Colors.white,
-                                          child: Text(
-                                            _chats[index].name.substring(0, 1),
-                                            style: GoogleFonts.inter(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: index % 2 == 0
-                                                  ? Colors.white
-                                                  : const Color(0xFF007AFF),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text(
-                                                    _chats[index].name,
-                                                    style: GoogleFonts.inter(
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: isDark
-                                                          ? Colors.white
-                                                          : Colors.black,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    _chats[index].lastTime,
-                                                    style: GoogleFonts.inter(
-                                                      fontSize: 12,
-                                                      color: const Color(
-                                                        0xFF666666,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
+                              ? Center(child: Text(_errorConversations!))
+                              : ListView.separated(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  itemCount: _chats.length,
+                                  separatorBuilder: (context, index) => Divider(
+                                    height: 1,
+                                    thickness: 0.5,
+                                    color: const Color(
+                                      0xFF666666,
+                                    ).withValues(alpha: 0.1),
+                                    indent: 64,
+                                  ),
+                                  itemBuilder: (context, index) {
+                                    return GestureDetector(
+                                      onTap: () => _navigateToChat(_chats[index]),
+                                      onLongPress: () =>
+                                          _showConversationActions(_chats[index]),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 24,
+                                              backgroundColor: index % 2 == 0
+                                                  ? const Color(0xFF007AFF)
+                                                  : Colors.white,
+                                              child: Text(
+                                                _chats[index].name.substring(0, 1),
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: index % 2 == 0
+                                                      ? Colors.white
+                                                      : const Color(0xFF007AFF),
+                                                ),
                                               ),
-                                              const SizedBox(height: 4),
-                                              Row(
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
-                                                  if (_chats[index].lastType ==
-                                                      MessageType.video)
-                                                    const Icon(
-                                                      Icons.videocam,
-                                                      size: 16,
-                                                      color: Color(0xFF666666),
-                                                    )
-                                                  else if (_chats[index]
-                                                          .lastType ==
-                                                      MessageType.images)
-                                                    const Icon(
-                                                      Icons.image,
-                                                      size: 16,
-                                                      color: Color(0xFF666666),
-                                                    )
-                                                  else if (_chats[index]
-                                                          .lastType ==
-                                                      MessageType.voice)
-                                                    const Icon(
-                                                      Icons.mic,
-                                                      size: 16,
-                                                      color: Color(0xFF666666),
-                                                    ),
-                                                  if (_chats[index].lastType !=
-                                                      MessageType.text)
-                                                    const SizedBox(width: 4),
-                                                  Expanded(
-                                                    child: Text(
-                                                      _chats[index].lastText ??
-                                                          (_chats[index]
-                                                                      .lastType ==
-                                                                  MessageType
-                                                                      .images
-                                                              ? 'Images'
-                                                              : _chats[index]
-                                                                        .lastType ==
-                                                                    MessageType
-                                                                        .video
-                                                              ? 'Video'
-                                                              : _chats[index]
-                                                                        .lastType ==
-                                                                    MessageType
-                                                                        .voice
-                                                              ? 'Voice message'
-                                                              : ''),
-                                                      style: GoogleFonts.inter(
-                                                        fontSize: 14,
-                                                        color: const Color(
-                                                          0xFF666666,
+                                                  Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      Text(
+                                                        _chats[index].name,
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: isDark
+                                                              ? Colors.white
+                                                              : Colors.black,
                                                         ),
                                                       ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
+                                                      Text(
+                                                        _chats[index].lastTime,
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 12,
+                                                          color: const Color(
+                                                            0xFF666666,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
-                                                  if (_chats[index]
-                                                          .unreadCount >
-                                                      0)
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
+                                                  const SizedBox(height: 4),
+                                                  Row(
+                                                    children: [
+                                                      if (_chats[index].lastType ==
+                                                          MessageType.video)
+                                                        const Icon(
+                                                          Icons.videocam,
+                                                          size: 16,
+                                                          color: Color(0xFF666666),
+                                                        )
+                                                      else if (_chats[index]
+                                                              .lastType ==
+                                                          MessageType.images)
+                                                        const Icon(
+                                                          Icons.image,
+                                                          size: 16,
+                                                          color: Color(0xFF666666),
+                                                        )
+                                                      else if (_chats[index]
+                                                              .lastType ==
+                                                          MessageType.voice)
+                                                        const Icon(
+                                                          Icons.mic,
+                                                          size: 16,
+                                                          color: Color(0xFF666666),
+                                                        ),
+                                                      if (_chats[index].lastType !=
+                                                          MessageType.text)
+                                                        const SizedBox(width: 4),
+                                                      Expanded(
+                                                        child: Text(
+                                                          _chats[index].lastText ??
+                                                              (_chats[index]
+                                                                          .lastType ==
+                                                                      MessageType
+                                                                          .images
+                                                                  ? 'Images'
+                                                                  : _chats[index]
+                                                                              .lastType ==
+                                                                          MessageType
+                                                                              .video
+                                                                      ? 'Video'
+                                                                      : _chats[index]
+                                                                                  .lastType ==
+                                                                              MessageType
+                                                                                  .voice
+                                                                          ? 'Voice message'
+                                                                          : ''),
+                                                          style: GoogleFonts.inter(
+                                                            fontSize: 14,
+                                                            color: const Color(
+                                                              0xFF666666,
+                                                            ),
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow:
+                                                              TextOverflow.ellipsis,
+                                                        ),
+                                                      ),
+                                                      if (_chats[index]
+                                                              .unreadCount >
+                                                          0)
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
                                                             horizontal: 8,
                                                             vertical: 4,
                                                           ),
-                                                      decoration:
-                                                          const BoxDecoration(
+                                                          decoration:
+                                                              const BoxDecoration(
                                                             color: Color(
                                                               0xFF007AFF,
                                                             ),
                                                             shape:
                                                                 BoxShape.circle,
                                                           ),
-                                                      child: Text(
-                                                        '${_chats[index].unreadCount}',
-                                                        style:
-                                                            GoogleFonts.inter(
+                                                          child: Text(
+                                                            '${_chats[index].unreadCount}',
+                                                            style:
+                                                                GoogleFonts.inter(
                                                               fontSize: 12,
                                                               fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                              color:
-                                                                  Colors.white,
+                                                                  FontWeight.w600,
+                                                              color: Colors.white,
                                                             ),
-                                                      ),
-                                                    ),
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
                                                 ],
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
+                                      ),
+                                    );
+                                  },
+                                ),
                     ),
                   ),
                   Padding(

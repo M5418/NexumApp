@@ -1,4 +1,7 @@
 import 'package:flutter/foundation.dart';
+import '../core/token_store.dart';
+import '../core/auth_api.dart';
+import '../core/profile_api.dart';
 
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
@@ -10,49 +13,60 @@ class AuthService extends ChangeNotifier {
   String? _userToken;
   String? _userName;
   String? _userEmail;
+  String? _avatarUrl;
 
   bool get isLoggedIn => _isLoggedIn;
   String? get userId => _userId;
   String? get userToken => _userToken;
   String? get userName => _userName;
   String? get userEmail => _userEmail;
+  String? get avatarUrl => _avatarUrl;
 
   /// Initialize auth service and check for existing login
   Future<void> initialize() async {
-    // In a real app, you would check SharedPreferences or secure storage
-    // For now, we'll simulate checking for stored credentials
-    await Future.delayed(const Duration(milliseconds: 500));
+    final token = await TokenStore.read();
+    if (token != null && token.isNotEmpty) {
+      _isLoggedIn = true;
+      _userToken = token;
+      await refreshUser(); // populate id/email/profile on app start
+    } else {
+      _isLoggedIn = false;
+    }
+    notifyListeners();
+  }
 
-    // Simulate being already logged in as Dehoua Guy
-    _isLoggedIn = true;
-    _userId = 'user_dehoua_guy';
-    _userToken = 'token_${DateTime.now().millisecondsSinceEpoch}';
-    _userName = 'Dehoua Guy';
-    _userEmail = 'dehoua.guy@nexum.com';
+  /// Fetch current user id/email and profile; notify listeners
+  Future<void> refreshUser() async {
+    try {
+      final me = await AuthApi().me(); // { ok, data: { id, email } }
+      final data = Map<String, dynamic>.from(me['data'] ?? {});
+      _userId = data['id']?.toString();
+      _userEmail = data['email']?.toString();
+    } catch (e) {
+      debugPrint('AuthService.refreshUser auth error: $e');
+    }
+
+    try {
+      final prof = await ProfileApi().me(); // { ok, ... } or minimal
+      final pd = Map<String, dynamic>.from(prof['data'] ?? prof);
+      final first = (pd['first_name'] ?? '').toString().trim();
+      final last = (pd['last_name'] ?? '').toString().trim();
+      final username = (pd['username'] ?? '').toString().trim();
+      _userName = [first, last].where((s) => s.isNotEmpty).join(' ');
+      if (_userName == null || _userName!.isEmpty) {
+        _userName = username.isNotEmpty ? username : (_userEmail ?? 'User');
+      }
+      _avatarUrl = (pd['profile_photo_url'] as String?) ?? _avatarUrl;
+    } catch (e) {
+      debugPrint('AuthService.refreshUser profile error: $e');
+    }
 
     notifyListeners();
   }
 
-  /// Sign in user
+  /// Sign in user (handled by SignInPage with AuthApi; keep for compat)
   Future<bool> signIn(String email, String password) async {
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
-
-      // For demo purposes, accept any email/password
-      if (email.isNotEmpty && password.isNotEmpty) {
-        _isLoggedIn = true;
-        _userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
-        _userToken = 'token_${DateTime.now().millisecondsSinceEpoch}';
-        _userName = 'Dehoua Guy';
-        _userEmail = email;
-
-        // In a real app, save to secure storage here
-
-        notifyListeners();
-        return true;
-      }
-
       return false;
     } catch (e) {
       debugPrint('Sign in error: $e');
@@ -60,37 +74,38 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Sign out user
+  /// Sign out user and clear token
   Future<void> signOut() async {
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(milliseconds: 500));
-
       _isLoggedIn = false;
       _userId = null;
       _userToken = null;
       _userName = null;
       _userEmail = null;
-
-      // In a real app, clear secure storage here
-
+      _avatarUrl = null;
+      await TokenStore.clear();
       notifyListeners();
     } catch (e) {
       debugPrint('Sign out error: $e');
     }
   }
 
-  /// Check if user session is still valid
+  /// Mark user as logged in (called after successful login)
+  void setLoggedIn(String token, {String? userId, String? userName, String? userEmail}) {
+    _isLoggedIn = true;
+    _userToken = token;
+    _userId = userId ?? _userId;
+    _userName = userName ?? _userName;
+    _userEmail = userEmail ?? _userEmail;
+    notifyListeners();
+  }
+
+  /// Optional: validate session
   Future<bool> validateSession() async {
     if (!_isLoggedIn || _userToken == null) {
       return false;
     }
-
     try {
-      // Simulate API call to validate token
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      // For demo, assume session is always valid if we have a token
       return true;
     } catch (e) {
       debugPrint('Session validation error: $e');

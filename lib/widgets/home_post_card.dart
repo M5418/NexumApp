@@ -124,18 +124,11 @@ class _HomePostCardState extends State<HomePostCard> {
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      image: DecorationImage(
-                        image: CachedNetworkImageProvider(
-                          widget.post.repostedBy!.userAvatarUrl,
-                        ),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
+                  _AvatarCircle(
+                    url: widget.post.repostedBy!.userAvatarUrl,
+                    name: widget.post.repostedBy!.userName,
+                    size: 20,
+                    isDark: widget.isDarkMode ?? false,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -172,18 +165,11 @@ class _HomePostCardState extends State<HomePostCard> {
                     ),
                   );
                 },
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    image: DecorationImage(
-                      image: CachedNetworkImageProvider(
-                        widget.post.userAvatarUrl,
-                      ),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                child: _AvatarCircle(
+                  url: widget.post.userAvatarUrl,
+                  name: widget.post.userName,
+                  size: 40,
+                  isDark: widget.isDarkMode ?? false,
                 ),
               ),
               const SizedBox(width: 12),
@@ -535,6 +521,62 @@ class _HomePostCardState extends State<HomePostCard> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AvatarCircle extends StatelessWidget {
+  final String url;
+  final String name;
+  final double size;
+  final bool isDark;
+
+  const _AvatarCircle({
+    required this.url,
+    required this.name,
+    required this.size,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasUrl = url.trim().isNotEmpty;
+    if (hasUrl) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          image: DecorationImage(
+            image: CachedNetworkImageProvider(url),
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+
+    final bg = isDark ? const Color(0xFF1F1F1F) : const Color(0xFFEAEAEA);
+    final border = isDark ? const Color(0xFF1F1F1F) : Colors.white;
+    final letter = (name.trim().isNotEmpty ? name.trim()[0] : 'U').toUpperCase();
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: bg,
+        border: Border.all(color: border, width: size * 0.05),
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style: GoogleFonts.inter(
+            fontSize: size * 0.45,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : Colors.black,
+          ),
+        ),
       ),
     );
   }

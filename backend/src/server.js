@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+
 import authRoutes from './routes/auth.js';
 import filesRoutes from './routes/files.js';
 import profileRoutes from './routes/profile.js';
@@ -16,19 +17,34 @@ import storiesRoutes from './routes/stories.js';
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// CORS configuration
+// CORS configuration (place BEFORE routes)
 const corsOptions = {
-  origin: [
-    "http://localhost:3000",
-    "http://10.0.2.2:3000",
-    "http://ec2-35-183-183-199.ca-central-1.compute.amazonaws.com"
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  // Allow your static origins plus any localhost/127.0.0.1 on any port (Flutter Web dev server)
+  origin: (origin, callback) => {
+    // Allow requests with no origin, like curl/Postman or health checks
+    if (!origin) return callback(null, true);
+
+    const allowedStatic = [
+      'http://localhost:3000',
+      'http://10.0.2.2:3000',
+      'http://ec2-35-183-183-199.ca-central-1.compute.amazonaws.com',
+    ];
+    const isLocalDev = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+
+    if (allowedStatic.includes(origin) || isLocalDev) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
+// Handle preflight for all routes
+app.options('*', cors(corsOptions));
+
 app.use(express.json({ limit: '10mb' }));
 
 // Health endpoints
@@ -57,7 +73,7 @@ app.use((err, req, res, next) => {
   console.error('Global error:', err);
   res.status(500).json({
     ok: false,
-    error: 'internal_server_error'
+    error: 'internal_server_error',
   });
 });
 
@@ -65,7 +81,7 @@ app.use((err, req, res, next) => {
 app.use('*', (req, res) => {
   res.status(404).json({
     ok: false,
-    error: 'not_found'
+    error: 'not_found',
   });
 });
 

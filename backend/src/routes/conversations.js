@@ -38,9 +38,10 @@ router.get('/', async (req, res) => {
     );
 
     const conversations = rows.map(r => {
-      const name = (r.first_name && r.last_name)
-        ? `${r.first_name} ${r.last_name}`.trim()
-        : (r.username || 'User');
+      const first = (r.first_name || '').trim();
+      const last = (r.last_name || '').trim();
+      const combined = `${first} ${last}`.trim();
+      const name = combined.length > 0 ? combined : (r.username || 'User');
       return {
         id: r.id,
         other_user_id: r.other_user_id,

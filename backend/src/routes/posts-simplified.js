@@ -18,41 +18,43 @@ const createPostSchema = z.object({
   message: 'post_requires_content_or_media_or_repost',
 });
 
-// Helper functions for JSON array management
-function addToJsonArray(jsonArray, userId) {
-  const arr = jsonArray && jsonArray !== 'null' ? JSON.parse(jsonArray) : [];
-  if (!arr.includes(userId)) {
-    arr.push(userId);
+// Helper functions for JSON array management (accept string or array)
+function toArray(value) {
+  if (!value || value === 'null' || value === '') return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.warn('Failed to parse JSON to array:', value, e);
+      return [];
+    }
   }
+  // Unknown type
+  return [];
+}
+
+function addToJsonArray(jsonArray, userId) {
+  const arr = toArray(jsonArray);
+  if (!arr.includes(userId)) arr.push(userId);
   return JSON.stringify(arr);
 }
 
 function removeFromJsonArray(jsonArray, userId) {
-  const arr = jsonArray && jsonArray !== 'null' ? JSON.parse(jsonArray) : [];
-  const filtered = arr.filter(id => id !== userId);
+  const arr = toArray(jsonArray);
+  const filtered = arr.filter((id) => id !== userId);
   return JSON.stringify(filtered);
 }
 
 function isInJsonArray(jsonArray, userId) {
-  if (!jsonArray || jsonArray === 'null' || jsonArray === '') return false;
-  try {
-    const arr = JSON.parse(jsonArray);
-    return Array.isArray(arr) && arr.includes(userId);
-  } catch (e) {
-    console.warn('Failed to parse JSON array:', jsonArray, e);
-    return false;
-  }
+  const arr = toArray(jsonArray);
+  return Array.isArray(arr) && arr.includes(userId);
 }
 
 function getJsonArrayCount(jsonArray) {
-  if (!jsonArray || jsonArray === 'null' || jsonArray === '') return 0;
-  try {
-    const arr = JSON.parse(jsonArray);
-    return Array.isArray(arr) ? arr.length : 0;
-  } catch (e) {
-    console.warn('Failed to parse JSON array for count:', jsonArray, e);
-    return 0;
-  }
+  const arr = toArray(jsonArray);
+  return Array.isArray(arr) ? arr.length : 0;
 }
 
 // Get author info
@@ -85,13 +87,18 @@ async function hydratePosts(rows, meId) {
   const userIds = rows.map(r => r.user_id);
   const authorMap = await getAuthorMap(userIds);
 
-  function safeParseJson(jsonString) {
-    try {
-      return JSON.parse(jsonString);
-    } catch (e) {
-      console.warn('Failed to parse JSON:', jsonString, e);
-      return null;
+  function safeParseJson(v) {
+    if (v == null || v === '' || v === 'null') return null;
+    if (Array.isArray(v) || typeof v === 'object') return v;
+    if (typeof v === 'string') {
+      try {
+        return JSON.parse(v);
+      } catch (e) {
+        console.warn('Failed to parse JSON:', v, e);
+        return null;
+      }
     }
+    return null;
   }
 
   return rows.map(r => ({
@@ -100,7 +107,14 @@ async function hydratePosts(rows, meId) {
     post_type: r.post_type,
     content: r.content,
     image_url: r.image_url,
-    image_urls: r.image_urls ? JSON.parse(r.image_urls) : null,
+    image_urls: (() => {
+      if (!r.image_urls) return null;
+      if (Array.isArray(r.image_urls)) return r.image_urls;
+      if (typeof r.image_urls === 'string') {
+        try { return JSON.parse(r.image_urls); } catch (_) { return null; }
+      }
+      return null;
+    })(),
     video_url: r.video_url,
     repost_of: r.repost_of,
     created_at: r.created_at,

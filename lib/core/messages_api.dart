@@ -21,18 +21,18 @@ class AttachmentDto {
   });
 
   factory AttachmentDto.fromJson(Map<String, dynamic> json) => AttachmentDto(
-    id: (json['id'] ?? '').toString(),
-    type: (json['type'] ?? 'image').toString(),
-    url: (json['url'] ?? '').toString(),
-    thumbnail: json['thumbnail']?.toString(),
-    durationSec: json['durationSec'] is int
-        ? json['durationSec'] as int
-        : int.tryParse(json['durationSec']?.toString() ?? ''),
-    fileSize: json['fileSize'] is int
-        ? json['fileSize'] as int
-        : int.tryParse(json['fileSize']?.toString() ?? ''),
-    fileName: json['fileName']?.toString(),
-  );
+        id: (json['id'] ?? '').toString(),
+        type: (json['type'] ?? 'image').toString(),
+        url: (json['url'] ?? '').toString(),
+        thumbnail: json['thumbnail']?.toString(),
+        durationSec: json['durationSec'] is int
+            ? json['durationSec'] as int
+            : int.tryParse(json['durationSec']?.toString() ?? ''),
+        fileSize: json['fileSize'] is int
+            ? json['fileSize'] as int
+            : int.tryParse(json['fileSize']?.toString() ?? ''),
+        fileName: json['fileName']?.toString(),
+      );
 }
 
 class MessageRecord {
@@ -46,6 +46,7 @@ class MessageRecord {
   final DateTime? readAt;
   final List<AttachmentDto> attachments;
   final String? myReaction;
+  final String? reaction; // latest reaction by anyone
   final Map<String, dynamic>? replyTo;
 
   MessageRecord({
@@ -59,30 +60,30 @@ class MessageRecord {
     this.readAt,
     required this.attachments,
     this.myReaction,
+    this.reaction,
     this.replyTo,
   });
 
   factory MessageRecord.fromJson(Map<String, dynamic> json) => MessageRecord(
-    id: (json['id'] ?? '').toString(),
-    conversationId: (json['conversation_id'] ?? '').toString(),
-    senderId: (json['sender_id'] ?? '').toString(),
-    receiverId: (json['receiver_id'] ?? '').toString(),
-    type: (json['type'] ?? 'text').toString(),
-    text: json['text']?.toString(),
-    createdAt:
-        DateTime.tryParse(json['created_at']?.toString() ?? '') ??
-        DateTime.now(),
-    readAt: json['read_at'] != null
-        ? DateTime.tryParse(json['read_at'].toString())
-        : null,
-    attachments: (json['attachments'] as List<dynamic>? ?? [])
-        .map((e) => AttachmentDto.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList(),
-    myReaction: json['my_reaction']?.toString(),
-    replyTo: json['reply_to'] != null
-        ? Map<String, dynamic>.from(json['reply_to'] as Map)
-        : null,
-  );
+        id: (json['id'] ?? '').toString(),
+        conversationId: (json['conversation_id'] ?? '').toString(),
+        senderId: (json['sender_id'] ?? '').toString(),
+        receiverId: (json['receiver_id'] ?? '').toString(),
+        type: (json['type'] ?? 'text').toString(),
+        text: json['text']?.toString(),
+        createdAt:
+            DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
+        readAt:
+            json['read_at'] != null ? DateTime.tryParse(json['read_at'].toString()) : null,
+        attachments: (json['attachments'] as List<dynamic>? ?? [])
+            .map((e) => AttachmentDto.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        myReaction: json['my_reaction']?.toString(),
+        reaction: json['reaction']?.toString(),
+        replyTo: json['reply_to'] != null
+            ? Map<String, dynamic>.from(json['reply_to'] as Map)
+            : null,
+      );
 }
 
 class MessagesApi {
@@ -124,6 +125,15 @@ class MessagesApi {
     return MessageRecord.fromJson(msg);
   }
 
+  String _inferTypeFromAttachments(List<Map<String, dynamic>> atts, {String fallback = 'text'}) {
+    final types = atts.map((a) => (a['type'] ?? '').toString()).toList();
+    if (types.contains('video')) return 'video';
+    if (types.contains('image')) return 'image';
+    if (types.contains('voice')) return 'voice';
+    if (types.contains('document')) return 'file';
+    return fallback;
+  }
+
   Future<MessageRecord> sendTextWithMedia({
     String? conversationId,
     String? otherUserId,
@@ -131,10 +141,15 @@ class MessagesApi {
     required List<Map<String, dynamic>> attachments,
     String? replyToMessageId,
   }) async {
+    final atts = attachments.where((a) => a.isNotEmpty).toList();
+    final msgType = atts.isEmpty
+        ? 'text'
+        : _inferTypeFromAttachments(atts, fallback: text.isNotEmpty ? 'text' : 'file');
+
     final body = <String, dynamic>{
-      'type': 'text', // Keep as text type but with attachments
+      'type': msgType,
       'text': text,
-      'attachments': attachments,
+      if (atts.isNotEmpty) 'attachments': atts,
     };
     if (conversationId != null) body['conversation_id'] = conversationId;
     if (otherUserId != null) body['other_user_id'] = otherUserId;

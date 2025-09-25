@@ -39,13 +39,48 @@ const profileSchema = z.object({
 router.get('/me', async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT u.id AS user_id, u.email,
-              p.first_name, p.last_name, p.username, p.birthday, p.gender,
-              p.professional_experiences, p.trainings, p.bio,
-              p.status, p.interest_domains,
-              p.street, p.city, p.state, p.postal_code, p.country,
-              p.profile_photo_url, p.cover_photo_url,
-              p.created_at AS profile_created_at, p.updated_at AS profile_updated_at
+      `SELECT 
+          u.id AS user_id,
+          u.email,
+          p.first_name,
+          p.last_name,
+          p.username,
+          p.birthday,
+          p.gender,
+          p.professional_experiences,
+          p.trainings,
+          p.bio,
+          p.status,
+          p.interest_domains,
+          p.street,
+          p.city,
+          p.state,
+          p.postal_code,
+          p.country,
+          p.profile_photo_url,
+          p.cover_photo_url,
+          p.created_at AS profile_created_at,
+          p.updated_at AS profile_updated_at,
+          -- Convenience: computed full name
+          TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))) AS full_name,
+          -- Connection counts
+          (
+            SELECT COUNT(*) FROM connections c
+             WHERE c.from_user_id = u.id
+          ) AS connections_outbound_count,
+          (
+            SELECT COUNT(*) FROM connections c
+             WHERE c.to_user_id = u.id
+          ) AS connections_inbound_count,
+          (
+            SELECT COUNT(DISTINCT 
+                     CASE 
+                       WHEN c.from_user_id = u.id THEN c.to_user_id 
+                       ELSE c.from_user_id 
+                     END)
+              FROM connections c
+             WHERE c.from_user_id = u.id OR c.to_user_id = u.id
+          ) AS connections_total_count
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
        WHERE u.id = ?

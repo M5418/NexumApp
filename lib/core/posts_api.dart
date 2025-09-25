@@ -161,10 +161,7 @@ class PostsApi {
     return Post(
       id: (p['id'] ?? '').toString(),
       userName: (author['name'] ?? 'User').toString(),
-      userAvatarUrl:
-          (author['avatarUrl'] ??
-                  'https://ui-avatars.com/api/?background=BFAE01&color=000&name=${Uri.encodeComponent((author['name'] ?? 'U').toString())}')
-              .toString(),
+      userAvatarUrl: (author['avatarUrl'] ?? '').toString(),
       createdAt: parseCreatedAt(p['created_at']),
       text: (p['content'] ?? '').toString(),
       mediaType: mediaType,
