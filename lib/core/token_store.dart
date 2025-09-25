@@ -1,10 +1,9 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'token_store_stub.dart'
+  if (dart.library.html) 'token_store_web.dart'
+  if (dart.library.io) 'token_store_io.dart' as impl;
 
 class TokenStore {
-  static const _k = FlutterSecureStorage();
-  static const _key = 'auth_token';
-
-  static Future<String?> read() => _k.read(key: _key);
-  static Future<void> write(String token) => _k.write(key: _key, value: token);
-  static Future<void> clear() => _k.delete(key: _key);
+  static Future<String?> read() => impl.readToken();
+  static Future<void> write(String token) => impl.writeToken(token);
+  static Future<void> clear() => impl.clearToken();
 }

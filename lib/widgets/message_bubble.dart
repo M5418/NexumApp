@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/message.dart';
 import '../image_swipe_page.dart';
 
@@ -499,23 +500,63 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildSingleFileRow(MediaAttachment attachment, bool isDark) {
-    return Row(
+Widget _buildSingleFileRow(MediaAttachment attachment, bool isDark) {
+  IconData pickIcon(String? name) {
+    final n = (name ?? '').toLowerCase();
+    if (n.endsWith('.pdf')) return Icons.picture_as_pdf;
+    if (n.endsWith('.xls') || n.endsWith('.xlsx')) return Icons.grid_on;
+    return Icons.description; // Word: use description icon
+  }
+
+  Color pickBadgeColor(String? name) {
+    final n = (name ?? '').toLowerCase();
+    if (n.endsWith('.pdf')) return const Color(0xFFE53935); // red
+    if (n.endsWith('.xls') || n.endsWith('.xlsx')) return const Color(0xFF2E7D32); // green
+    if (n.endsWith('.doc') || n.endsWith('.docx')) return const Color(0xFF1565C0); // blue
+    // fallback to bubble-ish tint
+    return widget.message.isFromCurrentUser
+        ? Colors.white.withValues(alpha: 51)
+        : const Color(0xFF007AFF).withValues(alpha: 51);
+  }
+
+  Future<void> openExternal(String url) async {
+    if (url.isEmpty) return;
+    try {
+      final uri = Uri.parse(url);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open file')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open file')),
+        );
+      }
+    }
+  }
+
+  final bubbleTextColor = widget.message.isFromCurrentUser
+      ? Colors.white
+      : (isDark ? Colors.white : Colors.black);
+
+  return GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () => openExternal(attachment.url),
+    child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: widget.message.isFromCurrentUser
-                ? Colors.white.withValues(alpha: 51)
-                : const Color(0xFF007AFF).withValues(alpha: 51),
+            color: pickBadgeColor(attachment.fileName),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
-            Icons.description,
-            color: widget.message.isFromCurrentUser
-                ? Colors.white
-                : const Color(0xFF007AFF),
+            pickIcon(attachment.fileName),
+            color: Colors.white,
             size: 24,
           ),
         ),
@@ -529,9 +570,7 @@ class _MessageBubbleState extends State<MessageBubble>
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: widget.message.isFromCurrentUser
-                      ? Colors.white
-                      : (isDark ? Colors.white : Colors.black),
+                  color: bubbleTextColor,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -550,8 +589,9 @@ class _MessageBubbleState extends State<MessageBubble>
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
+}
 
   // Helper: find voice attachment or synthesize from content URL
   MediaAttachment? _getVoiceAttachment() {

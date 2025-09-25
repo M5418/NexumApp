@@ -134,6 +134,7 @@ class _ChatPageState extends State<ChatPage> {
       });
       _scrollToBottom();
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _loadError = e.toString();
@@ -290,7 +291,6 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _sendVoiceMessage(VoiceRecordingResult recording) async {
     try {
-      // Removed snackbar; upload proceeds in background
       final audioUrl = await _audioRecorder.uploadVoiceFile(recording.filePath);
       if (audioUrl == null) {
         throw Exception('Failed to upload voice file');
@@ -312,7 +312,6 @@ class _ChatPageState extends State<ChatPage> {
         _replyToMessage = null;
       });
       _scrollToBottom();
-      // No snackbar on success
     } catch (e) {
       if (!mounted) return;
       _showSnack('Failed to send voice message: $e');
@@ -430,101 +429,105 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  // Open picker first (to keep browser user-gesture), then close the sheet.
   Future<void> _pickMedia(ImageSource source) async {
-    Navigator.pop(context);
     try {
       final ImagePicker picker = ImagePicker();
       final List<XFile> images = await picker.pickMultipleMedia();
+      if (mounted) Navigator.pop(context);
       if (images.isNotEmpty) {
         await _sendMediaWithText(images);
       }
     } catch (e) {
+      if (mounted) Navigator.pop(context);
       if (mounted) _showSnack('Failed to pick images: $e');
     }
   }
 
   Future<void> _pickVideo() async {
-    Navigator.pop(context);
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
+      if (mounted) Navigator.pop(context);
       if (video != null) {
         await _sendMediaWithText([video]);
       }
     } catch (e) {
+      if (mounted) Navigator.pop(context);
       if (mounted) _showSnack('Failed to pick video: $e');
     }
   }
 
+  // PDF/DOC/DOCX/XLS/XLSX
   Future<void> _pickFile() async {
-  Navigator.pop(context);
-  try {
-    final res = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: kIsWeb,
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
-    );
-    if (res == null || res.files.isEmpty) return;
+    try {
+      final res = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        withData: kIsWeb, // provide .bytes on web
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+      );
+      if (mounted) Navigator.pop(context);
+      if (res == null || res.files.isEmpty) return;
 
-    _showSnack('Uploading file(s)...');
+      _showSnack('Uploading file(s)...');
 
-    final profileApi = ProfileApi();
-    final attachments = <Map<String, dynamic>>[];
+      final profileApi = ProfileApi();
+      final attachments = <Map<String, dynamic>>[];
 
-    for (final f in res.files) {
-      final name = f.name;
-      final ext = (f.extension ??
-              (name.contains('.') ? name.split('.').last : 'bin'))
-          .toLowerCase();
+      for (final f in res.files) {
+        final name = f.name;
+        final ext = (f.extension ?? (name.contains('.') ? name.split('.').last : 'bin'))
+            .toLowerCase();
 
-      String url;
-      final fileSize = f.size;
+        String url;
+        final fileSize = f.size;
 
-      if (kIsWeb) {
-        final bytes = f.bytes;
-        if (bytes == null || bytes.isEmpty) continue;
-        url = await profileApi.uploadBytes(bytes, ext: ext);
-      } else {
-        final path = f.path;
-        if (path == null) continue;
-        url = await profileApi.uploadFile(File(path));
+        if (kIsWeb) {
+          final bytes = f.bytes;
+          if (bytes == null || bytes.isEmpty) continue;
+          url = await profileApi.uploadBytes(bytes, ext: ext);
+        } else {
+          final path = f.path;
+          if (path == null) continue;
+          url = await profileApi.uploadFile(File(path));
+        }
+
+        attachments.add({
+          'type': 'document',
+          'url': url,
+          'fileName': name,
+          'fileSize': fileSize,
+        });
       }
 
-      attachments.add({
-        'type': 'document',
-        'url': url,
-        'fileName': name,
-        'fileSize': fileSize,
+      if (attachments.isEmpty) {
+        _hideSnack();
+        return;
+      }
+
+      final convId = await _requireConversationId();
+      final record = await _messagesApi.sendTextWithMedia(
+        conversationId: convId,
+        otherUserId: null,
+        text: '',
+        attachments: attachments,
+        replyToMessageId: _replyToMessage?.id,
+      );
+
+      final msg = _toUiMessage(record);
+      setState(() {
+        _messages.add(msg);
+        _replyToMessage = null;
       });
-    }
-
-    if (attachments.isEmpty) {
+      _scrollToBottom();
       _hideSnack();
-      return;
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      _showSnack('Failed to pick/send files: $e');
     }
-
-    final convId = await _requireConversationId();
-    final record = await _messagesApi.sendTextWithMedia(
-      conversationId: convId,
-      otherUserId: null,
-      text: '',
-      attachments: attachments,
-      replyToMessageId: _replyToMessage?.id,
-    );
-
-    final msg = _toUiMessage(record);
-    setState(() {
-      _messages.add(msg);
-      _replyToMessage = null;
-    });
-    _scrollToBottom();
-    _hideSnack();
-  } catch (e) {
-    if (!mounted) return;
-    _showSnack('Failed to pick/send files: $e');
   }
-}
 
   Future<void> _sendMediaWithText(List<XFile> mediaFiles) async {
     final isDark =
@@ -933,7 +936,7 @@ class _ChatPageState extends State<ChatPage> {
             dateText,
             style: GoogleFonts.inter(
               fontSize: 12,
-              color: const Color(0xFF666666),
+              color: const Color.fromARGB(255, 255, 255, 255),
               fontWeight: FontWeight.w500,
             ),
           ),

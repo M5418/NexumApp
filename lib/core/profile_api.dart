@@ -58,6 +58,7 @@ class ProfileApi {
     }
     if (resolvedExt == 'jpeg') resolvedExt = 'jpg';
     if (!allowed.contains(resolvedExt)) {
+      // safest default
       resolvedExt = 'jpg';
     }
 
