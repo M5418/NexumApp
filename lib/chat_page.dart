@@ -655,11 +655,7 @@ class _ChatPageState extends State<ChatPage> {
         },
         onToggleStar: () => _toggleStar(message),
         onShareToStory: () => _showSnack('Shared to Story'),
-        onDelete: () {
-          setState(() {
-            _messages.removeWhere((m) => m.id == message.id);
-          });
-        },
+        onDelete: () => _confirmDelete(message),
         onReact: (emoji) => _addReaction(message, emoji),
       ),
     );
@@ -684,6 +680,73 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) {
       if (!mounted) return;
       _showSnack('Failed to react: $e');
+    }
+  }
+
+  // Confirm delete: "Delete for me" always available; "Delete for everyone" if sender
+  Future<void> _confirmDelete(Message message) async {
+    final isMine = message.isFromCurrentUser;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Delete message?'),
+          content: Text(
+            isMine
+                ? 'Do you want to delete this message for you or for everyone?'
+                : 'Do you want to delete this message from your chat? It will remain visible to ${widget.otherUser.name}.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('me'),
+              child: const Text('Delete for me'),
+            ),
+            if (isMine)
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('everyone'),
+                child: const Text('Delete for everyone'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == 'me') {
+      await _deleteForMe(message);
+    } else if (result == 'everyone') {
+      await _deleteForEveryone(message);
+    }
+  }
+
+  Future<void> _deleteForMe(Message message) async {
+    try {
+      await _messagesApi.deleteForMe(message.id);
+      setState(() {
+        _messageReactions.remove(message.id);
+        _messages.removeWhere((m) => m.id == message.id);
+      });
+      _showSnack('Deleted for me');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Failed to delete: $e');
+    }
+  }
+
+  Future<void> _deleteForEveryone(Message message) async {
+    try {
+      await _messagesApi.deleteForEveryone(message.id);
+      setState(() {
+        _messageReactions.remove(message.id);
+        _messages.removeWhere((m) => m.id == message.id);
+      });
+      _showSnack('Deleted for everyone');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Failed to delete for everyone: $e');
     }
   }
 

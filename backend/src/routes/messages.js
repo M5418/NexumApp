@@ -94,6 +94,54 @@ async function getOrCreateConversation(userId, otherUserId) {
   return id;
 }
 
+async function updateConversationLastMessage(conversationId) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT type, text, created_at 
+         FROM chat_messages 
+        WHERE conversation_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT 1`,
+      [conversationId]
+    );
+    if (rows.length === 0) {
+      await pool.execute(
+        `UPDATE conversations 
+            SET last_message_type = NULL, 
+                last_message_text = NULL, 
+                last_message_at = NULL, 
+                updated_at = NOW()
+          WHERE id = ?`,
+        [conversationId]
+      );
+      return;
+    }
+    const m = rows[0];
+    const label =
+      m.text ||
+      (m.type === 'image'
+        ? 'Photo'
+        : m.type === 'video'
+        ? 'Video'
+        : m.type === 'voice'
+        ? 'Voice message'
+        : m.type === 'file'
+        ? 'File'
+        : null);
+    await pool.execute(
+      `UPDATE conversations 
+          SET last_message_type = ?, 
+              last_message_text = ?, 
+              last_message_at = ?, 
+              updated_at = NOW()
+        WHERE id = ?`,
+      [m.type, label, m.created_at, conversationId]
+    );
+  } catch (e) {
+    console.error('Failed to update conversation last message:', e);
+  }
+}
+
 // List latest messages in a conversation (paginated backwards)
 router.get('/:conversationId', async (req, res) => {
   try {
@@ -125,10 +173,13 @@ router.get('/:conversationId', async (req, res) => {
         LEFT JOIN chat_messages reply_msg ON m.reply_to_message_id = reply_msg.id
         LEFT JOIN profiles reply_sender ON reply_msg.sender_id = reply_sender.user_id
        WHERE m.conversation_id = ?
+         AND m.id NOT IN (
+           SELECT message_id FROM chat_message_hides WHERE user_id = ?
+         )
        ORDER BY m.created_at DESC
        LIMIT ${limit}
     `;
-    const [rows] = await pool.query(sqlMessages, [conversationId.toString()]);
+    const [rows] = await pool.query(sqlMessages, [conversationId.toString(), userId]);
 
     const messageIds = rows.map((r) => r.id);
 
@@ -407,7 +458,68 @@ router.post('/:messageId/read', async (req, res) => {
   }
 });
 
-// Delete message (sender only)
+/**
+ * Delete for me (hide this message only for current user)
+ * Any participant (sender or receiver) can hide the message for themselves.
+ */
+router.post('/:messageId/delete-for-me', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return fail(res, 'user_not_authenticated', 401);
+    const { messageId } = req.params;
+
+    const [rows] = await pool.execute(
+      'SELECT conversation_id, sender_id, receiver_id FROM chat_messages WHERE id = ? LIMIT 1',
+      [messageId]
+    );
+    if (rows.length === 0) return fail(res, 'message_not_found', 404);
+    const msg = rows[0];
+    if (msg.sender_id !== userId && msg.receiver_id !== userId) {
+      return fail(res, 'not_in_conversation', 403);
+    }
+
+    await pool.execute(
+      `INSERT INTO chat_message_hides (message_id, user_id) 
+       VALUES (?, ?) 
+       ON DUPLICATE KEY UPDATE user_id = user_id`,
+      [messageId, userId]
+    );
+
+    // No need to update conversation last message globally for "delete for me".
+    return res.json(ok({ message: 'deleted_for_me' }));
+  } catch (err) {
+    console.error('Delete for me error:', err);
+    return fail(res, 'internal_error', 500);
+  }
+});
+
+/**
+ * Delete for everyone (sender only).
+ * Removes the message from DB for both sides.
+ */
+router.post('/:messageId/delete-for-everyone', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return fail(res, 'user_not_authenticated', 401);
+    const { messageId } = req.params;
+
+    const [rows] = await pool.execute('SELECT * FROM chat_messages WHERE id = ? LIMIT 1', [messageId]);
+    if (rows.length === 0) return fail(res, 'message_not_found', 404);
+
+    const msg = rows[0];
+    if (msg.sender_id !== userId) return fail(res, 'not_message_sender', 403);
+
+    await pool.execute('DELETE FROM chat_messages WHERE id = ?', [messageId]);
+    await updateConversationLastMessage(msg.conversation_id);
+
+    return res.json(ok({ message: 'deleted_for_everyone' }));
+  } catch (err) {
+    console.error('Delete for everyone error:', err);
+    return fail(res, 'internal_error', 500);
+  }
+});
+
+// Legacy: Delete message (sender only) — keep for backward compatibility
 router.delete('/:messageId', async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -422,6 +534,8 @@ router.delete('/:messageId', async (req, res) => {
     if (msg.sender_id !== userId) return fail(res, 'not_message_sender', 403);
 
     await pool.execute('DELETE FROM chat_messages WHERE id = ?', [messageId]);
+    await updateConversationLastMessage(msg.conversation_id);
+
     return res.json(ok({ message: 'deleted' }));
   } catch (err) {
     console.error('Delete message error:', err);

@@ -9,7 +9,7 @@ function normalizePair(a, b) {
   return a < b ? [a, b] : [b, a];
 }
 
-// List conversations for current user
+// List conversations for current user (respects per-user message hides)
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
@@ -19,22 +19,60 @@ router.get('/', async (req, res) => {
          c.*, 
          CASE WHEN c.user_a_id = ? THEN c.user_b_id ELSE c.user_a_id END AS other_user_id,
          p.first_name, p.last_name, p.username, p.profile_photo_url,
-         -- unread count for current user
+
+         -- unread count for current user (exclude messages hidden by this user)
          (SELECT COUNT(*) FROM chat_messages m 
-           WHERE m.conversation_id = c.id AND m.receiver_id = ? AND m.read_at IS NULL) AS unread_count,
-         -- last message sender
+            WHERE m.conversation_id = c.id 
+              AND m.receiver_id = ? 
+              AND m.read_at IS NULL
+              AND m.id NOT IN (SELECT message_id FROM chat_message_hides WHERE user_id = ?)
+         ) AS unread_count,
+
+         -- effective last message fields (excluding messages hidden by this user)
          (SELECT m.sender_id FROM chat_messages m 
-           WHERE m.conversation_id = c.id 
-           ORDER BY m.created_at DESC LIMIT 1) AS last_sender_id,
-         -- last message read (1 if read, 0 if not, null if none)
+            WHERE m.conversation_id = c.id
+              AND m.id NOT IN (SELECT message_id FROM chat_message_hides WHERE user_id = ?)
+            ORDER BY m.created_at DESC LIMIT 1) AS eff_last_sender_id,
+
          (SELECT IF(m.read_at IS NULL, 0, 1) FROM chat_messages m 
-           WHERE m.conversation_id = c.id 
-           ORDER BY m.created_at DESC LIMIT 1) AS last_read_flag
+            WHERE m.conversation_id = c.id
+              AND m.id NOT IN (SELECT message_id FROM chat_message_hides WHERE user_id = ?)
+            ORDER BY m.created_at DESC LIMIT 1) AS eff_last_read_flag,
+
+         (SELECT m.type FROM chat_messages m 
+            WHERE m.conversation_id = c.id
+              AND m.id NOT IN (SELECT message_id FROM chat_message_hides WHERE user_id = ?)
+            ORDER BY m.created_at DESC LIMIT 1) AS eff_last_message_type,
+
+         (SELECT m.text FROM chat_messages m 
+            WHERE m.conversation_id = c.id
+              AND m.id NOT IN (SELECT message_id FROM chat_message_hides WHERE user_id = ?)
+            ORDER BY m.created_at DESC LIMIT 1) AS eff_last_message_text,
+
+         (SELECT m.created_at FROM chat_messages m 
+            WHERE m.conversation_id = c.id
+              AND m.id NOT IN (SELECT message_id FROM chat_message_hides WHERE user_id = ?)
+            ORDER BY m.created_at DESC LIMIT 1) AS eff_last_message_at
+
        FROM conversations c
-       LEFT JOIN profiles p ON p.user_id = (CASE WHEN c.user_a_id = ? THEN c.user_b_id ELSE c.user_a_id END)
-       WHERE (c.user_a_id = ? AND c.user_a_deleted = 0) OR (c.user_b_id = ? AND c.user_b_deleted = 0)
-       ORDER BY (c.last_message_at IS NULL), c.last_message_at DESC`,
-      [userId, userId, userId, userId, userId]
+       LEFT JOIN profiles p 
+         ON p.user_id = (CASE WHEN c.user_a_id = ? THEN c.user_b_id ELSE c.user_a_id END)
+       WHERE (c.user_a_id = ? AND c.user_a_deleted = 0) 
+          OR (c.user_b_id = ? AND c.user_b_deleted = 0)
+       ORDER BY (eff_last_message_at IS NULL), eff_last_message_at DESC`,
+      [
+        userId, // other_user_id CASE
+        userId, // unread_count receiver_id
+        userId, // unread_count hides
+        userId, // eff_last_sender_id hides
+        userId, // eff_last_read_flag hides
+        userId, // eff_last_message_type hides
+        userId, // eff_last_message_text hides
+        userId, // eff_last_message_at hides
+        userId, // LEFT JOIN profiles CASE
+        userId, // WHERE user_a
+        userId, // WHERE user_b
+      ]
     );
 
     const conversations = rows.map(r => {
@@ -42,6 +80,12 @@ router.get('/', async (req, res) => {
       const last = (r.last_name || '').trim();
       const combined = `${first} ${last}`.trim();
       const name = combined.length > 0 ? combined : (r.username || 'User');
+
+      // Fallback to conversation columns if the effective ones are null
+      const lastType = r.eff_last_message_type || r.last_message_type || null;
+      const lastText = r.eff_last_message_text || r.last_message_text || null;
+      const lastAt = r.eff_last_message_at || r.last_message_at || null;
+
       return {
         id: r.id,
         other_user_id: r.other_user_id,
@@ -50,13 +94,17 @@ router.get('/', async (req, res) => {
           username: r.username ? `@${r.username}` : '@user',
           avatarUrl: r.profile_photo_url || null,
         },
-        last_message_type: r.last_message_type,
-        last_message_text: r.last_message_text,
-        last_message_at: r.last_message_at,
+        last_message_type: lastType,
+        last_message_text: lastText,
+        last_message_at: lastAt,
         unread_count: Number(r.unread_count || 0),
         muted: (r.user_a_id === userId ? !!r.user_a_muted : !!r.user_b_muted),
-        last_from_current_user: r.last_sender_id === userId,
-        last_read: r.last_sender_id ? (r.last_read_flag === 1) : null,
+        last_from_current_user: r.eff_last_sender_id
+          ? (r.eff_last_sender_id === userId)
+          : null,
+        last_read: r.eff_last_read_flag != null
+          ? (r.eff_last_read_flag === 1)
+          : null,
       };
     });
 
@@ -111,7 +159,6 @@ router.post('/:id/mark-read', async (req, res) => {
     const userId = req.user.id;
     const { id } = req.params;
 
-    // Get conversation to know side
     const [rows] = await pool.execute('SELECT * FROM conversations WHERE id = ? LIMIT 1', [id]);
     if (rows.length === 0) return fail(res, 'conversation_not_found', 404);
     const c = rows[0];
@@ -120,7 +167,10 @@ router.post('/:id/mark-read', async (req, res) => {
     if (!field) return fail(res, 'not_member_of_conversation', 403);
 
     await pool.execute(`UPDATE conversations SET ${field} = NOW() WHERE id = ?`, [id]);
-    await pool.execute('UPDATE chat_messages SET read_at = NOW() WHERE conversation_id = ? AND receiver_id = ? AND read_at IS NULL', [id, userId]);
+    await pool.execute(
+      'UPDATE chat_messages SET read_at = NOW() WHERE conversation_id = ? AND receiver_id = ? AND read_at IS NULL',
+      [id, userId]
+    );
 
     return res.json(ok({ message: 'marked_read' }));
   } catch (err) {
@@ -176,7 +226,7 @@ router.post('/:id/unmute', async (req, res) => {
   }
 });
 
-// Soft delete (hide for current user)
+// Soft delete (hide conversation for current user)
 router.delete('/:id', async (req, res) => {
   try {
     const userId = req.user.id;

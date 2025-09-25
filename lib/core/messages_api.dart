@@ -250,7 +250,18 @@ class MessagesApi {
     await _dio.post('/api/messages/$messageId/read');
   }
 
+  // Legacy delete (sender-only hard delete)
   Future<void> delete(String messageId) async {
     await _dio.delete('/api/messages/$messageId');
+  }
+
+  // New: Delete for me (hide just for current user)
+  Future<void> deleteForMe(String messageId) async {
+    await _dio.post('/api/messages/$messageId/delete-for-me');
+  }
+
+  // New: Delete for everyone (sender-only)
+  Future<void> deleteForEveryone(String messageId) async {
+    await _dio.post('/api/messages/$messageId/delete-for-everyone');
   }
 }
