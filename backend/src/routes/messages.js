@@ -3,8 +3,57 @@ import { z } from 'zod';
 import pool from '../db/db.js';
 import { ok, fail } from '../utils/response.js';
 import { generateId } from '../utils/id-generator.js';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const router = express.Router();
+
+// S3 signing for read
+const REGION = process.env.AWS_REGION || 'ca-central-1';
+const BUCKET = process.env.S3_BUCKET || 'nexum-uploads';
+const s3Client = new S3Client({ region: REGION });
+
+function extractKeyFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const host = u.host;
+    // Style: https://<bucket>.s3.<region>.amazonaws.com/<key>
+    if (host.startsWith(`${BUCKET}.s3.`)) {
+      return decodeURIComponent(u.pathname.replace(/^\//, ''));
+    }
+    // Alternate virtual-hosted/path style: https://s3.<region>.amazonaws.com/<bucket>/<key>
+    if (host.startsWith(`s3.${REGION}.amazonaws.com`) && u.pathname.startsWith(`/${BUCKET}/`)) {
+      return decodeURIComponent(u.pathname.substring(BUCKET.length + 2));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isAlreadySigned(url) {
+  return (
+    url.includes('X-Amz-Algorithm=') ||
+    url.includes('X-Amz-Signature=') ||
+    url.includes('X-Amz-Credential=')
+  );
+}
+
+async function ensureReadableUrl(url) {
+  try {
+    if (!url || isAlreadySigned(url)) return url;
+    const key = extractKeyFromUrl(url);
+    if (!key) return url; // not our bucket or not a recognizable S3 URL
+
+    const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+    const ttl = parseInt(process.env.S3_SIGNED_GET_TTL || '604800', 10); // 7 days default
+    const signed = await getSignedUrl(s3Client, cmd, { expiresIn: ttl });
+    return signed;
+  } catch (e) {
+    console.error('Failed to sign read URL:', e);
+    return url;
+  }
+}
 
 const sendMessageSchema = z.object({
   conversation_id: z.string().optional(),
@@ -52,9 +101,7 @@ router.get('/:conversationId', async (req, res) => {
     const { conversationId } = req.params;
 
     const limitRaw = parseInt(req.query.limit || '50', 10);
-    const limit = Number.isFinite(limitRaw)
-      ? Math.min(Math.max(limitRaw, 1), 100)
-      : 50;
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50;
 
     if (!userId) return fail(res, 'user_not_authenticated', 401);
     if (!conversationId) return fail(res, 'conversation_id_required', 400);
@@ -93,10 +140,22 @@ router.get('/:conversationId', async (req, res) => {
         `SELECT * FROM chat_attachments WHERE message_id IN (${placeholders})`,
         messageIds
       );
-      attachmentsByMsg = attRows.reduce((acc, a) => {
-        (acc[a.message_id] = acc[a.message_id] || []).push(a);
-        return acc;
-      }, {});
+
+      // Sign URLs on the fly if needed
+      const processed = {};
+      for (const a of attRows) {
+        const url = await ensureReadableUrl(a.url);
+        (processed[a.message_id] = processed[a.message_id] || []).push({
+          id: a.id,
+          type: a.type,
+          url,
+          thumbnail: a.thumbnail,
+          durationSec: a.durationSec,
+          fileSize: a.fileSize,
+          fileName: a.fileName,
+        });
+      }
+      attachmentsByMsg = processed;
     }
 
     // Reactions by current user
@@ -156,15 +215,7 @@ router.get('/:conversationId', async (req, res) => {
           : null,
         read_at: m.read_at,
         created_at: m.created_at,
-        attachments: (attachmentsByMsg[m.id] || []).map((a) => ({
-          id: a.id,
-          type: a.type,
-          url: a.url,
-          thumbnail: a.thumbnail,
-          durationSec: a.durationSec,
-          fileSize: a.fileSize,
-          fileName: a.fileName,
-        })),
+        attachments: attachmentsByMsg[m.id] || [],
         my_reaction: myReactions[m.id] || null,
         reaction: anyReactions[m.id] || null,
       }));
@@ -234,10 +285,12 @@ router.post('/', async (req, res) => {
           att.fileName || null,
         ]
       );
+      // Ensure readable URL in response
+      const signedUrl = await ensureReadableUrl(att.url);
       attachmentsOut.push({
         id: attId,
         type: att.type,
-        url: att.url,
+        url: signedUrl,
         thumbnail: att.thumbnail || null,
         durationSec: att.durationSec || null,
         fileSize: att.fileSize || null,
@@ -275,7 +328,7 @@ router.post('/', async (req, res) => {
           type: body.type,
           text,
           created_at: new Date(),
-          attachments: attachmentsOut, // return persisted attachment records with IDs
+          attachments: attachmentsOut,
           my_reaction: null,
           reaction: null,
         },

@@ -20,19 +20,29 @@ class AttachmentDto {
     this.fileName,
   });
 
-  factory AttachmentDto.fromJson(Map<String, dynamic> json) => AttachmentDto(
-        id: (json['id'] ?? '').toString(),
-        type: (json['type'] ?? 'image').toString(),
-        url: (json['url'] ?? '').toString(),
-        thumbnail: json['thumbnail']?.toString(),
-        durationSec: json['durationSec'] is int
-            ? json['durationSec'] as int
-            : int.tryParse(json['durationSec']?.toString() ?? ''),
-        fileSize: json['fileSize'] is int
-            ? json['fileSize'] as int
-            : int.tryParse(json['fileSize']?.toString() ?? ''),
-        fileName: json['fileName']?.toString(),
-      );
+  factory AttachmentDto.fromJson(Map<String, dynamic> json) {
+    // Accept both camelCase and snake_case keys
+    final thumb = json['thumbnail'] ?? json['thumbnail_url'];
+    final dSecRaw = json['durationSec'] ?? json['duration_sec'];
+    final fSizeRaw = json['fileSize'] ?? json['file_size'];
+    final fName = json['fileName'] ?? json['file_name'];
+
+    int? toIntNullable(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    return AttachmentDto(
+      id: (json['id'] ?? json['attachment_id'] ?? '').toString(),
+      type: (json['type'] ?? 'image').toString(),
+      url: (json['url'] ?? '').toString(),
+      thumbnail: thumb?.toString(),
+      durationSec: toIntNullable(dSecRaw),
+      fileSize: toIntNullable(fSizeRaw),
+      fileName: fName?.toString(),
+    );
+  }
 }
 
 class MessageRecord {
@@ -146,10 +156,23 @@ class MessagesApi {
         ? 'text'
         : _inferTypeFromAttachments(atts, fallback: text.isNotEmpty ? 'text' : 'file');
 
+    // Keep camelCase keys to match backend schema
+    final normalized = atts.map((a) {
+      return {
+        'type': a['type'],
+        'url': a['url'],
+        if (a['thumbnail'] != null) 'thumbnail': a['thumbnail'],
+        if (a['thumbnailUrl'] != null) 'thumbnail': a['thumbnailUrl'],
+        if (a['durationSec'] != null) 'durationSec': a['durationSec'],
+        if (a['fileSize'] != null) 'fileSize': a['fileSize'],
+        if (a['fileName'] != null) 'fileName': a['fileName'],
+      };
+    }).toList();
+
     final body = <String, dynamic>{
       'type': msgType,
       'text': text,
-      if (atts.isNotEmpty) 'attachments': atts,
+      if (normalized.isNotEmpty) 'attachments': normalized,
     };
     if (conversationId != null) body['conversation_id'] = conversationId;
     if (otherUserId != null) body['other_user_id'] = otherUserId;
@@ -162,6 +185,24 @@ class MessagesApi {
     final data = Map<String, dynamic>.from(map['data'] ?? {});
     final msg = Map<String, dynamic>.from(data['message'] ?? {});
     return MessageRecord.fromJson(msg);
+  }
+
+  String _inferFileNameFromUrl(String url) {
+    try {
+      final u = Uri.parse(url);
+      final path = u.path;
+      final dot = path.lastIndexOf('.');
+      String ext = 'm4a';
+      if (dot != -1 && dot < path.length - 1) {
+        ext = path.substring(dot + 1).toLowerCase();
+      }
+      if (ext.isEmpty) ext = 'm4a';
+      const allowed = {'m4a', 'mp3', 'aac', 'wav', 'webm', 'ogg'};
+      if (!allowed.contains(ext)) ext = 'm4a';
+      return 'voice_message.$ext';
+    } catch (_) {
+      return 'voice_message.m4a';
+    }
   }
 
   Future<MessageRecord> sendVoice({
@@ -181,7 +222,7 @@ class MessagesApi {
           'url': audioUrl,
           'durationSec': durationSec,
           'fileSize': fileSize,
-          'fileName': 'voice_message.m4a',
+          'fileName': _inferFileNameFromUrl(audioUrl),
         },
       ],
     };

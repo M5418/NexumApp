@@ -289,9 +289,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _sendVoiceMessage(VoiceRecordingResult recording) async {
     try {
-      if (!mounted) return;
-      _showSnack('Uploading voice message...');
-
+      // Removed snackbar; upload proceeds in background
       final audioUrl = await _audioRecorder.uploadVoiceFile(recording.filePath);
       if (audioUrl == null) {
         throw Exception('Failed to upload voice file');
@@ -313,9 +311,7 @@ class _ChatPageState extends State<ChatPage> {
         _replyToMessage = null;
       });
       _scrollToBottom();
-
-      if (!mounted) return;
-      _hideSnack();
+      // No snackbar on success
     } catch (e) {
       if (!mounted) return;
       _showSnack('Failed to send voice message: $e');
