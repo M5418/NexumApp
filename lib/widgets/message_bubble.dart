@@ -1,3 +1,5 @@
+// MOD: FIX import typo (remove stray quote after math)
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -27,17 +29,43 @@ class MessageBubble extends StatefulWidget {
   State<MessageBubble> createState() => _MessageBubbleState();
 }
 
-class _MessageBubbleState extends State<MessageBubble> {
+class _MessageBubbleState extends State<MessageBubble>
+    with SingleTickerProviderStateMixin {
   AudioPlayer? _audioPlayer;
   bool _isPlaying = false;
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   static String? _currentlyPlayingMessageId;
 
+  // MOD: Wave animation (subtle wobble while playing)
+  AnimationController? _waveController;
+
+  // Seed heights for waveform (0..1)
+  static const List<double> _waveBase = [
+    0.35, 0.75, 0.45, 0.9, 0.6, 0.8, 0.5, 0.7, 0.4, 0.62,
+    0.82, 0.48, 0.92, 0.55, 0.7, 0.62, 0.45, 0.78, 0.36, 0.58,
+    0.72, 0.42, 0.83, 0.53, 0.68, 0.61, 0.43, 0.79, 0.34, 0.56,
+  ];
+
   @override
   void initState() {
     super.initState();
     if (_hasVoice()) {
+      _initAudioPlayer();
+      _waveController = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 1200),
+      )..addListener(() {
+          // Only repaint while playing to save work
+          if (_isPlaying && mounted) setState(() {});
+        });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MessageBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_hasVoice() && _audioPlayer == null) {
       _initAudioPlayer();
     }
   }
@@ -50,49 +78,41 @@ class _MessageBubbleState extends State<MessageBubble> {
   void _initAudioPlayer() {
     _audioPlayer = AudioPlayer();
     _audioPlayer!.onPlayerStateChanged.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state == PlayerState.playing;
-          if (state == PlayerState.playing) {
-            _currentlyPlayingMessageId = widget.message.id;
-          } else if (state == PlayerState.stopped ||
-              state == PlayerState.completed) {
-            if (_currentlyPlayingMessageId == widget.message.id) {
-              _currentlyPlayingMessageId = null;
-            }
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = state == PlayerState.playing;
+        if (_isPlaying) {
+          _currentlyPlayingMessageId = widget.message.id;
+          _waveController?.repeat();
+        } else {
+          if (_currentlyPlayingMessageId == widget.message.id) {
+            _currentlyPlayingMessageId = null;
           }
-        });
-      }
+          _waveController?.stop();
+        }
+      });
     });
     _audioPlayer!.onPositionChanged.listen((position) {
-      if (mounted) {
-        setState(() {
-          _currentPosition = position;
-        });
-      }
+      if (!mounted) return;
+      setState(() => _currentPosition = position);
     });
     _audioPlayer!.onDurationChanged.listen((duration) {
-      if (mounted) {
-        setState(() {
-          _totalDuration = duration;
-        });
-      }
+      if (!mounted) return;
+      setState(() => _totalDuration = duration);
     });
   }
 
   @override
   void dispose() {
+    _waveController?.dispose();
     _audioPlayer?.dispose();
     super.dispose();
   }
 
   List<String> _getAllChatMedia() {
     final List<String> allMedia = [];
-
     for (final msg in widget.allMessages) {
-      if (msg.attachments.isEmpty) {
-        continue;
-      }
+      if (msg.attachments.isEmpty) continue;
       for (final attachment in msg.attachments) {
         if (attachment.type == MediaType.image) {
           allMedia.add(attachment.url);
@@ -102,7 +122,6 @@ class _MessageBubbleState extends State<MessageBubble> {
         }
       }
     }
-
     return allMedia;
   }
 
@@ -165,32 +184,21 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
         ],
       ),
-      child: Text(
-        emoji,
-        style: const TextStyle(fontSize: 14),
-      ),
+      child: Text(emoji, style: const TextStyle(fontSize: 14)),
     );
   }
 
-  // Prefer rendering attachments if present, regardless of message.type.
   Widget _buildMessageContent(BuildContext context, bool isDark) {
     final attachments = widget.message.attachments;
-    final hasMedia = attachments.any(
-        (a) => a.type == MediaType.image || a.type == MediaType.video);
+    final hasMedia =
+        attachments.any((a) => a.type == MediaType.image || a.type == MediaType.video);
     final hasFiles = attachments.any((a) => a.type == MediaType.document);
     final hasVoice = _hasVoice();
 
-    if (hasVoice) {
-      return _buildVoiceMessage(isDark);
-    }
-    if (hasMedia) {
-      return _buildMixedMediaMessage(context, isDark);
-    }
-    if (hasFiles) {
-      return _buildFilesMessage(isDark);
-    }
+    if (hasVoice) return _buildVoiceMessage(isDark);
+    if (hasMedia) return _buildMixedMediaMessage(context, isDark);
+    if (hasFiles) return _buildFilesMessage(isDark);
 
-    // Fallback to original type-specific renderers
     switch (widget.message.type) {
       case MessageType.text:
         return _buildTextMessage(isDark);
@@ -244,14 +252,12 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     return GestureDetector(
       onTap: () async {
-        if (media.isEmpty) {
-          return;
-        }
+        if (media.isEmpty) return;
         final allChatMedia = _getAllChatMedia();
-        final firstUrl = media.first.type == MediaType.video &&
-                media.first.thumbnailUrl != null
-            ? media.first.thumbnailUrl!
-            : media.first.url;
+        final firstUrl =
+            media.first.type == MediaType.video && media.first.thumbnailUrl != null
+                ? media.first.thumbnailUrl!
+                : media.first.url;
         final initialIndex = _getInitialMediaIndex(firstUrl);
 
         final result = await Navigator.push(
@@ -264,9 +270,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
         );
 
-        if (result != null &&
-            result['action'] == 'reply' &&
-            widget.onReply != null) {
+        if (result != null && result['action'] == 'reply' && widget.onReply != null) {
           widget.onReply!();
         }
       },
@@ -295,10 +299,8 @@ class _MessageBubbleState extends State<MessageBubble> {
               _buildTripleMosaic(media)
             else
               _buildGridMosaic(media),
-
             const SizedBox(height: 4),
             _buildMediaCountsRow(widget.message.attachments, isDark),
-
             if (widget.message.content.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
@@ -363,10 +365,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
         );
 
-        // Handle reply action from ImageSwipePage
-        if (result != null &&
-            result['action'] == 'reply' &&
-            widget.onReply != null) {
+        if (result != null && result['action'] == 'reply' && widget.onReply != null) {
           widget.onReply!();
         }
       },
@@ -389,10 +388,8 @@ class _MessageBubbleState extends State<MessageBubble> {
               _buildTripleMosaic(widget.message.attachments)
             else
               _buildGridMosaic(widget.message.attachments),
-
             const SizedBox(height: 4),
             _buildMediaCountsRow(widget.message.attachments, isDark),
-
             if (widget.message.content.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
@@ -441,10 +438,8 @@ class _MessageBubbleState extends State<MessageBubble> {
             _buildTripleMosaic(widget.message.attachments)
           else
             _buildVideosGridMosaic(widget.message.attachments),
-
           const SizedBox(height: 4),
           _buildMediaCountsRow(widget.message.attachments, isDark),
-
           if (widget.message.content.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
@@ -463,9 +458,8 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildFilesMessage(bool isDark) {
-    final files = widget.message.attachments
-        .where((a) => a.type == MediaType.document)
-        .toList();
+    final files =
+        widget.message.attachments.where((a) => a.type == MediaType.document).toList();
     final bubbleColor = widget.message.isFromCurrentUser
         ? const Color(0xFF007AFF)
         : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
@@ -559,12 +553,13 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  // Helper: find a usable voice attachment. If attachments are missing but the
-  // message is a voice type, try to synthesize a minimal attachment from content if it is a URL.
+  // Helper: find voice attachment or synthesize from content URL
   MediaAttachment? _getVoiceAttachment() {
     if (widget.message.attachments.isNotEmpty) {
-      final voice = widget.message.attachments
-          .firstWhere((a) => a.type == MediaType.voice, orElse: () => widget.message.attachments.first);
+      final voice = widget.message.attachments.firstWhere(
+        (a) => a.type == MediaType.voice,
+        orElse: () => widget.message.attachments.first,
+      );
       return voice.type == MediaType.voice ? voice : null;
     }
 
@@ -585,13 +580,15 @@ class _MessageBubbleState extends State<MessageBubble> {
     return null;
   }
 
+  // MOD: SMALL voice UI — play/pause IconButton | small waveform | total duration (one row)
   Widget _buildVoiceMessage(bool isDark) {
-    final attachment = _getVoiceAttachment();
+    final att = _getVoiceAttachment();
 
-    // Always render a voice bubble; if we lack a valid attachment/url, show a disabled UI
-    if (attachment == null) {
+    // Disabled UI if no attachment/URL
+    if (att == null) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        // MOD: smaller vertical padding
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: widget.message.isFromCurrentUser
               ? const Color(0xFF007AFF)
@@ -601,26 +598,17 @@ class _MessageBubbleState extends State<MessageBubble> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: widget.message.isFromCurrentUser
-                    ? Colors.white.withValues(alpha: 51)
-                    : const Color(0xFF007AFF).withValues(alpha: 26),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.mic_off,
-                color: widget.message.isFromCurrentUser
-                    ? Colors.white
-                    : const Color(0xFF007AFF),
-                size: 20,
-              ),
+            // MOD: plain icon (no circular background)
+            Icon(
+              Icons.mic_off,
+              color: widget.message.isFromCurrentUser
+                  ? Colors.white
+                  : const Color(0xFF007AFF),
+              size: 22,
             ),
             const SizedBox(width: 8),
             Text(
-              'Voice message',
+              'Voice message unavailable',
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: widget.message.isFromCurrentUser
@@ -633,17 +621,34 @@ class _MessageBubbleState extends State<MessageBubble> {
       );
     }
 
-    final duration = attachment.duration ?? _totalDuration;
-    final progress = _totalDuration.inMilliseconds > 0
-        ? _currentPosition.inMilliseconds / _totalDuration.inMilliseconds
+    final bubbleColor = widget.message.isFromCurrentUser
+        ? const Color(0xFF007AFF)
+        : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
+    final subTextColor = widget.message.isFromCurrentUser
+        ? Colors.white.withValues(alpha: 204)
+        : Colors.grey[600]!;
+    final inactive = widget.message.isFromCurrentUser
+        ? Colors.white.withValues(alpha: 77)
+        : Colors.grey.withValues(alpha: 77);
+    final active = widget.message.isFromCurrentUser
+        ? Colors.white
+        : const Color(0xFF007AFF);
+
+    final effectiveTotal = _totalDuration.inMilliseconds > 0
+        ? _totalDuration
+        : (att.duration ?? Duration.zero);
+    final effectiveCurrent = _currentPosition.inMilliseconds > 0
+        ? _currentPosition
+        : Duration.zero;
+    final progress = (effectiveTotal.inMilliseconds > 0)
+        ? (effectiveCurrent.inMilliseconds / effectiveTotal.inMilliseconds)
         : 0.0;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      // MOD: compact bubble padding
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: widget.message.isFromCurrentUser
-            ? const Color(0xFF007AFF)
-            : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
+        color: bubbleColor,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -653,69 +658,65 @@ class _MessageBubbleState extends State<MessageBubble> {
           if (widget.message.replyTo != null) _buildReplyPreview(isDark),
           if (widget.message.replyTo != null) const SizedBox(height: 6),
           Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              GestureDetector(
-                onTap: _togglePlayback,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: widget.message.isFromCurrentUser
-                        ? Colors.white.withValues(alpha: 51)
-                        : const Color(0xFF007AFF).withValues(alpha: 26),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: widget.message.isFromCurrentUser
-                        ? Colors.white
-                        : const Color(0xFF007AFF),
-                    size: 20,
-                  ),
+              // MOD: aligned, plain IconButton (no circle)
+              IconButton(
+                onPressed: _togglePlayback,
+                icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                color: widget.message.isFromCurrentUser
+                    ? Colors.white
+                    : const Color(0xFF007AFF),
+                iconSize: 24,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+              const SizedBox(width: 8),
+              // MOD: small waveform + seek using exact width via LayoutBuilder
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final waveWidth = constraints.maxWidth;
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (details) {
+                        if (effectiveTotal.inMilliseconds <= 0 ||
+                            _audioPlayer == null) {
+                          return;
+                        }
+                        final dx = details.localPosition.dx.clamp(0.0, waveWidth);
+                        final ratio = waveWidth <= 0 ? 0.0 : dx / waveWidth;
+                        final target = Duration(
+                          milliseconds: (effectiveTotal.inMilliseconds * ratio)
+                              .clamp(0, effectiveTotal.inMilliseconds)
+                              .toInt(),
+                        );
+                        _audioPlayer!.seek(target);
+                      },
+                      child: SizedBox(
+                        height: 18, // MOD: SMALL waveform height
+                        width: double.infinity,
+                        child: CustomPaint(
+                          painter: VoiceWavePainter(
+                            inactiveColor: inactive,
+                            activeColor: active,
+                            progress: progress,
+                            animation: (_waveController?.value ?? 0.0),
+                            bars: _waveBase,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      height: 3,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(1.5),
-                        color:
-                            (widget.message.isFromCurrentUser
-                                    ? Colors.white
-                                    : Colors.grey)
-                                .withValues(alpha: 77),
-                      ),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        backgroundColor: Colors.transparent,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          widget.message.isFromCurrentUser
-                              ? Colors.white
-                              : const Color(0xFF007AFF),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatDuration(
-                        _totalDuration.inMilliseconds > 0
-                            ? _totalDuration
-                            : duration,
-                      ),
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: widget.message.isFromCurrentUser
-                            ? Colors.white.withValues(alpha: 204)
-                            : Colors.grey[600],
-                      ),
-                    ),
-                  ],
+              Text(
+                _formatDuration(
+                  effectiveTotal.inMilliseconds > 0
+                      ? effectiveTotal
+                      : (att.duration ?? Duration.zero),
                 ),
+                style: GoogleFonts.inter(fontSize: 12, color: subTextColor),
               ),
             ],
           ),
@@ -725,40 +726,31 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Future<void> _togglePlayback() async {
-    if (_audioPlayer == null) {
-      return;
-    }
+    if (_audioPlayer == null) return;
 
     final attachment = _getVoiceAttachment();
-    if (attachment == null) {
-      return;
-    }
+    if (attachment == null) return;
 
     try {
       if (_isPlaying) {
         await _audioPlayer!.pause();
       } else {
-        // Stop any other currently playing voice message
         if (_currentlyPlayingMessageId != null &&
             _currentlyPlayingMessageId != widget.message.id) {
-          // Ideally stop other players; for now, this one will play
+          // could broadcast a pause to other bubbles
         }
         await _audioPlayer!.play(UrlSource(attachment.url));
       }
     } catch (e) {
       debugPrint('❌ Audio playback error: $e');
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to play audio: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to play audio: $e')));
     }
   }
 
   Widget _buildFileMessage(bool isDark) {
     final attachment = widget.message.attachments.first;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -830,10 +822,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildReplyPreview(bool isDark) {
-    if (widget.message.replyTo == null) {
-      return const SizedBox.shrink();
-    }
-
+    if (widget.message.replyTo == null) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
@@ -849,9 +838,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.message.isFromCurrentUser
-                ? 'You'
-                : widget.message.senderName,
+            widget.message.isFromCurrentUser ? 'You' : widget.message.senderName,
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -991,7 +978,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildTripleMosaic(List<MediaAttachment> attachments) {
-    // One large tile on the left and two stacked on the right, all inside one 270x140 mosaic
     const double contentWidth = 270;
     const double mosaicHeight = 140;
     const double spacing = 4;
@@ -1041,7 +1027,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildGridMosaic(List<MediaAttachment> attachments) {
-    // Two rows of two large tiles (133x140) inside one bubble. Show +N on the last tile if more remain.
     const double contentWidth = 270;
     const double spacing = 4;
     const double tileHeight = 140;
@@ -1070,11 +1055,10 @@ class _MessageBubbleState extends State<MessageBubble> {
                       radius: 16,
                       isVideo:
                           attachments[row * 2 + col].type == MediaType.video,
-                      overlayText:
-                          (row * 2 + col == displayCount - 1 &&
-                                  total > displayCount)
-                              ? '+${total - displayCount}'
-                              : null,
+                      overlayText: (row * 2 + col == displayCount - 1 &&
+                              total > displayCount)
+                          ? '+${total - displayCount}'
+                          : null,
                     ),
                   if (col == 0) const SizedBox(width: spacing),
                 ],
@@ -1087,7 +1071,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildVideosGridMosaic(List<MediaAttachment> attachments) {
-    // Same grid mosaic as images but always shows video overlay icons
     const double contentWidth = 270;
     const double spacing = 4;
     const double tileHeight = 140;
@@ -1115,11 +1098,10 @@ class _MessageBubbleState extends State<MessageBubble> {
                       height: tileHeight,
                       radius: 16,
                       isVideo: true,
-                      overlayText:
-                          (row * 2 + col == displayCount - 1 &&
-                                  total > displayCount)
-                              ? '+${total - displayCount}'
-                              : null,
+                      overlayText: (row * 2 + col == displayCount - 1 &&
+                              total > displayCount)
+                          ? '+${total - displayCount}'
+                          : null,
                     ),
                   if (col == 0) const SizedBox(width: spacing),
                 ],
@@ -1148,9 +1130,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     if (voices > 0) parts.add('$voices voice${voices > 1 ? 's' : ''}');
     if (files > 0) parts.add('$files file${files > 1 ? 's' : ''}');
 
-    if (parts.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (parts.isEmpty) return const SizedBox.shrink();
 
     return Text(
       parts.join(' • '),
@@ -1187,62 +1167,67 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   String _formatFileSize(int bytes) {
-    if (bytes < 1024) {
-      return '${bytes}B';
-    }
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    }
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
   }
 }
 
-class WaveformPainter extends CustomPainter {
-  final Color color;
+// MOD: Small, readable waveform with progress overlay
+class VoiceWavePainter extends CustomPainter {
+  final Color inactiveColor;
+  final Color activeColor;
+  final double progress; // 0..1
+  final double animation; // 0..1
+  final List<double> bars;
 
-  WaveformPainter({required this.color});
+  VoiceWavePainter({
+    required this.inactiveColor,
+    required this.activeColor,
+    required this.progress,
+    required this.animation,
+    required this.bars,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
+    final totalBars = bars.length;
+    if (totalBars == 0) return;
 
-    final barWidth = size.width / 20;
-    final heights = [
-      0.3,
-      0.7,
-      0.4,
-      0.8,
-      0.6,
-      0.9,
-      0.5,
-      0.7,
-      0.3,
-      0.6,
-      0.8,
-      0.4,
-      0.9,
-      0.5,
-      0.7,
-      0.6,
-      0.4,
-      0.8,
-      0.3,
-      0.5,
-    ];
+    // MOD: layout tuned for smaller waveform
+    final spacing = 3.0;
+    final barWidth = (size.width - (spacing * (totalBars - 1))) / totalBars;
+    final centerY = size.height / 2;
 
-    for (int i = 0; i < heights.length; i++) {
-      final x = i * barWidth + barWidth / 2;
-      final barHeight = size.height * heights[i];
-      final y1 = (size.height - barHeight) / 2;
-      final y2 = y1 + barHeight;
+    final cutoffX = size.width * progress;
+
+    for (int i = 0; i < totalBars; i++) {
+      final x = i * (barWidth + spacing) + barWidth / 2;
+
+      // MOD: smaller wobble + reduced amplitude range to keep bars short
+      final phase = (animation + i / totalBars) * math.pi * 2;
+      final wobble = 0.08 * math.sin(phase);
+      final amp = (bars[i] + wobble).clamp(0.2, 0.7);
+      final barHeight = size.height * amp;
+      final y1 = centerY - barHeight / 2;
+      final y2 = centerY + barHeight / 2;
+
+      final isActive = x <= cutoffX;
+      final paint = Paint()
+        ..color = isActive ? activeColor : inactiveColor
+        ..strokeWidth = barWidth
+        ..strokeCap = StrokeCap.round;
 
       canvas.drawLine(Offset(x, y1), Offset(x, y2), paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant VoiceWavePainter old) {
+    return old.progress != progress ||
+        old.animation != animation ||
+        old.activeColor != activeColor ||
+        old.inactiveColor != inactiveColor ||
+        old.bars != bars;
+  }
 }

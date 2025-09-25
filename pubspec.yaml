@@ -33,6 +33,9 @@ dependencies:
   pro_image_editor: ^11.5.6
   dio: ^5.9.0
   flutter_secure_storage: ^9.2.4
+  
+  file_picker: ^8.0.0
+  url_launcher: ^6.3.0
 
   # Audio recording
   record: ^6.1.1

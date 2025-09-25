@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'models/message.dart';
 import 'widgets/message_bubble.dart';
+import 'package:file_picker/file_picker.dart';
 import 'widgets/chat_input.dart';
 import 'widgets/message_actions_sheet.dart';
 import 'package:flutter/services.dart';
@@ -456,9 +457,74 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _pickFile() async {
-    Navigator.pop(context);
-    _showSnack('File picker not implemented yet');
+  Navigator.pop(context);
+  try {
+    final res = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: kIsWeb,
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+    );
+    if (res == null || res.files.isEmpty) return;
+
+    _showSnack('Uploading file(s)...');
+
+    final profileApi = ProfileApi();
+    final attachments = <Map<String, dynamic>>[];
+
+    for (final f in res.files) {
+      final name = f.name;
+      final ext = (f.extension ??
+              (name.contains('.') ? name.split('.').last : 'bin'))
+          .toLowerCase();
+
+      String url;
+      final fileSize = f.size;
+
+      if (kIsWeb) {
+        final bytes = f.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
+        url = await profileApi.uploadBytes(bytes, ext: ext);
+      } else {
+        final path = f.path;
+        if (path == null) continue;
+        url = await profileApi.uploadFile(File(path));
+      }
+
+      attachments.add({
+        'type': 'document',
+        'url': url,
+        'fileName': name,
+        'fileSize': fileSize,
+      });
+    }
+
+    if (attachments.isEmpty) {
+      _hideSnack();
+      return;
+    }
+
+    final convId = await _requireConversationId();
+    final record = await _messagesApi.sendTextWithMedia(
+      conversationId: convId,
+      otherUserId: null,
+      text: '',
+      attachments: attachments,
+      replyToMessageId: _replyToMessage?.id,
+    );
+
+    final msg = _toUiMessage(record);
+    setState(() {
+      _messages.add(msg);
+      _replyToMessage = null;
+    });
+    _scrollToBottom();
+    _hideSnack();
+  } catch (e) {
+    if (!mounted) return;
+    _showSnack('Failed to pick/send files: $e');
   }
+}
 
   Future<void> _sendMediaWithText(List<XFile> mediaFiles) async {
     final isDark =

@@ -120,13 +120,38 @@ class AudioRecorder {
 
       // Convert Blob -> bytes
       final reader = html.FileReader();
+
+      // MOD: use onLoad instead of onLoadEnd for more robust completion
       final loadCompleter = Completer<void>();
-      reader.onLoadEnd.listen((_) => loadCompleter.complete());
+      void onReaderLoad(html.Event _) {
+        if (!loadCompleter.isCompleted) loadCompleter.complete();
+      }
+      void onReaderError(html.Event e) {
+        if (!loadCompleter.isCompleted) {
+          loadCompleter.completeError(StateError('FileReader error: $e'));
+        }
+      }
+      reader.onLoad.listen(onReaderLoad);
+      reader.onError.listen(onReaderError);
+
       reader.readAsArrayBuffer(blob);
       await loadCompleter.future;
 
-      final buffer = reader.result as ByteBuffer;
-      final bytes = Uint8List.view(buffer);
+      // MOD: Handle both ByteBuffer and Uint8List results from FileReader
+      final result = reader.result;
+      late final Uint8List bytes;
+      if (result == null) {
+        throw StateError('FileReader.result is null');
+      } else if (result is ByteBuffer) {
+        bytes = Uint8List.view(result);
+      } else if (result is Uint8List) {
+        bytes = result;
+      } else if (result is List<int>) {
+        bytes = Uint8List.fromList(result);
+      } else {
+        throw StateError('Unexpected FileReader.result type: ${result.runtimeType}');
+      }
+
       _lastBytes = bytes;
 
       final duration = _startTime != null
