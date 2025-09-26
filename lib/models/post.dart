@@ -44,6 +44,7 @@ class Post {
   final bool isBookmarked;
   final bool isRepost;
   final RepostedBy? repostedBy;
+  final String? originalPostId;
 
   const Post({
     required this.id,
@@ -59,6 +60,7 @@ class Post {
     required this.isBookmarked,
     required this.isRepost,
     this.repostedBy,
+    this.originalPostId,
   });
 
   Post copyWith({
@@ -75,6 +77,7 @@ class Post {
     bool? isBookmarked,
     bool? isRepost,
     RepostedBy? repostedBy,
+    String? originalPostId,
   }) {
     return Post(
       id: id ?? this.id,
@@ -90,6 +93,7 @@ class Post {
       isBookmarked: isBookmarked ?? this.isBookmarked,
       isRepost: isRepost ?? this.isRepost,
       repostedBy: repostedBy ?? this.repostedBy,
+      originalPostId: originalPostId ?? this.originalPostId,
     );
-  }
+    }
 }

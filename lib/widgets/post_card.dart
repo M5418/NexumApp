@@ -45,15 +45,10 @@ class _PostCardState extends State<PostCard> {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
-    if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'now';
-    }
+    if (difference.inDays > 0) return '${difference.inDays}d ago';
+    if (difference.inHours > 0) return '${difference.inHours}h ago';
+    if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
+    return 'now';
   }
 
   IconData _getReactionIcon(ReactionType? reaction) {
@@ -91,6 +86,43 @@ class _PostCardState extends State<PostCard> {
     final reactionColor = const Color(0xFFBFAE01);
     final bookmarkColor = const Color(0xFFBFAE01);
 
+    // Build repost header text and avatar/icon
+    String _repostHeaderText() {
+      final rb = widget.post.repostedBy;
+      if (rb != null && (rb.actionType ?? '').isNotEmpty) {
+        // "You reposted this"
+        return 'You ${rb.actionType}';
+      }
+      if (rb != null && rb.userName.trim().isNotEmpty) {
+        // "<Username> reposted this"
+        return '${rb.userName} reposted this';
+      }
+      // Fallback when repost author is not provided by backend
+      return 'Reposted';
+    }
+
+    Widget _repostHeaderAvatar() {
+      final rb = widget.post.repostedBy;
+      if (rb != null) {
+        return _AvatarCircle(
+          url: rb.userAvatarUrl,
+          name: rb.userName,
+          size: 20,
+          isDark: isDarkMode,
+        );
+      }
+      // Fallback: show repeat icon inside a subtle circle
+      return Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF1F1F1F) : const Color(0xFFEAEAEA),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.repeat, size: 14, color: Color(0xFF666666)),
+      );
+    }
+
     return GestureDetector(
       onTap: () => widget.onTap?.call(widget.post.id),
       child: Container(
@@ -112,23 +144,16 @@ class _PostCardState extends State<PostCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Repost indicator
-            if (widget.post.isRepost && widget.post.repostedBy != null)
+            // Repost header (always show for reposts)
+            if (widget.post.isRepost)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Row(
                   children: [
-                    _AvatarCircle(
-                      url: widget.post.repostedBy!.userAvatarUrl,
-                      name: widget.post.repostedBy!.userName,
-                      size: 20,
-                      isDark: isDarkMode,
-                    ),
+                    _repostHeaderAvatar(),
                     const SizedBox(width: 8),
                     Text(
-                      widget.post.repostedBy!.actionType != null
-                          ? 'You ${widget.post.repostedBy!.actionType}'
-                          : '${widget.post.repostedBy!.userName} reposted this',
+                      _repostHeaderText(),
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         color: secondaryTextColor,
@@ -138,7 +163,7 @@ class _PostCardState extends State<PostCard> {
                 ),
               ),
 
-            // Post header
+            // Post header (original author)
             Row(
               children: [
                 _AvatarCircle(
@@ -157,7 +182,7 @@ class _PostCardState extends State<PostCard> {
                         widget.post.userName,
                         style: GoogleFonts.inter(
                           fontSize: 16,
-                          fontWeight: FontWeight.w700, // bolded title
+                          fontWeight: FontWeight.w700,
                           color: textColor,
                         ),
                       ),
@@ -181,7 +206,7 @@ class _PostCardState extends State<PostCard> {
             // Reduced space between header (title) and body
             const SizedBox(height: 6),
 
-            // Post text
+            // Post text (from original post if repost)
             if (widget.post.text.isNotEmpty) ...[
               ReadMoreText(
                 _showTranslation
@@ -219,7 +244,7 @@ class _PostCardState extends State<PostCard> {
               const SizedBox(height: 16),
             ],
 
-            // Media content
+            // Media content (from original post if repost)
             if (widget.post.mediaType != MediaType.none) ...[
               if (widget.post.mediaType == MediaType.image &&
                   widget.post.imageUrls.isNotEmpty)
@@ -235,7 +260,7 @@ class _PostCardState extends State<PostCard> {
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
                       color: secondaryTextColor.withAlpha(51),
-                      child: Center(
+                      child: const Center(
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(
@@ -280,7 +305,7 @@ class _PostCardState extends State<PostCard> {
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Container(
                             color: secondaryTextColor.withAlpha(51),
-                            child: Center(
+                            child: const Center(
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(

@@ -91,6 +91,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
     try {
       posts = await PostsApi().listFeed(limit: 20, offset: 0);
+      // Client-side hydration for reposts when backend doesn't include original
+      posts = await _hydrateReposts(posts);
     } catch (e) {
       errMsg = 'Posts failed: ${_toError(e)}';
     }
@@ -116,6 +118,47 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         ),
       );
     }
+  }
+
+  // Fetch original posts for repost items when the backend didn't hydrate them.
+  Future<List<Post>> _hydrateReposts(List<Post> posts) async {
+    if (posts.isEmpty) return posts;
+    final api = PostsApi();
+    final result = List<Post>.from(posts);
+
+    // Fetch originals for all reposts that declare originalPostId
+    final futures = <Future<void>>[];
+    for (int i = 0; i < result.length; i++) {
+      final p = result[i];
+      if (!p.isRepost) continue;
+      final ogId = p.originalPostId;
+      if (ogId == null || ogId.isEmpty) continue;
+
+      futures.add(() async {
+        final og = await api.getPost(ogId);
+        if (og == null) return;
+
+        // Merge original content into the repost card, but keep repost time and header
+        final merged = p.copyWith(
+          userName: og.userName,
+          userAvatarUrl: og.userAvatarUrl,
+          text: og.text,
+          mediaType: og.mediaType,
+          imageUrls: og.imageUrls,
+          videoUrl: og.videoUrl,
+          counts: og.counts,
+        );
+        result[i] = merged;
+      }());
+    }
+
+    try {
+      await Future.wait(futures);
+    } catch (_) {
+      // Ignore hydration errors; show whatever we have
+    }
+
+    return result;
   }
 
   String _toError(Object e) {
@@ -280,6 +323,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         isBookmarked: original.isBookmarked,
         isRepost: original.isRepost,
         repostedBy: original.repostedBy,
+        originalPostId: original.originalPostId,
       );
 
       setState(() {
@@ -463,17 +507,109 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     _openCommentsSheet(postId);
   }
 
-  void _onRepost(String postId) {
-    // UI-only implementation
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Repost functionality (UI only)',
-          style: GoogleFonts.inter(),
-        ),
-        backgroundColor: const Color(0xFFBFAE01),
+  void _onRepost(String postId) async {
+    // Confirm repost action
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Repost this?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        content: Text('Are you sure you want to repost this?',
+            style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel', style: GoogleFonts.inter()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Repost', style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
+          ),
+        ],
       ),
     );
+
+    if (confirm != true) return;
+
+    try {
+      await PostsApi().repost(postId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Post reposted successfully', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+      await _loadData(); // Refresh to show the new repost at the top with header
+    } on DioException catch (e) {
+      final code = e.response?.statusCode ?? 0;
+      final data = e.response?.data;
+      final msg = _toError(e);
+
+      // If already reposted, offer to remove
+      final isAlreadyReposted = code == 409 ||
+          (data is Map && ((data['error'] ?? data['message'] ?? '').toString().toLowerCase().contains('already')));
+
+      if (isAlreadyReposted) {
+        final remove = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Remove repost?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            content: Text('You already reposted this. Do you want to remove your repost?',
+                style: GoogleFonts.inter()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('Cancel', style: GoogleFonts.inter()),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child:
+                    Text('Remove', style: GoogleFonts.inter(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+
+        if (remove == true) {
+          try {
+            await PostsApi().unrepost(postId);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Repost removed', style: GoogleFonts.inter()),
+                backgroundColor: const Color(0xFF9E9E9E),
+              ),
+            );
+            await _loadData(); // Refresh to decrement counts and remove repost item
+          } catch (e2) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to remove repost: ${_toError(e2)}',
+                    style: GoogleFonts.inter()),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Repost failed: $msg', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Repost failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _onPostTap(String postId) {

@@ -88,6 +88,49 @@ class PostsApi {
     await _dio.delete('/api/posts/$postId/bookmark');
   }
 
+  // Repost: create (fallback to create(repost_of) if /repost route is missing)
+  Future<void> repost(String postId) async {
+    try {
+      await _dio.post('/api/posts/$postId/repost');
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        // Fallback for servers that don't expose /:postId/repost
+        await create(content: '', repostOf: postId);
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  // Repost: remove (no safe fallback without a specific API)
+  Future<void> unrepost(String postId) async {
+    await _dio.delete('/api/posts/$postId/repost');
+  }
+
+  // Single post fetch (used for client-side hydration of reposts)
+  Future<Post?> getPost(String id) async {
+    try {
+      final res = await _dio.get('/api/posts/$id');
+      final raw = res.data;
+
+      Map<String, dynamic>? p;
+      if (raw is Map<String, dynamic>) {
+        final data = Map<String, dynamic>.from(raw['data'] ?? raw);
+        if (data['post'] is Map) {
+          p = Map<String, dynamic>.from(data['post']);
+        } else if (data['data'] is Map) {
+          p = Map<String, dynamic>.from(data['data']);
+        } else if (raw['post'] is Map) {
+          p = Map<String, dynamic>.from(raw['post']);
+        }
+      }
+
+      return p != null ? _toPost(p) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // Comments: list
   Future<List<Comment>> listComments(String postId) async {
     final res = await _dio.get('/api/posts/$postId/comments');
@@ -133,7 +176,7 @@ class PostsApi {
       final me = Map<String, dynamic>.from(c['me'] ?? {});
       final id = (c['id'] ?? '').toString();
       final parentIdRaw = c['parent_comment_id'];
-      final parentId = parentIdRaw == null ? null : parentIdRaw.toString();
+      final parentId = parentIdRaw?.toString();
       parentOf[id] = parentId;
 
       flat[id] = Comment(
@@ -203,8 +246,74 @@ class PostsApi {
   }
 
   Post _toPost(Map<String, dynamic> p) {
-    final author = Map<String, dynamic>.from(p['author'] ?? {});
-    final counts = Map<String, dynamic>.from(p['counts'] ?? {});
+    // Prefer a nested original post for content/media/author when present
+    final original = Map<String, dynamic>.from(
+      p['original_post'] ??
+          p['originalPost'] ??
+          p['original'] ??
+          p['repost_of_post'] ??
+          {},
+    );
+
+    // Build synthetic original from top-level original_* fields if needed
+    Map<String, dynamic> syntheticOriginal = {};
+    if (original.isEmpty) {
+      final origAuthor = (p['original_author'] is Map)
+          ? Map<String, dynamic>.from(p['original_author'])
+          : {};
+      final origImageUrls = p['original_image_urls'];
+      final origImageUrl = p['original_image_url'];
+      final origVideoUrl = p['original_video_url'];
+      final origContent =
+          p['original_content'] ?? p['orig_content'] ?? p['source_content'];
+      if (origAuthor.isNotEmpty ||
+          origContent != null ||
+          origImageUrl != null ||
+          origImageUrls != null ||
+          origVideoUrl != null) {
+        syntheticOriginal = {
+          if (origContent != null) 'content': origContent,
+          if (origAuthor.isNotEmpty) 'author': origAuthor,
+          if (origImageUrl != null) 'image_url': origImageUrl,
+          if (origImageUrls != null) 'image_urls': origImageUrls,
+          if (origVideoUrl != null) 'video_url': origVideoUrl,
+        };
+      }
+    }
+
+    // Use original as the content source if present; otherwise synthetic; otherwise top-level
+    final contentSource =
+        original.isNotEmpty ? original : (syntheticOriginal.isNotEmpty ? syntheticOriginal : p);
+
+    // Author resolution for original content
+    Map<String, dynamic> authorFrom(Map<String, dynamic> src) {
+      final a = Map<String, dynamic>.from(src['author'] ?? {});
+      if (a.isNotEmpty) return a;
+      // Fallbacks some APIs might use
+      final oa = Map<String, dynamic>.from(src['original_author'] ?? {});
+      if (oa.isNotEmpty) return oa;
+      return {};
+    }
+
+    final author = authorFrom(contentSource);
+
+    // Counts: from content source counts, otherwise aggregate count fields or fallback to top-level counts
+    Map<String, dynamic> countsMap = {};
+    if (contentSource['counts'] is Map) {
+      countsMap = Map<String, dynamic>.from(contentSource['counts']);
+    } else if (p['counts'] is Map) {
+      countsMap = Map<String, dynamic>.from(p['counts']);
+    } else {
+      // per-column counts fallback
+      countsMap = {
+        'likes': p['likes_count'] ?? 0,
+        'comments': p['comments_count'] ?? 0,
+        'shares': p['shares_count'] ?? 0,
+        'reposts': p['reposts_count'] ?? 0,
+        'bookmarks': p['bookmarks_count'] ?? 0,
+      };
+    }
+
     final me = Map<String, dynamic>.from(p['me'] ?? {});
 
     DateTime parseCreatedAt(dynamic v) {
@@ -228,15 +337,59 @@ class PostsApi {
       return DateTime.now();
     }
 
+    // Media parsing from chosen content source, supporting media[] or direct fields
     MediaType mediaType = MediaType.none;
     String? videoUrl;
     List<String> imageUrls = [];
 
-    if (p['video_url'] != null && p['video_url'].toString().isNotEmpty) {
+    List<dynamic> mediaList = [];
+    if (contentSource['media'] is List) {
+      mediaList = List<dynamic>.from(contentSource['media']);
+    } else if (p['media'] is List) {
+      // some backends place media on the top-level even for reposts
+      mediaList = List<dynamic>.from(p['media']);
+    }
+
+    if (mediaList.isNotEmpty) {
+      final asMaps = mediaList
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+
+      final videos = asMaps.where((m) {
+        final t = (m['type'] ?? m['kind'] ?? '').toString().toLowerCase();
+        return t.contains('video');
+      }).toList();
+
+      final images = asMaps.where((m) {
+        final t = (m['type'] ?? m['kind'] ?? '').toString().toLowerCase();
+        return t.contains('image') || t.contains('photo') || t.isEmpty;
+      }).toList();
+
+      String? urlOf(Map<String, dynamic> m) =>
+          (m['url'] ?? m['src'] ?? m['link'] ?? '').toString();
+
+      if (videos.isNotEmpty) {
+        mediaType = MediaType.video;
+        videoUrl = urlOf(videos.first);
+      } else if (images.length > 1) {
+        mediaType = MediaType.images;
+        imageUrls = images
+            .map(urlOf)
+            .whereType<String>()
+            .where((u) => u.isNotEmpty)
+            .toList();
+      } else if (images.length == 1) {
+        mediaType = MediaType.image;
+        final u = urlOf(images.first);
+        if (u != null && u.isNotEmpty) imageUrls = [u];
+      }
+    } else if (contentSource['video_url'] != null &&
+        contentSource['video_url'].toString().isNotEmpty) {
       mediaType = MediaType.video;
-      videoUrl = p['video_url'].toString();
-    } else if (p['image_urls'] != null) {
-      final urls = (p['image_urls'] as List<dynamic>? ?? [])
+      videoUrl = contentSource['video_url'].toString();
+    } else if (contentSource['image_urls'] != null) {
+      final urls = (contentSource['image_urls'] as List<dynamic>? ?? [])
           .map((url) => url.toString())
           .where((url) => url.isNotEmpty)
           .toList();
@@ -247,9 +400,10 @@ class PostsApi {
         mediaType = MediaType.image;
         imageUrls = urls;
       }
-    } else if (p['image_url'] != null && p['image_url'].toString().isNotEmpty) {
+    } else if (contentSource['image_url'] != null &&
+        contentSource['image_url'].toString().isNotEmpty) {
       mediaType = MediaType.image;
-      imageUrls = [p['image_url'].toString()];
+      imageUrls = [contentSource['image_url'].toString()];
     }
 
     int toInt(dynamic v) {
@@ -259,26 +413,84 @@ class PostsApi {
       return 0;
     }
 
+    // Repost attribution (who reposted)
+    final repostAuthorRaw = Map<String, dynamic>.from(
+      p['repost_author'] ??
+          p['reposter'] ??
+          p['reposted_by_user'] ??
+          p['repostAuthor'] ??
+          p['repost_user'] ??
+          {},
+    );
+
+    final isRepost =
+        p['repost_of'] != null || (p['is_repost'] == true || p['isRepost'] == true);
+
+    // Best-effort original post id for client hydration
+    final originalPostId = (p['repost_of'] ??
+            p['repostOf'] ??
+            original['id'] ??
+            original['post_id'] ??
+            original['postId'])
+        ?.toString();
+
+    final repostedBy = repostAuthorRaw.isNotEmpty
+        ? RepostedBy(
+            userName:
+                (repostAuthorRaw['name'] ?? repostAuthorRaw['username'] ?? 'User')
+                    .toString(),
+            userAvatarUrl:
+                (repostAuthorRaw['avatarUrl'] ?? repostAuthorRaw['avatar_url'] ?? '')
+                    .toString(),
+            actionType: (me['reposted'] == true || me['is_repost_author'] == true)
+                ? 'reposted this'
+                : null,
+          )
+        : null;
+
+    // Author fields with snake_case fallback
+    final authorName =
+        (author['name'] ?? author['username'] ?? 'User').toString();
+    final authorAvatar =
+        (author['avatarUrl'] ?? author['avatar_url'] ?? '').toString();
+
+    // Text with multiple fallbacks (contentSource first)
+    final text = (contentSource['content'] ??
+            contentSource['text'] ??
+            p['original_content'] ??
+            p['text'] ??
+            p['content'] ??
+            '')
+        .toString();
+
     return Post(
       id: (p['id'] ?? '').toString(),
-      userName: (author['name'] ?? 'User').toString(),
-      userAvatarUrl: (author['avatarUrl'] ?? '').toString(),
-      createdAt: parseCreatedAt(p['created_at']),
-      text: (p['content'] ?? '').toString(),
+      // Original author on the main card when reposting
+      userName: authorName,
+      userAvatarUrl: authorAvatar,
+      // Prefer top-level created_at (repost time), fallback to content source
+      createdAt: parseCreatedAt(
+        p['created_at'] ??
+            p['createdAt'] ??
+            contentSource['created_at'] ??
+            contentSource['createdAt'],
+      ),
+      text: text,
       mediaType: mediaType,
       imageUrls: imageUrls,
       videoUrl: videoUrl,
       counts: PostCounts(
-        likes: toInt(counts['likes']),
-        comments: toInt(counts['comments']),
-        shares: toInt(counts['shares']),
-        reposts: toInt(counts['reposts']),
-        bookmarks: toInt(counts['bookmarks']),
+        likes: toInt(countsMap['likes']),
+        comments: toInt(countsMap['comments']),
+        shares: toInt(countsMap['shares']),
+        reposts: toInt(countsMap['reposts']),
+        bookmarks: toInt(countsMap['bookmarks']),
       ),
       userReaction: (me['liked'] == true) ? ReactionType.like : null,
       isBookmarked: (me['bookmarked'] ?? false) as bool,
-      isRepost: p['repost_of'] != null,
-      repostedBy: null,
+      isRepost: isRepost,
+      repostedBy: repostedBy,
+      originalPostId: originalPostId,
     );
   }
 }

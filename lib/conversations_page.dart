@@ -539,7 +539,7 @@ class _ConversationsPageState extends State<ConversationsPage>
                                               borderRadius: BorderRadius.circular(20),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: Colors.black.withValues(alpha: 13),
+                                                  color: Colors.black.withValues(alpha: 0),
                                                   blurRadius: 10,
                                                   offset: const Offset(0, 2),
                                                 ),
@@ -559,7 +559,7 @@ class _ConversationsPageState extends State<ConversationsPage>
                                                       width: 48,
                                                       height: 48,
                                                       decoration: BoxDecoration(
-                                                        color: const Color(0xFF666666).withValues(alpha: 51),
+                                                        color: const Color(0xFF666666).withValues(alpha: 0),
                                                         borderRadius: BorderRadius.circular(24),
                                                       ),
                                                       child: const Icon(Icons.group, color: Color(0xFF666666), size: 24),
@@ -636,7 +636,7 @@ class _ConversationsPageState extends State<ConversationsPage>
                                                                 vertical: 2,
                                                               ),
                                                               decoration: BoxDecoration(
-                                                                color: const Color(0xFF666666).withValues(alpha: 26),
+                                                                color: const Color(0xFF666666).withValues(alpha: 0),
                                                                 borderRadius: BorderRadius.circular(12),
                                                               ),
                                                               child: Text(
