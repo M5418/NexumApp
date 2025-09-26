@@ -86,12 +86,62 @@ async function getAuthorMap(userIds) {
   return map;
 }
 
+// Fetch repost snapshots for all repost rows in batch
+async function getRepostSnapshotMap(rows) {
+  const pairs = rows
+    .filter(r => r.repost_of)
+    .map(r => [r.repost_of, r.user_id]);
+  if (pairs.length === 0) return {};
+
+  // Build OR predicate to support MySQL without tuple IN
+  const where = pairs.map(() => '(original_post_id = ? AND reposted_by_user_id = ?)').join(' OR ');
+  const params = pairs.flat();
+
+  const [snapRows] = await pool.query(
+    `SELECT
+       original_post_id,
+       reposted_by_user_id,
+       reposter_name,
+       reposter_username,
+       reposter_avatar_url,
+       original_author_id,
+       original_author_name,
+       original_author_username,
+       original_author_avatar_url,
+       original_content,
+       original_post_type,
+       original_image_url,
+       original_image_urls,
+       original_video_url,
+       original_likes_count,
+       original_comments_count,
+       original_shares_count,
+       original_reposts_count,
+       original_bookmarks_count
+     FROM post_reposts
+     WHERE ${where}`,
+    params
+  );
+
+  const map = {};
+  for (const s of snapRows) {
+    const key = `${s.original_post_id}:${s.reposted_by_user_id}`;
+    map[key] = s;
+  }
+  return map;
+}
+
 // Hydrate posts with author info and user interaction flags
+// Enhancements: when a row is a repost (repost_of is not null), embed:
+//   - original_post: { author, content/media, counts }
+//   - repost_author: { name, username, avatarUrl }
+// and set top-level author to the original author (for UI to show original author on card)
 async function hydratePosts(rows, meId) {
   if (!rows || rows.length === 0) return [];
 
   const userIds = rows.map(r => r.user_id);
   const authorMap = await getAuthorMap(userIds);
+  const snapshotMap = await getRepostSnapshotMap(rows);
 
   function safeParseJson(v) {
     if (v == null || v === '' || v === 'null') return null;
@@ -107,53 +157,155 @@ async function hydratePosts(rows, meId) {
     return null;
   }
 
-  return rows.map(r => ({
-    id: r.id,
-    user_id: r.user_id,
-    post_type: r.post_type,
-    content: r.content,
-    image_url: r.image_url,
-    image_urls: (() => {
-      if (!r.image_urls) return null;
-      if (Array.isArray(r.image_urls)) return r.image_urls;
-      if (typeof r.image_urls === 'string') {
-        try { return JSON.parse(r.image_urls); } catch (_) { return null; }
-      }
-      return null;
-    })(),
-    video_url: r.video_url,
-    repost_of: r.repost_of,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-
-    // Author info
-    author: authorMap[r.user_id] || { name: 'User', username: null, avatarUrl: null },
-
-    // Interaction counts
-    counts: {
+  return rows.map(r => {
+    const baseCounts = {
       likes: r.likes_count || 0,
       comments: r.comments_count || 0,
       shares: r.shares_count || 0,
       bookmarks: r.bookmarks_count || 0,
       reposts: r.reposts_count || 0,
-    },
+    };
 
-    // User interaction flags
-    me: {
+    const me = {
       liked: isInJsonArray(r.liked_by, meId),
       bookmarked: isInJsonArray(r.bookmarked_by, meId),
       shared: isInJsonArray(r.shared_by, meId),
       reposted: isInJsonArray(r.reposted_by, meId),
-    },
+    };
 
-    // Interaction lists (for detailed views)
-    interactions: {
-      liked_by: safeParseJson(r.liked_by),
-      shared_by: safeParseJson(r.shared_by),
-      bookmarked_by: safeParseJson(r.bookmarked_by),
-      reposted_by: safeParseJson(r.reposted_by),
+    const isRepost = !!r.repost_of;
+    const reposterInfo = authorMap[r.user_id] || { name: 'User', username: null, avatarUrl: null };
+
+    if (!isRepost) {
+      // Normal post
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        post_type: r.post_type,
+        content: r.content,
+        image_url: r.image_url,
+        image_urls: (() => {
+          if (!r.image_urls) return null;
+          if (Array.isArray(r.image_urls)) return r.image_urls;
+          if (typeof r.image_urls === 'string') {
+            try { return JSON.parse(r.image_urls); } catch (_) { return null; }
+          }
+          return null;
+        })(),
+        video_url: r.video_url,
+        repost_of: r.repost_of,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+
+        // Author info (original poster)
+        author: reposterInfo,
+
+        // Interaction counts for this row
+        counts: baseCounts,
+
+        // User interaction flags
+        me,
+
+        // Interaction lists (for detailed views)
+        interactions: {
+          liked_by: safeParseJson(r.liked_by),
+          shared_by: safeParseJson(r.shared_by),
+          bookmarked_by: safeParseJson(r.bookmarked_by),
+          reposted_by: safeParseJson(r.reposted_by),
+        }
+      };
     }
-  }));
+
+    // Repost row: use snapshot to hydrate original and reposter header
+    const snap = snapshotMap[`${r.repost_of}:${r.user_id}`];
+
+    let original_post = null;
+    let repost_author = reposterInfo;
+    let author = reposterInfo; // default, will be overridden by snapshot original author
+
+    if (snap) {
+      let origImageUrls = null;
+      if (snap.original_image_urls) {
+        try {
+          origImageUrls = Array.isArray(snap.original_image_urls)
+            ? snap.original_image_urls
+            : JSON.parse(snap.original_image_urls);
+        } catch (_) {
+          origImageUrls = null;
+        }
+      }
+
+      original_post = {
+        content: snap.original_content || null,
+        post_type: snap.original_post_type || null,
+        image_url: snap.original_image_url || null,
+        image_urls: origImageUrls,
+        video_url: snap.original_video_url || null,
+        counts: {
+          likes: Number(snap.original_likes_count || 0),
+          comments: Number(snap.original_comments_count || 0),
+          shares: Number(snap.original_shares_count || 0),
+          reposts: Number(snap.original_reposts_count || 0),
+          bookmarks: Number(snap.original_bookmarks_count || 0),
+        },
+        author: {
+          name: snap.original_author_name || 'User',
+          username: snap.original_author_username || null,
+          avatarUrl: snap.original_author_avatar_url || null,
+        },
+      };
+
+      repost_author = {
+        name: snap.reposter_name || 'User',
+        username: snap.reposter_username || null,
+        avatarUrl: snap.reposter_avatar_url || null,
+      };
+
+      // Top-level author should be original author for the UI card header
+      author = original_post.author;
+    }
+
+    return {
+      id: r.id,
+      user_id: r.user_id,
+      post_type: r.post_type,
+      content: r.content, // usually null for repost row
+      image_url: r.image_url,
+      image_urls: (() => {
+        if (!r.image_urls) return null;
+        if (Array.isArray(r.image_urls)) return r.image_urls;
+        if (typeof r.image_urls === 'string') {
+          try { return JSON.parse(r.image_urls); } catch (_) { return null; }
+        }
+        return null;
+      })(),
+      video_url: r.video_url,
+      repost_of: r.repost_of,
+      created_at: r.created_at, // time of repost
+      updated_at: r.updated_at,
+
+      // Author of the original (for the main card)
+      author,
+
+      // Provide repost author explicitly for UI header
+      repost_author,
+
+      // Embed full original snapshot so the client can render without extra calls
+      original_post,
+
+      // Use row counts as backup; client prefers original_post.counts if present
+      counts: baseCounts,
+
+      me,
+
+      interactions: {
+        liked_by: safeParseJson(r.liked_by),
+        shared_by: safeParseJson(r.shared_by),
+        bookmarked_by: safeParseJson(r.bookmarked_by),
+        reposted_by: safeParseJson(r.reposted_by),
+      }
+    };
+  });
 }
 
 // Create a post

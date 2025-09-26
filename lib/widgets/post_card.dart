@@ -90,11 +90,11 @@ class _PostCardState extends State<PostCard> {
     String _repostHeaderText() {
       final rb = widget.post.repostedBy;
       if (rb != null && (rb.actionType ?? '').isNotEmpty) {
-        // "You reposted this"
-        return 'You ${rb.actionType}';
+        // Auth user reposted
+        return 'you reposted this';
       }
       if (rb != null && rb.userName.trim().isNotEmpty) {
-        // "<Username> reposted this"
+        // Another user reposted
         return '${rb.userName} reposted this';
       }
       // Fallback when repost author is not provided by backend

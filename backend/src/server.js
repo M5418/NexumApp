@@ -14,6 +14,7 @@ import conversationsRoutes from './routes/conversations.js';
 import messagesRoutes from './routes/messages.js';
 import storiesRoutes from './routes/stories.js';
 import communitiesRoutes from './routes/communities.js';
+import repostsRoutes from './routes/posts-reposts.js'; // NEW
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -47,7 +48,12 @@ app.use('/api/files', authMiddleware, filesRoutes);
 app.use('/api/profile', authMiddleware, profileRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
 app.use('/api/connections', authMiddleware, connectionsRoutes);
+
+// Posts routes
 app.use('/api/posts', authMiddleware, postsRoutes);
+// Repost endpoints (create/unrepost + snapshot)
+app.use('/api/posts', authMiddleware, repostsRoutes);
+
 app.use('/api/invitations', authMiddleware, invitationsRoutes);
 app.use('/api/conversations', authMiddleware, conversationsRoutes);
 app.use('/api/messages', authMiddleware, messagesRoutes);
