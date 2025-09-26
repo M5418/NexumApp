@@ -4,22 +4,26 @@ import '../models/comment.dart';
 
 class CommentWidget extends StatefulWidget {
   final Comment comment;
-  final VoidCallback? onLike;
-  final VoidCallback? onReply;
+  final void Function(Comment comment)? onLike;
+  final void Function(Comment comment)? onReply;
+  final void Function(Comment comment)? onDelete;
   final VoidCallback? onShowReplies;
   final bool showReplies;
   final int depth;
   final bool isDarkMode;
+  final String currentUserId;
 
   const CommentWidget({
     super.key,
     required this.comment,
     this.onLike,
     this.onReply,
+    this.onDelete,
     this.onShowReplies,
     this.showReplies = false,
     this.depth = 0,
     this.isDarkMode = true,
+    required this.currentUserId,
   });
 
   @override
@@ -60,6 +64,7 @@ class _CommentWidgetState extends State<CommentWidget> {
     final subtitleColor = widget.isDarkMode
         ? Colors.white.withValues(alpha: 179)
         : Colors.black.withValues(alpha: 179);
+    final canDelete = widget.comment.userId == widget.currentUserId;
 
     return Container(
       margin: EdgeInsets.only(left: widget.depth > 0 ? 40.0 : 0, bottom: 16),
@@ -130,6 +135,35 @@ class _CommentWidgetState extends State<CommentWidget> {
                             fontSize: 12,
                           ),
                         ),
+
+                        if (canDelete)
+                          PopupMenuButton<String>(
+                            color: widget.isDarkMode ? Colors.grey[900] : Colors.white,
+                            icon: Icon(Icons.more_vert, size: 18, color: subtitleColor),
+                            onSelected: (value) {
+                              if (value == 'delete') {
+                                widget.onDelete?.call(widget.comment);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline, size: 18, color: subtitleColor),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Delete',
+                                      style: GoogleFonts.inter(
+                                        color: textColor,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                     ),
 
@@ -145,11 +179,12 @@ class _CommentWidgetState extends State<CommentWidget> {
                         }
                       },
                       child: Text(
-                        widget.comment.text,
+                        widget.comment.text.isEmpty ? '[deleted]' : widget.comment.text,
                         style: GoogleFonts.inter(
-                          color: textColor,
+                          color: widget.comment.text.isEmpty ? subtitleColor : textColor,
                           fontSize: 14,
                           height: 1.3,
+                          fontStyle: widget.comment.text.isEmpty ? FontStyle.italic : FontStyle.normal,
                         ),
                         maxLines: _isExpanded ? null : 3,
                         overflow: _isExpanded
@@ -182,7 +217,7 @@ class _CommentWidgetState extends State<CommentWidget> {
                       children: [
                         // Like button
                         GestureDetector(
-                          onTap: widget.onLike,
+                          onTap: () => widget.onLike?.call(widget.comment),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -214,7 +249,7 @@ class _CommentWidgetState extends State<CommentWidget> {
 
                         // Reply button
                         GestureDetector(
-                          onTap: widget.onReply,
+                          onTap: () => widget.onReply?.call(widget.comment),
                           child: Text(
                             'Reply',
                             style: GoogleFonts.inter(
@@ -270,12 +305,10 @@ class _CommentWidgetState extends State<CommentWidget> {
                   comment: reply,
                   depth: widget.depth + 1,
                   isDarkMode: widget.isDarkMode,
-                  onLike: () {
-                    // Handle reply like
-                  },
-                  onReply: () {
-                    // Handle reply to reply
-                  },
+                  currentUserId: widget.currentUserId,
+                  onLike: widget.onLike,
+                  onReply: widget.onReply,
+                  onDelete: widget.onDelete,
                 );
               }).toList(),
             ),

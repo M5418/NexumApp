@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:dio/dio.dart';
+
 import 'models/post.dart';
-import 'data/sample_data.dart';
-import 'data/sample_comments.dart';
+import 'models/comment.dart';
+import 'core/posts_api.dart';
+import 'core/auth_api.dart';
 import 'widgets/custom_video_player.dart';
 import 'widgets/reaction_picker.dart';
 import 'widgets/comment_bottom_sheet.dart';
@@ -20,131 +23,84 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
   late PageController _pageController;
   bool _showReactionPicker = false;
   String? _reactionPickerPostId;
-  List<Post> _videoPosts = [];
-  final Map<String, bool> _expandedTexts =
-      {}; // Track expanded state for each post
+
+  final Map<String, bool> _expandedTexts = {};
   final Map<String, CustomVideoPlayer> _videoPlayers = {};
   final Map<String, GlobalKey<CustomVideoPlayerState>> _videoPlayerKeys = {};
+
+  List<Post> _videoPosts = [];
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _loadCurrentUserId();
     _loadVideoPosts();
-  }
-
-  void _loadVideoPosts() {
-    // Filter only video posts from sample data
-    final allPosts = SampleData.getSamplePosts();
-    _videoPosts = allPosts
-        .where((post) => post.mediaType == MediaType.video)
-        .toList();
-
-    // Add more sample video posts for demonstration
-    _videoPosts.addAll([
-      Post(
-        id: 'video_2',
-        userName: 'Sarah Chen',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1494790108755-2616b612b47c?w=150&h=150&fit=crop&crop=face',
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        text:
-            'Behind the scenes of our latest product launch! The team worked incredibly hard to make this happen. 🚀',
-        mediaType: MediaType.video,
-        videoUrl:
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        imageUrls: [],
-        counts: const PostCounts(
-          likes: 892,
-          comments: 156,
-          shares: 89,
-          reposts: 45,
-          bookmarks: 234,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: false,
-      ),
-      Post(
-        id: 'video_3',
-        userName: 'Marcus Johnson',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-        createdAt: DateTime.now().subtract(const Duration(hours: 6)),
-        text:
-            'Quick tip for entrepreneurs: Always validate your ideas before building! Here\'s how we did it.',
-        mediaType: MediaType.video,
-        videoUrl:
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        imageUrls: [],
-        counts: const PostCounts(
-          likes: 567,
-          comments: 89,
-          shares: 123,
-          reposts: 67,
-          bookmarks: 178,
-        ),
-        userReaction: ReactionType.like,
-        isBookmarked: true,
-        isRepost: false,
-      ),
-      Post(
-        id: 'video_4',
-        userName: 'Emma Rodriguez',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-        createdAt: DateTime.now().subtract(const Duration(hours: 10)),
-        text:
-            'Investor pitch day! Nervous but excited to share our vision with potential partners. 💼✨',
-        mediaType: MediaType.video,
-        videoUrl:
-            'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4',
-        imageUrls: [],
-        counts: const PostCounts(
-          likes: 1234,
-          comments: 234,
-          shares: 156,
-          reposts: 89,
-          bookmarks: 345,
-        ),
-        userReaction: ReactionType.heart,
-        isBookmarked: false,
-        isRepost: false,
-      ),
-      Post(
-        id: 'video_long_text',
-        userName: 'Alexandra Thompson',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
-        createdAt: DateTime.now().subtract(const Duration(hours: 4)),
-        text:
-            'Today I want to share with you the incredible journey we\'ve been on over the past 18 months building our startup from the ground up. It all started with a simple idea during a late-night brainstorming session with my co-founder. We were frustrated with the existing solutions in the market and knew there had to be a better way. What began as sketches on napkins has now evolved into a fully-featured platform that serves thousands of users worldwide. The challenges we faced were immense - from technical hurdles to fundraising difficulties, from team building struggles to market validation concerns. But every obstacle taught us something valuable. We learned the importance of listening to our users, iterating quickly, and staying true to our core mission. The support from our community has been absolutely overwhelming, and seeing how our product positively impacts people\'s daily lives makes every sleepless night worth it. This video shows some behind-the-scenes moments from our recent Series A announcement. Thank you to everyone who believed in us! 🚀💪 #startup #entrepreneurship #innovation',
-        mediaType: MediaType.video,
-        videoUrl:
-            'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        imageUrls: [],
-        counts: const PostCounts(
-          likes: 2156,
-          comments: 387,
-          shares: 245,
-          reposts: 156,
-          bookmarks: 567,
-        ),
-        userReaction: null,
-        isBookmarked: true,
-        isRepost: false,
-      ),
-    ]);
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    // Clear video players
     _videoPlayers.clear();
     _videoPlayerKeys.clear();
     super.dispose();
   }
+
+  Future<void> _loadCurrentUserId() async {
+    try {
+      final res = await AuthApi().me();
+      final id = (res['ok'] == true && res['data'] != null)
+          ? res['data']['id'] as String?
+          : null;
+      if (!mounted) return;
+      setState(() {
+        _currentUserId = id;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _currentUserId = null;
+      });
+    }
+  }
+
+  Future<void> _loadVideoPosts() async {
+    try {
+      // Fetch feed and keep only video posts
+      final posts = await PostsApi().listFeed(limit: 50, offset: 0);
+      final onlyVideos =
+          posts.where((p) => p.mediaType == MediaType.video).toList();
+      if (!mounted) return;
+      setState(() {
+        _videoPosts = onlyVideos;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_toError(e), style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  String _toError(Object e) {
+    if (e is DioException) {
+      final code = e.response?.statusCode;
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        final reason = (data['error'] ?? data['message'] ?? data).toString();
+        return 'HTTP ${code ?? 'error'}: $reason';
+      }
+      return 'HTTP ${code ?? 'error'}';
+    }
+    return e.toString();
+  }
+
+  int _findPostIndex(String postId) =>
+      _videoPosts.indexWhere((post) => post.id == postId);
 
   void _showReactions(String postId) {
     setState(() {
@@ -160,31 +116,213 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     });
   }
 
-  void _onReactionSelected(ReactionType reaction) {
-    // Handle reaction selection
+  void _onReactionSelected(ReactionType reaction) async {
     final postIndex = _videoPosts.indexWhere(
       (post) => post.id == _reactionPickerPostId,
     );
-    if (postIndex != -1) {
-      setState(() {
-        _videoPosts[postIndex] = _videoPosts[postIndex].copyWith(
-          userReaction: _videoPosts[postIndex].userReaction == reaction
-              ? null
-              : reaction,
-        );
-      });
+    if (postIndex == -1) {
+      _hideReactions();
+      return;
     }
+
+    final original = _videoPosts[postIndex];
+    final hadReaction = original.userReaction != null;
+    final isSameReaction = original.userReaction == reaction;
+
+    // Toggle ON when no previous reaction
+    if (!hadReaction) {
+      final updatedCounts = PostCounts(
+        likes: original.counts.likes + 1,
+        comments: original.counts.comments,
+        shares: original.counts.shares,
+        reposts: original.counts.reposts,
+        bookmarks: original.counts.bookmarks,
+      );
+      final optimistic =
+          original.copyWith(userReaction: reaction, counts: updatedCounts);
+      setState(() {
+        _videoPosts[postIndex] = optimistic;
+      });
+      try {
+        await PostsApi().like(original.id);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _videoPosts[postIndex] = original;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      _hideReactions();
+      return;
+    }
+
+    // Toggle OFF when same reaction
+    if (isSameReaction) {
+      final newLikes =
+          original.counts.likes > 0 ? original.counts.likes - 1 : 0;
+      final updatedCounts = PostCounts(
+        likes: newLikes,
+        comments: original.counts.comments,
+        shares: original.counts.shares,
+        reposts: original.counts.reposts,
+        bookmarks: original.counts.bookmarks,
+      );
+      final optimistic = original.copyWith(userReaction: null, counts: updatedCounts);
+      setState(() {
+        _videoPosts[postIndex] = optimistic;
+      });
+      try {
+        await PostsApi().unlike(original.id);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _videoPosts[postIndex] = original;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Unlike failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      _hideReactions();
+      return;
+    }
+
+    // Change reaction type (still liked): UI-only
+    setState(() {
+      _videoPosts[postIndex] = original.copyWith(userReaction: reaction);
+    });
     _hideReactions();
   }
 
-  void _toggleBookmark(String postId) {
-    final postIndex = _videoPosts.indexWhere((post) => post.id == postId);
-    if (postIndex != -1) {
+  Future<void> _handleLikeFromPlayer(Post post) async {
+    final idx = _findPostIndex(post.id);
+    if (idx == -1) return;
+    final original = _videoPosts[idx];
+
+    // If not liked yet: optimistic + API
+    if (original.userReaction == null) {
+      final updatedCounts = PostCounts(
+        likes: original.counts.likes + 1,
+        comments: original.counts.comments,
+        shares: original.counts.shares,
+        reposts: original.counts.reposts,
+        bookmarks: original.counts.bookmarks,
+      );
+      final optimistic =
+          original.copyWith(userReaction: ReactionType.heart, counts: updatedCounts);
       setState(() {
-        _videoPosts[postIndex] = _videoPosts[postIndex].copyWith(
-          isBookmarked: !_videoPosts[postIndex].isBookmarked,
-        );
+        _videoPosts[idx] = optimistic;
       });
+      try {
+        await PostsApi().like(post.id);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _videoPosts[idx] = original;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // If already liked with a different reaction: only switch locally
+    if (original.userReaction != ReactionType.heart) {
+      setState(() {
+        _videoPosts[idx] = original.copyWith(userReaction: ReactionType.heart);
+      });
+    }
+  }
+
+  Future<void> _handleUnlikeFromPlayer(Post post) async {
+    final idx = _findPostIndex(post.id);
+    if (idx == -1) return;
+    final original = _videoPosts[idx];
+
+    // Only handle unlike when current reaction is heart (what the player toggles)
+    if (original.userReaction == ReactionType.heart) {
+      final updatedCounts = PostCounts(
+        likes: original.counts.likes > 0 ? original.counts.likes - 1 : 0,
+        comments: original.counts.comments,
+        shares: original.counts.shares,
+        reposts: original.counts.reposts,
+        bookmarks: original.counts.bookmarks,
+      );
+      final optimistic = original.copyWith(userReaction: null, counts: updatedCounts);
+      setState(() {
+        _videoPosts[idx] = optimistic;
+      });
+      try {
+        await PostsApi().unlike(post.id);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _videoPosts[idx] = original;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Unlike failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleBookmark(String postId) async {
+    final idx = _findPostIndex(postId);
+    if (idx == -1) return;
+
+    final original = _videoPosts[idx];
+    final willBookmark = !original.isBookmarked;
+    final newBookmarks =
+        (original.counts.bookmarks + (willBookmark ? 1 : -1)).clamp(0, 1 << 30);
+
+    final updatedCounts = PostCounts(
+      likes: original.counts.likes,
+      comments: original.counts.comments,
+      shares: original.counts.shares,
+      reposts: original.counts.reposts,
+      bookmarks: newBookmarks,
+    );
+
+    final optimistic =
+        original.copyWith(isBookmarked: willBookmark, counts: updatedCounts);
+
+    setState(() {
+      _videoPosts[idx] = optimistic;
+    });
+
+    try {
+      if (willBookmark) {
+        await PostsApi().bookmark(postId);
+      } else {
+        await PostsApi().unbookmark(postId);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _videoPosts[idx] = original;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bookmark failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -196,24 +334,12 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         videoUrl: videoUrl,
         isLiked: post.userReaction == ReactionType.heart,
         onLike: () {
-          final postIndex = _videoPosts.indexWhere((p) => p.id == post.id);
-          if (postIndex != -1) {
-            setState(() {
-              _videoPosts[postIndex] = _videoPosts[postIndex].copyWith(
-                userReaction: ReactionType.heart,
-              );
-            });
-          }
+          // Handle double-tap like from player
+          _handleLikeFromPlayer(post);
         },
         onUnlike: () {
-          final postIndex = _videoPosts.indexWhere((p) => p.id == post.id);
-          if (postIndex != -1) {
-            setState(() {
-              _videoPosts[postIndex] = _videoPosts[postIndex].copyWith(
-                userReaction: null,
-              );
-            });
-          }
+          // Handle double-tap unlike from player
+          _handleUnlikeFromPlayer(post);
         },
       );
     }
@@ -229,12 +355,12 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle(
+        systemOverlayStyle: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.light,
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -247,9 +373,9 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.search, color: Colors.white),
+            icon: const Icon(Icons.search, color: Colors.white),
             onPressed: () {
-              // Handle search
+              // optional search for videos
             },
           ),
         ],
@@ -294,6 +420,12 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             ReactionPicker(
+                              currentReaction: _videoPosts
+                                  .firstWhere(
+                                    (p) => p.id == _reactionPickerPostId,
+                                    orElse: () => _videoPosts.first,
+                                  )
+                                  .userReaction,
                               onReactionSelected: _onReactionSelected,
                             ),
                           ],
@@ -433,8 +565,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                           isExpanded
                               ? post.text
                               : (post.text.length > 100
-                                    ? '${post.text.substring(0, 100)}...'
-                                    : post.text),
+                                  ? '${post.text.substring(0, 100)}...'
+                                  : post.text),
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontSize: 14,
@@ -487,9 +619,9 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
               children: [
                 // Like button
                 _buildActionButton(
-                  icon: post.userReaction == ReactionType.heart
-                      ? Icons.favorite
-                      : Icons.favorite_border,
+                  icon: post.userReaction == null
+                      ? Icons.favorite_border
+                      : Icons.favorite,
                   count: post.counts.likes,
                   isActive: post.userReaction != null,
                   onTap: () => _showReactions(post.id),
@@ -501,7 +633,9 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                 _buildActionButton(
                   icon: Icons.chat_bubble_outline,
                   count: post.counts.comments,
-                  onTap: () => _showComments(context, post.id),
+                  onTap: () {
+                    _showComments(context, post.id);
+                  },
                   isDark: isDark,
                 ),
                 const SizedBox(height: 20),
@@ -520,9 +654,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                               'Added to Stories!',
                               style: GoogleFonts.inter(),
                             ),
-                            backgroundColor: isDark
-                                ? Colors.grey[800]
-                                : Colors.grey[600],
+                            backgroundColor:
+                                isDark ? Colors.grey[800] : Colors.grey[600],
                           ),
                         );
                       },
@@ -533,9 +666,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                               'Link copied to clipboard!',
                               style: GoogleFonts.inter(),
                             ),
-                            backgroundColor: isDark
-                                ? Colors.grey[800]
-                                : Colors.grey[600],
+                            backgroundColor:
+                                isDark ? Colors.grey[800] : Colors.grey[600],
                           ),
                         );
                       },
@@ -546,9 +678,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                               'Shared to Telegram!',
                               style: GoogleFonts.inter(),
                             ),
-                            backgroundColor: isDark
-                                ? Colors.grey[800]
-                                : Colors.grey[600],
+                            backgroundColor:
+                                isDark ? Colors.grey[800] : Colors.grey[600],
                           ),
                         );
                       },
@@ -559,9 +690,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                               'Shared to Facebook!',
                               style: GoogleFonts.inter(),
                             ),
-                            backgroundColor: isDark
-                                ? Colors.grey[800]
-                                : Colors.grey[600],
+                            backgroundColor:
+                                isDark ? Colors.grey[800] : Colors.grey[600],
                           ),
                         );
                       },
@@ -572,9 +702,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                               'More sharing options coming soon!',
                               style: GoogleFonts.inter(),
                             ),
-                            backgroundColor: isDark
-                                ? Colors.grey[800]
-                                : Colors.grey[600],
+                            backgroundColor:
+                                isDark ? Colors.grey[800] : Colors.grey[600],
                           ),
                         );
                       },
@@ -585,9 +714,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                               'Sent to ${selectedUsers.length} ${selectedUsers.length == 1 ? 'person' : 'people'}!',
                               style: GoogleFonts.inter(),
                             ),
-                            backgroundColor: isDark
-                                ? Colors.grey[800]
-                                : Colors.grey[600],
+                            backgroundColor:
+                                isDark ? Colors.grey[800] : Colors.grey[600],
                           ),
                         );
                       },
@@ -599,9 +727,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
                 // Bookmark button
                 _buildActionButton(
-                  icon: post.isBookmarked
-                      ? Icons.bookmark
-                      : Icons.bookmark_border,
+                  icon: post.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                   count: post.counts.bookmarks,
                   isActive: post.isBookmarked,
                   onTap: () => _toggleBookmark(post.id),
@@ -657,50 +783,90 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     );
   }
 
-  void _showComments(BuildContext context, String postId) {
-    final comments = SampleComments.getCommentsForPost(postId);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => CommentBottomSheet(
-        postId: postId,
-        comments: comments,
-        isDarkMode: Theme.of(context).brightness == Brightness.dark,
-        onLikeComment: (commentId) {
-          // Handle comment like
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Comment liked!', style: GoogleFonts.inter()),
-              backgroundColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey[800]
-                  : Colors.grey[600],
-            ),
-          );
-        },
-        onReplyToComment: (commentId, replyText) {
-          // Handle comment reply
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Reply posted!', style: GoogleFonts.inter()),
-              backgroundColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey[800]
-                  : Colors.grey[600],
-            ),
-          );
-        },
-        onAddComment: (commentText) {
-          // Handle new comment
+  Future<void> _showComments(BuildContext context, String postId) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    List<Comment> comments = [];
+    try {
+      comments = await PostsApi().listComments(postId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    if (!mounted) return;
+
+    CommentBottomSheet.show(
+      context,
+      postId: postId,
+      comments: comments,
+      currentUserId: _currentUserId ?? '',
+      isDarkMode: isDark,
+      onAddComment: (text) async {
+        try {
+          await PostsApi().addComment(postId, content: text);
+
+          // Optimistically increment comments count on the post
+          final idx = _findPostIndex(postId);
+          if (idx != -1) {
+            final p = _videoPosts[idx];
+            final updatedCounts = PostCounts(
+              likes: p.counts.likes,
+              comments: p.counts.comments + 1,
+              shares: p.counts.shares,
+              reposts: p.counts.reposts,
+              bookmarks: p.counts.bookmarks,
+            );
+            setState(() {
+              _videoPosts[idx] = p.copyWith(counts: updatedCounts);
+            });
+          }
+
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Comment posted!', style: GoogleFonts.inter()),
-              backgroundColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey[800]
-                  : Colors.grey[600],
+              backgroundColor: const Color(0xFF4CAF50),
             ),
           );
-        },
-      ),
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Post comment failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      onReplyToComment: (commentId, replyText) async {
+        try {
+          await PostsApi()
+              .addComment(postId, content: replyText, parentCommentId: commentId);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Reply posted!', style: GoogleFonts.inter()),
+              backgroundColor: const Color(0xFF4CAF50),
+            ),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
     );
   }
 

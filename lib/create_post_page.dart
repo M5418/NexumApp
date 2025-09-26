@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'widgets/circle_icon_button.dart';
 import 'widgets/media_thumb.dart';
 import 'widgets/tag_chip.dart';
-import 'dart:io';
-import 'core/files_api.dart';
+import 'package:dio/dio.dart';
+import 'core/api_client.dart';
 import 'core/posts_api.dart';
+import 'core/communities_api.dart';
+import 'core/connections_api.dart';
+import 'core/users_api.dart';
 
 class CreatePostPage extends StatefulWidget {
   const CreatePostPage({super.key});
@@ -27,11 +29,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   bool _posting = false;
 
-  bool get _canPost =>
-      (!_posting) &&
-      (_titleController.text.trim().isNotEmpty ||
-          _bodyController.text.trim().isNotEmpty ||
-          _mediaItems.isNotEmpty);
+  // Body is REQUIRED, title optional. Media can be attached but not sufficient without body.
+  bool get _canPost => (!_posting) && _bodyController.text.trim().isNotEmpty;
 
   @override
   void dispose() {
@@ -46,9 +45,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0C0C0C)
-          : const Color(0xFFF1F4F8),
+      backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       body: SafeArea(
         child: Column(
           children: [
@@ -116,11 +113,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title field
+          // Title field (optional)
           _buildTitleField(isDark),
           const SizedBox(height: 16),
 
-          // Body field
+          // Body field (required)
           _buildBodyField(isDark),
           const SizedBox(height: 16),
 
@@ -254,7 +251,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   Widget _buildToolbar(bool isDark) {
     return Row(
       children: [
-        // Left group - media buttons
+        // Left group - actions
         CircleIconButton(
           icon: Icons.tag,
           size: 36,
@@ -267,7 +264,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
           icon: Icons.camera_alt_outlined,
           size: 36,
           onTap: () {
-            _showGalleryPicker();
+            // For web, opening camera is limited; reuse gallery picker for reliability.
+            _pickImagesFromGallery();
           },
         ),
         const SizedBox(width: 12),
@@ -275,7 +273,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           icon: Icons.photo_outlined,
           size: 36,
           onTap: () {
-            _showGalleryPicker();
+            _pickImagesFromGallery();
           },
         ),
         const SizedBox(width: 12),
@@ -283,7 +281,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           icon: Icons.videocam_outlined,
           size: 36,
           onTap: () {
-            _showGalleryPicker();
+            _pickVideoFromGallery();
           },
         ),
 
@@ -347,7 +345,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       // Single image - wide layout
       return MediaThumb(
         type: MediaType.image,
-        imageUrl: _mediaItems.first.imageUrl,
+        imageUrl: _mediaItems.first.path,
         width: double.infinity,
         height: 200,
         borderRadius: 25,
@@ -357,8 +355,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           });
         },
       );
-    } else if (_mediaItems.length == 1 &&
-        _mediaItems.first.type == MediaType.video) {
+    } else if (_mediaItems.length == 1 && _mediaItems.first.type == MediaType.video) {
       // Single video - wide layout
       return MediaThumb(
         type: MediaType.video,
@@ -385,7 +382,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           final item = _mediaItems[index];
           return MediaThumb(
             type: item.type,
-            imageUrl: item.imageUrl,
+            imageUrl: item.path,
             videoThumbnailUrl: item.thumbnailUrl,
             onRemove: () {
               setState(() {
@@ -481,147 +478,331 @@ class _CreatePostPageState extends State<CreatePostPage> {
   void _showUserTagPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? Colors.black
-          : Colors.white,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      isScrollControlled: true,
       builder: (context) {
-        final users = ['John Doe', 'Jane Doe', 'Bob Smith'];
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Select Users',
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+        return FutureBuilder<List<_TagUser>>(
+          future: _fetchConnectionUsers(),
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return SizedBox(
+                height: MediaQuery.of(context).size.height * 0.5,
+                child: const Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snap.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Failed to load connections',
+                  style: GoogleFonts.inter(color: Colors.red),
                 ),
-              ),
-              const SizedBox(height: 16),
-              ...users.map((user) {
-                final isSelected = _taggedUsers.contains(user);
+              );
+            }
+            final users = snap.data ?? [];
+            return StatefulBuilder(
+              builder: (context, setSheetState) {
+                String query = '';
+                final Set<String> localSelected = {..._taggedUsers};
 
-                return ListTile(
-                  title: Text(
-                    user,
-                    style: GoogleFonts.inter(
-                      color: isSelected ? null : Colors.grey,
-                    ),
+                List<_TagUser> filtered = users;
+                void applyQuery(String q) {
+                  setSheetState(() {
+                    query = q.trim().toLowerCase();
+                  });
+                }
+
+                filtered = users.where((u) {
+                  if (query.isEmpty) return true;
+                  return u.name.toLowerCase().contains(query) ||
+                      u.username.toLowerCase().contains(query);
+                }).toList();
+
+                return Container(
+                  height: MediaQuery.of(context).size.height * 0.75,
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Icon(
+                              Icons.arrow_back,
+                              color: isDark ? Colors.white : Colors.black,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            'Tag People',
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (localSelected.isNotEmpty)
+                            Text(
+                              '${localSelected.length} selected',
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFF666666),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Search bar
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search, color: Color(0xFF666666), size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextField(
+                                onChanged: applyQuery,
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  hintText: 'Search connections...',
+                                  hintStyle: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    color: const Color(0xFF666666),
+                                  ),
+                                  border: InputBorder.none,
+                                ),
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Users list
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No connections found',
+                                  style: GoogleFonts.inter(color: const Color(0xFF666666)),
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final u = filtered[index];
+                                  final label = u.username.isNotEmpty ? u.username : u.name;
+                                  final selected = localSelected.contains(label);
+                                  return ListTile(
+                                    leading: _Avatar(avatarUrl: u.avatarUrl, letter: u.avatarLetter),
+                                    title: Text(
+                                      u.name,
+                                      style: GoogleFonts.inter(),
+                                    ),
+                                    subtitle: Text(
+                                      u.username,
+                                      style: GoogleFonts.inter(color: const Color(0xFF666666)),
+                                    ),
+                                    trailing: selected
+                                        ? const Icon(Icons.check_circle, color: Color(0xFFBFAE01))
+                                        : const Icon(Icons.radio_button_unchecked, color: Color(0xFFCCCCCC)),
+                                    onTap: () {
+                                      setSheetState(() {
+                                        if (selected) {
+                                          localSelected.remove(label);
+                                        } else {
+                                          localSelected.add(label);
+                                        }
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+
+                      // Done button
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _taggedUsers
+                                ..clear()
+                                ..addAll(localSelected);
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: Container(
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0C0C0C),
+                              borderRadius: BorderRadius.circular(27),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Done',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check, color: Color(0xFFBFAE01))
-                      : null,
-                  onTap: () {
-                    setState(() {
-                      if (isSelected) {
-                        _taggedUsers.remove(user);
-                      } else {
-                        _taggedUsers.add(user);
-                      }
-                    });
-                    Navigator.pop(context);
-                  },
                 );
-              }),
-              const SizedBox(height: 16),
-            ],
-          ),
+              },
+            );
+          },
         );
       },
     );
   }
 
-  void _showGalleryPicker() async {
-    // Try different permission strategies based on Android version
-    PermissionStatus permissionStatus;
-
-    // Check Android version and request appropriate permission
+  Future<List<_TagUser>> _fetchConnectionUsers() async {
     try {
-      // Try photos permission first (Android 13+)
-      permissionStatus = await Permission.photos.request();
-    } catch (e) {
-      // Fallback to storage permission for older versions
-      permissionStatus = await Permission.storage.request();
+      final status = await ConnectionsApi().status();
+      final ids = <String>{...status.inbound, ...status.outbound};
+      if (ids.isEmpty) return [];
+
+      final all = await UsersApi().list(); // all users except current
+      final filtered = all.where((u) => ids.contains((u['id'] ?? '').toString()));
+
+      final List<_TagUser> users = filtered.map((u) {
+        final name = (u['name'] ?? '').toString();
+        final username = (u['username'] ?? '').toString();
+        final avatarUrl = u['avatarUrl']?.toString();
+        final email = (u['email'] ?? '').toString();
+        final letterSource = name.isNotEmpty ? name : (username.isNotEmpty ? username : email);
+        final letter = letterSource.isNotEmpty ? letterSource[0].toUpperCase() : 'U';
+        return _TagUser(
+          id: (u['id'] ?? '').toString(),
+          name: name.isNotEmpty ? name : (email.isNotEmpty ? email.split('@')[0] : 'User'),
+          username: username.isNotEmpty ? username : '@user',
+          avatarUrl: avatarUrl,
+          avatarLetter: letter,
+        );
+      }).toList();
+
+      users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return users;
+    } catch (_) {
+      return [];
     }
+  }
 
-    if (permissionStatus.isGranted) {
-      try {
-        final ImagePicker picker = ImagePicker();
+  Future<void> _pickImagesFromGallery() async {
+    try {
+      final picker = ImagePicker();
 
-        final List<XFile> images = await picker.pickMultiImage(
-          imageQuality: 80,
-          maxWidth: 1920,
-          maxHeight: 1080,
-        );
+      final List<XFile> images = await picker.pickMultiImage(
+        imageQuality: 80,
+        maxWidth: 1920,
+        maxHeight: 1080,
+      );
 
-        if (images.isNotEmpty) {
-          setState(() {
-            for (final image in images) {
-              _mediaItems.add(
-                MediaItem(type: MediaType.image, imageUrl: image.path),
-              );
-            }
-          });
-        }
-      } on PlatformException catch (e) {
-        if (!mounted) return;
-
-        if (e.code == 'photo_access_denied') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Photo access denied. Please enable gallery permissions in settings.',
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error accessing gallery. Please try again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } catch (e) {
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unexpected error occurred.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } else if (permissionStatus.isDenied) {
       if (!mounted) return;
+
+      if (images.isNotEmpty) {
+        setState(() {
+          // If a video was selected before, replace it with images
+          if (_mediaItems.any((m) => m.type == MediaType.video)) {
+            _mediaItems.clear();
+          }
+          for (final image in images) {
+            _mediaItems.add(
+              MediaItem(type: MediaType.image, path: image.path, xfile: image),
+            );
+          }
+        });
+      }
+    } on PlatformException catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Gallery permission denied. Please allow access to select photos.',
+            e.code == 'photo_access_denied'
+                ? 'Photo access denied. Please enable gallery permissions in settings.'
+                : 'Error accessing gallery. Please try again.',
           ),
           backgroundColor: Colors.red,
         ),
       );
-    } else if (permissionStatus.isPermanentlyDenied) {
+    } catch (_) {
       if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unexpected error occurred.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickVideoFromGallery() async {
+    try {
+      final picker = ImagePicker();
+
+      final XFile? video = await picker.pickVideo(
+        source: ImageSource.gallery,
+      );
+
+      if (!mounted) return;
+
+      if (video != null) {
+        setState(() {
+          // Only one video allowed, replace any existing media
+          _mediaItems
+            ..clear()
+            ..add(MediaItem(type: MediaType.video, path: video.path, xfile: video));
+        });
+      }
+    } on PlatformException catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'Gallery access permanently denied. Please enable in device settings.',
+          content: Text(
+            e.code == 'photo_access_denied'
+                ? 'Video access denied. Please enable gallery permissions in settings.'
+                : 'Error accessing gallery. Please try again.',
           ),
           backgroundColor: Colors.red,
-          action: SnackBarAction(
-            label: 'Settings',
-            textColor: Colors.white,
-            onPressed: () => openAppSettings(),
-          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unexpected error occurred.'),
+          backgroundColor: Colors.red,
         ),
       );
     }
@@ -630,9 +811,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   void _showCommunitySelector() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF0C0C0C)
-          : Colors.white,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0C0C0C) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -640,309 +819,257 @@ class _CreatePostPageState extends State<CreatePostPage> {
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        final communities = [
-          {
-            'name': 'Bicycle Tribe',
-            'description':
-                'Join passionate cyclists sharing rides, tips, and adventures',
-            'icon': '🚴‍♂️',
-            'memberCount': '+1K',
-            'color': const Color(0xFF8B4513),
-          },
-          {
-            'name': 'Mountain Hikers',
-            'description':
-                'Explore trails, share hiking experiences and connect with nature',
-            'icon': '🏔️',
-            'memberCount': '+1K',
-            'color': const Color(0xFF2E7D32),
-          },
-          {
-            'name': 'Pet Pals',
-            'description':
-                'A friendly group for pet lovers to share stories and advice',
-            'icon': '🐾',
-            'memberCount': '+1K',
-            'color': const Color(0xFF4CAF50),
-          },
-          {
-            'name': 'Technology',
-            'description': 'Latest tech trends, innovations, and discussions',
-            'icon': '💻',
-            'memberCount': '+2K',
-            'color': const Color(0xFF2196F3),
-          },
-          {
-            'name': 'Business',
-            'description':
-                'Business strategies, networking, and growth insights',
-            'icon': '💼',
-            'memberCount': '+3K',
-            'color': const Color(0xFF9C27B0),
-          },
-          {
-            'name': 'Finance',
-            'description':
-                'Investment tips, market analysis, and financial planning',
-            'icon': '💰',
-            'memberCount': '+1.5K',
-            'color': const Color(0xFF4CAF50),
-          },
-        ];
-
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Icon(
-                      Icons.arrow_back,
-                      color: isDark ? Colors.white : Colors.black,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    'Choose Community',
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Search bar
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+        return FutureBuilder<List<ApiCommunity>>(
+          future: CommunitiesApi().listMine(),
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return SizedBox(
+                height: MediaQuery.of(context).size.height * 0.5,
+                child: const Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snap.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Failed to load your communities',
+                  style: GoogleFonts.inter(color: Colors.red),
                 ),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1A1A1A)
-                      : const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.search,
-                      color: const Color(0xFF666666),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Search community...',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          color: const Color(0xFF666666),
-                        ),
+              );
+            }
+
+            final communities = snap.data ?? [];
+
+            return StatefulBuilder(
+              builder: (context, setSheetState) {
+                String query = '';
+
+                List<ApiCommunity> filtered = communities;
+                void applyQuery(String q) {
+                  setSheetState(() {
+                    query = q.trim().toLowerCase();
+                  });
+                }
+
+                filtered = communities.where((c) {
+                  if (query.isEmpty) return true;
+                  return c.name.toLowerCase().contains(query) ||
+                      c.bio.toLowerCase().contains(query);
+                }).toList();
+
+                return Container(
+                  height: MediaQuery.of(context).size.height * 0.75,
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Icon(
+                              Icons.arrow_back,
+                              color: isDark ? Colors.white : Colors.black,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            'Choose Community',
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
+                      const SizedBox(height: 24),
 
-              // Communities list
-              Expanded(
-                child: ListView.separated(
-                  itemCount: communities.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final community = communities[index];
-                    final isSelected = _selectedCommunities.contains(
-                      community['name'],
-                    );
-                    final canSelect =
-                        _selectedCommunities.length < _maxCommunities ||
-                        isSelected;
-
-                    return GestureDetector(
-                      onTap: canSelect
-                          ? () {
-                              setState(() {
-                                if (isSelected) {
-                                  _selectedCommunities.remove(
-                                    community['name'],
-                                  );
-                                } else {
-                                  _selectedCommunities.add(
-                                    community['name'] as String,
-                                  );
-                                }
-                              });
-                            }
-                          : null,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
+                      // Search bar
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1A1A1A)
-                              : const Color(0xFFF8F9FA),
-                          borderRadius: BorderRadius.circular(16),
-                          border: isSelected
-                              ? Border.all(
-                                  color: const Color(0xFFBFAE01),
-                                  width: 2,
-                                )
-                              : Border.all(color: Colors.transparent, width: 2),
+                          color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            // Community icon
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: (community['color'] as Color).withValues(
-                                  alpha: 51,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  community['icon'] as String,
-                                  style: const TextStyle(fontSize: 24),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-
-                            // Community info
+                            const Icon(Icons.search, color: Color(0xFF666666), size: 20),
+                            const SizedBox(width: 12),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    community['name'] as String,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: canSelect
-                                          ? (isDark
-                                                ? Colors.white
-                                                : Colors.black)
-                                          : const Color(0xFF999999),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    community['description'] as String,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      color: canSelect
-                                          ? const Color(0xFF666666)
-                                          : const Color(0xFF999999),
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Member count and selection indicator
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                // Member avatars (placeholder)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: List.generate(3, (i) {
-                                    return Container(
-                                      margin: EdgeInsets.only(
-                                        left: i > 0 ? 4 : 0,
-                                      ),
-                                      width: 24,
-                                      height: 24,
-                                      decoration: BoxDecoration(
-                                        color: community['color'] as Color,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: isDark
-                                              ? const Color(0xFF1A1A1A)
-                                              : const Color(0xFFF8F9FA),
-                                          width: 2,
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  community['memberCount'] as String,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
+                              child: TextField(
+                                onChanged: applyQuery,
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  hintText: 'Search community...',
+                                  hintStyle: GoogleFonts.inter(
+                                    fontSize: 16,
                                     color: const Color(0xFF666666),
                                   ),
+                                  border: InputBorder.none,
                                 ),
-                              ],
-                            ),
-
-                            if (isSelected) ...[
-                              const SizedBox(width: 12),
-                              Container(
-                                width: 24,
-                                height: 24,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFBFAE01),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.check,
-                                  color: Colors.white,
-                                  size: 16,
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  color: isDark ? Colors.white : Colors.black,
                                 ),
                               ),
-                            ],
+                            ),
                           ],
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
+                      const SizedBox(height: 20),
 
-              // Continue button
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0C0C0C),
-                      borderRadius: BorderRadius.circular(27),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Continue',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                      // Communities list
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No communities found',
+                                  style: GoogleFonts.inter(color: const Color(0xFF666666)),
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: filtered.length,
+                                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                                itemBuilder: (context, index) {
+                                  final community = filtered[index];
+                                  final isSelected = _selectedCommunities.contains(community.name);
+                                  final canSelect = _selectedCommunities.length < _maxCommunities || isSelected;
+
+                                  return GestureDetector(
+                                    onTap: canSelect
+                                        ? () {
+                                            setState(() {
+                                              if (isSelected) {
+                                                _selectedCommunities.remove(community.name);
+                                              } else {
+                                                _selectedCommunities.add(community.name);
+                                              }
+                                            });
+                                            setSheetState(() {});
+                                          }
+                                        : null,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF8F9FA),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: isSelected
+                                            ? Border.all(
+                                                color: const Color(0xFFBFAE01),
+                                                width: 2,
+                                              )
+                                            : Border.all(color: Colors.transparent, width: 2),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          // Community avatar
+                                          _CommunityAvatar(url: community.avatarUrl, name: community.name),
+                                          const SizedBox(width: 16),
+
+                                          // Community info
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  community.name,
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: canSelect ? (isDark ? Colors.white : Colors.black) : const Color(0xFF999999),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  community.bio,
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 14,
+                                                    color: canSelect ? const Color(0xFF666666) : const Color(0xFF999999),
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                          // Friends in common
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            children: [
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                community.friendsInCommon,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: const Color(0xFF666666),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+
+                                          if (isSelected) ...[
+                                            const SizedBox(width: 12),
+                                            Container(
+                                              width: 24,
+                                              height: 24,
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFFBFAE01),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.check,
+                                                color: Colors.white,
+                                                size: 16,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+
+                      // Continue button
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0C0C0C),
+                              borderRadius: BorderRadius.circular(27),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Continue',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ),
-              ),
-            ],
-          ),
+                );
+              },
+            );
+          },
         );
       },
     );
@@ -958,28 +1085,47 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Future<void> _publishPost() async {
+    final body = _bodyController.text.trim();
+    if (body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Please write what's on your mind before posting.",
+            style: GoogleFonts.inter(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _posting = true);
     try {
-      // Upload local image files (if any) and collect media descriptors
+      // Upload local files (if any) and collect media descriptors
       final mediaPayload = <Map<String, dynamic>>[];
       for (final item in _mediaItems) {
-        if (item.type == MediaType.image && item.imageUrl != null) {
-          final f = File(item.imageUrl!);
-          if (await f.exists()) {
-            final uploaded = await FilesApi().uploadFile(f);
-            mediaPayload.add({
-              'media_type': 'image',
-              's3_key': uploaded['key'],
-              'url': uploaded['url'],
-            });
-          }
+        final xf = item.xfile;
+        final path = item.path;
+        if (xf == null && (path == null || path.isEmpty)) continue;
+
+        // Upload using XFile bytes for web & mobile to avoid dart:io dependency
+        final uploaded = await _uploadXFile(xf!, item.type);
+        if (item.type == MediaType.image) {
+          mediaPayload.add({
+            'type': 'image',
+            'url': uploaded['url'],
+          });
+        } else if (item.type == MediaType.video) {
+          mediaPayload.add({
+            'type': 'video',
+            'url': uploaded['url'],
+          });
         }
-        // Note: video flow can be added similarly when implemented
       }
 
       final content = [
         _titleController.text.trim(),
-        _bodyController.text.trim(),
+        body,
       ].where((e) => e.isNotEmpty).join('\n\n');
 
       await PostsApi().create(
@@ -1007,12 +1153,170 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (mounted) setState(() => _posting = false);
     }
   }
+
+  // Upload helper that works on web and mobile using XFile bytes
+  Future<Map<String, String>> _uploadXFile(XFile file, MediaType type) async {
+    final dio = ApiClient().dio;
+    final ext = _extensionOf(file.name);
+    final contentType = _contentTypeForExt(ext, type);
+
+    // 1) presign
+    final pres = await dio.post(
+      '/api/files/presign-upload',
+      data: {'ext': ext},
+    );
+    final body = Map<String, dynamic>.from(pres.data);
+    final data = Map<String, dynamic>.from(body['data'] ?? {});
+    final putUrl = (data['putUrl'] ?? '').toString();
+    final key = (data['key'] ?? '').toString();
+    final readUrl = (data['readUrl'] ?? '').toString();
+    final publicUrl = (data['publicUrl'] ?? '').toString();
+    final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
+
+    // 2) upload to S3 via presigned URL
+    final bytes = await file.readAsBytes();
+    final s3 = Dio();
+    await s3.put(
+      putUrl,
+      data: bytes,
+      options: Options(
+        headers: {
+          'Content-Type': contentType,
+          // 'Content-Length' is not always allowed on web/XHR; omit for compatibility.
+        },
+      ),
+    );
+
+    // 3) confirm (non-blocking)
+    try {
+      await dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
+    } catch (_) {}
+
+    return {'key': key, 'url': bestUrl};
+  }
+
+  String _extensionOf(String filename) {
+    final idx = filename.lastIndexOf('.');
+    if (idx == -1 || idx == filename.length - 1) return 'bin';
+    return filename.substring(idx + 1).toLowerCase();
+  }
+
+  String _contentTypeForExt(String ext, MediaType hint) {
+    switch (ext.toLowerCase()) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'mp4':
+        return 'video/mp4';
+      default:
+        // Fallback based on hint
+        return hint == MediaType.video ? 'video/mp4' : 'application/octet-stream';
+    }
+  }
 }
 
 class MediaItem {
   final MediaType type;
-  final String? imageUrl;
-  final String? thumbnailUrl;
+  final String? path; // Local file path (mobile); not used on web
+  final String? thumbnailUrl; // Optional remote thumbnail for videos
+  final XFile? xfile; // Always keep the selected XFile to support web uploads
 
-  MediaItem({required this.type, this.imageUrl, this.thumbnailUrl});
+  MediaItem({
+    required this.type,
+    this.path,
+    this.thumbnailUrl,
+    this.xfile,
+  });
+}
+
+class _TagUser {
+  final String id;
+  final String name;
+  final String username; // includes leading @ if available
+  final String? avatarUrl;
+  final String avatarLetter;
+
+  _TagUser({
+    required this.id,
+    required this.name,
+    required this.username,
+    required this.avatarUrl,
+    required this.avatarLetter,
+  });
+}
+
+class _Avatar extends StatelessWidget {
+  final String? avatarUrl;
+  final String letter;
+  const _Avatar({required this.avatarUrl, required this.letter});
+
+  @override
+  Widget build(BuildContext context) {
+    if (avatarUrl != null && avatarUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundImage: NetworkImage(avatarUrl!),
+        backgroundColor: Colors.transparent,
+      );
+    }
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: const Color(0xFFE0E0E0),
+      child: Text(
+        letter,
+        style: const TextStyle(
+          color: Color(0xFF666666),
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+class _CommunityAvatar extends StatelessWidget {
+  final String? url;
+  final String name;
+  const _CommunityAvatar({required this.url, required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    if (url != null && url!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          url!,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallback(),
+        ),
+      );
+    }
+    return _fallback();
+  }
+
+  Widget _fallback() {
+    final letter = name.isNotEmpty ? name[0].toUpperCase() : 'C';
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDEDED),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF666666),
+          ),
+        ),
+      ),
+    );
+  }
 }

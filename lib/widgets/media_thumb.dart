@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 
 enum MediaType { image, video }
@@ -84,20 +85,35 @@ class MediaThumb extends StatelessWidget {
   }
 
   Widget _buildImageContent() {
-    if (imageUrl != null && imageUrl!.startsWith('http')) {
-      return CachedNetworkImage(
-        imageUrl: imageUrl!,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          color: Colors.grey[300],
-          child: const Center(child: CircularProgressIndicator()),
-        ),
-        errorWidget: (context, url, error) =>
-            Container(color: Colors.grey[300], child: const Icon(Icons.error)),
-      );
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      final url = imageUrl!;
+      if (url.startsWith('http')) {
+        return CachedNetworkImage(
+          imageUrl: url,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+            color: Colors.grey[300],
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+          errorWidget: (context, url, error) =>
+              Container(color: Colors.grey[300], child: const Icon(Icons.error)),
+        );
+      }
+
+      // Web: allow blob: and data: URLs so previews work in Chrome
+      if (kIsWeb && (url.startsWith('blob:') || url.startsWith('data:'))) {
+        return Image.network(
+          url,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) => Container(
+            color: Colors.grey[300],
+            child: const Icon(Icons.error),
+          ),
+        );
+      }
     }
 
-    // Placeholder for local images or no image
+    // Placeholder for unsupported/local paths
     return Container(
       color: Colors.grey[300],
       child: const Center(
@@ -107,20 +123,33 @@ class MediaThumb extends StatelessWidget {
   }
 
   Widget _buildVideoContent() {
-    if (videoThumbnailUrl != null && videoThumbnailUrl!.startsWith('http')) {
-      return CachedNetworkImage(
-        imageUrl: videoThumbnailUrl!,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          color: Colors.grey[300],
-          child: const Center(child: CircularProgressIndicator()),
-        ),
-        errorWidget: (context, url, error) =>
-            Container(color: Colors.grey[300], child: const Icon(Icons.error)),
-      );
+    if (videoThumbnailUrl != null && videoThumbnailUrl!.isNotEmpty) {
+      final url = videoThumbnailUrl!;
+      if (url.startsWith('http')) {
+        return CachedNetworkImage(
+          imageUrl: url,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+            color: Colors.grey[300],
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+          errorWidget: (context, url, error) =>
+              Container(color: Colors.grey[300], child: const Icon(Icons.error)),
+        );
+      }
+      if (kIsWeb && (url.startsWith('blob:') || url.startsWith('data:'))) {
+        return Image.network(
+          url,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) => Container(
+            color: Colors.grey[300],
+            child: const Icon(Icons.error),
+          ),
+        );
+      }
     }
 
-    // Placeholder for local videos or no thumbnail
+    // Placeholder for no/unsupported thumbnail
     return Container(
       color: Colors.grey[300],
       child: const Center(

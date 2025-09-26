@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/comment.dart';
+import '../core/posts_api.dart';
 import 'comment_widget.dart';
 
 class CommentBottomSheet extends StatefulWidget {
   final String postId;
   final List<Comment> comments;
   final bool isDarkMode;
-  final Function(String)? onAddComment;
-  final Function(String)? onLikeComment;
-  final Function(String, String)? onReplyToComment;
+  final String currentUserId;
+
+  // Optional hooks so parent can adjust counts after operations
+  final Future<void> Function(String)? onAddComment;
+  final Future<void> Function(String, String)? onReplyToComment;
 
   const CommentBottomSheet({
     super.key,
     required this.postId,
     required this.comments,
+    required this.currentUserId,
     this.isDarkMode = true,
     this.onAddComment,
-    this.onLikeComment,
     this.onReplyToComment,
   });
 
@@ -25,10 +28,10 @@ class CommentBottomSheet extends StatefulWidget {
     BuildContext context, {
     required String postId,
     required List<Comment> comments,
+    required String currentUserId,
     bool isDarkMode = true,
-    Function(String)? onAddComment,
-    Function(String)? onLikeComment,
-    Function(String, String)? onReplyToComment,
+    Future<void> Function(String)? onAddComment,
+    Future<void> Function(String, String)? onReplyToComment,
   }) {
     showModalBottomSheet(
       context: context,
@@ -37,9 +40,9 @@ class CommentBottomSheet extends StatefulWidget {
       builder: (context) => CommentBottomSheet(
         postId: postId,
         comments: comments,
+        currentUserId: currentUserId,
         isDarkMode: isDarkMode,
         onAddComment: onAddComment,
-        onLikeComment: onLikeComment,
         onReplyToComment: onReplyToComment,
       ),
     );
@@ -53,8 +56,17 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final Map<String, bool> _showRepliesMap = {};
+
   String? _replyingToCommentId;
   String? _replyingToUserName;
+
+  List<Comment> _comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _comments = widget.comments;
+  }
 
   @override
   void dispose() {
@@ -63,16 +75,175 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
     super.dispose();
   }
 
-  void _submitComment() {
-    final text = _commentController.text.trim();
-    if (text.isNotEmpty) {
-      if (_replyingToCommentId != null) {
-        widget.onReplyToComment?.call(_replyingToCommentId!, text);
-      } else {
-        widget.onAddComment?.call(text);
+  int _totalCommentsCount(List<Comment> list) {
+    int total = 0;
+    void walk(List<Comment> items) {
+      for (final c in items) {
+        total++;
+        if (c.replies.isNotEmpty) walk(c.replies);
       }
+    }
+
+    walk(list);
+    return total;
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final latest = await PostsApi().listComments(widget.postId);
+      if (!mounted) return;
+      setState(() {
+        _comments = latest;
+      });
+    } catch (_) {
+      // ignore refresh error in UI
+    }
+  }
+
+  Future<void> _toggleLike(Comment comment) async {
+    // Optimistic update through tree
+    void applyLocal(bool liked) {
+      bool updateInTree(List<Comment> items) {
+        for (int i = 0; i < items.length; i++) {
+          if (items[i].id == comment.id) {
+            final newCount = (items[i].likesCount + (liked ? 1 : -1)).clamp(0, 1 << 30);
+            items[i] = items[i].copyWith(
+              isLikedByUser: liked,
+              likesCount: newCount,
+            );
+            return true;
+          }
+          // try children
+          final children = List<Comment>.from(items[i].replies);
+          final updated = updateInTree(children);
+          if (updated) {
+            items[i] = items[i].copyWith(replies: children);
+            return true;
+          }
+        }
+        return false;
+      }
+
+      setState(() {
+        updateInTree(_comments);
+      });
+    }
+
+    final willLike = !comment.isLikedByUser;
+    applyLocal(willLike);
+
+    try {
+      if (willLike) {
+        await PostsApi().likeComment(widget.postId, comment.id);
+      } else {
+        await PostsApi().unlikeComment(widget.postId, comment.id);
+      }
+    } catch (_) {
+      // revert on failure
+      applyLocal(!willLike);
+    }
+  }
+
+  Future<void> _confirmDelete(Comment comment) async {
+    final subtitleColor = widget.isDarkMode
+        ? Colors.white.withValues(alpha: 179)
+        : Colors.black.withValues(alpha: 179);
+
+    final okPressed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: widget.isDarkMode ? Colors.grey[900] : Colors.white,
+        title: Text(
+          'Delete comment?',
+          style: GoogleFonts.inter(
+            color: widget.isDarkMode ? Colors.white : Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'This will remove the comment${comment.replies.isNotEmpty ? ' and its replies' : ''}.',
+          style: GoogleFonts.inter(
+            color: subtitleColor,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: subtitleColor)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete', style: GoogleFonts.inter(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (okPressed != true) return;
+
+    try {
+      await PostsApi().deleteComment(widget.postId, comment.id);
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Comment deleted', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Delete failed', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _submitComment() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+
+    try {
+      if (_replyingToCommentId != null) {
+        if (widget.onReplyToComment != null) {
+          await widget.onReplyToComment!.call(_replyingToCommentId!, text);
+        } else {
+          await PostsApi().addComment(
+            widget.postId,
+            content: text,
+            parentCommentId: _replyingToCommentId!,
+          );
+        }
+      } else {
+        if (widget.onAddComment != null) {
+          await widget.onAddComment!.call(text);
+        } else {
+          await PostsApi().addComment(widget.postId, content: text);
+        }
+      }
+
       _commentController.clear();
       _cancelReply();
+      await _refresh();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Comment posted!', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to post comment', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -105,6 +276,8 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
         ? Colors.white.withValues(alpha: 179)
         : Colors.black.withValues(alpha: 179);
 
+    final totalCount = _totalCommentsCount(_comments);
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
       decoration: BoxDecoration(
@@ -130,7 +303,7 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
             child: Row(
               children: [
                 Text(
-                  '${widget.comments.length} ${widget.comments.length == 1 ? 'comment' : 'comments'}',
+                  '$totalCount ${totalCount == 1 ? 'comment' : 'comments'}',
                   style: GoogleFonts.inter(
                     color: textColor,
                     fontSize: 16,
@@ -150,7 +323,7 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
 
           // Comments list
           Expanded(
-            child: widget.comments.isEmpty
+            child: _comments.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -182,16 +355,17 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: widget.comments.length,
+                    itemCount: _comments.length,
                     itemBuilder: (context, index) {
-                      final comment = widget.comments[index];
+                      final comment = _comments[index];
                       return CommentWidget(
                         comment: comment,
                         isDarkMode: widget.isDarkMode,
+                        currentUserId: widget.currentUserId,
                         showReplies: _showRepliesMap[comment.id] ?? false,
-                        onLike: () => widget.onLikeComment?.call(comment.id),
-                        onReply: () =>
-                            _startReply(comment.id, comment.userName),
+                        onLike: (c) => _toggleLike(c),
+                        onReply: (c) => _startReply(c.id, c.userName),
+                        onDelete: (c) => _confirmDelete(c),
                         onShowReplies: comment.replies.isNotEmpty
                             ? () => _toggleReplies(comment.id)
                             : null,
@@ -248,7 +422,7 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
             child: SafeArea(
               child: Row(
                 children: [
-                  // Current user avatar
+                  // Current user avatar (placeholder)
                   const CircleAvatar(
                     radius: 16,
                     backgroundImage: NetworkImage(
@@ -297,25 +471,29 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
 
                   const SizedBox(width: 8),
 
-                  // Send button
-                  GestureDetector(
-                    onTap: _submitComment,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _commentController.text.trim().isNotEmpty
-                            ? const Color(0xFFBFAE01)
-                            : subtitleColor,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.send,
-                        size: 16,
-                        color: _commentController.text.trim().isNotEmpty
-                            ? Colors.black
-                            : Colors.white,
-                      ),
-                    ),
+                  // Send button with enabled/disabled style
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _commentController,
+                    builder: (context, value, _) {
+                      final hasText = value.text.trim().isNotEmpty;
+                      return GestureDetector(
+                        onTap: hasText ? _submitComment : null,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: hasText
+                                ? const Color(0xFFBFAE01)
+                                : subtitleColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.send,
+                            size: 16,
+                            color: hasText ? Colors.black : Colors.white,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

@@ -152,11 +152,12 @@ class _PostCardState extends State<PostCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Title (made bolder)
                       Text(
                         widget.post.userName,
                         style: GoogleFonts.inter(
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700, // bolded title
                           color: textColor,
                         ),
                       ),
@@ -177,7 +178,8 @@ class _PostCardState extends State<PostCard> {
               ],
             ),
 
-            const SizedBox(height: 12),
+            // Reduced space between header (title) and body
+            const SizedBox(height: 6),
 
             // Post text
             if (widget.post.text.isNotEmpty) ...[

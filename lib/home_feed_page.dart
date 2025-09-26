@@ -6,6 +6,7 @@ import 'widgets/post_card.dart';
 import 'widgets/badge_icon.dart';
 import 'widgets/animated_navbar.dart';
 import 'widgets/share_bottom_sheet.dart';
+import 'widgets/comment_bottom_sheet.dart';
 import 'connections_page.dart';
 import 'create_post_page.dart';
 import 'conversations_page.dart';
@@ -14,6 +15,7 @@ import 'post_page.dart';
 import 'core/posts_api.dart';
 import 'core/stories_api.dart' as stories_api;
 import 'models/post.dart';
+import 'models/comment.dart';
 import 'theme_provider.dart';
 import 'search_page.dart';
 import 'notification_page.dart';
@@ -67,13 +69,18 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   Future<void> _loadCurrentUserId() async {
     try {
       final res = await AuthApi().me();
-      if (res['ok'] == true && res['data'] != null) {
-        _currentUserId = res['data']['id'] as String?;
-      } else {
-        _currentUserId = null;
-      }
+      final id = (res['ok'] == true && res['data'] != null)
+          ? res['data']['id'] as String?
+          : null;
+      if (!mounted) return;
+      setState(() {
+        _currentUserId = id;
+      });
     } catch (_) {
-      _currentUserId = null;
+      if (!mounted) return;
+      setState(() {
+        _currentUserId = null;
+      });
     }
   }
 
@@ -123,7 +130,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
     return e.toString();
   }
-    void _onNavTabChange(int index) {
+
+  void _onNavTabChange(int index) {
     setState(() {
       _selectedNavIndex = index;
       if (index != 3) {
@@ -149,28 +157,157 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
-  void _onBookmarkToggle(String postId) {
+  // Bookmarks: optimistic toggle + backend call
+  void _onBookmarkToggle(String postId) async {
+    final postIndex = _posts.indexWhere((post) => post.id == postId);
+    if (postIndex == -1) return;
+
+    final original = _posts[postIndex];
+    final willBookmark = !original.isBookmarked;
+    final newBookmarks =
+        (original.counts.bookmarks + (willBookmark ? 1 : -1)).clamp(0, 1 << 30);
+
+    final updatedCounts = PostCounts(
+      likes: original.counts.likes,
+      comments: original.counts.comments,
+      shares: original.counts.shares,
+      reposts: original.counts.reposts,
+      bookmarks: newBookmarks,
+    );
+
+    final optimistic = original.copyWith(
+      isBookmarked: willBookmark,
+      counts: updatedCounts,
+    );
+
     setState(() {
-      final postIndex = _posts.indexWhere((post) => post.id == postId);
-      if (postIndex != -1) {
-        final post = _posts[postIndex];
-        final newPost = Post(
-          id: post.id,
-          userName: post.userName,
-          userAvatarUrl: post.userAvatarUrl,
-          createdAt: post.createdAt,
-          text: post.text,
-          mediaType: post.mediaType,
-          imageUrls: post.imageUrls,
-          videoUrl: post.videoUrl,
-          counts: post.counts,
-          userReaction: post.userReaction,
-          isBookmarked: !post.isBookmarked,
-          isRepost: post.isRepost,
-          repostedBy: post.repostedBy,
-        );
-        _posts[postIndex] = newPost;
+      _posts[postIndex] = optimistic;
+    });
+
+    try {
+      if (willBookmark) {
+        await PostsApi().bookmark(postId);
+      } else {
+        await PostsApi().unbookmark(postId);
       }
+    } catch (e) {
+      if (!mounted) return;
+      // Revert UI on failure
+      setState(() {
+        _posts[postIndex] = original;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Bookmark failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Likes: toggle on/off; long-press changes reaction type locally (likes count reflects total likes)
+  void _onReactionChanged(String postId, ReactionType reaction) async {
+    final postIndex = _posts.indexWhere((post) => post.id == postId);
+    if (postIndex == -1) return;
+
+    final original = _posts[postIndex];
+    final hadReaction = original.userReaction != null;
+    final isSameReaction = original.userReaction == reaction;
+
+    // Toggle ON: no previous reaction
+    if (!hadReaction) {
+      final updatedCounts = PostCounts(
+        likes: original.counts.likes + 1,
+        comments: original.counts.comments,
+        shares: original.counts.shares,
+        reposts: original.counts.reposts,
+        bookmarks: original.counts.bookmarks,
+      );
+
+      final optimistic = original.copyWith(
+        userReaction: reaction,
+        counts: updatedCounts,
+      );
+
+      setState(() {
+        _posts[postIndex] = optimistic;
+      });
+
+      try {
+        await PostsApi().like(postId);
+      } catch (e) {
+        if (!mounted) return;
+        // Revert UI on failure
+        setState(() {
+          _posts[postIndex] = original;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Toggle OFF: same reaction tapped again
+    if (isSameReaction) {
+      final newLikes =
+          (original.counts.likes > 0 ? original.counts.likes - 1 : 0);
+      final updatedCounts = PostCounts(
+        likes: newLikes,
+        comments: original.counts.comments,
+        shares: original.counts.shares,
+        reposts: original.counts.reposts,
+        bookmarks: original.counts.bookmarks,
+      );
+
+      // Cannot use copyWith to set userReaction to null due to null-coalescing in copyWith
+      final optimistic = Post(
+        id: original.id,
+        userName: original.userName,
+        userAvatarUrl: original.userAvatarUrl,
+        createdAt: original.createdAt,
+        text: original.text,
+        mediaType: original.mediaType,
+        imageUrls: original.imageUrls,
+        videoUrl: original.videoUrl,
+        counts: updatedCounts,
+        userReaction: null,
+        isBookmarked: original.isBookmarked,
+        isRepost: original.isRepost,
+        repostedBy: original.repostedBy,
+      );
+
+      setState(() {
+        _posts[postIndex] = optimistic;
+      });
+
+      try {
+        await PostsApi().unlike(postId);
+      } catch (e) {
+        if (!mounted) return;
+        // Revert UI on failure
+        setState(() {
+          _posts[postIndex] = original;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Unlike failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Change reaction type (still liked): UI-only; no backend call needed
+    setState(() {
+      _posts[postIndex] = original.copyWith(userReaction: reaction);
     });
   }
 
@@ -235,17 +372,95 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     );
   }
 
-  void _onComment(String postId) {
-    // UI-only implementation
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Comment functionality (UI only)',
-          style: GoogleFonts.inter(),
+  Future<void> _openCommentsSheet(String postId) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    List<Comment> comments = [];
+    try {
+      comments = await PostsApi().listComments(postId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Load comments failed: ${_toError(e)}',
+              style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
         ),
-        backgroundColor: const Color(0xFFBFAE01),
-      ),
+      );
+    }
+
+    if (!mounted) return;
+
+    CommentBottomSheet.show(
+      context,
+      postId: postId,
+      comments: comments,
+      currentUserId: _currentUserId ?? '',
+      isDarkMode: isDark,
+      onAddComment: (text) async {
+        try {
+          await PostsApi().addComment(postId, content: text);
+
+          // Optimistically increment post comments count
+          final idx = _posts.indexWhere((p) => p.id == postId);
+          if (idx != -1) {
+            final p = _posts[idx];
+            final updatedCounts = PostCounts(
+              likes: p.counts.likes,
+              comments: p.counts.comments + 1,
+              shares: p.counts.shares,
+              reposts: p.counts.reposts,
+              bookmarks: p.counts.bookmarks,
+            );
+            setState(() {
+              _posts[idx] = p.copyWith(counts: updatedCounts);
+            });
+          }
+
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Comment posted!', style: GoogleFonts.inter()),
+              backgroundColor: const Color(0xFF4CAF50),
+            ),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Post comment failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      onReplyToComment: (commentId, replyText) async {
+        try {
+          await PostsApi()
+              .addComment(postId, content: replyText, parentCommentId: commentId);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Reply posted!', style: GoogleFonts.inter()),
+              backgroundColor: const Color(0xFF4CAF50),
+            ),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
     );
+  }
+
+  void _onComment(String postId) {
+    _openCommentsSheet(postId);
   }
 
   void _onRepost(String postId) {
@@ -552,6 +767,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
               delegate: SliverChildBuilderDelegate((context, index) {
                 return PostCard(
                   post: _posts[index],
+                  onReactionChanged: _onReactionChanged,
                   onBookmarkToggle: _onBookmarkToggle,
                   onTap: _onPostTap,
                   onShare: _onShare,
