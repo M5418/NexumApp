@@ -3,9 +3,11 @@ import express from 'express';
 import pool from '../db/db.js';
 import { ok, fail } from '../utils/response.js';
 import { COMMUNITIES, COMMUNITY_BY_ID } from '../data/communities.js';
-import { resolveCategoriesForInterests, categorySlug } from '../data/interest-mapping.js';
+import { topicsFromInterests } from '../data/interest-mapping.js';
 
 const router = express.Router();
+
+/* Helpers */
 
 function formatName(row) {
   const first = (row.first_name || '').trim();
@@ -44,61 +46,87 @@ function parseInterests(jsonVal) {
   try {
     const data = typeof jsonVal === 'string' ? JSON.parse(jsonVal) : jsonVal;
     return Array.isArray(data) ? data.filter((x) => typeof x === 'string') : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
-// List all predefined communities
+/* Routes */
+
+// GET /api/communities
+// Returns ALL per-interest communities (topics)
 router.get('/', async (_req, res) => {
-  try { return res.json(ok(COMMUNITIES)); }
-  catch (e) { console.error(e); return fail(res, 'internal_error', 500); }
+  try {
+    return res.json(ok(COMMUNITIES));
+  } catch (e) {
+    console.error('Communities list error:', e);
+    return fail(res, 'internal_error', 500);
+  }
 });
 
-// List current user's communities (derived from interests)
+// GET /api/communities/my
+// Derived from profile.interest_domains by exact topics and category expansion.
 router.get('/my', async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT interest_domains FROM profiles WHERE user_id = ? LIMIT 1`,
       [req.user.id]
     );
-    if (!rows || rows.length === 0) return res.json(ok([]));
-    const myInterests = parseInterests(rows[0].interest_domains);
-    const myCategories = resolveCategoriesForInterests(myInterests);
-    if (myCategories.length === 0) return res.json(ok([]));
+    if (!rows || rows.length === 0) {
+      return res.json(ok([]));
+    }
 
+    const myInterests = parseInterests(rows[0].interest_domains);
+    const myTopics = topicsFromInterests(myInterests); // canonical topic names
+    if (myTopics.length === 0) {
+      return res.json(ok([]));
+    }
+
+    // Compute member counts for ONLY the user's topics (for pills)
     const allRows = await loadAllUsersWithProfiles();
-    const countsBySlug = new Map(myCategories.map((c) => [categorySlug(c), 0]));
+    const countsByTopic = new Map(myTopics.map((t) => [t, 0]));
 
     for (const r of allRows) {
-      const cats = resolveCategoriesForInterests(parseInterests(r.interest_domains));
-      for (const c of cats) {
-        const s = categorySlug(c);
-        if (countsBySlug.has(s)) countsBySlug.set(s, (countsBySlug.get(s) || 0) + 1);
+      const ints = parseInterests(r.interest_domains);
+      const userTopics = topicsFromInterests(ints);
+      for (const t of userTopics) {
+        if (countsByTopic.has(t)) {
+          countsByTopic.set(t, (countsByTopic.get(t) || 0) + 1);
+        }
       }
     }
 
-    const data = myCategories.map((cat) => {
-      const s = categorySlug(cat);
-      const base = COMMUNITY_BY_ID[s];
-      if (!base) return null;
-      return {
-        id: base.id,
-        name: base.name,
-        bio: base.bio,
-        avatarUrl: base.avatarUrl,
-        coverUrl: base.coverUrl,
-        friendsInCommon: `+${countsBySlug.get(s) || 0}`,
-        unreadPosts: 0,
-      };
-    }).filter(Boolean);
+    // Build response from communities dataset
+    const data = myTopics
+      .map((topicName) => {
+        const slug = topicName
+          .toLowerCase()
+          .replace(/&/g, 'and')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        const base = COMMUNITY_BY_ID[slug];
+        if (!base) return null;
+        return {
+          id: base.id,
+          name: base.name,
+          bio: base.bio,
+          avatarUrl: base.avatarUrl,
+          coverUrl: base.coverUrl,
+          friendsInCommon: `+${countsByTopic.get(topicName) || 0}`,
+          unreadPosts: 0,
+        };
+      })
+      .filter(Boolean);
 
     return res.json(ok(data));
   } catch (e) {
-    console.error(e);
+    console.error('Communities my error:', e);
     return fail(res, 'internal_error', 500);
   }
 });
 
-// Community details
+// GET /api/communities/:id
+// Details for a specific topic-community
 router.get('/:id', async (req, res) => {
   try {
     const id = (req.params.id || '').trim().toLowerCase();
@@ -106,44 +134,56 @@ router.get('/:id', async (req, res) => {
     if (!community) return fail(res, 'community_not_found', 404);
 
     const rows = await loadAllUsersWithProfiles();
-    const target = community.name;
+    const targetTopic = community.name;
+
     let memberCount = 0;
     for (const r of rows) {
-      const cats = resolveCategoriesForInterests(parseInterests(r.interest_domains));
-      if (cats.includes(target)) memberCount++;
+      const ints = parseInterests(r.interest_domains);
+      const userTopics = topicsFromInterests(ints);
+      if (userTopics.includes(targetTopic)) memberCount++;
     }
+
     return res.json(ok({ ...community, memberCount }));
   } catch (e) {
-    console.error(e);
+    console.error('Community get error:', e);
     return fail(res, 'internal_error', 500);
   }
 });
 
-// Community members (derived)
+// GET /api/communities/:id/members
+// Members = users whose interests map to this specific topic.
+// (Exact matches on topic + expansion from any selected category containing this topic.)
 router.get('/:id/members', async (req, res) => {
   try {
     const id = (req.params.id || '').trim().toLowerCase();
     const community = COMMUNITY_BY_ID[id];
     if (!community) return fail(res, 'community_not_found', 404);
 
-    const target = community.name;
+    const targetTopic = community.name;
     const rows = await loadAllUsersWithProfiles();
     const members = [];
+
     for (const r of rows) {
-      const cats = resolveCategoriesForInterests(parseInterests(r.interest_domains));
-      if (cats.includes(target)) {
+      const ints = parseInterests(r.interest_domains);
+      const userTopics = topicsFromInterests(ints);
+      if (userTopics.includes(targetTopic)) {
         members.push({
           id: r.id,
           name: formatName(r),
-          username: r.username ? `@${r.username}` : (r.email ? `@${r.email.split('@')[0]}` : '@user'),
+          username: r.username
+            ? `@${r.username}`
+            : r.email
+              ? `@${r.email.split('@')[0]}`
+              : '@user',
           avatarUrl: r.profile_photo_url || null,
           avatarLetter: avatarLetterSource(r),
         });
       }
     }
+
     return res.json(ok(members));
   } catch (e) {
-    console.error(e);
+    console.error('Community members error:', e);
     return fail(res, 'internal_error', 500);
   }
 });

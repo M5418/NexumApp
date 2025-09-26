@@ -18,6 +18,12 @@ const createPostSchema = z.object({
   message: 'post_requires_content_or_media_or_repost',
 });
 
+// Comment schema (supports replies via parent_comment_id)
+const commentSchema = z.object({
+  content: z.string().min(1).max(1000),
+  parent_comment_id: z.string().length(12).optional(),
+});
+
 // Helper functions for JSON array management (accept string or array)
 function toArray(value) {
   if (!value || value === 'null' || value === '') return [];
@@ -83,7 +89,7 @@ async function getAuthorMap(userIds) {
 // Hydrate posts with author info and user interaction flags
 async function hydratePosts(rows, meId) {
   if (!rows || rows.length === 0) return [];
-  
+
   const userIds = rows.map(r => r.user_id);
   const authorMap = await getAuthorMap(userIds);
 
@@ -119,10 +125,10 @@ async function hydratePosts(rows, meId) {
     repost_of: r.repost_of,
     created_at: r.created_at,
     updated_at: r.updated_at,
-    
+
     // Author info
     author: authorMap[r.user_id] || { name: 'User', username: null, avatarUrl: null },
-    
+
     // Interaction counts
     counts: {
       likes: r.likes_count || 0,
@@ -131,7 +137,7 @@ async function hydratePosts(rows, meId) {
       bookmarks: r.bookmarks_count || 0,
       reposts: r.reposts_count || 0,
     },
-    
+
     // User interaction flags
     me: {
       liked: isInJsonArray(r.liked_by, meId),
@@ -139,7 +145,7 @@ async function hydratePosts(rows, meId) {
       shared: isInJsonArray(r.shared_by, meId),
       reposted: isInJsonArray(r.reposted_by, meId),
     },
-    
+
     // Interaction lists (for detailed views)
     interactions: {
       liked_by: safeParseJson(r.liked_by),
@@ -166,8 +172,8 @@ router.post('/', async (req, res) => {
       `INSERT INTO posts (id, user_id, post_type, content, image_url, image_urls, video_url, repost_of) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        postId, 
-        req.user.id, 
+        postId,
+        req.user.id,
         body.post_type,
         body.content || null,
         body.image_url || null,
@@ -195,8 +201,6 @@ router.get('/', async (req, res) => {
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const userId = req.query.user_id;
 
-    console.log('📊 Feed request:', { limit, offset, userId, meId: req.user.id });
-
     let rows;
     if (userId) {
       [rows] = await pool.query(
@@ -210,27 +214,8 @@ router.get('/', async (req, res) => {
       );
     }
 
-    console.log('📊 Raw posts from DB:', rows.length, rows.map(r => ({ id: r.id, content: r.content?.substring(0, 50) })));
-
     const posts = await hydratePosts(rows, req.user.id);
-    console.log('📊 Hydrated posts:', posts.length, posts.map(p => ({ 
-      id: p.id, 
-      content: p.content?.substring(0, 50),
-      author: p.author?.name,
-      counts: p.counts
-    })));
-
-    const response = ok({ posts, limit, offset });
-    console.log('📊 API Response structure:', {
-      ok: response.ok,
-      data: {
-        posts: response.data.posts?.length,
-        limit: response.data.limit,
-        offset: response.data.offset
-      }
-    });
-
-    return res.json(response);
+    return res.json(ok({ posts, limit, offset }));
   } catch (error) {
     console.error('Feed error:', error);
     return fail(res, 'internal_error', 500);
@@ -261,12 +246,12 @@ router.post('/:postId/like', async (req, res) => {
 
     const newLikedBy = addToJsonArray(rows[0].liked_by, req.user.id);
     const newCount = getJsonArrayCount(newLikedBy);
-    
+
     await pool.query(
       'UPDATE posts SET liked_by = ?, likes_count = ? WHERE id = ?',
       [newLikedBy, newCount, postId]
     );
-    
+
     return res.json(ok({}));
   } catch (error) {
     console.error('Like error:', error);
@@ -282,12 +267,12 @@ router.delete('/:postId/like', async (req, res) => {
 
     const newLikedBy = removeFromJsonArray(rows[0].liked_by, req.user.id);
     const newCount = getJsonArrayCount(newLikedBy);
-    
+
     await pool.query(
       'UPDATE posts SET liked_by = ?, likes_count = ? WHERE id = ?',
       [newLikedBy, newCount, postId]
     );
-    
+
     return res.json(ok({}));
   } catch (error) {
     console.error('Unlike error:', error);
@@ -338,34 +323,310 @@ router.delete('/:postId/bookmark', async (req, res) => {
   }
 });
 
-// Similar endpoints for share, repost...
-// [Additional endpoints would follow the same pattern]
-
-// Comments
+// Comments - List (top-level + replies)
 router.get('/:postId/comments', async (req, res) => {
   try {
     const { postId } = req.params;
-    const [rows] = await pool.query(
+
+    const [topRows] = await pool.query(
       'SELECT * FROM post_comments WHERE post_id = ? ORDER BY created_at ASC',
       [postId]
     );
-    
-    // Add author info to comments
-    const userIds = rows.map(r => r.user_id);
+    const [replyRows] = await pool.query(
+      'SELECT * FROM post_comment_replies WHERE post_id = ? ORDER BY created_at ASC',
+      [postId]
+    );
+
+    const userIds = [
+      ...new Set([
+        ...topRows.map(r => r.user_id),
+        ...replyRows.map(r => r.user_id),
+      ]),
+    ];
     const authorMap = await getAuthorMap(userIds);
-    
-    const comments = rows.map(r => ({
+
+    const top = topRows.map(r => ({
       ...r,
+      parent_comment_id: null,
       author: authorMap[r.user_id] || { name: 'User', username: null, avatarUrl: null },
       liked_by: r.liked_by ? JSON.parse(r.liked_by) : [],
-      me: {
-        liked: isInJsonArray(r.liked_by, req.user.id)
-      }
+      me: { liked: isInJsonArray(r.liked_by, req.user.id) },
     }));
-    
+
+    const replies = replyRows.map(r => ({
+      ...r,
+      parent_comment_id: r.parent_reply_id || r.comment_id,
+      author: authorMap[r.user_id] || { name: 'User', username: null, avatarUrl: null },
+      liked_by: r.liked_by ? JSON.parse(r.liked_by) : [],
+      me: { liked: isInJsonArray(r.liked_by, req.user.id) },
+    }));
+
+    const comments = [...top, ...replies];
     return res.json(ok({ comments }));
   } catch (error) {
     console.error('List comments error:', error);
+    return fail(res, 'internal_error', 500);
+  }
+});
+
+// Comments - Create (top-level or reply)
+router.post('/:postId/comments', async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const data = commentSchema.parse(req.body || {});
+
+    // Validate post exists
+    const [p] = await pool.query('SELECT id FROM posts WHERE id = ? LIMIT 1', [postId]);
+    if (p.length === 0) return fail(res, 'post_not_found', 404);
+
+    const commentId = generateId();
+
+    // If no parent => top-level comment
+    if (!data.parent_comment_id) {
+      await pool.query(
+        'INSERT INTO post_comments (id, post_id, user_id, content) VALUES (?, ?, ?, ?)',
+        [commentId, postId, req.user.id, data.content]
+      );
+
+      await pool.query(
+        'UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?',
+        [postId]
+      );
+
+      return res.json(ok({ id: commentId }));
+    }
+
+    // Otherwise it's a reply; figure out whether replying to a top-level comment or another reply
+    const parentId = data.parent_comment_id;
+
+    // Try parent as top-level comment
+    const [parentTop] = await pool.query(
+      'SELECT id FROM post_comments WHERE id = ? AND post_id = ? LIMIT 1',
+      [parentId, postId]
+    );
+
+    let rootCommentId = null;
+    let parentReplyId = null;
+
+    if (parentTop.length > 0) {
+      rootCommentId = parentId;
+      parentReplyId = null;
+    } else {
+      // Try parent as a reply
+      const [parentReply] = await pool.query(
+        'SELECT id, comment_id FROM post_comment_replies WHERE id = ? AND post_id = ? LIMIT 1',
+        [parentId, postId]
+      );
+      if (parentReply.length === 0) {
+        return fail(res, 'parent_comment_not_found', 404);
+      }
+      rootCommentId = parentReply[0].comment_id;
+      parentReplyId = parentId;
+    }
+
+    await pool.query(
+      'INSERT INTO post_comment_replies (id, post_id, comment_id, parent_reply_id, user_id, content) VALUES (?, ?, ?, ?, ?, ?)',
+      [commentId, postId, rootCommentId, parentReplyId, req.user.id, data.content]
+    );
+
+    await pool.query(
+      'UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?',
+      [postId]
+    );
+
+    return res.json(ok({ id: commentId }));
+  } catch (error) {
+    if (error instanceof z.ZodError) return fail(res, 'validation_error', 400);
+    console.error('Create comment error:', error);
+    return fail(res, 'internal_error', 500);
+  }
+});
+
+// Comments - Like (supports comment or reply)
+router.post('/:postId/comments/:commentId/like', async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+
+    // Try top-level comment
+    let [rows] = await pool.query(
+      'SELECT liked_by FROM post_comments WHERE id = ? AND post_id = ? LIMIT 1',
+      [commentId, postId]
+    );
+
+    if (rows.length > 0) {
+      const newLikedBy = addToJsonArray(rows[0].liked_by, req.user.id);
+      const newCount = getJsonArrayCount(newLikedBy);
+      await pool.query(
+        'UPDATE post_comments SET liked_by = ?, likes_count = ? WHERE id = ? AND post_id = ?',
+        [newLikedBy, newCount, commentId, postId]
+      );
+      return res.json(ok({}));
+    }
+
+    // Try reply
+    [rows] = await pool.query(
+      'SELECT liked_by FROM post_comment_replies WHERE id = ? AND post_id = ? LIMIT 1',
+      [commentId, postId]
+    );
+    if (rows.length === 0) return fail(res, 'comment_not_found', 404);
+
+    const newLikedBy = addToJsonArray(rows[0].liked_by, req.user.id);
+    const newCount = getJsonArrayCount(newLikedBy);
+    await pool.query(
+      'UPDATE post_comment_replies SET liked_by = ?, likes_count = ? WHERE id = ? AND post_id = ?',
+      [newLikedBy, newCount, commentId, postId]
+    );
+
+    return res.json(ok({}));
+  } catch (error) {
+    console.error('Comment like error:', error);
+    return fail(res, 'internal_error', 500);
+  }
+});
+
+// Comments - Unlike (supports comment or reply)
+router.delete('/:postId/comments/:commentId/like', async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+
+    // Try top-level comment
+    let [rows] = await pool.query(
+      'SELECT liked_by FROM post_comments WHERE id = ? AND post_id = ? LIMIT 1',
+      [commentId, postId]
+    );
+
+    if (rows.length > 0) {
+      const newLikedBy = removeFromJsonArray(rows[0].liked_by, req.user.id);
+      const newCount = getJsonArrayCount(newLikedBy);
+      await pool.query(
+        'UPDATE post_comments SET liked_by = ?, likes_count = ? WHERE id = ? AND post_id = ?',
+        [newLikedBy, newCount, commentId, postId]
+      );
+      return res.json(ok({}));
+    }
+
+    // Try reply
+    [rows] = await pool.query(
+      'SELECT liked_by FROM post_comment_replies WHERE id = ? AND post_id = ? LIMIT 1',
+      [commentId, postId]
+    );
+    if (rows.length === 0) return fail(res, 'comment_not_found', 404);
+
+    const newLikedBy = removeFromJsonArray(rows[0].liked_by, req.user.id);
+    const newCount = getJsonArrayCount(newLikedBy);
+    await pool.query(
+      'UPDATE post_comment_replies SET liked_by = ?, likes_count = ? WHERE id = ? AND post_id = ?',
+      [newLikedBy, newCount, commentId, postId]
+    );
+
+    return res.json(ok({}));
+  } catch (error) {
+    console.error('Comment unlike error:', error);
+    return fail(res, 'internal_error', 500);
+  }
+});
+
+// Comments - Delete (supports comment or reply)
+router.delete('/:postId/comments/:commentId', async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const { postId, commentId } = req.params;
+
+    // Check if it's a top-level comment
+    let [rows] = await conn.query(
+      'SELECT user_id FROM post_comments WHERE id = ? AND post_id = ? LIMIT 1',
+      [commentId, postId]
+    );
+
+    if (rows.length > 0) {
+      if (rows[0].user_id !== req.user.id) {
+        conn.release();
+        return fail(res, 'forbidden', 403);
+      }
+
+      // Count all replies under this top-level comment
+      const [cntRows] = await conn.query(
+        'SELECT COUNT(*) AS c FROM post_comment_replies WHERE post_id = ? AND comment_id = ?',
+        [postId, commentId]
+      );
+      const totalToDecrement = 1 + Number(cntRows[0].c || 0);
+
+      await conn.beginTransaction();
+
+      // Delete top-level comment (replies will cascade)
+      await conn.query(
+        'DELETE FROM post_comments WHERE id = ? AND post_id = ?',
+        [commentId, postId]
+      );
+
+      await conn.query(
+        'UPDATE posts SET comments_count = GREATEST(comments_count - ?, 0) WHERE id = ?',
+        [totalToDecrement, postId]
+      );
+
+      await conn.commit();
+      conn.release();
+      return res.json(ok({ deleted: totalToDecrement }));
+    }
+
+    // Otherwise, it may be a reply
+    const [replyRows] = await conn.query(
+      'SELECT user_id, comment_id FROM post_comment_replies WHERE id = ? AND post_id = ? LIMIT 1',
+      [commentId, postId]
+    );
+    if (replyRows.length === 0) {
+      conn.release();
+      return fail(res, 'comment_not_found', 404);
+    }
+    if (replyRows[0].user_id !== req.user.id) {
+      conn.release();
+      return fail(res, 'forbidden', 403);
+    }
+
+    // Gather subtree of replies using BFS
+    let queue = [commentId];
+    const toDelete = new Set(queue);
+
+    while (queue.length > 0) {
+      const placeholders = queue.map(() => '?').join(',');
+      const [children] = await conn.query(
+        `SELECT id FROM post_comment_replies 
+         WHERE post_id = ? AND parent_reply_id IN (${placeholders})`,
+        [postId, ...queue]
+      );
+      queue = [];
+      for (const row of children) {
+        if (!toDelete.has(row.id)) {
+          toDelete.add(row.id);
+          queue.push(row.id);
+        }
+      }
+    }
+
+    const ids = Array.from(toDelete);
+    await conn.beginTransaction();
+
+    // Delete the reply subtree
+    if (ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+      await conn.query(
+        `DELETE FROM post_comment_replies WHERE id IN (${placeholders}) AND post_id = ?`,
+        [...ids, postId]
+      );
+    }
+
+    await conn.query(
+      'UPDATE posts SET comments_count = GREATEST(comments_count - ?, 0) WHERE id = ?',
+      [ids.length, postId]
+    );
+
+    await conn.commit();
+    conn.release();
+    return res.json(ok({ deleted: ids.length }));
+  } catch (error) {
+    try { await conn.rollback(); } catch (_) {}
+    conn.release();
+    console.error('Delete comment error:', error);
     return fail(res, 'internal_error', 500);
   }
 });
