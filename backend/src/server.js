@@ -15,6 +15,7 @@ import messagesRoutes from './routes/messages.js';
 import storiesRoutes from './routes/stories.js';
 import communitiesRoutes from './routes/communities.js';
 import repostsRoutes from './routes/posts-reposts.js'; // NEW
+import booksRoutes from './routes/books.js'; // NEW
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -54,11 +55,15 @@ app.use('/api/posts', authMiddleware, postsRoutes);
 // Repost endpoints (create/unrepost + snapshot)
 app.use('/api/posts', authMiddleware, repostsRoutes);
 
+// Invitations, conversations, messages, stories, communities
 app.use('/api/invitations', authMiddleware, invitationsRoutes);
 app.use('/api/conversations', authMiddleware, conversationsRoutes);
 app.use('/api/messages', authMiddleware, messagesRoutes);
 app.use('/api/stories', authMiddleware, storiesRoutes);
 app.use('/api/communities', authMiddleware, communitiesRoutes);
+
+// Books routes (NEW)
+app.use('/api/books', authMiddleware, booksRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Global error:', err);

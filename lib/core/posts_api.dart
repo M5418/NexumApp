@@ -434,6 +434,9 @@ class PostsApi {
             original['postId'])
         ?.toString();
 
+    // Decide header text trigger: ONLY when this row's reposter is the current user
+    final isSelfRepostRow = (me['is_repost_author'] == true);
+
     final repostedBy = repostAuthorRaw.isNotEmpty
         ? RepostedBy(
             userName:
@@ -442,9 +445,7 @@ class PostsApi {
             userAvatarUrl:
                 (repostAuthorRaw['avatarUrl'] ?? repostAuthorRaw['avatar_url'] ?? '')
                     .toString(),
-            actionType: (me['reposted'] == true || me['is_repost_author'] == true)
-                ? 'reposted this'
-                : null,
+            actionType: isSelfRepostRow ? 'reposted this' : null,
           )
         : null;
 

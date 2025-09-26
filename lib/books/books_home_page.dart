@@ -2,118 +2,82 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'book_details_page.dart';
 import 'create_book_page.dart';
-import 'book_play_page.dart';
+import 'books_api.dart';
 
 class Book {
   final String id;
   final String title;
-  final String author;
-  final String coverUrl;
-  final String pdfUrl;
-  final String description;
-  final String language;
-  final DateTime addedAt;
-  final int readingMinutes;
-  final String content;
-  bool isFavorite;
+  final String? description;
+  final String? author;
+  final String? coverUrl;
+  final String? pdfUrl;
+  final String? audioUrl;
+  final String? language;
+  final String? category;
+  final List<String> tags;
+  final double? price;
+  final bool isPublished;
+  final int? readingMinutes;
+  final int? audioDurationSec;
+  final DateTime? createdAt;
+
+  int likes;
+  int favorites;
+  int reads;
+  int plays;
+  bool meLiked;
+  bool meFavorite;
 
   Book({
     required this.id,
     required this.title,
-    required this.author,
-    required this.coverUrl,
-    required this.pdfUrl,
-    required this.description,
-    required this.language,
-    required this.addedAt,
-    required this.readingMinutes,
-    required this.content,
-    this.isFavorite = false,
+    this.description,
+    this.author,
+    this.coverUrl,
+    this.pdfUrl,
+    this.audioUrl,
+    this.language,
+    this.category,
+    this.tags = const [],
+    this.price,
+    this.isPublished = false,
+    this.readingMinutes,
+    this.audioDurationSec,
+    this.createdAt,
+    this.likes = 0,
+    this.favorites = 0,
+    this.reads = 0,
+    this.plays = 0,
+    this.meLiked = false,
+    this.meFavorite = false,
   });
-}
 
-class BookSampleData {
-  static List<Book> all() {
-    final now = DateTime.now();
-    const para =
-        'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. ';
-    return [
-      Book(
-        id: 'b1',
-        title: '48 Laws of Power',
-        author: 'Robert Greene',
-        coverUrl:
-            'https://images-na.ssl-images-amazon.com/images/I/71aG+xDKSYL.jpg',
-        pdfUrl:
-            'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        description:
-            'Concise manual for power dynamics and strategy in personal and professional life.',
-        language: 'English',
-        addedAt: now.subtract(const Duration(days: 1, hours: 3, minutes: 34)),
-        readingMinutes: 540,
-        content: List.filled(120, para).join(),
-      ),
-      Book(
-        id: 'b2',
-        title: 'War in Pakistan',
-        author: 'Ayesha Khan',
-        coverUrl:
-            'https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?q=80&w=600&auto=format&fit=crop',
-        pdfUrl:
-            'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        description:
-            'An investigative chronicle into the human and political cost of regional conflicts.',
-        language: 'English',
-        addedAt: now.subtract(const Duration(days: 2, hours: 5)),
-        readingMinutes: 380,
-        content: List.filled(90, para).join(),
-      ),
-      Book(
-        id: 'b3',
-        title: 'Les Secrets de la Réussite',
-        author: 'Claire Dupont',
-        coverUrl:
-            'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=600&auto=format&fit=crop',
-        pdfUrl:
-            'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        description:
-            'Un guide pratique pour développer une carrière épanouissante et alignée avec vos valeurs.',
-        language: 'French',
-        addedAt: now.subtract(const Duration(hours: 7, minutes: 10)),
-        readingMinutes: 300,
-        content: List.filled(80, para).join(),
-      ),
-      Book(
-        id: 'b4',
-        title: 'القوة الناعمة',
-        author: 'سلمان العتيبي',
-        coverUrl:
-            'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=600&auto=format&fit=crop',
-        pdfUrl:
-            'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        description:
-            'مدخل لفهم تأثير القوة الثقافية والإعلامية في تشكيل النفوذ الدولي.',
-        language: 'Arabic',
-        addedAt: now.subtract(const Duration(days: 3, hours: 12)),
-        readingMinutes: 420,
-        content: List.filled(95, para).join(),
-      ),
-      Book(
-        id: 'b5',
-        title: 'El Arte de Emprender',
-        author: 'Luis Ortega',
-        coverUrl:
-            'https://images.unsplash.com/photo-1485322551133-3a4c27a9d925?q=80&w=600&auto=format&fit=crop',
-        pdfUrl:
-            'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        description:
-            'Estrategias prácticas para iniciar y escalar proyectos con impacto.',
-        language: 'Spanish',
-        addedAt: now.subtract(const Duration(days: 1, hours: 22)),
-        readingMinutes: 265,
-        content: List.filled(70, para).join(),
-      ),
-    ];
+  factory Book.fromApi(Map<String, dynamic> m) {
+    final counts = Map<String, dynamic>.from(m['counts'] ?? {});
+    final me = Map<String, dynamic>.from(m['me'] ?? {});
+    return Book(
+      id: (m['id'] ?? '').toString(),
+      title: (m['title'] ?? '').toString(),
+      description: m['description']?.toString(),
+      author: m['author']?.toString(),
+      coverUrl: (m['coverUrl'] ?? '').toString().isEmpty ? null : (m['coverUrl'] as String),
+      pdfUrl: (m['pdfUrl'] ?? '').toString().isEmpty ? null : (m['pdfUrl'] as String),
+      audioUrl: (m['audioUrl'] ?? '').toString().isEmpty ? null : (m['audioUrl'] as String),
+      language: m['language']?.toString(),
+      category: m['category']?.toString(),
+      tags: List<String>.from((m['tags'] ?? const []) as List),
+      price: m['price'] == null ? null : double.tryParse(m['price'].toString()),
+      isPublished: (m['isPublished'] ?? false) == true,
+      readingMinutes: m['readingMinutes'] == null ? null : int.tryParse(m['readingMinutes'].toString()),
+      audioDurationSec: m['audioDurationSec'] == null ? null : int.tryParse(m['audioDurationSec'].toString()),
+      createdAt: m['createdAt'] != null ? DateTime.tryParse(m['createdAt'].toString()) : null,
+      likes: int.tryParse((counts['likes'] ?? 0).toString()) ?? 0,
+      favorites: int.tryParse((counts['favorites'] ?? 0).toString()) ?? 0,
+      reads: int.tryParse((counts['reads'] ?? 0).toString()) ?? 0,
+      plays: int.tryParse((counts['plays'] ?? 0).toString()) ?? 0,
+      meLiked: (me['liked'] ?? false) == true,
+      meFavorite: (me['favorite'] ?? false) == true,
+    );
   }
 }
 
@@ -126,27 +90,87 @@ class BooksHomePage extends StatefulWidget {
 
 class _BooksHomePageState extends State<BooksHomePage> {
   String _selectedLanguage = 'All';
-  late List<Book> _books;
+  List<Book> _books = [];
+  bool _loading = true;
+  String? _error;
+
+  int _page = 1;
+  final int _limit = 20;
+  bool _hasMore = true;
+  final _controller = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _books = BookSampleData.all();
+    _fetchBooks(reset: true);
+    _controller.addListener(_onScroll);
   }
 
-  List<String> get _languages => [
-        'All',
-        'English',
-        'French',
-        'Arabic',
-        'Spanish',
-      ];
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<String> get _languages {
+    final set = <String>{'All'};
+    for (final b in _books) {
+      if ((b.language ?? '').isNotEmpty) set.add(b.language!);
+    }
+    return set.toList();
+  }
 
   List<Book> get _filteredBooks => _selectedLanguage == 'All'
       ? _books
-      : _books.where((b) => b.language == _selectedLanguage).toList();
+      : _books.where((b) => (b.language ?? '') == _selectedLanguage).toList();
 
-  String _timeAgo(DateTime d) {
+  void _onScroll() {
+    if (!_hasMore || _loading) return;
+    if (_controller.position.pixels >= _controller.position.maxScrollExtent - 200) {
+      _fetchBooks(reset: false);
+    }
+  }
+
+  Future<void> _fetchBooks({required bool reset}) async {
+    setState(() {
+      _loading = true;
+      if (reset) {
+        _error = null;
+        _page = 1;
+        _books = [];
+        _hasMore = true;
+      }
+    });
+    try {
+      final api = BooksApi.create();
+      final res = await api.listBooks(page: _page, limit: _limit, isPublished: true);
+      final data = Map<String, dynamic>.from(res);
+      final d = Map<String, dynamic>.from(data['data'] ?? {});
+      final list = List<Map<String, dynamic>>.from(d['books'] ?? const []);
+      final newBooks = list.map(Book.fromApi).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _books.addAll(newBooks);
+        _hasMore = newBooks.length >= _limit;
+        _page += 1;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Failed to load books: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  String _timeAgo(DateTime? d) {
+    if (d == null) return '';
     final diff = DateTime.now().difference(d);
     if (diff.inDays >= 2) return '${diff.inDays} days ago';
     if (diff.inDays >= 1) return 'Yesterday';
@@ -155,10 +179,48 @@ class _BooksHomePageState extends State<BooksHomePage> {
     return 'Just now';
   }
 
+  Future<void> _openCreate() async {
+    final changed = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CreateBookPage()),
+    );
+    if (!mounted) return;
+    if (changed == true) {
+      await _fetchBooks(reset: true);
+    }
+  }
+
+  Future<void> _toggleFavorite(Book b) async {
+    try {
+      final api = BooksApi.create();
+      if (b.meFavorite) {
+        await api.unfavorite(b.id);
+        if (!mounted) return;
+        setState(() {
+          b.meFavorite = false;
+          b.favorites = (b.favorites - 1).clamp(0, 1 << 30);
+        });
+      } else {
+        await api.favorite(b.id);
+        if (!mounted) return;
+        setState(() {
+          b.meFavorite = true;
+          b.favorites = b.favorites + 1;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update favorite: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
     return Scaffold(
       backgroundColor: bg,
       appBar: PreferredSize(
@@ -166,12 +228,10 @@ class _BooksHomePageState extends State<BooksHomePage> {
         child: Container(
           decoration: BoxDecoration(
             color: isDark ? Colors.black : Colors.white,
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(25),
-            ),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(25)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0),
+                color: Colors.black.withOpacity(0.06),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -185,10 +245,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(
-                      Icons.arrow_back,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
+                    icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
                   ),
                   Text(
                     'Books',
@@ -206,18 +263,8 @@ class _BooksHomePageState extends State<BooksHomePage> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const CreateBookPage(),
-                        ),
-                      );
-                    },
-                    icon: Icon(
-                      Icons.add,
-                      color: isDark ? Colors.white : const Color(0xFF666666),
-                    ),
+                    onPressed: _openCreate,
+                    icon: Icon(Icons.add, color: isDark ? Colors.white : const Color(0xFF666666)),
                   ),
                 ],
               ),
@@ -225,174 +272,209 @@ class _BooksHomePageState extends State<BooksHomePage> {
           ),
         ),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _filteredBooks.length,
-        separatorBuilder: (ctx, idx) => const SizedBox(height: 10),
-        itemBuilder: (ctx, idx) {
-          final b = _filteredBooks[idx];
-          return GestureDetector(
-            onTap: () => Navigator.push(
-              ctx,
-              MaterialPageRoute(builder: (ctx) => BookDetailsPage(book: b)),
-            ),
-            child: Container(
-              width: 360,
-              height: 140,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  if (!isDark)
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                ],
-              ),
-              child: Stack(
+      body: RefreshIndicator(
+        color: const Color(0xFFBFAE01),
+        onRefresh: () => _fetchBooks(reset: true),
+        child: _error != null
+            ? ListView(
                 children: [
-                  Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          bottomLeft: Radius.circular(12),
-                        ),
-                        child: SizedBox(
-                          width: 80,
-                          height: 140,
-                          child: Image.network(
-                            b.coverUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (ctx, error, stackTrace) => Container(
-                              color: isDark
-                                  ? const Color(0xFF111111)
-                                  : const Color(0xFFEAEAEA),
-                              child: const Icon(
-                                Icons.menu_book_outlined,
-                                color: Color(0xFFBFAE01),
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_error!, style: GoogleFonts.inter(color: Colors.red)),
+                  ),
+                ],
+              )
+            : ListView.separated(
+                controller: _controller,
+                padding: const EdgeInsets.all(16),
+                itemCount: _filteredBooks.length + (_loading ? 1 : 0),
+                separatorBuilder: (ctx, idx) => const SizedBox(height: 10),
+                itemBuilder: (ctx, idx) {
+                  if (idx >= _filteredBooks.length) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
+                    );
+                  }
+                  final b = _filteredBooks[idx];
+                  return GestureDetector(
+                    onTap: () => Navigator.push(
+                      ctx,
+                      MaterialPageRoute(builder: (ctx) => BookDetailsPage(book: b)),
+                    ),
+                    child: Container(
+                      width: 360,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          if (!isDark)
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          Row(
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      b.title,
-                                      maxLines: 2,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark
-                                            ? Colors.white
-                                            : Colors.black,
+                              ClipRRect(
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(12),
+                                  bottomLeft: Radius.circular(12),
+                                ),
+                                child: SizedBox(
+                                  width: 80,
+                                  height: 140,
+                                  child: b.coverUrl != null && b.coverUrl!.isNotEmpty
+                                      ? Image.network(
+                                          b.coverUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (ctx, error, stackTrace) => Container(
+                                            color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                            child: const Icon(
+                                              Icons.menu_book_outlined,
+                                              color: Color(0xFFBFAE01),
+                                              size: 24,
+                                            ),
+                                          ),
+                                        )
+                                      : Container(
+                                          color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                          child: const Icon(
+                                            Icons.menu_book_outlined,
+                                            color: Color(0xFFBFAE01),
+                                            size: 24,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              b.title,
+                                              maxLines: 2,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: isDark ? Colors.white : Colors.black,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        b.author ?? 'Unknown',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          color: const Color(0xFF999999),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            _timeAgo(b.createdAt),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              color: const Color(0xFF999999),
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            (b.language ?? '').isEmpty ? '—' : b.language!,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              color: const Color(0xFF999999),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.favorite, size: 14, color: Colors.pink.shade300),
+                                          const SizedBox(width: 4),
+                                          Text('${b.likes}', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                          const SizedBox(width: 10),
+                                          Icon(Icons.star, size: 14, color: const Color(0xFFBFAE01)),
+                                          const SizedBox(width: 4),
+                                          Text('${b.favorites}', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                          const SizedBox(width: 10),
+                                          Icon(Icons.menu_book, size: 14, color: isDark ? Colors.white : Colors.black),
+                                          const SizedBox(width: 4),
+                                          Text('${b.reads}', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                          const SizedBox(width: 10),
+                                          Icon(Icons.play_arrow, size: 14, color: isDark ? Colors.white : Colors.black),
+                                          const SizedBox(width: 4),
+                                          Text('${b.plays}', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    IconButton(
+                                      onPressed: () => _toggleFavorite(b),
+                                      icon: Icon(
+                                        b.meFavorite ? Icons.star : Icons.star_border,
+                                        size: 22,
+                                        color: const Color(0xFFBFAE01),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                b.author,
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: const Color(0xFF999999),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                b.description,
-                                maxLines: 2,
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: const Color(0xFF666666),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _timeAgo(b.addedAt),
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  color: const Color(0xFF999999),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Text(
-                                    '${b.readingMinutes ~/ 60} hr, ${b.readingMinutes % 60} min',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      color: const Color(0xFF999999),
+                                    GestureDetector(
+                                      onTap: () => b.audioUrl != null && b.audioUrl!.isNotEmpty
+                                          ? Navigator.push(
+                                              ctx,
+                                              MaterialPageRoute(
+                                                builder: (ctx) => BookDetailsPage(book: b),
+                                              ),
+                                            )
+                                          : null,
+                                      child: Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFBFAE01),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.play_arrow,
+                                          color: Colors.black,
+                                          size: 18,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    b.language,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      color: const Color(0xFF999999),
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                        ),
+                        ],
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            const Icon(
-                              Icons.star_border,
-                              size: 20,
-                              color: Color(0xFFBFAE01),
-                            ),
-                            GestureDetector(
-                              onTap: () => Navigator.push(
-                                ctx,
-                                MaterialPageRoute(
-                                  builder: (ctx) => BookPlayPage(book: b),
-                                ),
-                              ),
-                              child: Container(
-                                width: 32,
-                                height: 32,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFBFAE01),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.play_arrow,
-                                  color: Colors.black,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  );
+                },
               ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -415,19 +497,13 @@ class _LanguageFilter extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF111111) : const Color(0xFFF7F7F7),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
-        ),
+        border: Border.all(color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
       ),
       child: PopupMenuButton<String>(
         onSelected: onChanged,
         position: PopupMenuPosition.under,
         itemBuilder: (context) => [
-          for (final o in options)
-            PopupMenuItem<String>(
-              value: o,
-              child: Text(o, style: GoogleFonts.inter(fontSize: 13)),
-            ),
+          for (final o in options) PopupMenuItem<String>(value: o, child: Text(o, style: GoogleFonts.inter(fontSize: 13))),
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -444,11 +520,7 @@ class _LanguageFilter extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(
-                Icons.keyboard_arrow_down,
-                size: 16,
-                color: Color(0xFFBFAE01),
-              ),
+              const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFFBFAE01)),
             ],
           ),
         ),

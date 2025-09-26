@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'books_home_page.dart' show Book;
+import 'books_api.dart';
 
 class BookReadPage extends StatefulWidget {
   final Book book;
@@ -20,18 +21,42 @@ class _BookReadPageState extends State<BookReadPage> {
   String? errorMessage;
   int currentPage = 0;
   int totalPages = 0;
+  int defaultPage = 0;
 
   @override
   void initState() {
     super.initState();
-    _downloadAndLoadPdf();
+    _loadProgressThenPdf();
+  }
+
+  Future<void> _loadProgressThenPdf() async {
+    await _loadProgress();
+    await _downloadAndLoadPdf();
+  }
+
+  Future<void> _loadProgress() async {
+    try {
+      final api = BooksApi.create();
+      final res = await api.getProgress(widget.book.id);
+      final data = Map<String, dynamic>.from(res);
+      final d = Map<String, dynamic>.from(data['data'] ?? {});
+      final p = d['progress'];
+      if (p != null) {
+        final lastPage = int.tryParse((p['last_page'] ?? 0).toString()) ?? 0;
+        if (lastPage > 0) {
+          defaultPage = (lastPage - 1).clamp(0, 1000000);
+          currentPage = defaultPage;
+        }
+      }
+    } catch (_) {
+      // Ignore progress errors
+    }
   }
 
   Future<void> _downloadAndLoadPdf() async {
     try {
-      // Use a sample PDF URL for testing since the example URLs don't exist
-      final pdfUrl = widget.book.pdfUrl.isNotEmpty
-          ? widget.book.pdfUrl
+      final pdfUrl = (widget.book.pdfUrl ?? '').isNotEmpty
+          ? widget.book.pdfUrl!
           : 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
 
       final response = await http.get(Uri.parse(pdfUrl));
@@ -45,8 +70,7 @@ class _BookReadPageState extends State<BookReadPage> {
         });
       } else {
         setState(() {
-          errorMessage =
-              'Failed to download PDF (Status: ${response.statusCode})';
+          errorMessage = 'Failed to download PDF (Status: ${response.statusCode})';
           isLoading = false;
         });
       }
@@ -55,6 +79,17 @@ class _BookReadPageState extends State<BookReadPage> {
         errorMessage = 'Error loading PDF: $e';
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _updateProgress() async {
+    try {
+      final api = BooksApi.create();
+      // PDFView page index is 0-based, server expects 1-based page number.
+      final page = (currentPage + 1).clamp(1, totalPages == 0 ? 1 : totalPages);
+      await api.updateReadProgress(id: widget.book.id, page: page, totalPages: totalPages > 0 ? totalPages : null);
+    } catch (_) {
+      // Silently ignore
     }
   }
 
@@ -95,88 +130,71 @@ class _BookReadPageState extends State<BookReadPage> {
         ],
       ),
       body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
-            )
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
           : errorMessage != null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    errorMessage!,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        isLoading = true;
-                        errorMessage = null;
-                      });
-                      _downloadAndLoadPdf();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFBFAE01),
-                    ),
-                    child: Text(
-                      'Retry',
-                      style: GoogleFonts.inter(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w600,
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, size: 64, color: isDark ? Colors.white : Colors.black),
+                      const SizedBox(height: 16),
+                      Text(
+                        errorMessage!,
+                        style: GoogleFonts.inter(fontSize: 16, color: isDark ? Colors.white : Colors.black),
+                        textAlign: TextAlign.center,
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            isLoading = true;
+                            errorMessage = null;
+                          });
+                          _downloadAndLoadPdf();
+                        },
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01)),
+                        child: Text(
+                          'Retry',
+                          style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )
-          : PDFView(
-              filePath: localPath!,
-              enableSwipe: true,
-              swipeHorizontal: false,
-              autoSpacing: false,
-              pageFling: true,
-              pageSnap: true,
-              defaultPage: currentPage,
-              fitPolicy: FitPolicy.WIDTH,
-              preventLinkNavigation: false,
-              onRender: (pages) {
-                setState(() {
-                  totalPages = pages ?? 0;
-                });
-              },
-              onError: (error) {
-                setState(() {
-                  errorMessage = 'PDF Error: $error';
-                });
-              },
-              onPageError: (page, error) {
-                setState(() {
-                  errorMessage = 'Page Error: $error';
-                });
-              },
-              onViewCreated: (PDFViewController controller) {
-                // PDF controller ready
-              },
-              onLinkHandler: (String? uri) {
-                // Handle PDF links if needed
-              },
-              onPageChanged: (int? page, int? total) {
-                setState(() {
-                  currentPage = page ?? 0;
-                });
-              },
-            ),
+                )
+              : PDFView(
+                  filePath: localPath!,
+                  enableSwipe: true,
+                  swipeHorizontal: false,
+                  autoSpacing: false,
+                  pageFling: true,
+                  pageSnap: true,
+                  defaultPage: defaultPage,
+                  fitPolicy: FitPolicy.WIDTH,
+                  preventLinkNavigation: false,
+                  onRender: (pages) {
+                    setState(() {
+                      totalPages = pages ?? 0;
+                    });
+                  },
+                  onError: (error) {
+                    setState(() {
+                      errorMessage = 'PDF Error: $error';
+                    });
+                  },
+                  onPageError: (page, error) {
+                    setState(() {
+                      errorMessage = 'Page Error: $error';
+                    });
+                  },
+                  onViewCreated: (PDFViewController controller) {},
+                  onLinkHandler: (String? uri) {},
+                  onPageChanged: (int? page, int? total) {
+                    setState(() {
+                      currentPage = page ?? 0;
+                    });
+                    _updateProgress();
+                  },
+                ),
     );
   }
 }

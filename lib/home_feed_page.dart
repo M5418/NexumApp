@@ -50,8 +50,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   void initState() {
     super.initState();
     _ensureAuth();
-    _loadCurrentUserId();
-    _loadData();
+    // Load current user first so we can inject "Your Story" ring reliably
+    () async {
+      await _loadCurrentUserId();
+      await _loadData();
+    }();
   }
 
   Future<void> _ensureAuth() async {
@@ -102,6 +105,23 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     } catch (e) {
       final s = 'Stories failed: ${_toError(e)}';
       errMsg = errMsg == null ? s : '$errMsg | $s';
+    }
+
+    // Ensure "Your Story" ring shows even if you have no active stories
+    if (_currentUserId != null &&
+        !rings.any((r) => r.userId == _currentUserId)) {
+      rings = [
+        stories_api.StoryRing(
+          userId: _currentUserId!,
+          name: '',
+          username: '',
+          hasUnseen: false,
+          lastStoryAt: DateTime.now(),
+          thumbnailUrl: null,
+          storyCount: 0,
+        ),
+        ...rings,
+      ];
     }
 
     if (!mounted) return;
@@ -735,7 +755,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           // App bar + stories as a scrollable sliver
           SliverToBoxAdapter(
             child: Container(
-              height: 230,
+              height: 180,
               decoration: BoxDecoration(
                 color: isDark ? Colors.black : Colors.white,
                 borderRadius: const BorderRadius.vertical(
@@ -824,7 +844,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     ? 'Your Story'
                                     : (ring.name.isNotEmpty
                                         ? ring.name
-                                        : '@${ring.username}'),
+                                        : (ring.username.startsWith('@')
+                                            ? ring.username
+                                            : '@${ring.username}')),
                                 isMine: isMine,
                                 isSeen: !ring.hasUnseen,
                                 onAddTap: isMine

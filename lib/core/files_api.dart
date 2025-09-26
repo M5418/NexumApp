@@ -51,6 +51,7 @@ class FilesApi {
 
   String _contentTypeForExt(String ext) {
     switch (ext.toLowerCase()) {
+      // Images
       case 'jpg':
       case 'jpeg':
         return 'image/jpeg';
@@ -58,8 +59,27 @@ class FilesApi {
         return 'image/png';
       case 'webp':
         return 'image/webp';
+
+      // PDF
+      case 'pdf':
+        return 'application/pdf';
+
+      // Video
       case 'mp4':
         return 'video/mp4';
+
+      // Audio
+      case 'm4a':
+        return 'audio/mp4';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'aac':
+        return 'audio/aac';
+      case 'webm':
+        return 'audio/webm';
+
       default:
         return 'application/octet-stream';
     }

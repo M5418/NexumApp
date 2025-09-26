@@ -3,10 +3,86 @@ import 'package:google_fonts/google_fonts.dart';
 import 'books_home_page.dart' show Book;
 import 'book_read_page.dart';
 import 'book_play_page.dart';
+import 'books_api.dart';
 
-class BookDetailsPage extends StatelessWidget {
+class BookDetailsPage extends StatefulWidget {
   final Book book;
   const BookDetailsPage({super.key, required this.book});
+
+  @override
+  State<BookDetailsPage> createState() => _BookDetailsPageState();
+}
+
+class _BookDetailsPageState extends State<BookDetailsPage> {
+  late Book book;
+  bool _togglingLike = false;
+  bool _togglingFav = false;
+
+  @override
+  void initState() {
+    super.initState();
+    book = widget.book;
+  }
+
+  Future<void> _toggleLike() async {
+    if (_togglingLike) return;
+    setState(() => _togglingLike = true);
+    try {
+      final api = BooksApi.create();
+      if (book.meLiked) {
+        await api.unlike(book.id);
+        if (!mounted) return;
+        setState(() {
+          book.meLiked = false;
+          book.likes = (book.likes - 1).clamp(0, 1 << 30);
+        });
+      } else {
+        await api.like(book.id);
+        if (!mounted) return;
+        setState(() {
+          book.meLiked = true;
+          book.likes = book.likes + 1;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update like: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _togglingLike = false);
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_togglingFav) return;
+    setState(() => _togglingFav = true);
+    try {
+      final api = BooksApi.create();
+      if (book.meFavorite) {
+        await api.unfavorite(book.id);
+        if (!mounted) return;
+        setState(() {
+          book.meFavorite = false;
+          book.favorites = (book.favorites - 1).clamp(0, 1 << 30);
+        });
+      } else {
+        await api.favorite(book.id);
+        if (!mounted) return;
+        setState(() {
+          book.meFavorite = true;
+          book.favorites = book.favorites + 1;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update favorite: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _togglingFav = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +100,7 @@ class BookDetailsPage extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0),
+                color: Colors.black.withOpacity(0.06),
                 blurRadius: 12,
                 offset: const Offset(0, 8),
               ),
@@ -36,10 +112,7 @@ class BookDetailsPage extends StatelessWidget {
               children: [
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(
-                    Icons.arrow_back,
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
+                  icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
                 ),
                 Expanded(
                   child: Text(
@@ -53,6 +126,21 @@ class BookDetailsPage extends StatelessWidget {
                     ),
                   ),
                 ),
+                IconButton(
+                  onPressed: _togglingLike ? null : _toggleLike,
+                  icon: Icon(
+                    book.meLiked ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.pink.shade300,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _togglingFav ? null : _toggleFavorite,
+                  icon: Icon(
+                    book.meFavorite ? Icons.star : Icons.star_border,
+                    color: const Color(0xFFBFAE01),
+                  ),
+                ),
+                const SizedBox(width: 8),
               ],
             ),
           ),
@@ -65,31 +153,29 @@ class BookDetailsPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             child: AspectRatio(
               aspectRatio: 1.2,
-              child: Image.network(
-                book.coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: isDark
-                      ? const Color(0xFF111111)
-                      : const Color(0xFFEAEAEA),
-                  child: const Center(
-                    child: Icon(
-                      Icons.menu_book_outlined,
-                      color: Color(0xFFBFAE01),
-                      size: 48,
+              child: (book.coverUrl ?? '').isNotEmpty
+                  ? Image.network(
+                      book.coverUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                        child: const Center(
+                          child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 48),
+                        ),
+                      ),
+                    )
+                  : Container(
+                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                      child: const Center(
+                        child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 48),
+                      ),
                     ),
-                  ),
-                ),
-              ),
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            book.author,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: const Color(0xFF666666),
-            ),
+            book.author ?? 'Unknown',
+            style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF666666)),
           ),
           const SizedBox(height: 6),
           Text(
@@ -102,7 +188,32 @@ class BookDetailsPage extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            book.description,
+            (book.category ?? '').isEmpty ? (book.language ?? '') : '${book.category} • ${book.language ?? ''}',
+            style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF999999)),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.favorite, size: 16, color: Colors.pink.shade300),
+              const SizedBox(width: 4),
+              Text('${book.likes}', style: GoogleFonts.inter(fontSize: 13)),
+              const SizedBox(width: 12),
+              const Icon(Icons.star, size: 16, color: Color(0xFFBFAE01)),
+              const SizedBox(width: 4),
+              Text('${book.favorites}', style: GoogleFonts.inter(fontSize: 13)),
+              const SizedBox(width: 12),
+              Icon(Icons.menu_book, size: 16, color: isDark ? Colors.white : Colors.black),
+              const SizedBox(width: 4),
+              Text('${book.reads}', style: GoogleFonts.inter(fontSize: 13)),
+              const SizedBox(width: 12),
+              Icon(Icons.play_arrow, size: 16, color: isDark ? Colors.white : Colors.black),
+              const SizedBox(width: 4),
+              Text('${book.plays}', style: GoogleFonts.inter(fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            (book.description ?? 'No description'),
             style: GoogleFonts.inter(
               fontSize: 14,
               height: 1.4,
@@ -115,69 +226,48 @@ class BookDetailsPage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BookReadPage(book: book),
-                      ),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.menu_book_outlined,
-                    color: Colors.black,
-                  ),
+                  onPressed: (book.pdfUrl ?? '').isNotEmpty
+                      ? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => BookReadPage(book: book)),
+                          );
+                        }
+                      : null,
+                  icon: const Icon(Icons.menu_book_outlined, color: Colors.black),
                   label: Text(
                     'Read',
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFBFAE01),
                     foregroundColor: Colors.black,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 12,
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                   ),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BookPlayPage(book: book),
-                      ),
-                    );
-                  },
+                  onPressed: (book.audioUrl ?? '').isNotEmpty
+                      ? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => BookPlayPage(book: book)),
+                          );
+                        }
+                      : null,
                   icon: const Icon(Icons.play_arrow, color: Colors.white),
                   label: Text(
                     'Play',
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark
-                        ? const Color(0xFF333333)
-                        : const Color(0xFF1A1A1A),
+                    backgroundColor: isDark ? const Color(0xFF333333) : const Color(0xFF1A1A1A),
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 12,
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                   ),
                 ),
               ],

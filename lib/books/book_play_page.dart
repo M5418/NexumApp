@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:just_audio/just_audio.dart';
 import 'books_home_page.dart' show Book;
+import 'books_api.dart';
 
 class BookPlayPage extends StatefulWidget {
   final Book book;
@@ -11,50 +14,128 @@ class BookPlayPage extends StatefulWidget {
 }
 
 class _BookPlayPageState extends State<BookPlayPage> {
-  bool _isPlaying = false;
-  double _currentPosition = 0.0;
-  double _totalDuration = 1.0;
+  final _player = AudioPlayer();
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<PlayerState>? _stateSub;
+
+  bool _loading = true;
+  String? _error;
+
+  Duration _position = Duration.zero;
+  Duration _duration = const Duration(seconds: 1);
   double _playbackSpeed = 1.0;
 
   @override
   void initState() {
     super.initState();
-    // Simulate total duration based on reading minutes
-    _totalDuration = widget.book.readingMinutes * 60.0; // Convert to seconds
+    _initPlayer();
   }
 
-  void _togglePlayPause() {
-    setState(() {
-      _isPlaying = !_isPlaying;
-    });
+  @override
+  void dispose() {
+    _posSub?.cancel();
+    _stateSub?.cancel();
+    _player.dispose();
+    _sendProgress(); // try to persist last position
+    super.dispose();
   }
 
-  void _seekTo(double position) {
-    setState(() {
-      _currentPosition = position;
-    });
-  }
+  Future<void> _initPlayer() async {
+    final url = (widget.book.audioUrl ?? '').trim();
+    if (url.isEmpty) {
+      setState(() {
+        _error = 'No audio available for this book';
+        _loading = false;
+      });
+      return;
+    }
 
-  void _changeSpeed() {
-    setState(() {
-      if (_playbackSpeed == 1.0) {
-        _playbackSpeed = 1.25;
-      } else if (_playbackSpeed == 1.25) {
-        _playbackSpeed = 1.5;
-      } else if (_playbackSpeed == 1.5) {
-        _playbackSpeed = 2.0;
-      } else {
-        _playbackSpeed = 1.0;
+    try {
+      // Fetch last progress and seek if available
+      try {
+        final api = BooksApi.create();
+        final res = await api.getProgress(widget.book.id);
+        final data = Map<String, dynamic>.from(res);
+        final d = Map<String, dynamic>.from(data['data'] ?? {});
+        final p = d['progress'];
+        if (p != null) {
+          final lastPos = int.tryParse((p['last_audio_position_sec'] ?? 0).toString()) ?? 0;
+          if (lastPos > 0) {
+            _position = Duration(seconds: lastPos);
+          }
+          final total = int.tryParse((p['audio_duration_sec'] ?? 0).toString()) ?? 0;
+          if (total > 0) {
+            _duration = Duration(seconds: total);
+          }
+        }
+      } catch (_) {}
+
+      await _player.setUrl(url);
+      if (_duration.inSeconds <= 1) {
+        _duration = _player.duration ?? _duration;
       }
-    });
+      if (_position > Duration.zero) {
+        await _player.seek(_position);
+      }
+
+      _posSub = _player.positionStream.listen((pos) {
+        setState(() {
+          _position = pos;
+        });
+      });
+      _stateSub = _player.playerStateStream.listen((state) {
+        if (mounted) setState(() {});
+      });
+
+      setState(() {
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _error = 'Failed to load audio: $e';
+      });
+    }
   }
 
-  String _formatDuration(double seconds) {
-    final duration = Duration(seconds: seconds.round());
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    final secs = duration.inSeconds.remainder(60);
+  Future<void> _togglePlayPause() async {
+    if (_player.playerState.playing) {
+      await _player.pause();
+    } else {
+      await _player.play();
+    }
+    _sendProgress();
+  }
 
+  Future<void> _seekTo(double seconds) async {
+    final clamped = seconds.clamp(0, (_duration.inSeconds.toDouble()).clamp(1, 1e9));
+    final pos = Duration(seconds: clamped.round());
+    await _player.seek(pos);
+    setState(() {
+      _position = pos;
+    });
+    _sendProgress();
+  }
+
+  Future<void> _changeSpeed() async {
+    if (_playbackSpeed == 1.0) {
+      _playbackSpeed = 1.25;
+    } else if (_playbackSpeed == 1.25) {
+      _playbackSpeed = 1.5;
+    } else if (_playbackSpeed == 1.5) {
+      _playbackSpeed = 2.0;
+    } else {
+      _playbackSpeed = 1.0;
+    }
+    await _player.setSpeed(_playbackSpeed);
+    setState(() {});
+  }
+
+  String _formatDuration(Duration d) {
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    final secs = d.inSeconds.remainder(60);
     if (hours > 0) {
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     } else {
@@ -62,10 +143,26 @@ class _BookPlayPageState extends State<BookPlayPage> {
     }
   }
 
+  Future<void> _sendProgress() async {
+    try {
+      final api = BooksApi.create();
+      await api.updateAudioProgress(
+        id: widget.book.id,
+        positionSec: _position.inSeconds,
+        durationSec: _duration.inSeconds > 0 ? _duration.inSeconds : null,
+      );
+    } catch (_) {
+      // ignore
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
+    final playing = _player.playerState.playing;
+    final totalSeconds = (_duration.inSeconds <= 0 ? 1 : _duration.inSeconds).toDouble();
 
     return Scaffold(
       backgroundColor: bg,
@@ -86,212 +183,177 @@ class _BookPlayPageState extends State<BookPlayPage> {
           IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert)),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const SizedBox(height: 40),
-            // Book cover
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Image.network(
-                  widget.book.coverUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: isDark
-                        ? const Color(0xFF111111)
-                        : const Color(0xFFEAEAEA),
-                    child: const Center(
-                      child: Icon(
-                        Icons.menu_book_outlined,
-                        color: Color(0xFFBFAE01),
-                        size: 64,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // Book info
-            Text(
-              widget.book.title,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.book.author,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                color: const Color(0xFF666666),
-              ),
-            ),
-            const SizedBox(height: 40),
-
-            // Progress bar
-            Column(
-              children: [
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: const Color(0xFFBFAE01),
-                    inactiveTrackColor: isDark
-                        ? const Color(0xFF333333)
-                        : const Color(0xFFE0E0E0),
-                    thumbColor: const Color(0xFFBFAE01),
-                    overlayColor: const Color(0xFFBFAE01).withValues(alpha: 51),
-                    trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 8,
-                    ),
-                  ),
-                  child: Slider(
-                    value: _currentPosition,
-                    max: _totalDuration,
-                    onChanged: _seekTo,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
+          : _error != null
+              ? Center(child: Text(_error!, style: GoogleFonts.inter()))
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
                     children: [
-                      Text(
-                        _formatDuration(_currentPosition),
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: const Color(0xFF666666),
+                      const SizedBox(height: 40),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: (widget.book.coverUrl ?? '').isNotEmpty
+                              ? Image.network(
+                                  widget.book.coverUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                    child: const Center(
+                                      child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 64),
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                  child: const Center(
+                                    child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 64),
+                                  ),
+                                ),
                         ),
                       ),
+                      const SizedBox(height: 32),
                       Text(
-                        _formatDuration(_totalDuration),
+                        widget.book.title,
+                        textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: const Color(0xFF666666),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : Colors.black,
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.book.author ?? 'Unknown',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(fontSize: 16, color: const Color(0xFF666666)),
+                      ),
+                      const SizedBox(height: 40),
+
+                      // Progress bar
+                      Column(
+                        children: [
+                          SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: const Color(0xFFBFAE01),
+                              inactiveTrackColor: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
+                              thumbColor: const Color(0xFFBFAE01),
+                              overlayColor: const Color(0xFFBFAE01).withValues(alpha: 51),
+                              trackHeight: 4,
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                            ),
+                            child: Slider(
+                              value: _position.inSeconds.clamp(0, totalSeconds.toInt()).toDouble(),
+                              max: totalSeconds,
+                              onChanged: (v) => _seekTo(v),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _formatDuration(_position),
+                                  style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
+                                ),
+                                Text(
+                                  _formatDuration(_duration),
+                                  style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 40),
+
+                      // Controls
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          // Speed control
+                          GestureDetector(
+                            onTap: _changeSpeed,
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  if (!isDark)
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 33),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${_playbackSpeed}x',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // Previous 15s
+                          IconButton(
+                            onPressed: () => _seekTo((_position.inSeconds - 15).clamp(0, _duration.inSeconds).toDouble()),
+                            icon: const Icon(Icons.replay_10, size: 32),
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+
+                          // Play/Pause
+                          GestureDetector(
+                            onTap: _togglePlayPause,
+                            child: Container(
+                              width: 64,
+                              height: 64,
+                              decoration: const BoxDecoration(color: Color(0xFFBFAE01), shape: BoxShape.circle),
+                              child: Icon(playing ? Icons.pause : Icons.play_arrow, color: Colors.black, size: 32),
+                            ),
+                          ),
+
+                          // Forward 15s
+                          IconButton(
+                            onPressed: () => _seekTo((_position.inSeconds + 15).clamp(0, _duration.inSeconds).toDouble()),
+                            icon: const Icon(Icons.forward_10, size: 32),
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+
+                          // Bookmark placeholder
+                          IconButton(
+                            onPressed: () {},
+                            icon: const Icon(Icons.bookmark_border, size: 28),
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                        ],
+                      ),
+
+                      const Spacer(),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          IconButton(onPressed: () {}, icon: const Icon(Icons.timer_outlined), color: isDark ? Colors.white : Colors.black),
+                          IconButton(onPressed: () {}, icon: const Icon(Icons.share_outlined), color: isDark ? Colors.white : Colors.black),
+                          IconButton(onPressed: () {}, icon: const Icon(Icons.playlist_play_outlined), color: isDark ? Colors.white : Colors.black),
+                        ],
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-
-            const SizedBox(height: 40),
-
-            // Controls
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // Speed control
-                GestureDetector(
-                  onTap: _changeSpeed,
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        if (!isDark)
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 33),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${_playbackSpeed}x',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Previous 15s
-                IconButton(
-                  onPressed: () {
-                    _seekTo((_currentPosition - 15).clamp(0, _totalDuration));
-                  },
-                  icon: const Icon(Icons.replay_10, size: 32),
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-
-                // Play/Pause
-                GestureDetector(
-                  onTap: _togglePlayPause,
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFBFAE01),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.black,
-                      size: 32,
-                    ),
-                  ),
-                ),
-
-                // Forward 15s
-                IconButton(
-                  onPressed: () {
-                    _seekTo((_currentPosition + 15).clamp(0, _totalDuration));
-                  },
-                  icon: const Icon(Icons.forward_10, size: 32),
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-
-                // Bookmark
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.bookmark_border, size: 28),
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-              ],
-            ),
-
-            const Spacer(),
-
-            // Additional controls
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.timer_outlined),
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.share_outlined),
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.playlist_play_outlined),
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
