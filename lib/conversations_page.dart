@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'widgets/segmented_tabs.dart';
 import 'widgets/new_chat_bottom_sheet.dart';
 import 'chat_page.dart';
@@ -7,6 +8,7 @@ import 'models/message.dart';
 import 'community_page.dart';
 import 'invitation_page.dart';
 import 'core/conversations_api.dart';
+import 'core/communities_api.dart';
 
 class ConversationsPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -29,10 +31,17 @@ class _ConversationsPageState extends State<ConversationsPage>
   late TabController _tabController;
   int _selectedTabIndex = 0;
   final ConversationsApi _conversationsApi = ConversationsApi();
+
+  // Chats state
   bool _loadingConversations = false;
   String? _errorConversations;
-
   final List<ChatItem> _chats = [];
+
+  // Communities state
+  final CommunitiesApi _communitiesApi = CommunitiesApi();
+  bool _loadingCommunities = false;
+  String? _errorCommunities;
+  final List<CommunityItem> _communities = [];
 
   @override
   void initState() {
@@ -44,6 +53,7 @@ class _ConversationsPageState extends State<ConversationsPage>
     );
     _selectedTabIndex = widget.initialTabIndex.clamp(0, 1).toInt();
     _loadConversations();
+    _loadCommunities();
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
         setState(() {
@@ -100,6 +110,44 @@ class _ConversationsPageState extends State<ConversationsPage>
     }
   }
 
+  Future<void> _loadCommunities() async {
+    try {
+      setState(() {
+        _loadingCommunities = true;
+        _errorCommunities = null;
+      });
+      final list = await _communitiesApi.listMine();
+      if (!mounted) return;
+      final mapped = list
+          .map(
+            (c) => CommunityItem(
+              id: c.id,
+              name: c.name,
+              avatarUrl: c.avatarUrl,
+              bio: c.bio,
+              friendsInCommon: c.friendsInCommon,
+              unreadPosts: c.unreadPosts,
+            ),
+          )
+          .toList();
+      setState(() {
+        _communities
+          ..clear()
+          ..addAll(mapped);
+      });
+    } catch (e) {
+      setState(() {
+        _errorCommunities = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingCommunities = false;
+        });
+      }
+    }
+  }
+
   MessageType _mapLastType(String? t) {
     switch (t) {
       case 'text':
@@ -119,7 +167,6 @@ class _ConversationsPageState extends State<ConversationsPage>
     if (dt == null) return '';
     final tod = TimeOfDay.fromDateTime(dt);
     return tod.format(context);
-    // Note: we guarded mounted after the await before calling this
   }
 
   Future<void> _navigateToChat(ChatItem chatItem) async {
@@ -141,12 +188,10 @@ class _ConversationsPageState extends State<ConversationsPage>
       ),
     );
 
-    // Refresh conversations after returning (updates unread counts)
     if (!mounted) return;
     await _loadConversations();
   }
 
-  // ignore: unused_element
   void _navigateToCommunity(CommunityItem community) {
     Navigator.push(
       context,
@@ -180,7 +225,6 @@ class _ConversationsPageState extends State<ConversationsPage>
       final user = result['user'];
       if (convId.isEmpty || user == null) return;
 
-      // Navigate to chat page
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -192,7 +236,6 @@ class _ConversationsPageState extends State<ConversationsPage>
         ),
       );
 
-      // Refresh conversations after returning
       await _loadConversations();
     });
   }
@@ -308,13 +351,12 @@ class _ConversationsPageState extends State<ConversationsPage>
         child: Column(
           children: [
             _buildAppBar(isDark),
-
             _buildTabSwitcher(isDark),
-
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
+                  // Chats tab
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 5),
                     child: Container(
@@ -340,16 +382,13 @@ class _ConversationsPageState extends State<ConversationsPage>
                                   separatorBuilder: (context, index) => Divider(
                                     height: 1,
                                     thickness: 0.5,
-                                    color: const Color(
-                                      0xFF666666,
-                                    ).withValues(alpha: 0.1),
+                                    color: const Color(0xFF666666).withValues(alpha: 0.1),
                                     indent: 64,
                                   ),
                                   itemBuilder: (context, index) {
                                     return GestureDetector(
                                       onTap: () => _navigateToChat(_chats[index]),
-                                      onLongPress: () =>
-                                          _showConversationActions(_chats[index]),
+                                      onLongPress: () => _showConversationActions(_chats[index]),
                                       child: Container(
                                         padding: const EdgeInsets.all(16),
                                         child: Row(
@@ -373,32 +412,24 @@ class _ConversationsPageState extends State<ConversationsPage>
                                             const SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
+                                                crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
                                                   Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceBetween,
+                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                     children: [
                                                       Text(
                                                         _chats[index].name,
                                                         style: GoogleFonts.inter(
                                                           fontSize: 16,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: isDark
-                                                              ? Colors.white
-                                                              : Colors.black,
+                                                          fontWeight: FontWeight.w600,
+                                                          color: isDark ? Colors.white : Colors.black,
                                                         ),
                                                       ),
                                                       Text(
                                                         _chats[index].lastTime,
                                                         style: GoogleFonts.inter(
                                                           fontSize: 12,
-                                                          color: const Color(
-                                                            0xFF666666,
-                                                          ),
+                                                          color: const Color(0xFF666666),
                                                         ),
                                                       ),
                                                     ],
@@ -406,86 +437,44 @@ class _ConversationsPageState extends State<ConversationsPage>
                                                   const SizedBox(height: 4),
                                                   Row(
                                                     children: [
-                                                      if (_chats[index].lastType ==
-                                                          MessageType.video)
-                                                        const Icon(
-                                                          Icons.videocam,
-                                                          size: 16,
-                                                          color: Color(0xFF666666),
-                                                        )
-                                                      else if (_chats[index]
-                                                              .lastType ==
-                                                          MessageType.images)
-                                                        const Icon(
-                                                          Icons.image,
-                                                          size: 16,
-                                                          color: Color(0xFF666666),
-                                                        )
-                                                      else if (_chats[index]
-                                                              .lastType ==
-                                                          MessageType.voice)
-                                                        const Icon(
-                                                          Icons.mic,
-                                                          size: 16,
-                                                          color: Color(0xFF666666),
-                                                        ),
-                                                      if (_chats[index].lastType !=
-                                                          MessageType.text)
+                                                      if (_chats[index].lastType == MessageType.video)
+                                                        const Icon(Icons.videocam, size: 16, color: Color(0xFF666666))
+                                                      else if (_chats[index].lastType == MessageType.images)
+                                                        const Icon(Icons.image, size: 16, color: Color(0xFF666666))
+                                                      else if (_chats[index].lastType == MessageType.voice)
+                                                        const Icon(Icons.mic, size: 16, color: Color(0xFF666666)),
+                                                      if (_chats[index].lastType != MessageType.text)
                                                         const SizedBox(width: 4),
                                                       Expanded(
                                                         child: Text(
                                                           _chats[index].lastText ??
-                                                              (_chats[index]
-                                                                          .lastType ==
-                                                                      MessageType
-                                                                          .images
+                                                              (_chats[index].lastType == MessageType.images
                                                                   ? 'Images'
-                                                                  : _chats[index]
-                                                                              .lastType ==
-                                                                          MessageType
-                                                                              .video
+                                                                  : _chats[index].lastType == MessageType.video
                                                                       ? 'Video'
-                                                                      : _chats[index]
-                                                                                  .lastType ==
-                                                                              MessageType
-                                                                                  .voice
+                                                                      : _chats[index].lastType == MessageType.voice
                                                                           ? 'Voice message'
                                                                           : ''),
                                                           style: GoogleFonts.inter(
                                                             fontSize: 14,
-                                                            color: const Color(
-                                                              0xFF666666,
-                                                            ),
+                                                            color: const Color(0xFF666666),
                                                           ),
                                                           maxLines: 1,
-                                                          overflow:
-                                                              TextOverflow.ellipsis,
+                                                          overflow: TextOverflow.ellipsis,
                                                         ),
                                                       ),
-                                                      if (_chats[index]
-                                                              .unreadCount >
-                                                          0)
+                                                      if (_chats[index].unreadCount > 0)
                                                         Container(
-                                                          padding:
-                                                              const EdgeInsets.symmetric(
-                                                            horizontal: 8,
-                                                            vertical: 4,
-                                                          ),
-                                                          decoration:
-                                                              const BoxDecoration(
-                                                            color: Color(
-                                                              0xFF007AFF,
-                                                            ),
-                                                            shape:
-                                                                BoxShape.circle,
+                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                          decoration: const BoxDecoration(
+                                                            color: Color(0xFF007AFF),
+                                                            shape: BoxShape.circle,
                                                           ),
                                                           child: Text(
                                                             '${_chats[index].unreadCount}',
-                                                            style:
-                                                                GoogleFonts.inter(
+                                                            style: GoogleFonts.inter(
                                                               fontSize: 12,
-                                                              fontWeight:
-                                                                  FontWeight.w600,
+                                                              fontWeight: FontWeight.w600,
                                                               color: Colors.white,
                                                             ),
                                                           ),
@@ -503,6 +492,7 @@ class _ConversationsPageState extends State<ConversationsPage>
                                 ),
                     ),
                   ),
+                  // Communities tab
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 5),
                     child: Container(
@@ -518,15 +508,175 @@ class _ConversationsPageState extends State<ConversationsPage>
                           ),
                         ],
                       ),
-                      child: const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(40.0),
-                          child: Text(
-                            'Communities coming soon...',
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                        ),
-                      ),
+                      child: _loadingCommunities
+                          ? const Center(child: CircularProgressIndicator())
+                          : _errorCommunities != null
+                              ? Center(child: Text(_errorCommunities!))
+                              : _communities.isEmpty
+                                  ? const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(40.0),
+                                        child: Text(
+                                          'No communities yet.\nAdd or update your interests to join communities automatically.',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      itemCount: _communities.length,
+                                      separatorBuilder: (context, index) => const SizedBox(height: 8),
+                                      itemBuilder: (context, index) {
+                                        final c = _communities[index];
+                                        return GestureDetector(
+                                          onTap: () => _navigateToCommunity(c),
+                                          child: Container(
+                                            margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: isDark ? Colors.black : Colors.white,
+                                              borderRadius: BorderRadius.circular(20),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withValues(alpha: 13),
+                                                  blurRadius: 10,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                // Avatar
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(24),
+                                                  child: CachedNetworkImage(
+                                                    imageUrl: c.avatarUrl,
+                                                    width: 48,
+                                                    height: 48,
+                                                    fit: BoxFit.cover,
+                                                    placeholder: (context, url) => Container(
+                                                      width: 48,
+                                                      height: 48,
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFF666666).withValues(alpha: 51),
+                                                        borderRadius: BorderRadius.circular(24),
+                                                      ),
+                                                      child: const Icon(Icons.group, color: Color(0xFF666666), size: 24),
+                                                    ),
+                                                    errorWidget: (context, url, error) => Container(
+                                                      width: 48,
+                                                      height: 48,
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFF666666).withValues(alpha: 51),
+                                                        borderRadius: BorderRadius.circular(24),
+                                                      ),
+                                                      child: const Icon(Icons.group, color: Color(0xFF666666), size: 24),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                // Content
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        c.name,
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 16,
+                                                          fontWeight: FontWeight.w600,
+                                                          color: isDark ? Colors.white : Colors.black,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        c.bio,
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 14,
+                                                          color: const Color(0xFF666666),
+                                                        ),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                // Right side: avatars stack + unread badge
+                                                Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                  children: [
+                                                    SizedBox(
+                                                      width: 80,
+                                                      height: 24,
+                                                      child: Stack(
+                                                        children: [
+                                                          for (int i = 0; i < 3; i++)
+                                                            Positioned(
+                                                              right: i * 16.0,
+                                                              child: Container(
+                                                                width: 24,
+                                                                height: 24,
+                                                                decoration: BoxDecoration(
+                                                                  color: _getMemberAvatarColor(i),
+                                                                  shape: BoxShape.circle,
+                                                                  border: Border.all(
+                                                                    color: isDark ? Colors.black : Colors.white,
+                                                                    width: 2,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          Positioned(
+                                                            right: 0,
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 2,
+                                                              ),
+                                                              decoration: BoxDecoration(
+                                                                color: const Color(0xFF666666).withValues(alpha: 26),
+                                                                borderRadius: BorderRadius.circular(12),
+                                                              ),
+                                                              child: Text(
+                                                                c.friendsInCommon,
+                                                                style: GoogleFonts.inter(
+                                                                  fontSize: 10,
+                                                                  fontWeight: FontWeight.w500,
+                                                                  color: const Color(0xFF666666),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    if (c.unreadPosts > 0)
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                        decoration: const BoxDecoration(
+                                                          color: Color(0xFF2196F3),
+                                                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                                                        ),
+                                                        child: Text(
+                                                          c.unreadPosts.toString(),
+                                                          style: GoogleFonts.inter(
+                                                            fontSize: 12,
+                                                            fontWeight: FontWeight.w600,
+                                                            color: Colors.white,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                     ),
                   ),
                 ],
@@ -536,6 +686,17 @@ class _ConversationsPageState extends State<ConversationsPage>
         ),
       ),
     );
+  }
+
+  Color _getMemberAvatarColor(int index) {
+    const colors = [
+      Color(0xFF2196F3),
+      Color(0xFF4CAF50),
+      Color(0xFFFF9800),
+      Color(0xFF9C27B0),
+      Color(0xFFF44336),
+    ];
+    return colors[index % colors.length];
   }
 
   Widget _buildAppBar(bool isDark) {

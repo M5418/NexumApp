@@ -139,9 +139,9 @@ class MessageActionsSheet extends StatelessWidget {
                                         : const Color(0xFFF3F4F6),
                                     borderRadius: BorderRadius.circular(24),
                                   ),
-                                  child: Text(
-                                    emoji,
-                                    style: const TextStyle(fontSize: 20),
+                                  child: const Text(
+                                    '👍',
+                                    style: TextStyle(fontSize: 20),
                                   ),
                                 ),
                               ),
@@ -198,8 +198,9 @@ class MessageActionsSheet extends StatelessWidget {
               label: 'Delete',
               destructive: true,
               onTap: () {
-                onDelete();
+                // Close the bottom sheet first, then show the confirm dialog
                 Navigator.pop(context);
+                Future.microtask(onDelete);
               },
             ),
           ],
