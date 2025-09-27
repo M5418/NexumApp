@@ -1,7 +1,12 @@
-import 'dart:io';
+import 'dart:io' show File, Platform;
+import 'dart:typed_data';
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../core/files_api.dart';
 import 'books_api.dart';
 
@@ -21,66 +26,182 @@ class _CreateBookPageState extends State<CreateBookPage> {
   int? _audioDurationSec;
   String _language = 'English';
 
+  // Native (mobile/desktop)
   File? _coverFile;
   File? _pdfFile;
   File? _audioFile;
 
+  // Web (bytes)
+  Uint8List? _coverBytes;
+  Uint8List? _pdfBytes;
+  Uint8List? _audioBytes;
+
+  // Friendly names + extensions (used across platforms)
+  String? _pdfName;
+  String? _audioName;
+  String? _coverExt;
+  String? _pdfExt;
+  String? _audioExt;
+
+  // Uploaded URLs
   String? _coverUrl;
   String? _pdfUrl;
   String? _audioUrl;
 
+  // Audio preview
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlayingPreview = false;
+
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() => _isPlayingPreview = false);
+    });
+  }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
     _authorCtrl.dispose();
     _descCtrl.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
   Future<void> _pickCover() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
-    if (res != null && res.files.isNotEmpty && res.files.first.path != null) {
-      setState(() {
-        _coverFile = File(res.files.first.path!);
-      });
-    }
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: kIsWeb,
+    );
+    if (res == null || res.files.isEmpty) return;
+
+    final f = res.files.first;
+    setState(() {
+      _coverExt = (f.extension ?? 'jpg').toLowerCase();
+      if (kIsWeb) {
+        _coverBytes = f.bytes;
+        _coverFile = null;
+      } else if (f.path != null) {
+        _coverFile = File(f.path!);
+        _coverBytes = null;
+      }
+    });
   }
 
   Future<void> _pickPdf() async {
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf'],
+      allowedExtensions: const ['pdf'],
       allowMultiple: false,
+      withData: kIsWeb,
     );
-    if (res != null && res.files.isNotEmpty && res.files.first.path != null) {
-      setState(() {
-        _pdfFile = File(res.files.first.path!);
-      });
-    }
+    if (res == null || res.files.isEmpty) return;
+
+    final f = res.files.first;
+    setState(() {
+      _pdfName = f.name;
+      _pdfExt = (f.extension ?? 'pdf').toLowerCase();
+      if (kIsWeb) {
+        _pdfBytes = f.bytes;
+        _pdfFile = null;
+      } else if (f.path != null) {
+        _pdfFile = File(f.path!);
+        _pdfBytes = null;
+      }
+    });
   }
 
   Future<void> _pickAudio() async {
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['mp3', 'm4a', 'wav', 'aac', 'webm'],
+      allowedExtensions: const ['mp3', 'm4a', 'wav', 'aac', 'webm'],
       allowMultiple: false,
+      withData: kIsWeb,
     );
-    if (res != null && res.files.isNotEmpty && res.files.first.path != null) {
-      setState(() {
-        _audioFile = File(res.files.first.path!);
-      });
+    if (res == null || res.files.isEmpty) return;
+
+    final f = res.files.first;
+    setState(() {
+      _audioName = f.name;
+      _audioExt = (f.extension ?? 'mp3').toLowerCase();
+      if (kIsWeb) {
+        _audioBytes = f.bytes;
+        _audioFile = null;
+      } else if (f.path != null) {
+        _audioFile = File(f.path!);
+        _audioBytes = null;
+      }
+    });
+  }
+
+  Future<void> _toggleAudioPreview() async {
+    try {
+      if (_isPlayingPreview) {
+        await _audioPlayer.stop();
+        if (mounted) setState(() => _isPlayingPreview = false);
+        return;
+      }
+
+      if (kIsWeb && _audioBytes != null) {
+        await _audioPlayer.play(BytesSource(_audioBytes!));
+      } else if (_audioFile != null) {
+        await _audioPlayer.play(DeviceFileSource(_audioFile!.path));
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No audio selected', style: GoogleFonts.inter())),
+        );
+        return;
+      }
+
+      if (mounted) setState(() => _isPlayingPreview = true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Audio preview failed: $e', style: GoogleFonts.inter())),
+      );
     }
+  }
+
+  Future<void> _showPdfPreviewDialog() async {
+    if (!kIsWeb && _pdfFile == null && _pdfBytes == null) return;
+    if (kIsWeb && _pdfBytes == null) return;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(16),
+          child: SizedBox(
+            width: 720,
+            height: 920,
+            child: kIsWeb
+                ? SfPdfViewer.memory(_pdfBytes!)
+                : SfPdfViewer.file(_pdfFile!),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _submit() async {
     if (_titleCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Title is required', style: GoogleFonts.inter())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Title is required', style: GoogleFonts.inter())),
+      );
       return;
     }
-    if (_pdfFile == null && _audioFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Attach at least a PDF or an audio file', style: GoogleFonts.inter())));
+    final hasPdf = _pdfFile != null || _pdfBytes != null;
+    final hasAudio = _audioFile != null || _audioBytes != null;
+    if (!hasPdf && !hasAudio) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Attach at least a PDF or an audio file', style: GoogleFonts.inter())),
+      );
       return;
     }
 
@@ -88,16 +209,30 @@ class _CreateBookPageState extends State<CreateBookPage> {
     try {
       final filesApi = FilesApi();
 
+      // Cover upload
       if (_coverFile != null) {
         final up = await filesApi.uploadFile(_coverFile!);
         _coverUrl = up['url'];
+      } else if (_coverBytes != null) {
+        final up = await filesApi.uploadBytes(_coverBytes!, ext: _coverExt ?? 'jpg');
+        _coverUrl = up['url'];
       }
+
+      // PDF upload
       if (_pdfFile != null) {
         final up = await filesApi.uploadFile(_pdfFile!);
         _pdfUrl = up['url'];
+      } else if (_pdfBytes != null) {
+        final up = await filesApi.uploadBytes(_pdfBytes!, ext: _pdfExt ?? 'pdf');
+        _pdfUrl = up['url'];
       }
+
+      // Audio upload
       if (_audioFile != null) {
         final up = await filesApi.uploadFile(_audioFile!);
+        _audioUrl = up['url'];
+      } else if (_audioBytes != null) {
+        final up = await filesApi.uploadBytes(_audioBytes!, ext: _audioExt ?? 'mp3');
         _audioUrl = up['url'];
       }
 
@@ -150,7 +285,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(25)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
+                color: Colors.black.withValues(alpha: 0.06),
                 blurRadius: 14,
                 offset: const Offset(0, 8),
               ),
@@ -239,18 +374,24 @@ class _CreateBookPageState extends State<CreateBookPage> {
           ),
           const SizedBox(height: 12),
 
-          // Cover + reading time
+          // Cover + reading time (Wrap to avoid overflow)
           _InputCard(
-            child: Row(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _SquareButton(icon: Icons.image_outlined, label: 'Cover', onTap: _pickCover),
-                const SizedBox(width: 12),
-                if (_coverFile != null)
+                if (kIsWeb && _coverBytes != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(_coverBytes!, width: 64, height: 64, fit: BoxFit.cover),
+                  )
+                else if (_coverFile != null)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: Image.file(_coverFile!, width: 64, height: 64, fit: BoxFit.cover),
                   ),
-                const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
@@ -259,6 +400,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                     border: Border.all(color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
                   ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.access_time, size: 16, color: Color(0xFFBFAE01)),
                       const SizedBox(width: 6),
@@ -271,9 +413,8 @@ class _CreateBookPageState extends State<CreateBookPage> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
                 SizedBox(
-                  width: 72,
+                  width: 96,
                   child: TextField(
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(hintText: 'mins', isDense: true),
@@ -289,7 +430,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
 
           const SizedBox(height: 12),
 
-          // Upload Book PDF section
+          // Upload Book PDF section with preview button (web-friendly)
           _InputCard(
             child: Row(
               children: [
@@ -297,18 +438,29 @@ class _CreateBookPageState extends State<CreateBookPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _pdfFile?.path.split(Platform.pathSeparator).last ?? 'No PDF selected',
+                    kIsWeb
+                        ? (_pdfName ?? 'No PDF selected')
+                        : (_pdfFile != null
+                            ? _pdfFile!.path.split(Platform.pathSeparator).last
+                            : 'No PDF selected'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(),
                   ),
                 ),
+                const SizedBox(width: 8),
+                if ((kIsWeb && _pdfBytes != null) || (!kIsWeb && _pdfFile != null))
+                  IconButton(
+                    tooltip: 'Preview',
+                    onPressed: _showPdfPreviewDialog,
+                    icon: const Icon(Icons.visibility),
+                  ),
               ],
             ),
           ),
           const SizedBox(height: 12),
 
-          // Upload Audio section
+          // Upload Audio section with play/pause preview
           _InputCard(
             child: Row(
               children: [
@@ -316,12 +468,22 @@ class _CreateBookPageState extends State<CreateBookPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _audioFile?.path.split(Platform.pathSeparator).last ?? 'No audio selected',
+                    kIsWeb
+                        ? (_audioName ?? 'No audio selected')
+                        : (_audioFile != null
+                            ? _audioFile!.path.split(Platform.pathSeparator).last
+                            : 'No audio selected'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(),
                   ),
                 ),
+                if ((kIsWeb && _audioBytes != null) || (!kIsWeb && _audioFile != null))
+                  IconButton(
+                    tooltip: _isPlayingPreview ? 'Pause' : 'Play preview',
+                    onPressed: _toggleAudioPreview,
+                    icon: Icon(_isPlayingPreview ? Icons.pause_circle : Icons.play_circle),
+                  ),
                 const SizedBox(width: 8),
                 SizedBox(
                   width: 96,
@@ -383,7 +545,7 @@ class _InputCard extends StatelessWidget {
         boxShadow: [
           if (!isDark)
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 10,
               offset: const Offset(0, 6),
             ),

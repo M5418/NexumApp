@@ -41,6 +41,9 @@ dependencies:
   record: ^6.1.1
   web: ^1.1.1
 
+  # Web-compatible PDF viewer
+  syncfusion_flutter_pdfviewer: ^26.2.11
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

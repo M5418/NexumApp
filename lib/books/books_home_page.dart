@@ -7,7 +7,6 @@ import 'books_api.dart';
 class Book {
   final String id;
   final String title;
-  final String? description;
   final String? author;
   final String? coverUrl;
   final String? pdfUrl;
@@ -31,7 +30,6 @@ class Book {
   Book({
     required this.id,
     required this.title,
-    this.description,
     this.author,
     this.coverUrl,
     this.pdfUrl,
@@ -58,7 +56,6 @@ class Book {
     return Book(
       id: (m['id'] ?? '').toString(),
       title: (m['title'] ?? '').toString(),
-      description: m['description']?.toString(),
       author: m['author']?.toString(),
       coverUrl: (m['coverUrl'] ?? '').toString().isEmpty ? null : (m['coverUrl'] as String),
       pdfUrl: (m['pdfUrl'] ?? '').toString().isEmpty ? null : (m['pdfUrl'] as String),
@@ -149,14 +146,12 @@ class _BooksHomePageState extends State<BooksHomePage> {
       final list = List<Map<String, dynamic>>.from(d['books'] ?? const []);
       final newBooks = list.map(Book.fromApi).toList();
 
-      if (!mounted) return;
       setState(() {
         _books.addAll(newBooks);
         _hasMore = newBooks.length >= _limit;
         _page += 1;
       });
     } catch (e) {
-      if (!mounted) return;
       setState(() {
         _error = 'Failed to load books: $e';
       });
@@ -184,8 +179,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
       context,
       MaterialPageRoute(builder: (_) => const CreateBookPage()),
     );
-    if (!mounted) return;
-    if (changed == true) {
+    if (changed == true && mounted) {
       await _fetchBooks(reset: true);
     }
   }
@@ -195,21 +189,18 @@ class _BooksHomePageState extends State<BooksHomePage> {
       final api = BooksApi.create();
       if (b.meFavorite) {
         await api.unfavorite(b.id);
-        if (!mounted) return;
         setState(() {
           b.meFavorite = false;
           b.favorites = (b.favorites - 1).clamp(0, 1 << 30);
         });
       } else {
         await api.favorite(b.id);
-        if (!mounted) return;
         setState(() {
           b.meFavorite = true;
           b.favorites = b.favorites + 1;
         });
       }
     } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update favorite: $e')),
       );
@@ -231,7 +222,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(25)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
+                color: Colors.black.withValues(alpha: 0),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -313,7 +304,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                         boxShadow: [
                           if (!isDark)
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
+                              color: Colors.black.withValues(alpha: 0),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),

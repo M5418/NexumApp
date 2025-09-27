@@ -1,483 +1,407 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
-import '../theme_provider.dart';
-import 'podcast_sample_data.dart';
-import 'podcast_models.dart';
+import 'podcasts_api.dart';
+import 'podcast_details_page.dart';
 import 'create_podcast_page.dart';
-import 'my_library_page.dart';
-import 'favorites_page.dart';
-import 'podcast_categories_page.dart';
-import 'favorite_playlist_page.dart';
+// Removed: import 'categories_page.dart';
+import 'player_page.dart';
 
-class PodcastsHomePage extends StatelessWidget {
+class Podcast {
+  final String id;
+  final String title;
+  final String? author;
+  final String? coverUrl;
+  final String? audioUrl;
+  final int? durationSec;
+  final String? language;
+  final String? category;
+  final List<String> tags;
+  final DateTime? createdAt;
+
+  int likes;
+  int favorites;
+  int plays;
+  bool meLiked;
+  bool meFavorite;
+
+  Podcast({
+    required this.id,
+    required this.title,
+    this.author,
+    this.coverUrl,
+    this.audioUrl,
+    this.durationSec,
+    this.language,
+    this.category,
+    this.tags = const [],
+    this.createdAt,
+    this.likes = 0,
+    this.favorites = 0,
+    this.plays = 0,
+    this.meLiked = false,
+    this.meFavorite = false,
+  });
+
+  factory Podcast.fromApi(Map<String, dynamic> m) {
+    final counts = Map<String, dynamic>.from(m['counts'] ?? {});
+    final me = Map<String, dynamic>.from(m['me'] ?? {});
+    return Podcast(
+      id: (m['id'] ?? '').toString(),
+      title: (m['title'] ?? '').toString(),
+      author: m['author']?.toString(),
+      coverUrl: (m['coverUrl'] ?? '').toString().isEmpty ? null : (m['coverUrl'] as String),
+      audioUrl: (m['audioUrl'] ?? '').toString().isEmpty ? null : (m['audioUrl'] as String),
+      durationSec: m['durationSec'] == null ? null : int.tryParse(m['durationSec'].toString()),
+      language: m['language']?.toString(),
+      category: m['category']?.toString(),
+      tags: List<String>.from((m['tags'] ?? const []) as List),
+      createdAt: m['createdAt'] != null ? DateTime.tryParse(m['createdAt'].toString()) : null,
+      likes: int.tryParse((counts['likes'] ?? 0).toString()) ?? 0,
+      favorites: int.tryParse((counts['favorites'] ?? 0).toString()) ?? 0,
+      plays: int.tryParse((counts['plays'] ?? 0).toString()) ?? 0,
+      meLiked: (me['liked'] ?? false) == true,
+      meFavorite: (me['favorite'] ?? false) == true,
+    );
+  }
+}
+
+class PodcastsHomePage extends StatefulWidget {
   const PodcastsHomePage({super.key});
+
+  @override
+  State<PodcastsHomePage> createState() => _PodcastsHomePageState();
+}
+
+class _PodcastsHomePageState extends State<PodcastsHomePage> {
+  final _controller = ScrollController();
+
+  List<Podcast> _podcasts = [];
+  bool _loading = true;
+  String? _error;
+  int _page = 1;
+  final int _limit = 20;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch(reset: true);
+    _controller.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _loading) return;
+    if (_controller.position.pixels >= _controller.position.maxScrollExtent - 200) {
+      _fetch(reset: false);
+    }
+  }
+
+  Future<void> _fetch({required bool reset}) async {
+    setState(() {
+      _loading = true;
+      if (reset) {
+        _error = null;
+        _page = 1;
+        _podcasts = [];
+        _hasMore = true;
+      }
+    });
+    try {
+      final api = PodcastsApi.create();
+      final res = await api.list(page: _page, limit: _limit, isPublished: true);
+      final data = Map<String, dynamic>.from(res);
+      final d = Map<String, dynamic>.from(data['data'] ?? {});
+      final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
+      final newItems = list.map(Podcast.fromApi).toList();
+
+      setState(() {
+        _podcasts.addAll(newItems);
+        _hasMore = newItems.length >= _limit;
+        _page += 1;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load podcasts: $e';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _timeAgo(DateTime? d) {
+    if (d == null) return '';
+    final diff = DateTime.now().difference(d);
+    if (diff.inDays >= 2) return '${diff.inDays} days ago';
+    if (diff.inDays >= 1) return 'Yesterday';
+    if (diff.inHours >= 1) return '${diff.inHours} hr';
+    if (diff.inMinutes >= 1) return '${diff.inMinutes} min';
+    return 'Just now';
+    }
+
+  Future<void> _openCreate() async {
+    final changed = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CreatePodcastPage()),
+    );
+    if (changed == true && mounted) {
+      await _fetch(reset: true);
+    }
+  }
+
+  Future<void> _openCategories() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PodcastsCategoriesPage()),
+    );
+  }
+
+  Future<void> _toggleFavorite(Podcast p) async {
+    try {
+      final api = PodcastsApi.create();
+      if (p.meFavorite) {
+        await api.unfavorite(p.id);
+        setState(() {
+          p.meFavorite = false;
+          p.favorites = (p.favorites - 1).clamp(0, 1 << 30);
+        });
+      } else {
+        await api.favorite(p.id);
+        setState(() {
+          p.meFavorite = true;
+          p.favorites = p.favorites + 1;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return; // guard BuildContext across async gap
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update favorite: $e', style: GoogleFonts.inter())),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, _) => Scaffold(
-        backgroundColor: bg,
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(100),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark ? Colors.black : Colors.white,
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(25),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 26),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: Icon(
-                            Icons.arrow_back,
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
-                        ),
-                        Text(
-                          'Podcast',
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(
-                          Icons.search,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF666666),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.more_horiz,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF666666),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        body: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              // Quick actions
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                sliver: _QuickActionsSliver(
-                  onCreate: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreatePodcastPage(),
-                    ),
-                  ),
-                  onLibrary: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MyLibraryPage(),
-                    ),
-                  ),
-                  onFavorites: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const FavoritesPage(),
-                    ),
-                  ),
-                  onCategories: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const PodcastCategoriesPage(),
-                    ),
-                  ),
-                ),
-              ),
-              // Section: Top Podcast
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverToBoxAdapter(
-                  child: _SectionHeader(
-                    title: 'Top Podcast',
-                    trailing: 'More',
-                    onTapTrailing: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PodcastCategoryFeedPage(
-                          title: 'Top Podcast',
-                          podcasts: PodcastSampleData.topPodcasts,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                sliver: _PodcastSliverGrid(
-                  podcasts: PodcastSampleData.topPodcasts,
-                  onTap: (p) => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => FavoritePlaylistPage(
-                        playlist: Playlist(
-                          id: 'auto-top-${p.id}',
-                          title: '${p.title} — Highlights',
-                          coverUrl: p.coverUrl,
-                          description: p.description,
-                          episodes: p.episodes,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Section: Educations
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                sliver: SliverToBoxAdapter(
-                  child: _SectionHeader(
-                    title: 'Educations',
-                    trailing: 'More',
-                    onTapTrailing: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PodcastCategoryFeedPage(
-                          title: 'Education & Languages',
-                          podcasts: PodcastSampleData.byDomain(
-                            'Education & Languages',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                sliver: _PodcastSliverGrid(
-                  podcasts: PodcastSampleData.byDomain('Education & Languages'),
-                  onTap: (p) => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => FavoritePlaylistPage(
-                        playlist: Playlist(
-                          id: 'edu-${p.id}',
-                          title: '${p.title} — Education',
-                          coverUrl: p.coverUrl,
-                          description: p.description,
-                          episodes: p.episodes,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String trailing;
-  final VoidCallback onTapTrailing;
-  const _SectionHeader({
-    required this.title,
-    required this.trailing,
-    required this.onTapTrailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Row(
-      children: [
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : Colors.black,
-          ),
-        ),
-        const Spacer(),
-        GestureDetector(
-          onTap: onTapTrailing,
-          child: Row(
-            children: [
-              Text(
-                trailing,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFBFAE01),
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.chevron_right,
-                color: Color(0xFFBFAE01),
-                size: 18,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PodcastSliverGrid extends StatelessWidget {
-  final List<Podcast> podcasts;
-  final void Function(Podcast) onTap;
-  const _PodcastSliverGrid({required this.podcasts, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.70,
-      ),
-      delegate: SliverChildBuilderDelegate((context, i) {
-        final p = podcasts[i];
-        return GestureDetector(
-          onTap: () => onTap(p),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                if (!isDark)
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 13),
-                    blurRadius: 10,
-                    offset: const Offset(0, 6),
-                  ),
-              ],
-            ),
-            child: Column(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(18),
-                  ),
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: CachedNetworkImage(
-                      imageUrl: p.coverUrl,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 400,
-                      memCacheHeight: 400,
-                      placeholder: (context, url) => Container(
-                        color: isDark
-                            ? const Color(0xFF111111)
-                            : const Color(0xFFEAEAEA),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        color: isDark
-                            ? const Color(0xFF111111)
-                            : const Color(0xFFEAEAEA),
-                        child: const Center(
-                          child: Icon(Icons.podcasts, color: Color(0xFFBFAE01)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        p.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        p.author,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: const Color(0xFF666666),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }, childCount: podcasts.length),
-    );
-  }
-}
-
-class _QuickActionsSliver extends StatelessWidget {
-  final VoidCallback onCreate;
-  final VoidCallback onLibrary;
-  final VoidCallback onFavorites;
-  final VoidCallback onCategories;
-  const _QuickActionsSliver({
-    required this.onCreate,
-    required this.onLibrary,
-    required this.onFavorites,
-    required this.onCategories,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 2.6,
-      ),
-      delegate: SliverChildListDelegate([
-        _QuickActionTile(
-          icon: Icons.add,
-          label: 'Add Podcast',
-          onTap: onCreate,
-          isDark: isDark,
-        ),
-        _QuickActionTile(
-          icon: Icons.library_music_outlined,
-          label: 'My Library',
-          onTap: onLibrary,
-          isDark: isDark,
-        ),
-        _QuickActionTile(
-          icon: Icons.favorite_border,
-          label: 'Favorites',
-          onTap: onFavorites,
-          isDark: isDark,
-        ),
-        _QuickActionTile(
-          icon: Icons.category_outlined,
-          label: 'Categories',
-          onTap: onCategories,
-          isDark: isDark,
-        ),
-      ]),
-    );
-  }
-}
-
-class _QuickActionTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool isDark;
-  const _QuickActionTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
-          ),
-          boxShadow: [
-            if (!isDark)
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(100),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black : Colors.white,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(25)),
+            boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 13),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
+                color: Colors.black.withValues(alpha: 0),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
               ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: isDark ? Colors.white : Colors.black),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : Colors.black,
-                ),
+            ],
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
+                  ),
+                  Text(
+                    'Podcasts',
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: 'Categories',
+                    onPressed: _openCategories,
+                    icon: Icon(Icons.category_outlined, color: isDark ? Colors.white : const Color(0xFF666666)),
+                  ),
+                  IconButton(
+                    onPressed: _openCreate,
+                    icon: Icon(Icons.add, color: isDark ? Colors.white : const Color(0xFF666666)),
+                  ),
+                ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Color(0xFFBFAE01), size: 18),
-          ],
+          ),
         ),
+      ),
+      body: RefreshIndicator(
+        color: const Color(0xFFBFAE01),
+        onRefresh: () => _fetch(reset: true),
+        child: _error != null
+            ? ListView(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_error!, style: GoogleFonts.inter(color: Colors.red)),
+                  ),
+                ],
+              )
+            : ListView.separated(
+                controller: _controller,
+                padding: const EdgeInsets.all(16),
+                itemCount: _podcasts.length + (_loading ? 1 : 0),
+                separatorBuilder: (ctx, idx) => const SizedBox(height: 10),
+                itemBuilder: (ctx, idx) {
+                  if (idx >= _podcasts.length) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
+                      ),
+                    );
+                  }
+                  final p = _podcasts[idx];
+                  return GestureDetector(
+                    onTap: () => Navigator.push(
+                      ctx,
+                      MaterialPageRoute(builder: (ctx) => PodcastDetailsPage(podcast: p)),
+                    ),
+                    child: Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          if (!isDark)
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              bottomLeft: Radius.circular(12),
+                            ),
+                            child: SizedBox(
+                              width: 110,
+                              height: 120,
+                              child: (p.coverUrl ?? '').isNotEmpty
+                                  ? Image.network(
+                                      p.coverUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                        child: const Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 24),
+                                      ),
+                                    )
+                                  : Container(
+                                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                      child: const Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 24),
+                                    ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    p.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white : Colors.black,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    p.author ?? 'Unknown',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF999999)),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        _timeAgo(p.createdAt),
+                                        style: GoogleFonts.inter(fontSize: 10, color: const Color(0xFF999999)),
+                                      ),
+                                      const Spacer(),
+                                      Icon(Icons.play_arrow, size: 14, color: isDark ? Colors.white : Colors.black),
+                                      const SizedBox(width: 4),
+                                      Text('${p.plays}',
+                                          style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                IconButton(
+                                  tooltip: p.meFavorite ? 'Unfavorite' : 'Favorite',
+                                  onPressed: () => _toggleFavorite(p),
+                                  icon: Icon(
+                                    p.meFavorite ? Icons.star : Icons.star_border,
+                                    size: 22,
+                                    color: const Color(0xFFBFAE01),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => (p.audioUrl ?? '').isNotEmpty
+                                      ? Navigator.push(
+                                          ctx,
+                                          MaterialPageRoute(builder: (ctx) => PlayerPage(podcast: p)),
+                                        )
+                                      : null,
+                                  child: Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFBFAE01),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.play_arrow, color: Colors.black, size: 18),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
 }
 
-class PodcastCategoryFeedPage extends StatelessWidget {
-  final String title;
-  final List<Podcast> podcasts;
-  const PodcastCategoryFeedPage({
-    super.key,
-    required this.title,
-    required this.podcasts,
-  });
+// Temporary placeholder to fix missing import/class until categories_page.dart exists
+class PodcastsCategoriesPage extends StatelessWidget {
+  const PodcastsCategoriesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -486,42 +410,23 @@ class PodcastCategoryFeedPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        centerTitle: false,
         backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
+        centerTitle: false,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
         title: Text(
-          title,
+          'Categories',
           style: GoogleFonts.inter(
-            fontSize: 18,
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.white : Colors.black,
           ),
         ),
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: _PodcastSliverGrid(
-              podcasts: podcasts,
-              onTap: (p) => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => FavoritePlaylistPage(
-                    playlist: Playlist(
-                      id: 'cat-${p.id}',
-                      title: '${p.title} — Highlights',
-                      coverUrl: p.coverUrl,
-                      description: p.description,
-                      episodes: p.episodes,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+      body: Center(
+        child: Text(
+          'Categories page coming soon',
+          style: GoogleFonts.inter(color: isDark ? Colors.white : Colors.black),
+        ),
       ),
     );
   }

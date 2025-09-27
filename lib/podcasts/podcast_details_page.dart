@@ -1,53 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'books_home_page.dart' show Book;
-import 'book_read_page.dart';
-import 'book_play_page.dart';
-import 'books_api.dart';
 
-class BookDetailsPage extends StatefulWidget {
-  final Book book;
-  const BookDetailsPage({super.key, required this.book});
+import 'podcasts_home_page.dart' show Podcast;
+import 'podcasts_api.dart';
+import 'player_page.dart';
+import 'add_to_playlist_sheet.dart';
+
+class PodcastDetailsPage extends StatefulWidget {
+  final Podcast podcast;
+  const PodcastDetailsPage({super.key, required this.podcast});
 
   @override
-  State<BookDetailsPage> createState() => _BookDetailsPageState();
+  State<PodcastDetailsPage> createState() => _PodcastDetailsPageState();
 }
 
-class _BookDetailsPageState extends State<BookDetailsPage> {
-  late Book book;
+class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
+  late Podcast podcast;
   bool _togglingLike = false;
   bool _togglingFav = false;
 
   @override
   void initState() {
     super.initState();
-    book = widget.book;
+    podcast = widget.podcast;
   }
 
   Future<void> _toggleLike() async {
     if (_togglingLike) return;
     setState(() => _togglingLike = true);
     try {
-      final api = BooksApi.create();
-      if (book.meLiked) {
-        await api.unlike(book.id);
+      final api = PodcastsApi.create();
+      if (podcast.meLiked) {
+        // no explicit unlike endpoint for "like" here; using /like DELETE
+        await api.unlike(podcast.id);
         if (!mounted) return;
         setState(() {
-          book.meLiked = false;
-          book.likes = (book.likes - 1).clamp(0, 1 << 30);
+          podcast.meLiked = false;
+          podcast.likes = (podcast.likes - 1).clamp(0, 1 << 30);
         });
       } else {
-        await api.like(book.id);
+        await api.like(podcast.id);
         if (!mounted) return;
         setState(() {
-          book.meLiked = true;
-          book.likes = book.likes + 1;
+          podcast.meLiked = true;
+          podcast.likes = podcast.likes + 1;
         });
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update like: $e')),
+        SnackBar(content: Text('Failed to update like: $e', style: GoogleFonts.inter())),
       );
     } finally {
       if (mounted) setState(() => _togglingLike = false);
@@ -58,26 +60,26 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
     if (_togglingFav) return;
     setState(() => _togglingFav = true);
     try {
-      final api = BooksApi.create();
-      if (book.meFavorite) {
-        await api.unfavorite(book.id);
+      final api = PodcastsApi.create();
+      if (podcast.meFavorite) {
+        await api.unfavorite(podcast.id);
         if (!mounted) return;
         setState(() {
-          book.meFavorite = false;
-          book.favorites = (book.favorites - 1).clamp(0, 1 << 30);
+          podcast.meFavorite = false;
+          podcast.favorites = (podcast.favorites - 1).clamp(0, 1 << 30);
         });
       } else {
-        await api.favorite(book.id);
+        await api.favorite(podcast.id);
         if (!mounted) return;
         setState(() {
-          book.meFavorite = true;
-          book.favorites = book.favorites + 1;
+          podcast.meFavorite = true;
+          podcast.favorites = podcast.favorites + 1;
         });
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update favorite: $e')),
+        SnackBar(content: Text('Failed to update favorite: $e', style: GoogleFonts.inter())),
       );
     } finally {
       if (mounted) setState(() => _togglingFav = false);
@@ -88,6 +90,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
     return Scaffold(
       backgroundColor: bg,
       appBar: PreferredSize(
@@ -95,9 +98,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
         child: Container(
           decoration: BoxDecoration(
             color: isDark ? Colors.black : Colors.white,
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(20),
-            ),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.06),
@@ -116,7 +117,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                 ),
                 Expanded(
                   child: Text(
-                    book.title,
+                    podcast.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
@@ -127,17 +128,19 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                   ),
                 ),
                 IconButton(
+                  tooltip: podcast.meLiked ? 'Unlike' : 'Like',
                   onPressed: _togglingLike ? null : _toggleLike,
                   icon: Icon(
-                    book.meLiked ? Icons.favorite : Icons.favorite_border,
+                    podcast.meLiked ? Icons.favorite : Icons.favorite_border,
                     color: Colors.pink.shade300,
                   ),
                 ),
                 IconButton(
+                  tooltip: podcast.meFavorite ? 'Unfavorite' : 'Favorite',
                   onPressed: _togglingFav ? null : _toggleFavorite,
-                  icon: Icon(
-                    book.meFavorite ? Icons.star : Icons.star_border,
-                    color: const Color(0xFFBFAE01),
+                  icon: const Icon(
+                    Icons.star,
+                    color: Color(0xFFBFAE01),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -152,34 +155,34 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: AspectRatio(
-              aspectRatio: 1.2,
-              child: (book.coverUrl ?? '').isNotEmpty
+              aspectRatio: 1,
+              child: (podcast.coverUrl ?? '').isNotEmpty
                   ? Image.network(
-                      book.coverUrl!,
+                      podcast.coverUrl!,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) => Container(
                         color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
                         child: const Center(
-                          child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 48),
+                          child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 48),
                         ),
                       ),
                     )
                   : Container(
                       color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
                       child: const Center(
-                        child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 48),
+                        child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 48),
                       ),
                     ),
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            book.author ?? 'Unknown',
+            podcast.author ?? 'Unknown',
             style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF666666)),
           ),
           const SizedBox(height: 6),
           Text(
-            book.title,
+            podcast.title,
             style: GoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.w700,
@@ -188,7 +191,11 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
           ),
           const SizedBox(height: 10),
           Text(
-            (book.category ?? '').isEmpty ? (book.language ?? '') : '${book.category} • ${book.language ?? ''}',
+            [
+              podcast.category ?? '',
+              podcast.language ?? '',
+              if (podcast.durationSec != null && podcast.durationSec! > 0) '${(podcast.durationSec! ~/ 60)} min',
+            ].where((s) => s.isNotEmpty).join(' • '),
             style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF999999)),
           ),
           const SizedBox(height: 10),
@@ -196,26 +203,23 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
             children: [
               Icon(Icons.favorite, size: 16, color: Colors.pink.shade300),
               const SizedBox(width: 4),
-              Text('${book.likes}', style: GoogleFonts.inter(fontSize: 13)),
+              Text('${podcast.likes}', style: GoogleFonts.inter(fontSize: 13)),
               const SizedBox(width: 12),
               const Icon(Icons.star, size: 16, color: Color(0xFFBFAE01)),
               const SizedBox(width: 4),
-              Text('${book.favorites}', style: GoogleFonts.inter(fontSize: 13)),
-              const SizedBox(width: 12),
-              Icon(Icons.menu_book, size: 16, color: isDark ? Colors.white : Colors.black),
-              const SizedBox(width: 4),
-              Text('${book.reads}', style: GoogleFonts.inter(fontSize: 13)),
+              Text('${podcast.favorites}', style: GoogleFonts.inter(fontSize: 13)),
               const SizedBox(width: 12),
               Icon(Icons.play_arrow, size: 16, color: isDark ? Colors.white : Colors.black),
               const SizedBox(width: 4),
-              Text('${book.plays}', style: GoogleFonts.inter(fontSize: 13)),
+              Text('${podcast.plays}', style: GoogleFonts.inter(fontSize: 13)),
             ],
           ),
           const SizedBox(height: 12),
 
-          // Since Book.description was removed from the model, show a safe fallback text.
           Text(
-            'No description provided.',
+            (podcast as dynamic).description?.toString().isNotEmpty == true
+                ? (podcast as dynamic).description
+                : 'No description provided.',
             style: GoogleFonts.inter(
               fontSize: 14,
               height: 1.4,
@@ -224,57 +228,45 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
           ),
 
           const SizedBox(height: 18),
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: (book.pdfUrl ?? '').isNotEmpty
-                      ? () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => BookReadPage(book: book)),
-                          );
-                        }
-                      : null,
-                  icon: const Icon(Icons.menu_book_outlined, color: Colors.black),
-                  label: Text(
-                    'Read',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFBFAE01),
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                  ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: (podcast.audioUrl ?? '').isNotEmpty
+                    ? () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => PlayerPage(podcast: podcast)),
+                        );
+                      }
+                    : null,
+                icon: const Icon(Icons.play_arrow, color: Colors.white),
+                label: Text('Play', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? const Color(0xFF333333) : const Color(0xFF1A1A1A),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: (book.audioUrl ?? '').isNotEmpty
-                      ? () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => BookPlayPage(book: book)),
-                          );
-                        }
-                      : null,
-                  icon: const Icon(Icons.play_arrow, color: Colors.white),
-                  label: Text(
-                    'Play',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.white),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? const Color(0xFF333333) : const Color(0xFF1A1A1A),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                  ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () => showAddToPlaylistSheet(context, podcast),
+                icon: const Icon(Icons.playlist_add, color: Colors.black),
+                label: Text(
+                  'Add to playlist',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black),
                 ),
-              ],
-            ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFBFAE01),
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+              ),
+            ],
           ),
         ],
       ),

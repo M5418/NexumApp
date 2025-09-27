@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart';
-import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'books_home_page.dart' show Book;
 import 'books_api.dart';
 
@@ -16,22 +13,19 @@ class BookReadPage extends StatefulWidget {
 }
 
 class _BookReadPageState extends State<BookReadPage> {
-  String? localPath;
+  final PdfViewerController _pdfController = PdfViewerController();
+
   bool isLoading = true;
   String? errorMessage;
-  int currentPage = 0;
+
+  int currentPage = 0;   // 0-based for our state
   int totalPages = 0;
-  int defaultPage = 0;
+  int defaultPage = 0;   // 0-based for our state
 
   @override
   void initState() {
     super.initState();
-    _loadProgressThenPdf();
-  }
-
-  Future<void> _loadProgressThenPdf() async {
-    await _loadProgress();
-    await _downloadAndLoadPdf();
+    _loadProgress();
   }
 
   Future<void> _loadProgress() async {
@@ -42,54 +36,30 @@ class _BookReadPageState extends State<BookReadPage> {
       final d = Map<String, dynamic>.from(data['data'] ?? {});
       final p = d['progress'];
       if (p != null) {
-        final lastPage = int.tryParse((p['last_page'] ?? 0).toString()) ?? 0;
+        final lastPage = int.tryParse((p['last_page'] ?? 0).toString()) ?? 0; // server is 1-based
         if (lastPage > 0) {
           defaultPage = (lastPage - 1).clamp(0, 1000000);
           currentPage = defaultPage;
         }
       }
     } catch (_) {
-      // Ignore progress errors
-    }
-  }
-
-  Future<void> _downloadAndLoadPdf() async {
-    try {
-      final pdfUrl = (widget.book.pdfUrl ?? '').isNotEmpty
-          ? widget.book.pdfUrl!
-          : 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
-
-      final response = await http.get(Uri.parse(pdfUrl));
-      if (response.statusCode == 200) {
-        final dir = await getApplicationDocumentsDirectory();
-        final file = File('${dir.path}/${widget.book.id}.pdf');
-        await file.writeAsBytes(response.bodyBytes);
-        setState(() {
-          localPath = file.path;
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          errorMessage = 'Failed to download PDF (Status: ${response.statusCode})';
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        errorMessage = 'Error loading PDF: $e';
-        isLoading = false;
-      });
+      // ignore errors
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   Future<void> _updateProgress() async {
     try {
       final api = BooksApi.create();
-      // PDFView page index is 0-based, server expects 1-based page number.
       final page = (currentPage + 1).clamp(1, totalPages == 0 ? 1 : totalPages);
-      await api.updateReadProgress(id: widget.book.id, page: page, totalPages: totalPages > 0 ? totalPages : null);
+      await api.updateReadProgress(
+        id: widget.book.id,
+        page: page,
+        totalPages: totalPages > 0 ? totalPages : null,
+      );
     } catch (_) {
-      // Silently ignore
+      // ignore
     }
   }
 
@@ -97,6 +67,10 @@ class _BookReadPageState extends State<BookReadPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
+    final pdfUrl = (widget.book.pdfUrl ?? '').isNotEmpty
+        ? widget.book.pdfUrl!
+        : 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
 
     return Scaffold(
       backgroundColor: bg,
@@ -114,7 +88,7 @@ class _BookReadPageState extends State<BookReadPage> {
         ),
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
         actions: [
-          if (!isLoading && localPath != null)
+          if (!isLoading && totalPages > 0)
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Center(
@@ -133,65 +107,37 @@ class _BookReadPageState extends State<BookReadPage> {
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
           : errorMessage != null
               ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 64, color: isDark ? Colors.white : Colors.black),
-                      const SizedBox(height: 16),
-                      Text(
-                        errorMessage!,
-                        style: GoogleFonts.inter(fontSize: 16, color: isDark ? Colors.white : Colors.black),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            isLoading = true;
-                            errorMessage = null;
-                          });
-                          _downloadAndLoadPdf();
-                        },
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01)),
-                        child: Text(
-                          'Retry',
-                          style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error_outline, size: 64, color: isDark ? Colors.white : Colors.black),
+                        const SizedBox(height: 16),
+                        Text(
+                          errorMessage!,
+                          style: GoogleFonts.inter(fontSize: 16, color: isDark ? Colors.white : Colors.black),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 )
-              : PDFView(
-                  filePath: localPath!,
-                  enableSwipe: true,
-                  swipeHorizontal: false,
-                  autoSpacing: false,
-                  pageFling: true,
-                  pageSnap: true,
-                  defaultPage: defaultPage,
-                  fitPolicy: FitPolicy.WIDTH,
-                  preventLinkNavigation: false,
-                  onRender: (pages) {
-                    setState(() {
-                      totalPages = pages ?? 0;
-                    });
+              : SfPdfViewer.network(
+                  pdfUrl,
+                  controller: _pdfController,
+                  canShowPaginationDialog: false,
+                  onDocumentLoaded: (details) {
+                    totalPages = details.document.pages.count;
+                    // Jump to last read page (1-based for viewer)
+                    if (defaultPage > 0) {
+                      _pdfController.jumpToPage(defaultPage + 1);
+                    }
+                    setState(() {}); // refresh page count in AppBar
                   },
-                  onError: (error) {
-                    setState(() {
-                      errorMessage = 'PDF Error: $error';
-                    });
-                  },
-                  onPageError: (page, error) {
-                    setState(() {
-                      errorMessage = 'Page Error: $error';
-                    });
-                  },
-                  onViewCreated: (PDFViewController controller) {},
-                  onLinkHandler: (String? uri) {},
-                  onPageChanged: (int? page, int? total) {
-                    setState(() {
-                      currentPage = page ?? 0;
-                    });
+                  onPageChanged: (details) {
+                    // details.newPageNumber is 1-based
+                    currentPage = (details.newPageNumber - 1).clamp(0, totalPages > 0 ? totalPages - 1 : 0);
                     _updateProgress();
                   },
                 ),

@@ -16,6 +16,7 @@ import storiesRoutes from './routes/stories.js';
 import communitiesRoutes from './routes/communities.js';
 import repostsRoutes from './routes/posts-reposts.js'; // NEW
 import booksRoutes from './routes/books.js'; // NEW
+import podcastsRoutes from './routes/podcasts.js'; // NEW
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -62,8 +63,11 @@ app.use('/api/messages', authMiddleware, messagesRoutes);
 app.use('/api/stories', authMiddleware, storiesRoutes);
 app.use('/api/communities', authMiddleware, communitiesRoutes);
 
-// Books routes (NEW)
+// Books routes
 app.use('/api/books', authMiddleware, booksRoutes);
+
+// Podcasts routes (NEW)
+app.use('/api/podcasts', authMiddleware, podcastsRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Global error:', err);
