@@ -1,15 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import 'widgets/segmented_tabs.dart';
 import 'widgets/post_card.dart';
-import 'data/sample_data.dart';
 import 'models/post.dart';
 
 import 'widgets/community_card.dart';
 import 'conversations_page.dart'; // for CommunityItem model
 import 'community_page.dart';
+
+import 'core/search_api.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -22,136 +24,82 @@ class _SearchPageState extends State<SearchPage> {
   final TextEditingController _controller = TextEditingController();
   int _selectedTabIndex = 0;
 
-  late final List<Post> _allPosts;
-  late final List<_SearchUser> _allUsers;
-  late final List<CommunityItem> _communities;
+  final SearchApi _searchApi = SearchApi();
+
+  bool _loading = false;
+  String? _error;
+
+  List<SearchAccount> _accounts = const [];
+  List<Post> _posts = const [];
+  List<CommunityItem> _communities = const [];
+
+  // Keep local visual toggle for the "Connect" button (UI only)
+  final Set<String> _connectedIds = <String>{};
+
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    _allPosts = SampleData.getSamplePosts();
-    _allUsers = [
-      _SearchUser(
-        'Gia Monroe',
-        '@gia_monroe_',
-        'https://picsum.photos/200/200?random=301',
-      ),
-      _SearchUser(
-        'Reid Vaughn',
-        '@reidv',
-        'https://picsum.photos/200/200?random=302',
-      ),
-      _SearchUser(
-        'Blake Lambert',
-        '@blakelmbrt',
-        'https://picsum.photos/200/200?random=303',
-      ),
-      _SearchUser(
-        'Aiden Blaze',
-        '@aidenblaze',
-        'https://picsum.photos/200/200?random=304',
-        connected: true,
-      ),
-      _SearchUser(
-        'Aiden Frost',
-        '@aidenfrost',
-        'https://picsum.photos/200/200?random=305',
-        connected: true,
-      ),
-      _SearchUser(
-        'Aiden Nova',
-        '@aidennova',
-        'https://picsum.photos/200/200?random=306',
-      ),
-      _SearchUser(
-        'Aiden Vibe',
-        '@aidenvibe',
-        'https://picsum.photos/200/200?random=307',
-      ),
-      _SearchUser(
-        'Aiden Wolf',
-        '@aidenwolf',
-        'https://picsum.photos/200/200?random=308',
-      ),
-      _SearchUser(
-        'Aiden Skye',
-        '@aidenskye',
-        'https://picsum.photos/200/200?random=309',
-      ),
-      _SearchUser(
-        'Aiden Lux',
-        '@aidenlux',
-        'https://picsum.photos/200/200?random=310',
-      ),
-    ];
-    _communities = [
-      CommunityItem(
-        id: 'c1',
-        name: 'Farm Harmony',
-        avatarUrl: 'https://picsum.photos/200/200?random=351',
-        bio: 'Connecting growers, makers, and nature lovers.',
-        friendsInCommon: '+102',
-        unreadPosts: 0,
-      ),
-      CommunityItem(
-        id: 'c2',
-        name: 'PartyPlanet Crew',
-        avatarUrl: 'https://picsum.photos/200/200?random=352',
-        bio: 'Vibes, dance, and shine together ✨',
-        friendsInCommon: '+1K',
-        unreadPosts: 0,
-      ),
-      CommunityItem(
-        id: 'c3',
-        name: 'Day One Code',
-        avatarUrl: 'https://picsum.photos/200/200?random=353',
-        bio: 'Builders and makers writing code from day one.',
-        friendsInCommon: '+345',
-        unreadPosts: 0,
-      ),
-    ];
+    // No initial fetch until user types.
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  List<_SearchUser> get _filteredUsers {
-    final q = _controller.text.trim().toLowerCase();
-    if (q.isEmpty) return _allUsers;
-    return _allUsers
-        .where(
-          (u) =>
-              u.name.toLowerCase().contains(q) ||
-              u.handle.toLowerCase().contains(q),
-        )
-        .toList();
+  void _onQueryChanged(String _) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _runSearch);
   }
 
-  List<Post> get _filteredPosts {
-    final q = _controller.text.trim().toLowerCase();
-    if (q.isEmpty) return _allPosts;
-    return _allPosts
-        .where(
-          (p) =>
-              p.userName.toLowerCase().contains(q) ||
-              p.text.toLowerCase().contains(q),
-        )
-        .toList();
-  }
+  Future<void> _runSearch() async {
+    final q = _controller.text.trim();
+    if (q.isEmpty) {
+      setState(() {
+        _loading = false;
+        _error = null;
+        _accounts = const [];
+        _posts = const [];
+        _communities = const [];
+        _connectedIds.clear();
+      });
+      return;
+    }
 
-  List<CommunityItem> get _filteredCommunities {
-    final q = _controller.text.trim().toLowerCase();
-    if (q.isEmpty) return _communities;
-    return _communities
-        .where(
-          (c) =>
-              c.name.toLowerCase().contains(q) ||
-              c.bio.toLowerCase().contains(q),
-        )
-        .toList();
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final result = await _searchApi.search(query: q, limit: 12);
+      if (!mounted) return;
+      setState(() {
+        _accounts = result.accounts;
+        _posts = result.posts;
+        _communities = result.communities
+            .map((c) => CommunityItem(
+                  id: c.id,
+                  name: c.name,
+                  avatarUrl: c.avatarUrl,
+                  bio: c.bio,
+                  friendsInCommon: '+0',
+                  unreadPosts: 0,
+                ))
+            .toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -224,7 +172,7 @@ class _SearchPageState extends State<SearchPage> {
                           Expanded(
                             child: TextField(
                               controller: _controller,
-                              onChanged: (_) => setState(() {}),
+                              onChanged: _onQueryChanged,
                               style: GoogleFonts.inter(fontSize: 15),
                               decoration: InputDecoration(
                                 isDense: true,
@@ -240,7 +188,13 @@ class _SearchPageState extends State<SearchPage> {
                             GestureDetector(
                               onTap: () {
                                 _controller.clear();
-                                setState(() {});
+                                setState(() {
+                                  _accounts = const [];
+                                  _posts = const [];
+                                  _communities = const [];
+                                  _connectedIds.clear();
+                                  _error = null;
+                                });
                               },
                               child: const Icon(
                                 Icons.close,
@@ -277,6 +231,19 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildTabContent(bool isDark) {
+    if (_error != null) {
+      return Center(
+        child: Text(
+          _error!,
+          style: GoogleFonts.inter(fontSize: 14, color: Colors.red),
+        ),
+      );
+    }
+
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+
     switch (_selectedTabIndex) {
       case 0:
         return _buildTrending(isDark);
@@ -290,41 +257,54 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
-  // Trending = a few suggested accounts + a trending post
+  // Trending
   Widget _buildTrending(bool isDark) {
-    final users = _filteredUsers.take(3).toList();
-    final posts = _filteredPosts;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-      children: [
-        for (int i = 0; i < users.length; i++) ...[
-          _UserRowTile(
-            user: users[i],
-            isDark: isDark,
-            onToggleConnect: () =>
-                setState(() => users[i].connected = !users[i].connected),
-          ),
-          if (i < users.length - 1) const SizedBox(height: 8),
-        ],
-        const SizedBox(height: 8),
-        if (posts.isNotEmpty) PostCard(post: posts.first, isDarkMode: isDark),
-      ],
+    return Center(
+      child: Text(
+        'Coming soon',
+        style: GoogleFonts.inter(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: const Color(0xFF666666),
+        ),
+      ),
     );
   }
 
   // Account tab
   Widget _buildAccounts(bool isDark) {
-    final users = _filteredUsers;
+    final users = _accounts;
+    if (_controller.text.isEmpty) {
+      return _emptyState('Start typing to search accounts', isDark);
+    }
+    if (users.isEmpty) {
+      return _emptyState('No accounts found', isDark);
+    }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       itemCount: users.length,
       separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final u = users[index];
+        final isConnected = _connectedIds.contains(u.id);
+        final vm = _SearchUser(
+          u.name,
+          u.username,
+          u.avatarUrl ?? '',
+          connected: isConnected,
+        );
         return _UserRowTile(
-          user: u,
+          user: vm,
           isDark: isDark,
-          onToggleConnect: () => setState(() => u.connected = !u.connected),
+          onToggleConnect: () {
+            setState(() {
+              if (isConnected) {
+                _connectedIds.remove(u.id);
+              } else {
+                _connectedIds.add(u.id);
+              }
+            });
+          },
         );
       },
     );
@@ -332,7 +312,10 @@ class _SearchPageState extends State<SearchPage> {
 
   // Post tab
   Widget _buildPosts(bool isDark) {
-    final posts = _filteredPosts;
+    final posts = _posts;
+    if (_controller.text.isEmpty) {
+      return _emptyState('Start typing to search posts', isDark);
+    }
     if (posts.isEmpty) {
       return _emptyState('No posts found', isDark);
     }
@@ -347,7 +330,10 @@ class _SearchPageState extends State<SearchPage> {
 
   // Community tab
   Widget _buildCommunities(bool isDark) {
-    final communities = _filteredCommunities;
+    final communities = _communities;
+    if (_controller.text.isEmpty) {
+      return _emptyState('Start typing to search communities', isDark);
+    }
     if (communities.isEmpty) {
       return _emptyState('No communities found', isDark);
     }
@@ -363,7 +349,10 @@ class _SearchPageState extends State<SearchPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => CommunityPage(communityName: c.name),
+                builder: (context) => CommunityPage(
+                  communityId: c.id,
+                  communityName: c.name,
+                ),
               ),
             );
           },
@@ -382,7 +371,7 @@ class _SearchPageState extends State<SearchPage> {
   }
 }
 
-// Simple user model for Search page
+// Simple user model used by the existing row tile
 class _SearchUser {
   final String name;
   final String handle;

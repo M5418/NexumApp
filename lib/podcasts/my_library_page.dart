@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'podcasts_api.dart';
+import 'my_episodes_page.dart';
 import 'favorite_playlist_page.dart';
 
 class MyLibraryPage extends StatefulWidget {
@@ -102,13 +103,6 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
               color: isDark ? Colors.white : Colors.black,
             )),
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-        actions: [
-          IconButton(
-            tooltip: 'New Playlist',
-            onPressed: _createPlaylist,
-            icon: const Icon(Icons.playlist_add),
-          ),
-        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
@@ -116,19 +110,62 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
               ? Center(child: Text(_error!, style: GoogleFonts.inter(color: Colors.red)))
               : CustomScrollView(
                   slivers: [
-                    // Playlists header
+                    // Quick actions (restored original design)
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      sliver: SliverToBoxAdapter(
-                        child: Text('My Playlists',
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : Colors.black,
-                            )),
+                      padding: const EdgeInsets.all(16),
+                      sliver: SliverGrid(
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 2.6,
+                        ),
+                        delegate: SliverChildListDelegate([
+                          _ActionCard(
+                            icon: Icons.drafts_outlined,
+                            label: 'Drafts',
+                            onTap: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Drafts coming soon', style: GoogleFonts.inter())),
+                              );
+                            },
+                            isDark: isDark,
+                          ),
+                          _ActionCard(
+                            icon: Icons.podcasts_outlined,
+                            label: 'My Episodes',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const MyEpisodesPage()),
+                            ),
+                            isDark: isDark,
+                          ),
+                          _ActionCard(
+                            icon: Icons.playlist_add,
+                            label: 'New Playlist',
+                            onTap: _createPlaylist,
+                            isDark: isDark,
+                          ),
+                        ]),
                       ),
                     ),
-                    // Playlists grid
+
+                    // Header
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      sliver: SliverToBoxAdapter(
+                        child: Text(
+                          'My Playlists',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Playlists grid (restored taller card design)
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       sliver: SliverGrid(
@@ -136,17 +173,18 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
                           crossAxisCount: 2,
                           mainAxisSpacing: 12,
                           crossAxisSpacing: 12,
-                          mainAxisExtent: 160,
+                          mainAxisExtent: 240,
                         ),
                         delegate: SliverChildBuilderDelegate((context, i) {
                           final pl = _playlists[i];
                           return GestureDetector(
                             onTap: () => Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => FavoritePlaylistPage(playlistId: pl.id)),
+                              MaterialPageRoute(
+                                builder: (context) => FavoritePlaylistPage(playlistId: pl.id),
+                              ),
                             ).then((_) => _load()),
                             child: Container(
-                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
                                 borderRadius: BorderRadius.circular(16),
@@ -159,26 +197,34 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
                                     ),
                                 ],
                               ),
+                              clipBehavior: Clip.antiAlias,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.queue_music, color: Color(0xFFBFAE01)),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          pl.name,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-                                        ),
+                                  AspectRatio(
+                                    aspectRatio: 1,
+                                    child: Container(
+                                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                      child: const Center(
+                                        child: Icon(Icons.playlist_play, color: Color(0xFFBFAE01)),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                  const Spacer(),
-                                  Text('${pl.itemsCount} items',
-                                      style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666))),
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                                    child: Text(
+                                      pl.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: true,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        height: 1.2,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? Colors.white : Colors.black,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -188,6 +234,64 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+// Grid action card used at the top (restored)
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isDark;
+  const _ActionCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
+          ),
+          boxShadow: [
+            if (!isDark)
+              BoxShadow(
+                color: Colors.black.withOpacity(0.13),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: isDark ? Colors.white : Colors.black),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Color(0xFFBFAE01), size: 18),
+          ],
+        ),
+      ),
     );
   }
 }

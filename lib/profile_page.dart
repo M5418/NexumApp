@@ -15,6 +15,8 @@ import 'core/auth_api.dart';
 import 'core/token_store.dart';
 import 'sign_in_page.dart';
 import 'core/profile_api.dart';
+import 'core/api_client.dart';
+import 'podcasts/podcasts_api.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -29,6 +31,27 @@ class _ProfilePageState extends State<ProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   Map<String, dynamic>? _profile;
   bool _loadingProfile = true;
+
+  String? _myUserId;
+
+  // Activity: posts I engaged with (like/bookmark/share/repost), excluding my own original posts
+  List<Post> _activityPosts = [];
+  bool _loadingActivity = true;
+  String? _errorActivity;
+
+  // Posts: created by me
+  List<Post> _myPosts = [];
+  bool _loadingMyPosts = true;
+  String? _errorMyPosts;
+
+  // Media grid: image URLs from my posts
+  List<String> _mediaImageUrls = [];
+  bool _loadingMedia = true;
+
+  // Podcasts: created by me
+  List<Map<String, dynamic>> _myPodcasts = [];
+  bool _loadingPodcasts = true;
+  String? _errorPodcasts;
 
   @override
   void initState() {
@@ -45,11 +68,16 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final res = await ProfileApi().me();
       final data = Map<String, dynamic>.from(res['data'] ?? {});
+      final meId = (data['user_id'] ?? '').toString();
       if (!mounted) return;
       setState(() {
         _profile = data;
+        _myUserId = meId.isNotEmpty ? meId : null;
         _loadingProfile = false;
       });
+      if (_myUserId != null) {
+        _loadAllTabs();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -64,9 +92,7 @@ class _ProfilePageState extends State<ProfilePage> {
       if (value is String) {
         final decoded = jsonDecode(value);
         if (decoded is List) {
-          return decoded
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
+          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         }
         return [];
       }
@@ -118,6 +144,391 @@ class _ProfilePageState extends State<ProfilePage> {
     return n.toString();
   }
 
+  DateTime _parseCreatedAt(dynamic v) {
+    if (v == null) return DateTime.now();
+    final s = v.toString();
+    final iso = DateTime.tryParse(s);
+    if (iso != null) return iso;
+    final m = RegExp(
+      r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$',
+    ).firstMatch(s);
+    if (m != null) {
+      final year = int.parse(m.group(1)!);
+      final month = int.parse(m.group(2)!);
+      final day = int.parse(m.group(3)!);
+      final hour = int.parse(m.group(4)!);
+      final minute = int.parse(m.group(5)!);
+      final second = int.parse(m.group(6)!);
+      final ms = int.tryParse(m.group(7) ?? '0') ?? 0;
+      return DateTime.utc(year, month, day, hour, minute, second, ms);
+    }
+    return DateTime.now();
+  }
+
+  Post _mapRawPostToModel(Map<String, dynamic> p) {
+    Map<String, dynamic> asMap(dynamic v) =>
+        v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
+
+    final original = asMap(p['original_post']);
+    // Use original post for content/media/author if it was hydrated
+    final contentSource = original.isNotEmpty ? original : p;
+
+    // Author (from content source)
+    final author = asMap(contentSource['author']);
+    final authorName = (author['name'] ?? author['username'] ?? 'User').toString();
+    final authorAvatar = (author['avatarUrl'] ?? author['avatar_url'] ?? '').toString();
+
+    // Counts
+    Map<String, dynamic> countsMap = {};
+    final directCounts = asMap(p['counts']);
+    final originalCounts = asMap(contentSource['counts']);
+    if (originalCounts.isNotEmpty) {
+      countsMap = originalCounts;
+    } else if (directCounts.isNotEmpty) {
+      countsMap = directCounts;
+    } else {
+      countsMap = {
+        'likes': p['likes_count'] ?? 0,
+        'comments': p['comments_count'] ?? 0,
+        'shares': p['shares_count'] ?? 0,
+        'reposts': p['reposts_count'] ?? 0,
+        'bookmarks': p['bookmarks_count'] ?? 0,
+      };
+    }
+
+    // Media: prefer `media` list; fallback to image_url/image_urls/video_url if needed
+    MediaType mediaType = MediaType.none;
+    String? videoUrl;
+    List<String> imageUrls = [];
+
+    List<dynamic> mediaList = [];
+    if (contentSource['media'] is List) {
+      mediaList = List<dynamic>.from(contentSource['media']);
+    } else if (p['media'] is List) {
+      mediaList = List<dynamic>.from(p['media']);
+    }
+
+    if (mediaList.isNotEmpty) {
+      final asMaps = mediaList
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+
+      String urlOf(Map<String, dynamic> m) =>
+          (m['url'] ?? m['src'] ?? m['link'] ?? '').toString();
+
+      final videos = asMaps.where((m) {
+        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '').toString().toLowerCase();
+        return t.contains('video');
+      }).toList();
+
+      final images = asMaps.where((m) {
+        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '').toString().toLowerCase();
+        return t.contains('image') || t.contains('photo') || t.isEmpty;
+      }).toList();
+
+      if (videos.isNotEmpty) {
+        mediaType = MediaType.video;
+        videoUrl = urlOf(videos.first);
+      } else if (images.length > 1) {
+        mediaType = MediaType.images;
+        imageUrls = images.map(urlOf).where((u) => u.isNotEmpty).toList();
+      } else if (images.length == 1) {
+        mediaType = MediaType.image;
+        final u = urlOf(images.first);
+        if (u.isNotEmpty) imageUrls = [u];
+      }
+    } else {
+      // Fallbacks for alternate schemas
+      List<String> _parseImageUrls(dynamic v) {
+        if (v == null) return [];
+        if (v is List) return v.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+        if (v is String && v.isNotEmpty) {
+          try {
+            final decoded = jsonDecode(v);
+            if (decoded is List) {
+              return decoded.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+            }
+          } catch (_) {}
+        }
+        return [];
+      }
+
+      final csVideo = (contentSource['video_url'] ?? '').toString();
+      final csImageUrl = (contentSource['image_url'] ?? '').toString();
+      final csImageUrls = _parseImageUrls(contentSource['image_urls']);
+
+      if (csVideo.isNotEmpty) {
+        mediaType = MediaType.video;
+        videoUrl = csVideo;
+      } else if (csImageUrls.length > 1) {
+        mediaType = MediaType.images;
+        imageUrls = csImageUrls;
+      } else if (csImageUrls.length == 1) {
+        mediaType = MediaType.image;
+        imageUrls = csImageUrls;
+      } else if (csImageUrl.isNotEmpty) {
+        mediaType = MediaType.image;
+        imageUrls = [csImageUrl];
+      }
+    }
+
+    // Me flags (from row, not original)
+    final me = asMap(p['me']);
+    final likedByMe = (me['liked'] ?? false) == true;
+    final bookmarkedByMe = (me['bookmarked'] ?? false) == true;
+
+    // Repost detection
+    final isRepost = p['repost_of'] != null || original.isNotEmpty;
+
+    // Reposter info (header)
+    final repostAuthor = asMap(p['repost_author']);
+    RepostedBy? repostedBy;
+    if (repostAuthor.isNotEmpty) {
+      // Only show "reposted this" when this repost row belongs to me
+      final isRepostRowByMe = (_myUserId != null) &&
+          (p['user_id'] != null) &&
+          p['repost_of'] != null &&
+          p['user_id'].toString() == _myUserId;
+      repostedBy = RepostedBy(
+        userName: (repostAuthor['name'] ?? repostAuthor['username'] ?? 'User').toString(),
+        userAvatarUrl: (repostAuthor['avatarUrl'] ?? repostAuthor['avatar_url'] ?? '').toString(),
+        actionType: isRepostRowByMe ? 'reposted this' : null,
+      );
+    }
+
+    // Text
+    final text = (contentSource['content'] ??
+            contentSource['text'] ??
+            p['original_content'] ??
+            p['text'] ??
+            p['content'] ??
+            '')
+        .toString();
+
+    return Post(
+      id: (p['id'] ?? '').toString(),
+      userName: authorName,
+      userAvatarUrl: authorAvatar,
+      createdAt: _parseCreatedAt(
+        p['created_at'] ?? p['createdAt'] ?? contentSource['created_at'] ?? contentSource['createdAt'],
+      ),
+      text: text,
+      mediaType: mediaType,
+      imageUrls: imageUrls,
+      videoUrl: videoUrl,
+      counts: PostCounts(
+        likes: _toInt(countsMap['likes']),
+        comments: _toInt(countsMap['comments']),
+        shares: _toInt(countsMap['shares']),
+        reposts: _toInt(countsMap['reposts']),
+        bookmarks: _toInt(countsMap['bookmarks']),
+      ),
+      userReaction: likedByMe ? ReactionType.like : null,
+      isBookmarked: bookmarkedByMe,
+      isRepost: isRepost,
+      repostedBy: repostedBy,
+      originalPostId: (p['repost_of'] ?? original['id'] ?? original['post_id'] ?? '').toString().isEmpty
+          ? null
+          : (p['repost_of'] ?? original['id'] ?? original['post_id']).toString(),
+    );
+  }
+
+  Future<void> _loadAllTabs() async {
+    _loadMyPosts();
+    _loadActivity();
+    _loadMyPodcasts();
+  }
+
+  Future<void> _loadMyPosts() async {
+    if (_myUserId == null) return;
+    setState(() {
+      _loadingMyPosts = true;
+      _errorMyPosts = null;
+      _loadingMedia = true;
+    });
+
+    try {
+      final dio = ApiClient().dio;
+      final res = await dio.get('/api/posts', queryParameters: {
+        'user_id': _myUserId,
+        'limit': 50,
+        'offset': 0,
+      });
+
+      final body = Map<String, dynamic>.from(res.data ?? {});
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final list = (data['posts'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      // Hydrate original posts for repost rows
+      final origIds = list
+          .map((p) => p['repost_of'])
+          .where((id) => id != null && id.toString().isNotEmpty)
+          .map((id) => id.toString())
+          .toSet();
+
+      final Map<String, Map<String, dynamic>> originals = {};
+      await Future.wait(origIds.map((id) async {
+        try {
+          final r = await dio.get('/api/posts/$id');
+          final rb = Map<String, dynamic>.from(r.data ?? {});
+          final rd = Map<String, dynamic>.from(rb['data'] ?? {});
+          if (rd['post'] is Map) {
+            originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
+          }
+        } catch (_) {}
+      }));
+
+      for (final p in list) {
+        final ro = p['repost_of'];
+        if (ro != null) {
+          final op = originals[ro.toString()];
+          if (op != null) p['original_post'] = op;
+        }
+      }
+
+      final posts = list.map(_mapRawPostToModel).toList();
+
+      // Build media grid only from my posts containing images
+      final mediaImages = <String>[];
+      for (final post in posts) {
+        if (post.mediaType == MediaType.image && post.imageUrls.isNotEmpty) {
+          mediaImages.add(post.imageUrls.first);
+        } else if (post.mediaType == MediaType.images && post.imageUrls.length > 1) {
+          mediaImages.addAll(post.imageUrls);
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _myPosts = posts;
+        _mediaImageUrls = mediaImages;
+        _loadingMyPosts = false;
+        _loadingMedia = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMyPosts = 'Failed to load your posts';
+        _loadingMyPosts = false;
+        _loadingMedia = false;
+      });
+    }
+  }
+
+   Future<void> _loadActivity() async {
+    if (_myUserId == null) return;
+    setState(() {
+      _loadingActivity = true;
+      _errorActivity = null;
+    });
+
+    try {
+      final dio = ApiClient().dio;
+      final res = await dio.get('/api/posts', queryParameters: {
+        'limit': 100,
+        'offset': 0,
+      });
+
+      final body = Map<String, dynamic>.from(res.data ?? {});
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final raw = (data['posts'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      // Activity filter: include reposts done by me, or posts I liked/shared/bookmarked; exclude my own originals
+      final filtered = <Map<String, dynamic>>[];
+      for (final p in raw) {
+        final userId = (p['user_id'] ?? '').toString();
+        final me = p['me'] is Map ? Map<String, dynamic>.from(p['me']) : <String, dynamic>{};
+        final isMineOriginalRow = userId == _myUserId && (p['repost_of'] == null);
+        final isRepostRowByMe = userId == _myUserId && (p['repost_of'] != null);
+        final likedByMe = (me['liked'] ?? false) == true;
+        final sharedByMe = (me['shared'] ?? false) == true;
+        final bookmarkedByMe = (me['bookmarked'] ?? false) == true;
+
+        final include = isRepostRowByMe || likedByMe || sharedByMe || bookmarkedByMe;
+        if (!include) continue;
+        if (isMineOriginalRow && !isRepostRowByMe) continue;
+
+        filtered.add(p);
+      }
+
+      // Hydrate original posts for repost rows (so we can display original content/media/author)
+      final origIds = filtered
+          .map((p) => p['repost_of'])
+          .where((id) => id != null && id.toString().isNotEmpty)
+          .map((id) => id.toString())
+          .toSet();
+
+      final Map<String, Map<String, dynamic>> originals = {};
+      await Future.wait(origIds.map((id) async {
+        try {
+          final r = await dio.get('/api/posts/$id');
+          final rb = Map<String, dynamic>.from(r.data ?? {});
+          final rd = Map<String, dynamic>.from(rb['data'] ?? {});
+          if (rd['post'] is Map) {
+            originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
+          }
+        } catch (_) {}
+      }));
+
+      for (final p in filtered) {
+        final ro = p['repost_of'];
+        if (ro != null) {
+          final op = originals[ro.toString()];
+          if (op != null) p['original_post'] = op;
+        }
+      }
+
+      final results = filtered.map(_mapRawPostToModel).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      if (!mounted) return;
+      setState(() {
+        _activityPosts = results;
+        _loadingActivity = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorActivity = 'Failed to load activity';
+        _loadingActivity = false;
+      });
+    }
+  }
+
+  Future<void> _loadMyPodcasts() async {
+    setState(() {
+      _loadingPodcasts = true;
+      _errorPodcasts = null;
+    });
+
+    try {
+      final api = PodcastsApi();
+      final res = await api.list(mine: true, limit: 50, page: 1);
+      final body = Map<String, dynamic>.from(res);
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final podcasts = (data['podcasts'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _myPodcasts = podcasts;
+        _loadingPodcasts = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorPodcasts = 'Failed to load your podcasts';
+        _loadingPodcasts = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -142,7 +553,7 @@ class _ProfilePageState extends State<ProfilePage> {
           final String? bioText = p['bio'] as String?;
           final String coverUrl =
               (p['cover_photo_url'] as String?) ??
-              'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop';
+                  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop';
           final String? profileUrl = p['profile_photo_url'] as String?;
           final List<Map<String, dynamic>> experiences = _parseListOfMap(
             p['professional_experiences'],
@@ -155,9 +566,7 @@ class _ProfilePageState extends State<ProfilePage> {
           );
           return Scaffold(
             key: scaffoldKey,
-            backgroundColor: isDark
-                ? const Color(0xFF0C0C0C)
-                : const Color(0xFFF1F4F8),
+            backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
             endDrawer: _buildDrawer(),
             body: _loadingProfile
                 ? const Center(child: CircularProgressIndicator())
@@ -181,13 +590,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
                                   InkWell(
-                                    onTap: () => scaffoldKey.currentState
-                                        ?.openEndDrawer(),
+                                    onTap: () => scaffoldKey.currentState?.openEndDrawer(),
                                     child: Icon(
                                       Icons.more_horiz,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : Colors.white,
+                                      color: isDark ? Colors.white70 : Colors.white,
                                     ),
                                   ),
                                 ],
@@ -199,15 +605,11 @@ class _ProfilePageState extends State<ProfilePage> {
                         Container(
                           margin: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF000000)
-                                : Colors.white,
+                            color: isDark ? const Color(0xFF000000) : Colors.white,
                             borderRadius: BorderRadius.circular(25),
                             boxShadow: [
                               BoxShadow(
-                                color: isDark
-                                    ? Colors.black.withValues(alpha: 0)
-                                    : Colors.black.withValues(alpha: 10),
+                                color: isDark ? Colors.black.withValues(alpha: 0) : Colors.black.withValues(alpha: 10),
                                 blurRadius: 25,
                                 offset: const Offset(0, 2),
                               ),
@@ -229,48 +631,33 @@ class _ProfilePageState extends State<ProfilePage> {
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           border: Border.all(
-                                            color: isDark
-                                                ? const Color(0xFF1F1F1F)
-                                                : Colors.white,
+                                            color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
                                             width: 4,
                                           ),
                                         ),
                                         child: CircleAvatar(
                                           radius: 58,
-                                          backgroundImage:
-                                              (profileUrl != null &&
-                                                  profileUrl.isNotEmpty)
+                                          backgroundImage: (profileUrl != null && profileUrl.isNotEmpty)
                                               ? NetworkImage(profileUrl)
                                               : null,
-                                          child:
-                                              (profileUrl == null ||
-                                                  profileUrl.isEmpty)
+                                          child: (profileUrl == null || profileUrl.isEmpty)
                                               ? Text(
-                                                  (fullName.isNotEmpty
-                                                          ? fullName.substring(
-                                                              0,
-                                                              1,
-                                                            )
-                                                          : '?')
-                                                      .toUpperCase(),
+                                                  (fullName.isNotEmpty ? fullName.substring(0, 1) : '?').toUpperCase(),
                                                   style: GoogleFonts.inter(
                                                     fontSize: 40,
                                                     fontWeight: FontWeight.w700,
-                                                    color: isDark
-                                                        ? Colors.white
-                                                        : Colors.black,
+                                                    color: isDark ? Colors.white : Colors.black,
                                                   ),
                                                 )
                                               : null,
                                         ),
                                       ),
                                     ),
-                                    // Stats Row
+                                                                        // Stats Row
                                     Transform.translate(
                                       offset: const Offset(0, -30),
                                       child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
+                                        mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
                                           _buildStatColumn(
                                             _formatCount(p['connections_total_count']),
@@ -278,8 +665,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                           ),
                                           const SizedBox(width: 40),
                                           _buildStatColumn(
-                                              _formatCount(p['connections_inbound_count']),
-                                              'Connected'),
+                                            _formatCount(p['connections_inbound_count']),
+                                            'Connected',
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -289,17 +677,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                       child: Column(
                                         children: [
                                           Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
+                                            mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
                                               Text(
                                                 fullName,
                                                 style: GoogleFonts.inter(
                                                   fontSize: 24,
                                                   fontWeight: FontWeight.w700,
-                                                  color: isDark
-                                                      ? Colors.white70
-                                                      : Colors.black87,
+                                                  color: isDark ? Colors.white70 : Colors.black87,
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
@@ -317,9 +702,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 atUsername,
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
-                                                  color: isDark
-                                                      ? Colors.white70
-                                                      : Colors.grey[600],
+                                                  color: isDark ? Colors.white70 : Colors.grey[600],
                                                 ),
                                               ),
                                             ),
@@ -329,9 +712,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                             textAlign: TextAlign.center,
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
-                                              color: isDark
-                                                  ? Colors.white70
-                                                  : Colors.grey[600],
+                                              color: isDark ? Colors.white70 : Colors.grey[600],
                                               height: 1.4,
                                             ),
                                           ),
@@ -350,26 +731,16 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 final expItems = experiences
                                                     .map(
                                                       (e) => ExperienceItem(
-                                                        title:
-                                                            (e['title'] ?? '')
-                                                                .toString(),
-                                                        subtitle:
-                                                            (e['subtitle']
-                                                                    as String?)
-                                                                ?.toString(),
+                                                        title: (e['title'] ?? '').toString(),
+                                                        subtitle: (e['subtitle'] as String?)?.toString(),
                                                       ),
                                                     )
                                                     .toList();
                                                 final trainItems = trainings
                                                     .map(
                                                       (t) => TrainingItem(
-                                                        title:
-                                                            (t['title'] ?? '')
-                                                                .toString(),
-                                                        subtitle:
-                                                            (t['subtitle']
-                                                                    as String?)
-                                                                ?.toString(),
+                                                        title: (t['title'] ?? '').toString(),
+                                                        subtitle: (t['subtitle'] as String?)?.toString(),
                                                       ),
                                                     )
                                                     .toList();
@@ -444,19 +815,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 await _loadProfile();
                                               },
                                               style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(
-                                                  0xFFBFAE01,
-                                                ),
-                                                foregroundColor: isDark
-                                                    ? Colors.black
-                                                    : Colors.black,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 12,
-                                                    ),
+                                                backgroundColor: const Color(0xFFBFAE01),
+                                                foregroundColor: isDark ? Colors.black : Colors.black,
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
                                                 shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(25),
+                                                  borderRadius: BorderRadius.circular(25),
                                                 ),
                                               ),
                                               child: Text(
@@ -464,9 +827,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w500,
-                                                  color: isDark
-                                                      ? Colors.black
-                                                      : Colors.black,
+                                                  color: isDark ? Colors.black : Colors.black,
                                                 ),
                                               ),
                                             ),
@@ -478,24 +839,17 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 Navigator.push(
                                                   context,
                                                   MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        const MyConnectionsPage(),
+                                                    builder: (_) => const MyConnectionsPage(),
                                                   ),
                                                 );
                                               },
                                               style: OutlinedButton.styleFrom(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 12,
-                                                    ),
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
                                                 shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(25),
+                                                  borderRadius: BorderRadius.circular(25),
                                                 ),
                                                 side: BorderSide(
-                                                  color: isDark
-                                                      ? Colors.white70
-                                                      : Colors.grey[300]!,
+                                                  color: isDark ? Colors.white70 : Colors.grey[300]!,
                                                 ),
                                               ),
                                               child: Text(
@@ -503,9 +857,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w500,
-                                                  color: isDark
-                                                      ? Colors.white70
-                                                      : Colors.black,
+                                                  color: isDark ? Colors.white70 : Colors.black,
                                                 ),
                                               ),
                                             ),
@@ -515,19 +867,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                             padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
                                               border: Border.all(
-                                                color: isDark
-                                                    ? Colors.white70
-                                                    : Colors.grey[300]!,
+                                                color: isDark ? Colors.white70 : Colors.grey[300]!,
                                               ),
-                                              borderRadius:
-                                                  BorderRadius.circular(40),
+                                              borderRadius: BorderRadius.circular(40),
                                             ),
                                             child: Icon(
                                               Icons.person_add_outlined,
                                               size: 20,
-                                              color: isDark
-                                                  ? Colors.white70
-                                                  : Colors.black,
+                                              color: isDark ? Colors.white70 : Colors.black,
                                             ),
                                           ),
                                         ],
@@ -538,9 +885,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                               // Professional Experiences Section
                               Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -549,9 +894,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         Icon(
                                           Icons.work,
                                           size: 20,
-                                          color: isDark
-                                              ? Colors.white70
-                                              : Colors.black87,
+                                          color: isDark ? Colors.white70 : Colors.black87,
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -559,9 +902,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.black87,
+                                            color: isDark ? Colors.white70 : Colors.black87,
                                           ),
                                         ),
                                       ],
@@ -574,9 +915,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                           'No experiences added yet.',
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.grey[600],
+                                            color: isDark ? Colors.white70 : Colors.grey[600],
                                           ),
                                         ),
                                       ),
@@ -589,9 +928,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w500,
-                                              color: isDark
-                                                  ? Colors.white70
-                                                  : Colors.black87,
+                                              color: isDark ? Colors.white70 : Colors.black87,
                                             ),
                                           ),
                                         ),
@@ -602,9 +939,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                               // Trainings Section
                               Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -613,9 +948,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         Icon(
                                           Icons.school,
                                           size: 20,
-                                          color: isDark
-                                              ? Colors.white70
-                                              : Colors.black87,
+                                          color: isDark ? Colors.white70 : Colors.black87,
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -623,9 +956,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.black87,
+                                            color: isDark ? Colors.white70 : Colors.black87,
                                           ),
                                         ),
                                       ],
@@ -638,17 +969,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                           'No trainings added yet.',
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.grey[600],
+                                            color: isDark ? Colors.white70 : Colors.grey[600],
                                           ),
                                         ),
                                       ),
                                     if (trainings.isNotEmpty)
                                       ...trainings.map(
                                         (tr) => Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Align(
                                               alignment: Alignment.centerLeft,
@@ -657,26 +985,18 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w500,
-                                                  color: isDark
-                                                      ? Colors.white70
-                                                      : Colors.black87,
+                                                  color: isDark ? Colors.white70 : Colors.black87,
                                                 ),
                                               ),
                                             ),
-                                            if ((tr['subtitle'] ?? '')
-                                                .toString()
-                                                .trim()
-                                                .isNotEmpty)
+                                            if ((tr['subtitle'] ?? '').toString().trim().isNotEmpty)
                                               Align(
                                                 alignment: Alignment.centerLeft,
                                                 child: Text(
-                                                  (tr['subtitle'] ?? '')
-                                                      .toString(),
+                                                  (tr['subtitle'] ?? '').toString(),
                                                   style: GoogleFonts.inter(
                                                     fontSize: 14,
-                                                    color: isDark
-                                                        ? Colors.white70
-                                                        : Colors.grey[600],
+                                                    color: isDark ? Colors.white70 : Colors.grey[600],
                                                   ),
                                                 ),
                                               ),
@@ -690,12 +1010,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                               // Interest Section
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  0,
-                                  20,
-                                  20,
-                                ),
+                                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -704,9 +1019,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         Icon(
                                           Icons.favorite,
                                           size: 20,
-                                          color: isDark
-                                              ? Colors.white70
-                                              : Colors.black87,
+                                          color: isDark ? Colors.white70 : Colors.black87,
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -714,9 +1027,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.black87,
+                                            color: isDark ? Colors.white70 : Colors.black87,
                                           ),
                                         ),
                                       ],
@@ -726,19 +1037,13 @@ class _ProfilePageState extends State<ProfilePage> {
                                       spacing: 8,
                                       runSpacing: 8,
                                       children: interests.isNotEmpty
-                                          ? interests
-                                                .map(
-                                                  (i) => _buildInterestChip(i),
-                                                )
-                                                .toList()
+                                          ? interests.map((i) => _buildInterestChip(i)).toList()
                                           : [
                                               Text(
                                                 'No interests selected yet.',
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
-                                                  color: isDark
-                                                      ? Colors.white70
-                                                      : Colors.grey[600],
+                                                  color: isDark ? Colors.white70 : Colors.grey[600],
                                                 ),
                                               ),
                                             ],
@@ -901,10 +1206,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const Spacer(),
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Wrap(
                     alignment: WrapAlignment.center,
                     spacing: 16,
@@ -1063,9 +1365,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 margin: const EdgeInsets.symmetric(horizontal: 5),
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1F1F1F)
-                      : const Color(0xFFF5F5F5),
+                  color: isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF5F5F5),
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: TabBar(
@@ -1076,9 +1376,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   indicatorSize: TabBarIndicatorSize.tab,
                   dividerColor: Colors.transparent,
                   labelColor: isDark ? Colors.white70 : Colors.white,
-                  unselectedLabelColor: isDark
-                      ? Colors.white70
-                      : const Color(0xFF666666),
+                  unselectedLabelColor:
+                      isDark ? Colors.white70 : const Color(0xFF666666),
                   labelStyle: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -1114,77 +1413,25 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildActivityTab() {
-    final activities = [
-      Post(
-        id: '1',
-        userName: 'Wellness Weekly',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            '5 Simple habits that changed my life completely. Small changes, big impact! 🌟',
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
+    Widget _buildActivityTab() {
+    if (_loadingActivity) return const Center(child: CircularProgressIndicator());
+    if (_errorActivity != null) return Center(child: Text(_errorActivity!));
+    if (_activityPosts.isEmpty) {
+      return ListView(
+        primary: false,
+        padding: const EdgeInsets.only(top: 10, bottom: 20),
+        children: [
+          Center(child: Text('No recent activity yet.')),
         ],
-        videoUrl: null,
-        counts: const PostCounts(
-          likes: 156,
-          comments: 34,
-          shares: 22,
-          reposts: 0,
-          bookmarks: 67,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: const RepostedBy(
-          userName: 'You',
-          userAvatarUrl:
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-          actionType: 'reposted this',
-        ),
-      ),
-      Post(
-        id: '2',
-        userName: 'Mindful Living',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            'Morning meditation changed everything for me. Starting each day with intention 🧘‍♀️',
-        createdAt: DateTime.now().subtract(const Duration(hours: 4)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: const PostCounts(
-          likes: 89,
-          comments: 12,
-          shares: 8,
-          reposts: 0,
-          bookmarks: 23,
-        ),
-        userReaction: ReactionType.like,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: const RepostedBy(
-          userName: 'You',
-          userAvatarUrl:
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-          actionType: 'liked this',
-        ),
-      ),
-    ];
-
+      );
+    }
     return ListView.builder(
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: activities.length,
+      itemCount: _activityPosts.length,
       itemBuilder: (context, index) {
         return PostCard(
-          post: activities[index],
+          post: _activityPosts[index],
           onReactionChanged: (postId, reaction) {},
           onBookmarkToggle: (postId) {},
           onShare: (postId) {},
@@ -1196,65 +1443,24 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildPostsTab() {
-    final posts = [
-      Post(
-        id: '6',
-        userName: 'Ludovic Carl',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text: 'Beautiful morning meditation session! 🧘‍♀️ #mindfulness',
-        createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
+    if (_loadingMyPosts) return const Center(child: CircularProgressIndicator());
+    if (_errorMyPosts != null) return Center(child: Text(_errorMyPosts!));
+    if (_myPosts.isEmpty) {
+      return ListView(
+        primary: false,
+        padding: const EdgeInsets.only(top: 10, bottom: 20),
+        children: [
+          Center(child: Text('No posts yet.')),
         ],
-        videoUrl: null,
-        counts: const PostCounts(
-          likes: 89,
-          comments: 12,
-          shares: 5,
-          reposts: 0,
-          bookmarks: 23,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: false,
-        repostedBy: null,
-      ),
-      Post(
-        id: '7',
-        userName: 'Ludovic Carl',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            'Just finished an amazing workout! Feeling energized and ready for the day 💪',
-        createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: const PostCounts(
-          likes: 156,
-          comments: 28,
-          shares: 12,
-          reposts: 0,
-          bookmarks: 45,
-        ),
-        userReaction: ReactionType.like,
-        isBookmarked: true,
-        isRepost: false,
-        repostedBy: null,
-      ),
-    ];
-
+      );
+    }
     return ListView.builder(
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: posts.length,
+      itemCount: _myPosts.length,
       itemBuilder: (context, index) {
         return HomePostCard(
-          post: posts[index],
+          post: _myPosts[index],
           onReactionChanged: (postId, reaction) {},
           onBookmarkToggle: (postId) {},
           onShare: (postId) {},
@@ -1266,23 +1472,33 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildPodcastsTab() {
-    return ListView(
+    if (_loadingPodcasts) return const Center(child: CircularProgressIndicator());
+    if (_errorPodcasts != null) return Center(child: Text(_errorPodcasts!));
+    if (_myPodcasts.isEmpty) {
+      return ListView(
+        primary: false,
+        padding: const EdgeInsets.all(16),
+        children: [
+          Center(child: Text('No podcasts yet.')),
+        ],
+      );
+    }
+    return ListView.builder(
       primary: false,
       padding: const EdgeInsets.all(16),
-      children: [
-        _buildPodcastItem(
-          'Wellness Wednesday',
-          'Episode 12: Finding Balance in Busy Life',
-          '45 min',
-          'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=300&h=300&fit=crop',
-        ),
-        _buildPodcastItem(
-          'Mindful Moments',
-          'Episode 8: The Power of Gratitude',
-          '32 min',
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop',
-        ),
-      ],
+      itemCount: _myPodcasts.length,
+      itemBuilder: (context, i) {
+        final p = _myPodcasts[i];
+        final title = (p['title'] ?? '').toString();
+        final episode = (p['description'] ?? '').toString();
+        final durationSec =
+            (p['durationSec'] is num) ? (p['durationSec'] as num).toInt() : null;
+        final duration = durationSec != null ? '${durationSec ~/ 60} min' : '';
+        final imageUrl = ((p['coverUrl'] ?? '') as String).isNotEmpty
+            ? (p['coverUrl'] as String)
+            : 'https://via.placeholder.com/300x300.png?text=Podcast';
+        return _buildPodcastItem(title, episode, duration, imageUrl);
+      },
     );
   }
 
@@ -1331,6 +1547,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 4),
                     Text(
                       episode,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         color: isDark
@@ -1360,21 +1578,22 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildMediaTab() {
-    final mediaItems = [
-      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=300&h=300&fit=crop',
-    ];
-
+    if (_loadingMedia) return const Center(child: CircularProgressIndicator());
+    if (_mediaImageUrls.isEmpty) {
+      return GridView.count(
+        primary: false,
+        crossAxisCount: 3,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+        children: const [],
+      );
+    }
     return GridView.count(
       primary: false,
       crossAxisCount: 3,
       mainAxisSpacing: 2,
       crossAxisSpacing: 2,
-      children: mediaItems.map((imageUrl) {
+      children: _mediaImageUrls.map((imageUrl) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.network(imageUrl, fit: BoxFit.cover),

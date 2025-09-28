@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../core/files_api.dart';
+import '../data/interest_domains.dart';
 import 'podcasts_api.dart';
 
 class CreatePodcastPage extends StatefulWidget {
@@ -147,6 +148,66 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
     }
   }
 
+  Future<void> _pickCategory() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            final filtered = interestDomains
+                .where((d) => d.toLowerCase().contains(query.toLowerCase()))
+                .toList();
+            return Container(
+              height: MediaQuery.of(ctx).size.height * 0.75,
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 12)],
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Search category',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) => setModal(() => query = val),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (ctx, i) {
+                        final v = filtered[i];
+                        return ListTile(
+                          title: Text(v, style: GoogleFonts.inter()),
+                          onTap: () => Navigator.pop(ctx, v),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _categoryCtrl.text = selected;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -279,7 +340,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // Language + Category
+                // Language + Category (Category is searchable dropdown)
                 Row(
                   children: [
                     Expanded(
@@ -292,7 +353,13 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                     Expanded(
                       child: TextField(
                         controller: _categoryCtrl,
-                        decoration: const InputDecoration(labelText: 'Category (optional)', border: OutlineInputBorder()),
+                        readOnly: true,
+                        onTap: _pickCategory,
+                        decoration: const InputDecoration(
+                          labelText: 'Category (choose from interests)',
+                          suffixIcon: Icon(Icons.arrow_drop_down),
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
                   ],

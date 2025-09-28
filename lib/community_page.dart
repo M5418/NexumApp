@@ -2,19 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 
-import 'data/sample_data.dart';
 import 'models/post.dart';
-import 'post_page.dart';
+import 'core/community_posts_api.dart';
+import 'community_post_page.dart';
 import 'theme_provider.dart';
 import 'widgets/post_card.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/segmented_tabs.dart';
 
 class CommunityPage extends StatefulWidget {
+  final String communityId;
   final String communityName;
 
-  const CommunityPage({super.key, required this.communityName});
+  const CommunityPage({
+    super.key,
+    required this.communityId,
+    required this.communityName,
+  });
 
   @override
   State<CommunityPage> createState() => _CommunityPageState();
@@ -24,7 +30,10 @@ class _CommunityPageState extends State<CommunityPage> {
   List<Post> _posts = [];
   int _selectedTabIndex = 0;
 
-  // Sample media albums for the Media tab
+  // Loading state for community posts
+  bool _loadingPosts = false;
+
+  // Sample media albums for the Media tab (can be replaced later with real media)
   final List<Map<String, String>> _mediaAlbums = [
     {
       'title': 'Green Moments',
@@ -58,35 +67,203 @@ class _CommunityPageState extends State<CommunityPage> {
     _loadData();
   }
 
-  void _loadData() {
+  Future<void> _loadData() async {
     setState(() {
-      // Reuse the same sample posts to ensure identical look to Home feed
-      _posts = SampleData.getSamplePosts();
+      _loadingPosts = true;
     });
+
+    try {
+      final list = await CommunityPostsApi()
+          .list(widget.communityId, limit: 20, offset: 0);
+      if (!mounted) return;
+      setState(() {
+        _posts = list;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to load community posts: ${_toError(e)}',
+            style: GoogleFonts.inter(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loadingPosts = false;
+      });
+    }
   }
 
-  void _onBookmarkToggle(String postId) {
-    setState(() {
-      final postIndex = _posts.indexWhere((post) => post.id == postId);
-      if (postIndex != -1) {
-        final post = _posts[postIndex];
-        final updated = Post(
-          id: post.id,
-          userName: post.userName,
-          userAvatarUrl: post.userAvatarUrl,
-          createdAt: post.createdAt,
-          text: post.text,
-          mediaType: post.mediaType,
-          imageUrls: post.imageUrls,
-          videoUrl: post.videoUrl,
-          counts: post.counts,
-          userReaction: post.userReaction,
-          isBookmarked: !post.isBookmarked,
-          isRepost: post.isRepost,
-          repostedBy: post.repostedBy,
-        );
-        _posts[postIndex] = updated;
+  String _toError(Object e) {
+    if (e is DioException) {
+      final code = e.response?.statusCode;
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        final reason = (data['error'] ?? data['message'] ?? data).toString();
+        return 'HTTP ${code ?? 'error'}: $reason';
       }
+      return 'HTTP ${code ?? 'error'}';
+    }
+    return e.toString();
+  }
+
+  // Toggle bookmark for a post (optimistic UI + backend)
+  void _onBookmarkToggle(String postId) async {
+    final postIndex = _posts.indexWhere((post) => post.id == postId);
+    if (postIndex == -1) return;
+
+    final original = _posts[postIndex];
+    final willBookmark = !original.isBookmarked;
+    final newBookmarks =
+        (original.counts.bookmarks + (willBookmark ? 1 : -1)).clamp(0, 1 << 30);
+
+    final updatedCounts = PostCounts(
+      likes: original.counts.likes,
+      comments: original.counts.comments,
+      shares: original.counts.shares,
+      reposts: original.counts.reposts,
+      bookmarks: newBookmarks,
+    );
+
+    final optimistic = original.copyWith(
+      isBookmarked: willBookmark,
+      counts: updatedCounts,
+    );
+
+    setState(() {
+      _posts[postIndex] = optimistic;
+    });
+
+    try {
+      if (willBookmark) {
+        await CommunityPostsApi().bookmark(widget.communityId, postId);
+      } else {
+        await CommunityPostsApi().unbookmark(widget.communityId, postId);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      // Revert UI on failure
+      setState(() {
+        _posts[postIndex] = original;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bookmark failed: ${_toError(e)}',
+              style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Likes: toggle on/off; long-press changes reaction type locally
+  void _onReactionChanged(String postId, ReactionType reaction) async {
+    final postIndex = _posts.indexWhere((post) => post.id == postId);
+    if (postIndex == -1) return;
+
+    final original = _posts[postIndex];
+    final hadReaction = original.userReaction != null;
+    final isSameReaction = original.userReaction == reaction;
+
+    // Toggle ON: no previous reaction
+    if (!hadReaction) {
+      final updatedCounts = PostCounts(
+        likes: original.counts.likes + 1,
+        comments: original.counts.comments,
+        shares: original.counts.shares,
+        reposts: original.counts.reposts,
+        bookmarks: original.counts.bookmarks,
+      );
+
+      final optimistic = original.copyWith(
+        userReaction: reaction,
+        counts: updatedCounts,
+      );
+
+      setState(() {
+        _posts[postIndex] = optimistic;
+      });
+
+      try {
+        await CommunityPostsApi().like(widget.communityId, postId);
+      } catch (e) {
+        if (!mounted) return;
+        // Revert UI on failure
+        setState(() {
+          _posts[postIndex] = original;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Like failed: ${_toError(e)}',
+                style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Toggle OFF: same reaction tapped again
+    if (isSameReaction) {
+      final newLikes = (original.counts.likes > 0
+          ? original.counts.likes - 1
+          : 0);
+      final updatedCounts = PostCounts(
+        likes: newLikes,
+        comments: original.counts.comments,
+        shares: original.counts.shares,
+        reposts: original.counts.reposts,
+        bookmarks: original.counts.bookmarks,
+      );
+
+      // Build a new Post to null-out userReaction
+      final optimistic = Post(
+        id: original.id,
+        userName: original.userName,
+        userAvatarUrl: original.userAvatarUrl,
+        createdAt: original.createdAt,
+        text: original.text,
+        mediaType: original.mediaType,
+        imageUrls: original.imageUrls,
+        videoUrl: original.videoUrl,
+        counts: updatedCounts,
+        userReaction: null,
+        isBookmarked: original.isBookmarked,
+        isRepost: original.isRepost,
+        repostedBy: original.repostedBy,
+        originalPostId: original.originalPostId,
+      );
+
+      setState(() {
+        _posts[postIndex] = optimistic;
+      });
+
+      try {
+        await CommunityPostsApi().unlike(widget.communityId, postId);
+      } catch (e) {
+        if (!mounted) return;
+        // Revert UI on failure
+        setState(() {
+          _posts[postIndex] = original;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unlike failed: ${_toError(e)}',
+                style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Change reaction type (still liked): UI-only; no backend call needed
+    setState(() {
+      _posts[postIndex] = original.copyWith(userReaction: reaction);
     });
   }
 
@@ -104,10 +281,7 @@ class _CommunityPageState extends State<CommunityPage> {
       onCopyLink: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Link copied to clipboard',
-              style: GoogleFonts.inter(),
-            ),
+            content: Text('Link copied to clipboard', style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF9E9E9E),
           ),
         );
@@ -151,45 +325,147 @@ class _CommunityPageState extends State<CommunityPage> {
     );
   }
 
+  // Navigate to full community post page for comments and details
   void _onComment(String postId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Comment functionality (UI only)',
-          style: GoogleFonts.inter(),
-        ),
-        backgroundColor: const Color(0xFFBFAE01),
-      ),
-    );
+    _onPostTap(postId);
   }
 
-  void _onRepost(String postId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Repost functionality (UI only)',
-          style: GoogleFonts.inter(),
-        ),
-        backgroundColor: const Color(0xFFBFAE01),
+  Future<void> _onRepost(String postId) async {
+    // Confirm repost action
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title:
+            Text('Repost this?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        content:
+            Text('Are you sure you want to repost this?', style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel', style: GoogleFonts.inter()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Repost',
+                style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
+          ),
+        ],
       ),
     );
+
+    if (confirm != true) return;
+
+    try {
+      await CommunityPostsApi().repost(widget.communityId, postId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Post reposted successfully', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+      await _loadData(); // refresh feed to include repost header/counts
+    } on DioException catch (e) {
+      final code = e.response?.statusCode ?? 0;
+      final data = e.response?.data;
+      final msg = _toError(e);
+
+      final isAlreadyReposted = code == 409 ||
+          (data is Map &&
+              ((data['error'] ?? data['message'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains('already')));
+
+      if (isAlreadyReposted) {
+        final remove = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Remove repost?',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            content: Text('You already reposted this. Remove your repost?',
+                style: GoogleFonts.inter()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('Cancel', style: GoogleFonts.inter()),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text('Remove',
+                    style: GoogleFonts.inter(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+
+        if (remove == true) {
+          try {
+            await CommunityPostsApi().unrepost(widget.communityId, postId);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Repost removed', style: GoogleFonts.inter()),
+                backgroundColor: const Color(0xFF9E9E9E),
+              ),
+            );
+            await _loadData();
+          } catch (e2) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to remove repost: ${_toError(e2)}',
+                    style: GoogleFonts.inter()),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Repost failed: $msg', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Repost failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _onPostTap(String postId) {
+    final p = _posts.firstWhere(
+      (e) => e.id == postId,
+      orElse: () => _posts.first,
+    );
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => PostPage(postId: postId)),
+      MaterialPageRoute(
+        builder: (context) => CommunityPostPage(
+          communityId: widget.communityId,
+          post: p, // pass full post for instant render
+        ),
+      ),
     );
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         final isDark = themeProvider.isDarkMode;
-        final backgroundColor = isDark
-            ? const Color(0xFF0C0C0C)
-            : const Color(0xFFF1F4F8);
+        final backgroundColor =
+            isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
         final appBarBg = isDark ? Colors.black : Colors.white;
         final appBarFg = isDark ? Colors.white : Colors.black;
 
@@ -239,149 +515,158 @@ class _CommunityPageState extends State<CommunityPage> {
                 SizedBox(
                   height: 650,
                   child: _selectedTabIndex == 0
-                      ? ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          itemCount: _posts.length,
-                          itemBuilder: (context, index) {
-                            final p = _posts[index];
-                            return PostCard(
-                              post: p,
-                              onBookmarkToggle: _onBookmarkToggle,
-                              onTap: _onPostTap,
-                              onShare: _onShare,
-                              onComment: _onComment,
-                              onRepost: _onRepost,
-                              isDarkMode: isDark,
-                            );
-                          },
-                        )
-                      : _selectedTabIndex == 1
-                      ? SingleChildScrollView(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 5),
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: isDark ? Colors.black : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: isDark
-                                        ? Colors.black.withValues(alpha: 0)
-                                        : Colors.black.withValues(alpha: 13),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'About this Community',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'People of Purpose is a community of changemakers, dreamers, and doers—united by passion and driven by impact. We uplift, serve, and grow together, creating meaningful change in our lives, our communities, and the world around us.\n\nFound at the heart of the community since 2015.',
+                      ? (_loadingPosts
+                          ? const Center(child: CircularProgressIndicator())
+                          : (_posts.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'No posts yet',
                                     style: GoogleFonts.inter(
                                       fontSize: 14,
-                                      height: 1.5,
                                       color: const Color(0xFF666666),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        )
-                      : SingleChildScrollView(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 5),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: isDark ? Colors.black : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: isDark
-                                        ? Colors.black.withValues(alpha: 0)
-                                        : Colors.black.withValues(alpha: 13),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 2),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  itemCount: _posts.length,
+                                  itemBuilder: (context, index) {
+                                    final p = _posts[index];
+                                    return PostCard(
+                                      post: p,
+                                      onReactionChanged: _onReactionChanged,
+                                      onBookmarkToggle: _onBookmarkToggle,
+                                      onTap: (id) => _onPostTap(id),
+                                      onShare: _onShare,
+                                      onComment: _onComment,
+                                      onRepost: _onRepost,
+                                      isDarkMode: isDark,
+                                    );
+                                  },
+                                )))
+                      : _selectedTabIndex == 1
+                          ? SingleChildScrollView(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 5),
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.black : Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: isDark
+                                            ? Colors.black
+                                                .withValues(alpha: 0)
+                                            : Colors.black
+                                                .withValues(alpha: 13),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'About this Community',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'People of Purpose is a community of changemakers, dreamers, and doers—united by passion and driven by impact. We uplift, serve, and grow together, creating meaningful change in our lives, our communities, and the world around us.\n\nFound at the heart of the community since 2015.',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          height: 1.5,
+                                          color: const Color(0xFF666666),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                              child: GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                            )
+                          : SingleChildScrollView(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 5),
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.black : Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: isDark
+                                            ? Colors.black
+                                                .withValues(alpha: 0)
+                                            : Colors.black
+                                                .withValues(alpha: 13),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 2,
                                       mainAxisSpacing: 8,
                                       crossAxisSpacing: 8,
                                       childAspectRatio: 1.2,
                                     ),
-                                itemCount: _mediaAlbums.length,
-                                itemBuilder: (context, index) {
-                                  final album = _mediaAlbums[index];
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? Colors.black
-                                          : Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
+                                    itemCount: _mediaAlbums.length,
+                                    itemBuilder: (context, index) {
+                                      final album = _mediaAlbums[index];
+                                      return Container(
+                                        decoration: BoxDecoration(
                                           color: isDark
-                                              ? Colors.black.withValues(
-                                                  alpha: 0,
-                                                )
-                                              : Colors.black.withValues(
-                                                  alpha: 13,
-                                                ),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 1),
-                                        ),
-                                      ],
-                                      border: Border.all(
-                                        color: const Color(
-                                          0xFF666666,
-                                        ).withValues(alpha: 26),
-                                        width: 0.6,
-                                      ),
-                                    ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: CachedNetworkImage(
-                                            imageUrl: album['imageUrl'] ?? '',
-                                            fit: BoxFit.cover,
-                                            width: double.infinity,
-                                            placeholder: (context, url) => SizedBox(
-                                              height: 160,
-                                              width: double.infinity,
-                                              child: Image.network(
-                                                'https://picsum.photos/1200/400?random=42',
-                                                fit: BoxFit.cover,
-                                              ),
+                                              ? Colors.black
+                                              : Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: isDark
+                                                  ? Colors.black
+                                                      .withValues(alpha: 0)
+                                                  : Colors.black
+                                                      .withValues(alpha: 13),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 1),
                                             ),
-                                            errorWidget:
-                                                (
-                                                  context,
-                                                  url,
-                                                  error,
-                                                ) => SizedBox(
+                                          ],
+                                          border: Border.all(
+                                            color: const Color(
+                                              0xFF666666,
+                                            ).withValues(alpha: 26),
+                                            width: 0.6,
+                                          ),
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: CachedNetworkImage(
+                                                imageUrl:
+                                                    album['imageUrl'] ?? '',
+                                                fit: BoxFit.cover,
+                                                width: double.infinity,
+                                                placeholder: (context, url) =>
+                                                    SizedBox(
                                                   height: 160,
                                                   width: double.infinity,
                                                   child: Image.network(
@@ -389,48 +674,60 @@ class _CommunityPageState extends State<CommunityPage> {
                                                     fit: BoxFit.cover,
                                                   ),
                                                 ),
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  album['title'] ?? '',
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: isDark
-                                                        ? Colors.white
-                                                        : Colors.black,
+                                                errorWidget:
+                                                    (context, url, error) =>
+                                                        SizedBox(
+                                                  height: 160,
+                                                  width: double.infinity,
+                                                  child: Image.network(
+                                                    'https://picsum.photos/1200/400?random=42',
+                                                    fit: BoxFit.cover,
                                                   ),
                                                 ),
                                               ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '• ${album['year'] ?? ''}',
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 12,
-                                                  color: const Color(
-                                                    0xFF666666,
+                                            ),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      album['title'] ?? '',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: isDark
+                                                            ? Colors.white
+                                                            : Colors.black,
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    '• ${album['year'] ?? ''}',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 12,
+                                                      color: const Color(
+                                                        0xFF666666,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  );
-                                },
+                                      );
+                                    },
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
                 ),
               ],
             ),
@@ -458,9 +755,8 @@ class _CommunityPageState extends State<CommunityPage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0)
-                : Colors.black.withValues(alpha: 13),
+            color:
+                isDark ? Colors.black.withValues(alpha: 0) : Colors.black.withValues(alpha: 13),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),

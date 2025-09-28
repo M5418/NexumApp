@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'podcasts_api.dart';
 import 'player_page.dart';
@@ -42,6 +43,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
     }
   }
 
+  String _mmss(int? sec) {
+    if (sec == null || sec <= 0) return '00:00';
+    final d = Duration(seconds: sec);
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -71,14 +80,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
                     crossAxisCount: 2,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 0.68,
+                    childAspectRatio: 0.68, // original taller tile
                   ),
                   itemBuilder: (context, i) {
-                    final p = _items[i];
+                    final e = _items[i];
                     return GestureDetector(
                       onTap: () {
-                        if ((p.audioUrl ?? '').isNotEmpty) {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(podcast: p)));
+                        if ((e.audioUrl ?? '').isNotEmpty) {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(podcast: e)));
                         }
                       },
                       child: Container(
@@ -100,12 +109,52 @@ class _FavoritesPageState extends State<FavoritesPage> {
                           children: [
                             AspectRatio(
                               aspectRatio: 1,
-                              child: (p.coverUrl ?? '').isNotEmpty
-                                  ? Image.network(p.coverUrl!, fit: BoxFit.cover)
-                                  : Container(
-                                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                                      child: const Center(child: Icon(Icons.podcasts, color: Color(0xFFBFAE01))),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  (e.coverUrl ?? '').isNotEmpty
+                                      ? CachedNetworkImage(
+                                          imageUrl: e.coverUrl!,
+                                          fit: BoxFit.cover,
+                                          memCacheWidth: 400,
+                                          memCacheHeight: 400,
+                                          placeholder: (context, url) => Container(
+                                            color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                          ),
+                                          errorWidget: (context, url, error) => Container(
+                                            color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                            child: const Center(
+                                              child: Icon(Icons.podcasts, color: Color(0xFFBFAE01)),
+                                            ),
+                                          ),
+                                        )
+                                      : Container(
+                                          color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                          child: const Center(child: Icon(Icons.podcasts, color: Color(0xFFBFAE01))),
+                                        ),
+                                  Positioned(
+                                    right: 8,
+                                    bottom: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.6),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.access_time, color: Colors.white, size: 12),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _mmss(e.durationSec),
+                                            style: GoogleFonts.inter(color: Colors.white, fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
                                     ),
+                                  ),
+                                ],
+                              ),
                             ),
                             Padding(
                               padding: const EdgeInsets.all(10),
@@ -113,7 +162,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    p.title,
+                                    e.title,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     softWrap: true,
@@ -124,7 +173,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    p.author ?? 'Unknown',
+                                    e.author ?? 'Unknown',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: GoogleFonts.inter(

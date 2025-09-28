@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/mentor.dart';
-import '../data/mentorship_data.dart';
+import '../core/mentorship_api.dart';
 
 class MySchedulePage extends StatefulWidget {
   const MySchedulePage({super.key});
@@ -13,25 +12,119 @@ class MySchedulePage extends StatefulWidget {
 class _MySchedulePageState extends State<MySchedulePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _api = MentorshipApi();
+
+  // Upcoming
+  bool _loadingUpcoming = true;
+  String? _errorUpcoming;
+  List<MentorshipSessionDto> _upcoming = [];
+
+  // Completed
+  bool _loadingCompleted = false;
+  String? _errorCompleted;
+  List<MentorshipSessionDto> _completed = [];
+
+  // Cancelled
+  bool _loadingCancelled = false;
+  String? _errorCancelled;
+  List<MentorshipSessionDto> _cancelled = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_onTabChanged);
+    _loadStatus('upcoming');
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    switch (_tabController.index) {
+      case 0:
+        if (_upcoming.isEmpty && !_loadingUpcoming) _loadStatus('upcoming');
+        break;
+      case 1:
+        if (_completed.isEmpty && !_loadingCompleted) _loadStatus('completed');
+        break;
+      case 2:
+        if (_cancelled.isEmpty && !_loadingCancelled) _loadStatus('cancelled');
+        break;
+    }
+  }
+
+  Future<void> _loadStatus(String status) async {
+    setState(() {
+      if (status == 'upcoming') {
+        _loadingUpcoming = true;
+        _errorUpcoming = null;
+      } else if (status == 'completed') {
+        _loadingCompleted = true;
+        _errorCompleted = null;
+      } else {
+        _loadingCancelled = true;
+        _errorCancelled = null;
+      }
+    });
+
+    try {
+      final items = await _api.listSessions(status);
+      if (!mounted) return;
+      setState(() {
+        if (status == 'upcoming') {
+          _upcoming = items;
+        } else if (status == 'completed') {
+          _completed = items;
+        } else {
+          _cancelled = items;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        final err = 'Failed to load $status sessions: $e';
+        if (status == 'upcoming') {
+          _errorUpcoming = err;
+        } else if (status == 'completed') {
+          _errorCompleted = err;
+        } else {
+          _errorCancelled = err;
+        }
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        if (status == 'upcoming') {
+          _loadingUpcoming = false;
+        } else if (status == 'completed') {
+          _loadingCompleted = false;
+        } else {
+          _loadingCancelled = false;
+        }
+      });
+    }
+  }
+
+  Future<void> _refreshCurrent() async {
+    switch (_tabController.index) {
+      case 0:
+        await _loadStatus('upcoming');
+        break;
+      case 1:
+        await _loadStatus('completed');
+        break;
+      case 2:
+        await _loadStatus('cancelled');
+        break;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark
-        ? const Color(0xFF0C0C0C)
-        : const Color(0xFFF1F4F8);
-    final surfaceColor = isDark
-        ? const Color(0xFF000000)
-        : const Color(0xFFFFFFFF);
-    final textColor = isDark
-        ? const Color(0xFFFFFFFF)
-        : const Color(0xFF000000);
+    final backgroundColor =
+        isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+    final surfaceColor = isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+    final textColor = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
     final secondaryTextColor = const Color(0xFF666666);
 
     return Scaffold(
@@ -88,21 +181,62 @@ class _MySchedulePageState extends State<MySchedulePage>
     Color textColor,
     Color secondaryTextColor,
   ) {
-    final upcomingSessions = MentorshipData.getUpcomingSessions();
+    final loading = _loadingUpcoming;
+    final error = _errorUpcoming;
+    final items = _upcoming;
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: upcomingSessions.length,
-      itemBuilder: (context, index) {
-        final session = upcomingSessions[index];
-        return _buildSessionCard(
-          session,
-          surfaceColor,
-          textColor,
-          secondaryTextColor,
-          showJoinButton: true,
-        );
-      },
+    return RefreshIndicator(
+      color: const Color(0xFFBFAE01),
+      onRefresh: () => _loadStatus('upcoming'),
+      child: loading && items.isEmpty
+          ? ListView(children: const [
+              SizedBox(height: 160),
+              Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01))),
+            ])
+          : error != null && items.isEmpty
+              ? ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    const SizedBox(height: 80),
+                    Center(child: Text(error, style: GoogleFonts.inter(color: Colors.red), textAlign: TextAlign.center)),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: ElevatedButton(
+                        onPressed: () => _loadStatus('upcoming'),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01)),
+                        child: Text('Retry', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
+                )
+              : items.isEmpty
+                  ? ListView(children: [
+                      const SizedBox(height: 160),
+                      Center(
+                        child: Text(
+                          'No upcoming sessions',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: secondaryTextColor,
+                          ),
+                        ),
+                      ),
+                    ])
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final s = items[index];
+                        return _buildSessionCard(
+                          s,
+                          surfaceColor,
+                          textColor,
+                          secondaryTextColor,
+                          showJoinButton: true,
+                        );
+                      },
+                    ),
     );
   }
 
@@ -111,45 +245,62 @@ class _MySchedulePageState extends State<MySchedulePage>
     Color textColor,
     Color secondaryTextColor,
   ) {
-    // Sample completed sessions
-    final completedSessions = [
-      MentorshipSession(
-        id: '10',
-        mentorId: '2',
-        mentorName: 'Sarah Kim',
-        mentorAvatar:
-            'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
-        scheduledTime: DateTime.now().subtract(const Duration(days: 3)),
-        duration: const Duration(hours: 1),
-        topic: 'Startup Strategy Discussion',
-        status: SessionStatus.completed,
-      ),
-      MentorshipSession(
-        id: '11',
-        mentorId: '4',
-        mentorName: 'Emily Rodriguez',
-        mentorAvatar:
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-        scheduledTime: DateTime.now().subtract(const Duration(days: 7)),
-        duration: const Duration(minutes: 45),
-        topic: 'Business Operations Review',
-        status: SessionStatus.completed,
-      ),
-    ];
+    final loading = _loadingCompleted;
+    final error = _errorCompleted;
+    final items = _completed;
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: completedSessions.length,
-      itemBuilder: (context, index) {
-        final session = completedSessions[index];
-        return _buildSessionCard(
-          session,
-          surfaceColor,
-          textColor,
-          secondaryTextColor,
-          showRatingButton: true,
-        );
-      },
+    return RefreshIndicator(
+      color: const Color(0xFFBFAE01),
+      onRefresh: () => _loadStatus('completed'),
+      child: loading && items.isEmpty
+          ? ListView(children: const [
+              SizedBox(height: 160),
+              Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01))),
+            ])
+          : error != null && items.isEmpty
+              ? ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    const SizedBox(height: 80),
+                    Center(child: Text(error, style: GoogleFonts.inter(color: Colors.red), textAlign: TextAlign.center)),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: ElevatedButton(
+                        onPressed: () => _loadStatus('completed'),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01)),
+                        child: Text('Retry', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
+                )
+              : items.isEmpty
+                  ? ListView(children: [
+                      const SizedBox(height: 160),
+                      Center(
+                        child: Text(
+                          'No completed sessions',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: secondaryTextColor,
+                          ),
+                        ),
+                      ),
+                    ])
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final s = items[index];
+                        return _buildSessionCard(
+                          s,
+                          surfaceColor,
+                          textColor,
+                          secondaryTextColor,
+                          showRatingButton: true,
+                        );
+                      },
+                    ),
     );
   }
 
@@ -158,59 +309,67 @@ class _MySchedulePageState extends State<MySchedulePage>
     Color textColor,
     Color secondaryTextColor,
   ) {
-    // Sample cancelled sessions
-    final cancelledSessions = [
-      MentorshipSession(
-        id: '20',
-        mentorId: '3',
-        mentorName: 'David Wilson',
-        mentorAvatar:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-        scheduledTime: DateTime.now().subtract(const Duration(days: 1)),
-        duration: const Duration(hours: 1),
-        topic: 'Marketing Strategy Session',
-        status: SessionStatus.cancelled,
-      ),
-    ];
+    final loading = _loadingCancelled;
+    final error = _errorCancelled;
+    final items = _cancelled;
 
-    if (cancelledSessions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.event_busy, size: 64, color: secondaryTextColor),
-            const SizedBox(height: 16),
-            Text(
-              'No cancelled sessions',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: secondaryTextColor,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: cancelledSessions.length,
-      itemBuilder: (context, index) {
-        final session = cancelledSessions[index];
-        return _buildSessionCard(
-          session,
-          surfaceColor,
-          textColor,
-          secondaryTextColor,
-          showRescheduleButton: true,
-        );
-      },
+    return RefreshIndicator(
+      color: const Color(0xFFBFAE01),
+      onRefresh: () => _loadStatus('cancelled'),
+      child: loading && items.isEmpty
+          ? ListView(children: const [
+              SizedBox(height: 160),
+              Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01))),
+            ])
+          : error != null && items.isEmpty
+              ? ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    const SizedBox(height: 80),
+                    Center(child: Text(error, style: GoogleFonts.inter(color: Colors.red), textAlign: TextAlign.center)),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: ElevatedButton(
+                        onPressed: () => _loadStatus('cancelled'),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01)),
+                        child: Text('Retry', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
+                )
+              : items.isEmpty
+                  ? ListView(children: [
+                      const SizedBox(height: 160),
+                      Center(
+                        child: Text(
+                          'No cancelled sessions',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: secondaryTextColor,
+                          ),
+                        ),
+                      ),
+                    ])
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final s = items[index];
+                        return _buildSessionCard(
+                          s,
+                          surfaceColor,
+                          textColor,
+                          secondaryTextColor,
+                          showRescheduleButton: true,
+                        );
+                      },
+                    ),
     );
   }
 
   Widget _buildSessionCard(
-    MentorshipSession session,
+    MentorshipSessionDto session,
     Color surfaceColor,
     Color textColor,
     Color secondaryTextColor, {
@@ -218,6 +377,9 @@ class _MySchedulePageState extends State<MySchedulePage>
     bool showRatingButton = false,
     bool showRescheduleButton = false,
   }) {
+    final avatar = session.mentorAvatar ??
+        'https://ui-avatars.com/api/?name=${Uri.encodeComponent(session.mentorName)}';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
@@ -226,7 +388,7 @@ class _MySchedulePageState extends State<MySchedulePage>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 13),
+            color: Colors.black.withAlpha(13),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -239,7 +401,7 @@ class _MySchedulePageState extends State<MySchedulePage>
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundImage: NetworkImage(session.mentorAvatar),
+                backgroundImage: NetworkImage(avatar),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -272,10 +434,10 @@ class _MySchedulePageState extends State<MySchedulePage>
           const SizedBox(height: 16),
           Row(
             children: [
-              Icon(Icons.access_time, size: 16, color: secondaryTextColor),
+              const Icon(Icons.access_time, size: 16, color: Color(0xFF666666)),
               const SizedBox(width: 8),
               Text(
-                _formatSessionDateTime(session.scheduledTime),
+                _formatSessionDateTime(session.scheduledAt),
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -284,7 +446,7 @@ class _MySchedulePageState extends State<MySchedulePage>
               ),
               const Spacer(),
               Text(
-                '${session.duration.inMinutes} min',
+                '${session.durationMinutes} min',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -299,7 +461,12 @@ class _MySchedulePageState extends State<MySchedulePage>
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  // Join meeting
+                  if ((session.meetingLink ?? '').isEmpty) {
+                    _snack('Meeting link not available yet.');
+                  } else {
+                    _snack('Meeting link: ${session.meetingLink}');
+                    // Optionally: launch URL with url_launcher if available.
+                  }
                 },
                 icon: const Icon(Icons.videocam, size: 18, color: Colors.black),
                 label: Text(
@@ -323,9 +490,7 @@ class _MySchedulePageState extends State<MySchedulePage>
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () {
-                  _showRatingDialog();
-                },
+                onPressed: () => _showRatingDialog(session.id),
                 icon: Icon(Icons.star_outline, size: 18, color: textColor),
                 label: Text(
                   'Rate Session',
@@ -336,7 +501,7 @@ class _MySchedulePageState extends State<MySchedulePage>
                   ),
                 ),
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: textColor.withValues(alpha: 51)),
+                  side: BorderSide(color: textColor.withAlpha(51)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -349,7 +514,8 @@ class _MySchedulePageState extends State<MySchedulePage>
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  // Reschedule session
+                  // TODO: Implement reschedule flow
+                  _snack('Reschedule flow coming soon');
                 },
                 icon: const Icon(Icons.schedule, size: 18, color: Colors.black),
                 label: Text(
@@ -374,33 +540,37 @@ class _MySchedulePageState extends State<MySchedulePage>
     );
   }
 
-  Widget _buildStatusChip(SessionStatus status, Color textColor) {
-    Color chipColor;
-    String statusText;
+  Widget _buildStatusChip(String status, Color textColor) {
+    final s = (status).toLowerCase();
+    late Color chipColor;
+    late String statusText;
 
-    switch (status) {
-      case SessionStatus.scheduled:
+    switch (s) {
+      case 'scheduled':
         chipColor = const Color.fromARGB(255, 219, 201, 34);
         statusText = 'Scheduled';
         break;
-      case SessionStatus.inProgress:
+      case 'in_progress':
         chipColor = Colors.green;
         statusText = 'In Progress';
         break;
-      case SessionStatus.completed:
+      case 'completed':
         chipColor = Colors.green;
         statusText = 'Completed';
         break;
-      case SessionStatus.cancelled:
+      case 'cancelled':
         chipColor = Colors.red;
         statusText = 'Cancelled';
         break;
+      default:
+        chipColor = const Color(0xFF666666);
+        statusText = s.isEmpty ? 'Unknown' : s;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: chipColor.withValues(alpha: 26),
+        color: chipColor.withAlpha(26),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -416,13 +586,13 @@ class _MySchedulePageState extends State<MySchedulePage>
 
   String _formatSessionDateTime(DateTime dateTime) {
     final now = DateTime.now();
-    final difference = dateTime.difference(now);
-
-    if (difference.inDays == 0) {
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(dateTime.year, dateTime.month, dateTime.day);
+    if (d == today) {
       return 'Today ${_formatTime(dateTime)}';
-    } else if (difference.inDays == 1) {
+    } else if (d == today.add(const Duration(days: 1))) {
       return 'Tomorrow ${_formatTime(dateTime)}';
-    } else if (difference.inDays == -1) {
+    } else if (d == today.subtract(const Duration(days: 1))) {
       return 'Yesterday ${_formatTime(dateTime)}';
     } else {
       return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${_formatTime(dateTime)}';
@@ -435,74 +605,108 @@ class _MySchedulePageState extends State<MySchedulePage>
     final period = hour >= 12 ? 'PM' : 'AM';
     final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
     return '$displayHour:$minute $period';
+    }
+
+  void _snack(String m) {
+    final s = ScaffoldMessenger.maybeOf(context);
+    s?.showSnackBar(SnackBar(content: Text(m)));
   }
 
-  void _showRatingDialog() {
+  Future<void> _showRatingDialog(String sessionId) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark
-        ? const Color(0xFF000000)
-        : const Color(0xFFFFFFFF);
-    final textColor = isDark
-        ? const Color(0xFFFFFFFF)
-        : const Color(0xFF000000);
+    final surfaceColor = isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+    final textColor = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
 
-    showDialog(
+    int selected = 0;
+
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: surfaceColor,
-        title: Text(
-          'Rate Session',
-          style: GoogleFonts.inter(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: textColor,
+      builder: (context) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          backgroundColor: surfaceColor,
+          title: Text(
+            'Rate Session',
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'How was your mentorship session?',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-                color: textColor,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'How was your mentorship session?',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (i) {
+                  final idx = i + 1;
+                  final isOn = idx <= selected;
+                  return IconButton(
+                    icon: Icon(
+                      isOn ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    onPressed: () => setStateDialog(() => selected = idx),
+                  );
+                }),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (index) {
-                return IconButton(
-                  icon: Icon(Icons.star, color: Colors.amber, size: 32),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    // Handle rating
-                  },
-                );
-              }),
+            TextButton(
+              onPressed: selected == 0
+                  ? null
+                  : () async {
+                      try {
+                        await _api.reviewSession(sessionId: sessionId, rating: selected);
+                        if (!mounted) return;
+                        Navigator.pop(context);
+                        _snack('Thanks for your feedback!');
+                        // Refresh completed tab after rating
+                        await _loadStatus('completed');
+                      } catch (e) {
+                        if (!mounted) return;
+                        _snack('Failed to submit review: $e');
+                      }
+                    },
+              child: Text(
+                'Submit',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: selected == 0 ? textColor.withAlpha(120) : const Color(0xFFBFAE01),
+                ),
+              ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: textColor,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }

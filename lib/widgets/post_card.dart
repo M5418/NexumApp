@@ -87,7 +87,7 @@ class _PostCardState extends State<PostCard> {
     final bookmarkColor = const Color(0xFFBFAE01);
 
     // Build repost header text and avatar/icon
-    String _repostHeaderText() {
+    String repostHeaderText() {
       final rb = widget.post.repostedBy;
       if (rb != null && (rb.actionType ?? '').isNotEmpty) {
         // Auth user reposted
@@ -101,7 +101,7 @@ class _PostCardState extends State<PostCard> {
       return 'Reposted';
     }
 
-    Widget _repostHeaderAvatar() {
+    Widget repostHeaderAvatar() {
       final rb = widget.post.repostedBy;
       if (rb != null) {
         return _AvatarCircle(
@@ -150,10 +150,10 @@ class _PostCardState extends State<PostCard> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Row(
                   children: [
-                    _repostHeaderAvatar(),
+                    repostHeaderAvatar(),
                     const SizedBox(width: 8),
                     Text(
-                      _repostHeaderText(),
+                      repostHeaderText(),
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         color: secondaryTextColor,

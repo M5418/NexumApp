@@ -9,6 +9,7 @@ import 'community_page.dart';
 import 'invitation_page.dart';
 import 'core/conversations_api.dart';
 import 'core/communities_api.dart';
+import 'conversation_search_page.dart';
 
 class ConversationsPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -193,13 +194,16 @@ class _ConversationsPageState extends State<ConversationsPage>
   }
 
   void _navigateToCommunity(CommunityItem community) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CommunityPage(communityName: community.name),
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => CommunityPage(
+        communityId: community.id,
+        communityName: community.name,
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _navigateToInvitations() {
     Navigator.push(
@@ -734,7 +738,14 @@ class _ConversationsPageState extends State<ConversationsPage>
                     ),
                   ),
                   child: IconButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ConversationSearchPage(),
+                        ),
+                      );
+                    },
                     icon: const Icon(
                       Icons.search,
                       size: 18,

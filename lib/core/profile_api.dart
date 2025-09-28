@@ -11,6 +11,10 @@ class ProfileApi {
     final res = await _dio.get('/api/profile/me');
     return Map<String, dynamic>.from(res.data);
   }
+  Future<Map<String, dynamic>> getByUserId(String userId) async {
+    final res = await _dio.get('/api/profile/$userId');
+    return Map<String, dynamic>.from(res.data);
+  }
 
   Future<Map<String, dynamic>> update(Map<String, dynamic> data) async {
     final res = await _dio.patch('/api/profile', data: data);

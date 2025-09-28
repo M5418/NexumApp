@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'podcasts_api.dart';
-import 'favorite_playlist_page.dart';
+import 'podcasts_home_page.dart' show Podcast;
+import 'player_page.dart';
 
-class MyLibraryPage extends StatefulWidget {
-  const MyLibraryPage({super.key});
+class MyEpisodesPage extends StatefulWidget {
+  const MyEpisodesPage({super.key});
 
   @override
-  State<MyLibraryPage> createState() => _MyLibraryPageState();
+  State<MyEpisodesPage> createState() => _MyEpisodesPageState();
 }
 
-class _MyLibraryPageState extends State<MyLibraryPage> {
+class _MyEpisodesPageState extends State<MyEpisodesPage> {
   bool _loading = true;
   String? _error;
-  List<_PlaylistRow> _playlists = [];
+  List<Podcast> _items = [];
 
   @override
   void initState() {
@@ -28,61 +30,24 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
       _error = null;
     });
     try {
+      // Use published list as "episodes" source; backend stays unchanged.
       final api = PodcastsApi.create();
-      final res = await api.listMyPlaylists();
+      final res = await api.list(page: 1, limit: 100, isPublished: true);
       final data = Map<String, dynamic>.from(res);
       final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['playlists'] ?? const []);
-      _playlists = list
-          .map((m) => _PlaylistRow(
-                id: (m['id'] ?? '').toString(),
-                name: (m['name'] ?? '').toString(),
-                isPrivate: (m['isPrivate'] ?? false) == true,
-                itemsCount: int.tryParse((m['itemsCount'] ?? 0).toString()) ?? 0,
-              ))
-          .toList();
+      final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
+      _items = list.map(Podcast.fromApi).toList();
     } catch (e) {
-      _error = 'Failed to load playlists: $e';
+      _error = 'Failed to load episodes: $e';
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _createPlaylist() async {
-    final nameCtrl = TextEditingController();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-          title: Text('New Playlist', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-          content: TextField(
-            controller: nameCtrl,
-            decoration: const InputDecoration(hintText: 'Playlist name'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01), foregroundColor: Colors.black),
-              child: const Text('Create'),
-            ),
-          ],
-        );
-      },
-    );
-    if (name == null || name.isEmpty) return;
-    try {
-      final api = PodcastsApi.create();
-      await api.createPlaylist(name: name, isPrivate: false);
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
-      );
-    }
+  String _shortDate(DateTime? d) {
+    if (d == null) return '';
+    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
 
   @override
@@ -95,20 +60,15 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
       appBar: AppBar(
         backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
-        centerTitle: false,
-        title: Text('My Library',
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : Colors.black,
-            )),
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-        actions: [
-          IconButton(
-            tooltip: 'New Playlist',
-            onPressed: _createPlaylist,
-            icon: const Icon(Icons.playlist_add),
+        title: Text(
+          'My Episodes',
+          style: GoogleFonts.inter(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black,
           ),
-        ],
+        ),
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
@@ -116,74 +76,25 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
               ? Center(child: Text(_error!, style: GoogleFonts.inter(color: Colors.red)))
               : CustomScrollView(
                   slivers: [
-                    // Playlists header
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      sliver: SliverToBoxAdapter(
-                        child: Text('My Playlists',
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : Colors.black,
-                            )),
-                      ),
-                    ),
-                    // Playlists grid
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      sliver: SliverGrid(
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          mainAxisExtent: 160,
-                        ),
-                        delegate: SliverChildBuilderDelegate((context, i) {
-                          final pl = _playlists[i];
-                          return GestureDetector(
-                            onTap: () => Navigator.push(
+                      padding: const EdgeInsets.all(16),
+                      sliver: SliverList.builder(
+                        itemCount: _items.length,
+                        itemBuilder: (context, i) {
+                          final e = _items[i];
+                          return _EpisodeRow(
+                            title: e.title,
+                            author: e.author ?? 'Unknown',
+                            coverUrl: e.coverUrl ?? '',
+                            date: _shortDate(e.createdAt),
+                            onPlay: () => Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => FavoritePlaylistPage(playlistId: pl.id)),
-                            ).then((_) => _load()),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  if (!isDark)
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.13),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.queue_music, color: Color(0xFFBFAE01)),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          pl.name,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const Spacer(),
-                                  Text('${pl.itemsCount} items',
-                                      style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666))),
-                                ],
+                              MaterialPageRoute(
+                                builder: (context) => PlayerPage(podcast: e),
                               ),
                             ),
                           );
-                        }, childCount: _playlists.length),
+                        },
                       ),
                     ),
                   ],
@@ -192,16 +103,115 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
   }
 }
 
-class _PlaylistRow {
-  final String id;
-  final String name;
-  final bool isPrivate;
-  final int itemsCount;
-
-  _PlaylistRow({
-    required this.id,
-    required this.name,
-    required this.isPrivate,
-    required this.itemsCount,
+class _EpisodeRow extends StatelessWidget {
+  final String title;
+  final String author;
+  final String coverUrl;
+  final String date;
+  final VoidCallback onPlay;
+  const _EpisodeRow({
+    required this.title,
+    required this.author,
+    required this.coverUrl,
+    required this.date,
+    required this.onPlay,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onPlay,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            if (!isDark)
+              BoxShadow(
+                color: Colors.black.withOpacity(0.13),
+                blurRadius: 10,
+                offset: const Offset(0, 6),
+              ),
+          ],
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: (coverUrl).isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: coverUrl,
+                        fit: BoxFit.cover,
+                        memCacheWidth: 112,
+                        memCacheHeight: 112,
+                        placeholder: (context, url) => Container(
+                          color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                          child: const Center(
+                            child: Icon(
+                              Icons.podcasts,
+                              color: Color(0xFFBFAE01),
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                        child: const Center(
+                          child: Icon(
+                            Icons.podcasts,
+                            color: Color(0xFFBFAE01),
+                            size: 20,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$author • $date',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color(0xFF666666),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(
+                Icons.play_circle_fill,
+                color: Color(0xFFBFAE01),
+              ),
+              onPressed: onPlay,
+            ),
+            const Icon(Icons.more_vert, color: Color(0xFF666666)),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'book_details_page.dart';
 import 'create_book_page.dart';
 import 'books_api.dart';
+import 'book_search_page.dart';
 
 class Book {
   final String id;
@@ -247,6 +248,15 @@ class _BooksHomePageState extends State<BooksHomePage> {
                     ),
                   ),
                   const Spacer(),
+                  IconButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const BookSearchPage()),
+                      );
+                    },
+                    icon: Icon(Icons.search, color: isDark ? Colors.white : const Color(0xFF666666)),
+                  ),
                   _LanguageFilter(
                     selected: _selectedLanguage,
                     options: _languages,

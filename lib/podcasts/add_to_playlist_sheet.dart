@@ -211,7 +211,7 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
                           ),
                           Switch(
                             value: r.contains,
-                            activeColor: const Color(0xFFBFAE01),
+                            activeThumbColor: const Color(0xFFBFAE01),
                             onChanged: (v) => _toggle(r.id, v),
                           ),
                         ],

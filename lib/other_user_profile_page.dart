@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+
 import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
 import 'widgets/message_invite_card.dart';
@@ -8,6 +11,9 @@ import 'models/post.dart';
 import 'theme_provider.dart';
 import 'core/connections_api.dart';
 import 'core/conversations_api.dart';
+import 'core/api_client.dart';
+import 'core/profile_api.dart';
+import 'podcasts/podcasts_api.dart';
 import 'chat_page.dart';
 import 'models/message.dart' hide MediaType;
 
@@ -40,13 +46,620 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   late bool _isConnected;
   final ConversationsApi _conversationsApi = ConversationsApi();
 
+  // Backend profile data for OTHER user
+  Map<String, dynamic>? _userProfile;
+  String? _profilePhotoUrl;
+  String _coverPhotoUrl = '';
+
+  int _connectionsInboundCount = 0;   // inbound to this user
+  int _connectionsTotalCount = 0;
+
+  List<Map<String, dynamic>> _experiences = [];
+  List<Map<String, dynamic>> _trainings = [];
+  List<String> _interests = [];
+
+
+  // Data: Activity (their engagements), Posts (created by other user), Media (images from posts), Podcasts
+  List<Post> _activityPosts = [];
+  bool _loadingActivity = true;
+  String? _errorActivity;
+
+  List<Post> _userPosts = [];
+  bool _loadingPosts = true;
+  String? _errorPosts;
+
+  List<String> _mediaImageUrls = [];
+  bool _loadingMedia = true;
+
+  List<Map<String, dynamic>> _podcasts = [];
+  bool _loadingPodcasts = true;
+  String? _errorPodcasts;
+
   @override
   void initState() {
     super.initState();
     _isConnected = widget.isConnected;
+    // Load profile first so header and stats use real backend
+    _loadUserProfile();
+    // Kick off tabs
+    _loadUserPosts();     // posts authored by this user (with repost hydration)
+    _loadActivity();      // "their activity": likes/bookmarks/reposts they did
+    _loadPodcasts();      // podcasts authored by this user
   }
 
-  @override
+  // Utilities
+  int _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) {
+      final i = int.tryParse(v);
+      if (i != null) return i;
+    }
+    return 0;
+  }
+
+  DateTime _parseCreatedAt(dynamic v) {
+    if (v == null) return DateTime.now();
+    if (v is DateTime) return v;
+    final s = v.toString();
+    try {
+      return DateTime.parse(s).toLocal();
+    } catch (_) {
+      return DateTime.now();
+    }
+  }
+
+  List<Map<String, dynamic>> _parseListOfMap(dynamic value) {
+    try {
+      if (value == null) return [];
+      if (value is String) {
+        final decoded = jsonDecode(value);
+        if (decoded is List) {
+          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+        return [];
+      }
+      if (value is List) {
+        return value.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  List<String> _parseStringList(dynamic value) {
+    try {
+      if (value == null) return [];
+      if (value is String) {
+        final decoded = jsonDecode(value);
+        if (decoded is List) {
+          return decoded.map((e) => e.toString()).toList();
+        }
+        return [];
+      }
+      if (value is List) {
+        return value.map((e) => e.toString()).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  String _formatCount(dynamic v) {
+    final n = _toInt(v);
+    if (n >= 1000000) {
+      final m = n / 1000000;
+      return '${m.toStringAsFixed(m >= 10 ? 0 : 1)}M';
+    }
+    if (n >= 1000) {
+      final k = n / 1000;
+      return '${k.toStringAsFixed(k >= 10 ? 0 : 1)}K';
+    }
+    return n.toString();
+  }
+
+  Future<void> _loadUserProfile() async {
+
+    try {
+      final api = ProfileApi();
+      final res = await api.getByUserId(widget.userId);
+      final body = Map<String, dynamic>.from(res);
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+
+      final experiences = _parseListOfMap(data['professional_experiences']);
+      final trainings = _parseListOfMap(data['trainings']);
+      final interests = _parseStringList(data['interest_domains']);
+
+      final profileUrl = (data['profile_photo_url'] ?? '').toString();
+      final coverUrl = (data['cover_photo_url'] ?? '').toString();
+
+      setState(() {
+        _userProfile = data;
+        _profilePhotoUrl = profileUrl.isNotEmpty ? profileUrl : null;
+        _coverPhotoUrl = coverUrl.isNotEmpty ? coverUrl : (widget.userCoverUrl);
+        _experiences = experiences;
+        _trainings = trainings;
+        _interests = interests;
+
+        _connectionsInboundCount = _toInt(data['connections_inbound_count']);
+        _connectionsTotalCount = _toInt(data['connections_total_count']);
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+    }
+  }
+
+  Post _mapRawPostToModel(Map<String, dynamic> p) {
+    Map<String, dynamic> asMap(dynamic v) =>
+        v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
+
+    final original = asMap(p['original_post']);
+    // Use original post for content/media/author if it was hydrated
+    final contentSource = original.isNotEmpty ? original : p;
+
+    // Author (from content source)
+    final author = asMap(contentSource['author']);
+    final authorName = (author['name'] ?? author['username'] ?? 'User').toString();
+    final authorAvatar = (author['avatarUrl'] ?? author['avatar_url'] ?? '').toString();
+
+    // Counts
+    Map<String, dynamic> countsMap = {};
+    final directCounts = asMap(p['counts']);
+    final originalCounts = asMap(contentSource['counts']);
+    if (originalCounts.isNotEmpty) {
+      countsMap = originalCounts;
+    } else if (directCounts.isNotEmpty) {
+      countsMap = directCounts;
+    } else {
+      countsMap = {
+        'likes': p['likes_count'] ?? 0,
+        'comments': p['comments_count'] ?? 0,
+        'shares': p['shares_count'] ?? 0,
+        'reposts': p['reposts_count'] ?? 0,
+        'bookmarks': p['bookmarks_count'] ?? 0,
+      };
+    }
+
+    // Media
+    MediaType mediaType = MediaType.none;
+    String? videoUrl;
+    List<String> imageUrls = [];
+
+    List<dynamic> mediaList = [];
+    if (contentSource['media'] is List) {
+      mediaList = List<dynamic>.from(contentSource['media']);
+    } else if (p['media'] is List) {
+      mediaList = List<dynamic>.from(p['media']);
+    }
+
+    if (mediaList.isNotEmpty) {
+      final asMaps = mediaList
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+
+      String urlOf(Map<String, dynamic> m) =>
+          (m['url'] ?? m['src'] ?? m['link'] ?? '').toString();
+
+      final videos = asMaps.where((m) {
+        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '').toString().toLowerCase();
+        return t.contains('video');
+      }).toList();
+
+      final images = asMaps.where((m) {
+        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '').toString().toLowerCase();
+        return t.contains('image') || t.contains('photo') || t.isEmpty;
+      }).toList();
+
+      if (videos.isNotEmpty) {
+        mediaType = MediaType.video;
+        videoUrl = urlOf(videos.first);
+      } else if (images.length > 1) {
+        mediaType = MediaType.images;
+        imageUrls = images.map(urlOf).where((u) => u.isNotEmpty).toList();
+      } else if (images.length == 1) {
+        mediaType = MediaType.image;
+        final u = urlOf(images.first);
+        if (u.isNotEmpty) imageUrls = [u];
+      }
+    } else {
+      // Fallbacks for alternate schemas
+      List<String> _parseImageUrls(dynamic v) {
+        if (v == null) return [];
+        if (v is List) return v.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+        if (v is String && v.isNotEmpty) {
+          try {
+            final decoded = jsonDecode(v);
+            if (decoded is List) {
+              return decoded.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+            }
+          } catch (_) {}
+        }
+        return [];
+      }
+
+      final csVideo = (contentSource['video_url'] ?? '').toString();
+      final csImageUrl = (contentSource['image_url'] ?? '').toString();
+      final csImageUrls = _parseImageUrls(contentSource['image_urls']);
+
+      if (csVideo.isNotEmpty) {
+        mediaType = MediaType.video;
+        videoUrl = csVideo;
+      } else if (csImageUrls.length > 1) {
+        mediaType = MediaType.images;
+        imageUrls = csImageUrls;
+      } else if (csImageUrls.length == 1) {
+        mediaType = MediaType.image;
+        imageUrls = csImageUrls;
+      } else if (csImageUrl.isNotEmpty) {
+        mediaType = MediaType.image;
+        imageUrls = [csImageUrl];
+      }
+    }
+
+    // Me flags (from row, not original)
+    final me = asMap(p['me']);
+    final likedByMe = (me['liked'] ?? false) == true;
+    final bookmarkedByMe = (me['bookmarked'] ?? false) == true;
+
+    // Repost detection
+    final isRepost = p['repost_of'] != null || original.isNotEmpty;
+
+    // Reposter info (header) — for other user's page we keep generic
+    final repostAuthor = asMap(p['repost_author']);
+    RepostedBy? repostedBy;
+    if (repostAuthor.isNotEmpty) {
+      repostedBy = RepostedBy(
+        userName: (repostAuthor['name'] ?? repostAuthor['username'] ?? 'User').toString(),
+        userAvatarUrl: (repostAuthor['avatarUrl'] ?? repostAuthor['avatar_url'] ?? '').toString(),
+        actionType: 'reposted this',
+      );
+    }
+
+    // Text
+    final text = (contentSource['content'] ??
+            contentSource['text'] ??
+            p['original_content'] ??
+            p['text'] ??
+            p['content'] ??
+            '')
+        .toString();
+
+    return Post(
+      id: (p['id'] ?? '').toString(),
+      userName: authorName,
+      userAvatarUrl: authorAvatar,
+      createdAt: _parseCreatedAt(
+        p['created_at'] ?? p['createdAt'] ?? contentSource['created_at'] ?? contentSource['createdAt'],
+      ),
+      text: text,
+      mediaType: mediaType,
+      imageUrls: imageUrls,
+      videoUrl: videoUrl,
+      counts: PostCounts(
+        likes: _toInt(countsMap['likes']),
+        comments: _toInt(countsMap['comments']),
+        shares: _toInt(countsMap['shares']),
+        reposts: _toInt(countsMap['reposts']),
+        bookmarks: _toInt(countsMap['bookmarks']),
+      ),
+      userReaction: likedByMe ? ReactionType.like : null,
+      isBookmarked: bookmarkedByMe,
+      isRepost: isRepost,
+      repostedBy: repostedBy,
+      originalPostId: (p['repost_of'] ?? original['id'] ?? original['post_id'] ?? '')
+              .toString()
+              .isEmpty
+          ? null
+          : (p['repost_of'] ?? original['id'] ?? original['post_id']).toString(),
+    );
+  }
+
+    Future<void> _loadUserPosts() async {
+    setState(() {
+      _loadingPosts = true;
+      _errorPosts = null;
+      _loadingMedia = true;
+    });
+
+    try {
+      final dio = ApiClient().dio;
+      final res = await dio.get('/api/posts', queryParameters: {
+        'user_id': widget.userId,
+        'limit': 50,
+        'offset': 0,
+      });
+
+      final body = Map<String, dynamic>.from(res.data ?? {});
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final list = (data['posts'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      // Hydrate original posts for repost rows
+      final origIds = list
+          .map((p) => p['repost_of'])
+          .where((id) => id != null && id.toString().isNotEmpty)
+          .map((id) => id.toString())
+          .toSet();
+
+      final Map<String, Map<String, dynamic>> originals = {};
+      await Future.wait(origIds.map((id) async {
+        try {
+          final r = await dio.get('/api/posts/$id');
+          final rb = Map<String, dynamic>.from(r.data ?? {});
+          final rd = Map<String, dynamic>.from(rb['data'] ?? {});
+          if (rd['post'] is Map) {
+            originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
+          }
+        } catch (_) {}
+      }));
+
+      for (final p in list) {
+        final ro = p['repost_of'];
+        if (ro != null) {
+          final op = originals[ro.toString()];
+          if (op != null) p['original_post'] = op;
+        }
+      }
+
+      final posts = list.map(_mapRawPostToModel).toList();
+
+      // Build media grid from this user's ORIGINAL posts containing images
+      // - Exclude repost rows to avoid duplicated media from originals
+      // - Deduplicate URLs across posts
+      final urls = <String>{};
+      for (final post in posts) {
+        if (post.isRepost) continue; // exclude repost media from Media tab
+        if (post.mediaType == MediaType.image && post.imageUrls.isNotEmpty) {
+          urls.add(post.imageUrls.first);
+        } else if (post.mediaType == MediaType.images && post.imageUrls.isNotEmpty) {
+          urls.addAll(post.imageUrls);
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _userPosts = posts;
+        _mediaImageUrls = urls.toList();
+        _loadingPosts = false;
+        _loadingMedia = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorPosts = 'Failed to load posts';
+        _loadingPosts = false;
+        _loadingMedia = false;
+      });
+    }
+  }
+
+  Future<void> _loadActivity() async {
+    setState(() {
+      _loadingActivity = true;
+      _errorActivity = null;
+    });
+
+    try {
+      final dio = ApiClient().dio;
+      final res = await dio.get('/api/posts', queryParameters: {
+        'limit': 100,
+        'offset': 0,
+      });
+
+      final body = Map<String, dynamic>.from(res.data ?? {});
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final raw = (data['posts'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      // 1) Reposts done by this user
+      final included = <Map<String, dynamic>>[];
+      for (final p in raw) {
+        final userId = (p['user_id'] ?? '').toString();
+        final isRepostRowByUser = userId == widget.userId && (p['repost_of'] != null);
+        if (isRepostRowByUser) {
+          p['__activity_action'] = 'reposted_this';
+          included.add(p);
+        }
+      }
+
+      // 2) Posts liked/bookmarked/shared by this user (via engagement per post)
+      final toCheck = raw.take(100).toList();
+      for (final p in toCheck) {
+        final pid = (p['id'] ?? '').toString();
+        if (pid.isEmpty) continue;
+        try {
+          final r = await dio.get('/api/posts/$pid/engagement');
+          final rb = Map<String, dynamic>.from(r.data ?? {});
+          final d2 = Map<String, dynamic>.from(rb['data'] ?? {});
+          final likes =
+              (d2['likes'] as List? ?? const []).map((e) => e.toString()).toSet();
+          final bookmarks =
+              (d2['bookmarks'] as List? ?? const []).map((e) => e.toString()).toSet();
+          final shares =
+              (d2['shares'] as List? ?? const []).map((e) => e.toString()).toSet();
+
+          String? action;
+          if (likes.contains(widget.userId)) action ??= 'liked_this';
+          if (bookmarks.contains(widget.userId)) action ??= 'bookmarked_this';
+          if (shares.contains(widget.userId)) action ??= 'shared_this';
+
+          if (action != null) {
+            final clone = Map<String, dynamic>.from(p);
+            clone['__activity_action'] = action;
+            included.add(clone);
+          }
+        } catch (_) {
+          // ignore failed engagement fetch
+        }
+      }
+
+      // Hydrate original posts for repost rows (so we can show original content/media/author)
+      final origIds = included
+          .map((p) => p['repost_of'])
+          .where((id) => id != null && id.toString().isNotEmpty)
+          .map((id) => id.toString())
+          .toSet();
+
+      final Map<String, Map<String, dynamic>> originals = {};
+      await Future.wait(origIds.map((id) async {
+        try {
+          final r = await dio.get('/api/posts/$id');
+          final rb = Map<String, dynamic>.from(r.data ?? {});
+          final rd = Map<String, dynamic>.from(rb['data'] ?? {});
+          if (rd['post'] is Map) {
+            originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
+          }
+        } catch (_) {}
+      }));
+
+      for (final p in included) {
+        final ro = p['repost_of'];
+        if (ro != null) {
+          final op = originals[ro.toString()];
+          if (op != null) p['original_post'] = op;
+        }
+      }
+
+      // Convert to Post models and add activity headers
+      final results = <Post>[];
+      for (final p in included) {
+        final post = _mapRawPostToModel(p);
+        final action = p['__activity_action'] as String?;
+        if (action != null) {
+          // Override repostedBy to show this user's activity action
+          final activityPost = post.copyWith(
+            repostedBy: RepostedBy(
+              userName: widget.userName,
+              userAvatarUrl: widget.userAvatarUrl,
+              actionType: action,
+            ),
+          );
+          results.add(activityPost);
+        } else {
+          results.add(post);
+        }
+      }
+
+      results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      if (!mounted) return;
+      setState(() {
+        _activityPosts = results;
+        _loadingActivity = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorActivity = 'Failed to load activity';
+        _loadingActivity = false;
+      });
+    }
+  }
+
+  Future<void> _loadPodcasts() async {
+    setState(() {
+      _loadingPodcasts = true;
+      _errorPodcasts = null;
+    });
+
+    try {
+      final api = PodcastsApi();
+      final res = await api.list(authorId: widget.userId, limit: 50, page: 1);
+      final body = Map<String, dynamic>.from(res);
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final podcasts = (data['podcasts'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _podcasts = podcasts;
+        _loadingPodcasts = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorPodcasts = 'Failed to load podcasts';
+        _loadingPodcasts = false;
+      });
+    }
+  }
+
+  Future<void> _handleMessageUser() async {
+    final ctx = context;
+    try {
+      // Check if conversation already exists
+      final conversationId = await _conversationsApi.checkConversationExists(
+        widget.userId,
+      );
+
+      if (!ctx.mounted) return;
+
+      if (conversationId != null) {
+        // Conversation exists - navigate to chat
+        final chatUser = ChatUser(
+          id: widget.userId,
+          name: widget.userName,
+          avatarUrl: widget.userAvatarUrl,
+        );
+
+        Navigator.push(
+          ctx,
+          MaterialPageRoute(
+            builder: (_) => ChatPage(
+              otherUser: chatUser,
+              isDarkMode: false,
+              conversationId: conversationId,
+            ),
+          ),
+        );
+      } else {
+        // No conversation - show invite bottom sheet
+        if (ctx.mounted) {
+          _showMessageBottomSheet(ctx);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error handling message user: $e');
+      // Fallback to invite sheet on error
+      if (ctx.mounted) {
+        _showMessageBottomSheet(ctx);
+      }
+    }
+  }
+
+  void _showMessageBottomSheet(BuildContext ctx) {
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: MessageInviteCard(
+          receiverId: widget.userId,
+          fullName: widget.userName,
+          bio: widget.userBio,
+          avatarUrl: widget.userAvatarUrl,
+          coverUrl: _coverPhotoUrl.isNotEmpty ? _coverPhotoUrl : widget.userCoverUrl,
+          onClose: () => Navigator.pop(ctx),
+          onInvitationSent: (invitation) {
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(ctx).showSnackBar(
+              SnackBar(content: Text('Invitation sent to ${widget.userName}')),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+    @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
@@ -55,6 +668,24 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           final isDark = themeProvider.isDarkMode;
+
+          // Derive display name and @username from backend if available
+          final String displayName = (() {
+            final p = _userProfile ?? {};
+            final fullName = (p['full_name'] ?? '').toString().trim();
+            if (fullName.isNotEmpty) return fullName;
+            return widget.userName;
+          })();
+          final String atUsername = (() {
+            final p = _userProfile ?? {};
+            final u = (p['username'] ?? '').toString().trim();
+            return u.isNotEmpty ? '@$u' : '';
+          })();
+
+          final String coverUrl = _coverPhotoUrl.isNotEmpty
+              ? _coverPhotoUrl
+              : widget.userCoverUrl;
+
           return Scaffold(
             key: scaffoldKey,
             backgroundColor:
@@ -68,13 +699,13 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                     height: 200,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      image: (widget.userCoverUrl.isNotEmpty)
+                      image: (coverUrl.isNotEmpty)
                           ? DecorationImage(
-                              image: NetworkImage(widget.userCoverUrl),
+                              image: NetworkImage(coverUrl),
                               fit: BoxFit.cover,
                             )
                           : null,
-                      color: widget.userCoverUrl.isEmpty
+                      color: coverUrl.isEmpty
                           ? (isDark ? Colors.black : Colors.grey[300])
                           : null,
                     ),
@@ -145,22 +776,45 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                   ),
                                   child: CircleAvatar(
                                     radius: 58,
-                                    backgroundImage: NetworkImage(
-                                      widget.userAvatarUrl,
-                                    ),
+                                    backgroundImage: (_profilePhotoUrl != null &&
+                                            _profilePhotoUrl!.isNotEmpty)
+                                        ? NetworkImage(_profilePhotoUrl!)
+                                        : null,
+                                    child: (_profilePhotoUrl == null ||
+                                            _profilePhotoUrl!.isEmpty)
+                                        ? Text(
+                                            (displayName.isNotEmpty
+                                                    ? displayName[0]
+                                                    : 'U')
+                                                .toUpperCase(),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 40,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                            ),
+                                          )
+                                        : null,
                                   ),
                                 ),
                               ),
 
-                              // Stats Row
+                              // Stats Row (real backend counts)
                               Transform.translate(
                                 offset: const Offset(0, -30),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    _buildStatColumn('2,8K', 'Connections'),
+                                    _buildStatColumn(
+                                      _formatCount(_connectionsTotalCount),
+                                      'Connections',
+                                    ),
                                     const SizedBox(width: 40),
-                                    _buildStatColumn('892', 'Connected'),
+                                    _buildStatColumn(
+                                      _formatCount(_connectionsInboundCount),
+                                      'Connected',
+                                    ),
                                   ],
                                 ),
                               ),
@@ -175,7 +829,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                           MainAxisAlignment.center,
                                       children: [
                                         Text(
-                                          widget.userName,
+                                          displayName,
                                           style: GoogleFonts.inter(
                                             fontSize: 24,
                                             fontWeight: FontWeight.w700,
@@ -189,6 +843,19 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                         ),
                                       ],
                                     ),
+                                    if (atUsername.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          atUsername,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.grey[600],
+                                          ),
+                                        ),
+                                      ),
                                     const SizedBox(height: 8),
                                     Text(
                                       widget.userBio,
@@ -327,7 +994,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                           ),
                         ),
 
-                        // Professional Experiences Section
+                        // Professional Experiences Section (real backend data)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Column(
@@ -353,34 +1020,52 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Doctor In Physiopine',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Coach Football',
+                              if (_experiences.isEmpty) ...[
+                                Text(
+                                  'No professional experiences to display',
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
                                     color: isDark
-                                        ? Colors.grey[300]
+                                        ? Colors.grey[400]
                                         : Colors.grey[600],
                                   ),
                                 ),
-                              ),
+                              ] else ...[
+                                for (final exp in _experiences) ...[
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      (exp['title'] ?? 'Experience')
+                                          .toString(),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  if (exp['subtitle'] != null &&
+                                      exp['subtitle'].toString().isNotEmpty)
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        exp['subtitle'].toString(),
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.grey[300]
+                                              : Colors.grey[600],
+                                        ),
+                                      ),
+                                    ),
+                                  const SizedBox(height: 8),
+                                ],
+                              ],
                               const SizedBox(height: 20),
                             ],
                           ),
                         ),
 
-                        // Trainings Section
+                        // Trainings Section (real backend data)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Column(
@@ -406,34 +1091,51 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'University of Pens',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Professor',
+                              if (_trainings.isEmpty) ...[
+                                Text(
+                                  'No trainings to display',
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
                                     color: isDark
-                                        ? Colors.grey[300]
+                                        ? Colors.grey[400]
                                         : Colors.grey[600],
                                   ),
                                 ),
-                              ),
+                              ] else ...[
+                                for (final t in _trainings) ...[
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      (t['title'] ?? 'Training').toString(),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  if (t['subtitle'] != null &&
+                                      t['subtitle'].toString().isNotEmpty)
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        t['subtitle'].toString(),
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.grey[300]
+                                              : Colors.grey[600],
+                                        ),
+                                      ),
+                                    ),
+                                  const SizedBox(height: 8),
+                                ],
+                              ],
                               const SizedBox(height: 20),
                             ],
                           ),
                         ),
 
-                        // Interest Section
+                        // Interest Section (real backend data)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                           child: Column(
@@ -459,22 +1161,25 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _buildInterestChip('Aerospace'),
-                                  _buildInterestChip('Engineering'),
-                                  _buildInterestChip('Environment'),
-                                  _buildInterestChip('Technology'),
-                                  _buildInterestChip('Health & Wellness'),
-                                  _buildInterestChip('Sports'),
-                                  _buildInterestChip('Photography'),
-                                  _buildInterestChip('Travel'),
-                                  _buildInterestChip('Music'),
-                                  _buildInterestChip('Cooking'),
-                                ],
-                              ),
+                              if (_interests.isEmpty) ...[
+                                Text(
+                                  'No interests to display',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ] else ...[
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _interests
+                                      .map((i) => _buildInterestChip(i))
+                                      .toList(),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -489,74 +1194,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Future<void> _handleMessageUser() async {
-    final ctx = context;
-    try {
-      // Check if conversation already exists
-      final conversationId = await _conversationsApi.checkConversationExists(
-        widget.userId,
-      );
-
-      if (!ctx.mounted) return;
-
-      if (conversationId != null) {
-        // Conversation exists - navigate to chat
-        final chatUser = ChatUser(
-          id: widget.userId,
-          name: widget.userName,
-          avatarUrl: widget.userAvatarUrl,
-        );
-
-        Navigator.push(
-          ctx,
-          MaterialPageRoute(
-            builder: (_) => ChatPage(
-              otherUser: chatUser,
-              isDarkMode: false,
-              conversationId: conversationId,
-            ),
-          ),
-        );
-      } else {
-        // No conversation - show invite bottom sheet
-        if (ctx.mounted) {
-          _showMessageBottomSheet(ctx);
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ Error handling message user: $e');
-      // Fallback to invite sheet on error
-      if (ctx.mounted) {
-        _showMessageBottomSheet(ctx);
-      }
-    }
-  }
-
-  void _showMessageBottomSheet(BuildContext ctx) {
-    showModalBottomSheet(
-      context: ctx,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: MessageInviteCard(
-          receiverId: widget.userId,
-          fullName: widget.userName,
-          bio: widget.userBio,
-          avatarUrl: widget.userAvatarUrl,
-          coverUrl: widget.userCoverUrl,
-          onClose: () => Navigator.pop(ctx),
-          onInvitationSent: (invitation) {
-            Navigator.pop(ctx);
-            ScaffoldMessenger.of(ctx).showSnackBar(
-              SnackBar(content: Text('Invitation sent to ${widget.userName}')),
-            );
-          },
-        ),
       ),
     );
   }
@@ -693,189 +1330,22 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   }
 
   Widget _buildActivityTab(bool isDark) {
-    final activities = [
-      Post(
-        id: '1',
-        userName: 'Wellness Weekly',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            '5 Simple habits that changed my life completely. Small changes, big impact! 🌟',
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 156,
-          comments: 34,
-          shares: 22,
-          reposts: 0,
-          bookmarks: 67,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: widget.userName,
-          userAvatarUrl: widget.userAvatarUrl,
-          actionType: 'reposted this',
-        ),
-      ),
-      Post(
-        id: '2',
-        userName: 'Mindful Living',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=200&h=200&fit=crop&crop=face',
-        text:
-            'Morning meditation changed everything for me. Starting each day with intention 🧘‍♀️',
-        createdAt: DateTime.now().subtract(const Duration(hours: 4)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 89,
-          comments: 12,
-          shares: 8,
-          reposts: 0,
-          bookmarks: 23,
-        ),
-        userReaction: ReactionType.like,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: widget.userName,
-          userAvatarUrl: widget.userAvatarUrl,
-          actionType: 'liked this',
-        ),
-      ),
-      Post(
-        id: '3',
-        userName: 'Fitness Journey',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
-        text:
-            'Consistency beats perfection every single time. Keep showing up! 💪',
-        createdAt: DateTime.now().subtract(const Duration(hours: 6)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 234,
-          comments: 45,
-          shares: 18,
-          reposts: 0,
-          bookmarks: 89,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: widget.userName,
-          userAvatarUrl: widget.userAvatarUrl,
-          actionType: 'commented on this',
-        ),
-      ),
-      Post(
-        id: '4',
-        userName: 'Healthy Habits',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face',
-        text:
-            'The power of small daily actions. Transform your life one habit at a time ✨',
-        createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 167,
-          comments: 28,
-          shares: 31,
-          reposts: 0,
-          bookmarks: 54,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: widget.userName,
-          userAvatarUrl: widget.userAvatarUrl,
-          actionType: 'shared this',
-        ),
-      ),
-      Post(
-        id: '5',
-        userName: 'Nature Therapy',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face',
-        text: 'Spending time in nature is the best medicine for the soul 🌿',
-        createdAt: DateTime.now().subtract(const Duration(hours: 10)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 198,
-          comments: 67,
-          shares: 25,
-          reposts: 0,
-          bookmarks: 78,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: widget.userName,
-          userAvatarUrl: widget.userAvatarUrl,
-          actionType: 'was tagged in this',
-        ),
-      ),
-      Post(
-        id: '6',
-        userName: 'Tech Innovation',
-        userAvatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-        text:
-            'The future of AI is here! Exciting times ahead for technology enthusiasts 🚀',
-        createdAt: DateTime.now().subtract(const Duration(hours: 12)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 312,
-          comments: 89,
-          shares: 45,
-          reposts: 0,
-          bookmarks: 156,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: true,
-        repostedBy: RepostedBy(
-          userName: widget.userName,
-          userAvatarUrl: widget.userAvatarUrl,
-          actionType: 'reposted this',
-        ),
-      ),
-    ];
-
+    if (_loadingActivity) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_errorActivity != null) {
+      return Center(child: Text(_errorActivity!));
+    }
+    if (_activityPosts.isEmpty) {
+      return const Center(child: Text('No activity found'));
+    }
     return ListView.builder(
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: activities.length,
+      itemCount: _activityPosts.length,
       itemBuilder: (context, index) {
         return ActivityPostCard(
-          post: activities[index],
+          post: _activityPosts[index],
           onReactionChanged: (postId, reaction) {
             // Handle reaction change
           },
@@ -897,39 +1367,22 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   }
 
   Widget _buildPostsTab(bool isDark) {
-    final posts = [
-      Post(
-        id: '6',
-        userName: widget.userName,
-        userAvatarUrl: widget.userAvatarUrl,
-        text: 'Beautiful morning meditation session! 🧘‍♀️ #mindfulness',
-        createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-        mediaType: MediaType.image,
-        imageUrls: [
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
-        ],
-        videoUrl: null,
-        counts: PostCounts(
-          likes: 89,
-          comments: 12,
-          shares: 5,
-          reposts: 0,
-          bookmarks: 23,
-        ),
-        userReaction: null,
-        isBookmarked: false,
-        isRepost: false,
-        repostedBy: null,
-      ),
-    ];
-
+    if (_loadingPosts) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_errorPosts != null) {
+      return Center(child: Text(_errorPosts!));
+    }
+    if (_userPosts.isEmpty) {
+      return const Center(child: Text('No posts found'));
+    }
     return ListView.builder(
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: posts.length,
+      itemCount: _userPosts.length,
       itemBuilder: (context, index) {
         return HomePostCard(
-          post: posts[index],
+          post: _userPosts[index],
           onReactionChanged: (postId, reaction) {
             // Handle reaction change
           },
@@ -951,31 +1404,35 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   }
 
   Widget _buildPodcastsTab(bool isDark) {
-    return ListView(
+    if (_loadingPodcasts) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_errorPodcasts != null) {
+      return Center(child: Text(_errorPodcasts!));
+    }
+    if (_podcasts.isEmpty) {
+      return const Center(child: Text('No podcasts found'));
+    }
+    return ListView.builder(
       primary: false,
       padding: const EdgeInsets.all(16),
-      children: [
-        _buildPodcastItem(
-          'Wellness Wednesday',
-          'Episode 12: Finding Balance in Busy Life',
-          '45 min',
-          'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=300&h=300&fit=crop',
+      itemCount: _podcasts.length,
+      itemBuilder: (context, index) {
+        final podcast = _podcasts[index];
+        return _buildPodcastItem(
+          (podcast['title'] ?? 'Untitled').toString(),
+          (podcast['description'] ?? 'No description').toString(),
+          '${podcast['durationSec'] ?? 0}s',
+          (podcast['coverUrl'] ?? '').toString(),
           isDark,
-        ),
-        _buildPodcastItem(
-          'Mindful Moments',
-          'Episode 8: The Power of Gratitude',
-          '32 min',
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop',
-          isDark,
-        ),
-      ],
+        );
+      },
     );
   }
 
   Widget _buildPodcastItem(
     String title,
-    String episode,
+    String description,
     String duration,
     String imageUrl,
     bool isDark,
@@ -993,12 +1450,19 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              imageUrl,
-              width: 60,
-              height: 60,
-              fit: BoxFit.cover,
-            ),
+            child: imageUrl.isNotEmpty
+                ? Image.network(
+                    imageUrl,
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.cover,
+                  )
+                : Container(
+                    width: 60,
+                    height: 60,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.music_note),
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1014,7 +1478,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  episode,
+                  description,
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: isDark ? Colors.grey[300] : const Color(0xFF666666),
@@ -1038,21 +1502,18 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   }
 
   Widget _buildMediaTab(bool isDark) {
-    final mediaItems = [
-      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=300&fit=crop',
-      'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=300&h=300&fit=crop',
-    ];
-
+    if (_loadingMedia) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_mediaImageUrls.isEmpty) {
+      return const Center(child: Text('No media found'));
+    }
     return GridView.count(
       primary: false,
       crossAxisCount: 3,
       mainAxisSpacing: 2,
       crossAxisSpacing: 2,
-      children: mediaItems.map((imageUrl) {
+      children: _mediaImageUrls.map((imageUrl) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.network(imageUrl, fit: BoxFit.cover),

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import pool from '../db/db.js';
 import { ok, fail } from '../utils/response.js';
 import { generateId } from '../utils/id-generator.js';
+import { createNotification } from '../utils/notifications.js';
 
 const router = express.Router();
 
@@ -219,6 +220,20 @@ router.post('/', async (req, res) => {
     await updateProfileCounters(senderId);
     await updateProfileCounters(data.receiver_id);
 
+    // Notify receiver: invitation_received
+    try {
+      await createNotification({
+        user_id: data.receiver_id,
+        actor_id: senderId,
+        type: 'invitation_received',
+        invitation_id: invitationId,
+        other_user_id: senderId,
+        preview_text: data.invitation_content,
+      });
+    } catch (e) {
+      console.error('notify invitation_received error:', e);
+    }
+
     // Get the created invitation with user details
     const [invitationRows] = await pool.execute(`
       SELECT i.*, 
@@ -322,6 +337,20 @@ router.put('/:invitationId', async (req, res) => {
          WHERE id = ?`,
         [invitation.invitation_content, conversationId]
       );
+
+      // Notify sender: invitation_accepted
+      try {
+        await createNotification({
+          user_id: invitation.sender_id,
+          actor_id: invitation.receiver_id,
+          type: 'invitation_accepted',
+          invitation_id: invitationId,
+          conversation_id: conversationId,
+          other_user_id: invitation.receiver_id,
+        });
+      } catch (e) {
+        console.error('notify invitation_accepted error:', e);
+      }
     }
 
     return res.json(ok({ 

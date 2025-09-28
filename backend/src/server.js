@@ -14,9 +14,14 @@ import conversationsRoutes from './routes/conversations.js';
 import messagesRoutes from './routes/messages.js';
 import storiesRoutes from './routes/stories.js';
 import communitiesRoutes from './routes/communities.js';
-import repostsRoutes from './routes/posts-reposts.js'; // NEW
-import booksRoutes from './routes/books.js'; // NEW
-import podcastsRoutes from './routes/podcasts.js'; // NEW
+import communityPostsRoutes from './routes/community-posts.js';
+import communityRepostsRoutes from './routes/community-posts-reposts.js';
+import repostsRoutes from './routes/posts-reposts.js';
+import booksRoutes from './routes/books.js';
+import podcastsRoutes from './routes/podcasts.js';
+import mentorshipRoutes from './routes/mentorship.js';
+import searchRoutes from './routes/search.js';
+import notificationsRoutes from './routes/notifications.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -45,30 +50,42 @@ app.use(express.json({ limit: '10mb' }));
 app.get('/health', (req, res) => res.json({ ok: true }));
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 
+// Auth and user resources
 app.use('/api/auth', authRoutes);
 app.use('/api/files', authMiddleware, filesRoutes);
 app.use('/api/profile', authMiddleware, profileRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
 app.use('/api/connections', authMiddleware, connectionsRoutes);
 
-// Posts routes
+// Global posts
 app.use('/api/posts', authMiddleware, postsRoutes);
-// Repost endpoints (create/unrepost + snapshot)
 app.use('/api/posts', authMiddleware, repostsRoutes);
 
-// Invitations, conversations, messages, stories, communities
+// Other APIs
 app.use('/api/invitations', authMiddleware, invitationsRoutes);
 app.use('/api/conversations', authMiddleware, conversationsRoutes);
 app.use('/api/messages', authMiddleware, messagesRoutes);
 app.use('/api/stories', authMiddleware, storiesRoutes);
+
+// Communities + community posts
 app.use('/api/communities', authMiddleware, communitiesRoutes);
+app.use('/api/communities', authMiddleware, communityPostsRoutes);
+app.use('/api/communities', authMiddleware, communityRepostsRoutes);
 
-// Books routes
+// Content libraries
 app.use('/api/books', authMiddleware, booksRoutes);
-
-// Podcasts routes (NEW)
 app.use('/api/podcasts', authMiddleware, podcastsRoutes);
 
+// Mentorship
+app.use('/api/mentorship', authMiddleware, mentorshipRoutes);
+
+// Notifications
+app.use('/api/notifications', authMiddleware, notificationsRoutes);
+
+// Search
+app.use('/api/search', authMiddleware, searchRoutes);
+
+// Errors
 app.use((err, req, res, next) => {
   console.error('Global error:', err);
   res.status(500).json({ ok: false, error: 'internal_server_error' });

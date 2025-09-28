@@ -9,6 +9,7 @@ import 'package:dio/dio.dart';
 import 'core/api_client.dart';
 import 'core/posts_api.dart';
 import 'core/communities_api.dart';
+import 'core/community_posts_api.dart';
 import 'core/connections_api.dart';
 import 'core/users_api.dart';
 
@@ -22,7 +23,7 @@ class CreatePostPage extends StatefulWidget {
 class _CreatePostPageState extends State<CreatePostPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
-  final List<String> _selectedCommunities = [];
+  final List<ApiCommunity> _selectedCommunities = [];
   final List<MediaItem> _mediaItems = [];
   final List<String> _taggedUsers = [];
   final int _maxCommunities = 3;
@@ -329,10 +330,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
       runSpacing: 8,
       children: _selectedCommunities.map((community) {
         return TagChip(
-          label: community,
+          label: community.name,
           onRemove: () {
             setState(() {
-              _selectedCommunities.remove(community);
+              _selectedCommunities.removeWhere((c) => c.id == community.id);
             });
           },
         );
@@ -475,7 +476,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  void _showUserTagPicker() {
+    void _showUserTagPicker() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
@@ -938,7 +939,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 separatorBuilder: (context, index) => const SizedBox(height: 12),
                                 itemBuilder: (context, index) {
                                   final community = filtered[index];
-                                  final isSelected = _selectedCommunities.contains(community.name);
+                                  final isSelected = _selectedCommunities.any((c) => c.id == community.id);
                                   final canSelect = _selectedCommunities.length < _maxCommunities || isSelected;
 
                                   return GestureDetector(
@@ -946,9 +947,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                         ? () {
                                             setState(() {
                                               if (isSelected) {
-                                                _selectedCommunities.remove(community.name);
+                                                _selectedCommunities.removeWhere((c) => c.id == community.id);
                                               } else {
-                                                _selectedCommunities.add(community.name);
+                                                _selectedCommunities.add(community);
                                               }
                                             });
                                             setSheetState(() {});
@@ -1099,6 +1100,36 @@ class _CreatePostPageState extends State<CreatePostPage> {
       return;
     }
 
+    // Confirm if posting to a community
+    if (_selectedCommunities.isNotEmpty) {
+      final community = _selectedCommunities.first;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          return AlertDialog(
+            backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+            title: Text('Post to Community?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            content: Text(
+              "This post will be published in the community \"${community.name}\" and will not appear in your home feed.",
+              style: GoogleFonts.inter(),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('Cancel', style: GoogleFonts.inter()),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text('Post', style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
+    }
+
     setState(() => _posting = true);
     try {
       // Upload local files (if any) and collect media descriptors
@@ -1108,7 +1139,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
         final path = item.path;
         if (xf == null && (path == null || path.isEmpty)) continue;
 
-        // Upload using XFile bytes for web & mobile to avoid dart:io dependency
         final uploaded = await _uploadXFile(xf!, item.type);
         if (item.type == MediaType.image) {
           mediaPayload.add({
@@ -1128,10 +1158,21 @@ class _CreatePostPageState extends State<CreatePostPage> {
         body,
       ].where((e) => e.isNotEmpty).join('\n\n');
 
-      await PostsApi().create(
-        content: content,
-        media: mediaPayload.isEmpty ? null : mediaPayload,
-      );
+      if (_selectedCommunities.isNotEmpty) {
+        // Post to the first selected community (UI unchanged; supports up to 3 selections but we take the first for publishing)
+        final community = _selectedCommunities.first;
+        await CommunityPostsApi().create(
+          communityId: community.id,
+          content: content,
+          media: mediaPayload.isEmpty ? null : mediaPayload,
+        );
+      } else {
+        // Post to home feed (global posts)
+        await PostsApi().create(
+          content: content,
+          media: mediaPayload.isEmpty ? null : mediaPayload,
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

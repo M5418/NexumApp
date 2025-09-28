@@ -1,6 +1,7 @@
 import express from 'express';
 import pool from '../db/db.js';
 import { ok, fail } from '../utils/response.js';
+import { createNotification } from '../utils/notifications.js';
 
 const router = express.Router();
 
@@ -87,10 +88,25 @@ router.post('/:userId', async (req, res) => {
       return fail(res, 'invalid_user_id', 400);
     }
 
-    await pool.execute(
+    const [result] = await pool.execute(
       'INSERT IGNORE INTO connections (from_user_id, to_user_id) VALUES (?, ?)',
       [fromUserId, toUserId]
     );
+
+    // Notify recipient only if a new row was actually inserted
+    if (result && result.affectedRows > 0) {
+      try {
+        await createNotification({
+          user_id: toUserId,
+          actor_id: fromUserId,
+          type: 'connection_received',
+          // Helpful for profile navigation fallback
+          other_user_id: fromUserId,
+        });
+      } catch (e) {
+        console.error('notify connection_received error:', e);
+      }
+    }
 
     return res.json(ok({}));
   } catch (error) {

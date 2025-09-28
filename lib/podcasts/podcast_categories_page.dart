@@ -70,6 +70,7 @@ class _PodcastsCategoriesPageState extends State<PodcastsCategoriesPage> {
                     final c = _cats[idx];
                     final name = (c['category'] ?? '').toString();
                     final count = int.tryParse((c['count'] ?? 0).toString()) ?? 0;
+                    final isDark = Theme.of(ctx).brightness == Brightness.dark;
                     return ListTile(
                       tileColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

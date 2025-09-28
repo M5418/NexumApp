@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../data/mentorship_data.dart';
+import '../core/mentorship_api.dart';
 import 'mentorship_conversations_page.dart';
 import 'professional_fields_page.dart';
 import 'my_mentors_page.dart';
@@ -23,18 +23,45 @@ class MentorshipHomePage extends StatefulWidget {
 }
 
 class _MentorshipHomePageState extends State<MentorshipHomePage> {
+  final _api = MentorshipApi();
+  bool _loading = true;
+  String? _error;
+  List<MentorshipFieldDto> _fields = [];
+  List<MentorshipSessionDto> _upcoming = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final fields = await _api.listFields();
+      final sessions = await _api.listSessions('upcoming');
+      if (!mounted) return;
+      setState(() {
+        _fields = fields;
+        _upcoming = sessions;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Failed to load mentorship data: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark
-        ? const Color(0xFF0C0C0C)
-        : const Color(0xFFF1F4F8);
-    final surfaceColor = isDark
-        ? const Color(0xFF000000)
-        : const Color(0xFFFFFFFF);
-    final textColor = isDark
-        ? const Color(0xFFFFFFFF)
-        : const Color(0xFF000000);
+    final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+    final surfaceColor = isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+    final textColor = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
     final secondaryTextColor = const Color(0xFF666666);
 
     return Scaffold(
@@ -56,214 +83,190 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Stats Section
-            Row(
-              children: [
-                Expanded(
-                  child: _buildNavigationButton(
-                    Icons.chat_bubble_outline,
-                    'Conversations',
-                    surfaceColor,
-                    textColor,
-                    () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const MentorshipConversationsPage(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildNavigationButton(
-                    Icons.calendar_today_outlined,
-                    'Schedule',
-                    surfaceColor,
-                    textColor,
-                    () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MySchedulePage(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildNavigationButton(
-                    Icons.person_outline,
-                    'My Mentors',
-                    surfaceColor,
-                    textColor,
-                    () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MyMentorsPage(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Container()), // Empty space
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Professional Fields Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Choose a professional field',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ProfessionalFieldsPage(),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    'View All',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFFBFAE01),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildProfessionalFields(
-              surfaceColor,
-              textColor,
-              secondaryTextColor,
-            ),
-            const SizedBox(height: 24),
-
-            // Upcoming Meetings Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Upcoming meetings',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MySchedulePage(),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    'View',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFFBFAE01),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildUpcomingMeetings(surfaceColor, textColor, secondaryTextColor),
-            const SizedBox(height: 24),
-
-            // Why Choose Mentorship Section
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: surfaceColor,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 13),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: RefreshIndicator(
+        onRefresh: _load,
+        color: const Color(0xFFBFAE01),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Stats / Navigation
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.lightbulb_outline,
-                        color: const Color(0xFFBFAE01),
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Why Choose Mentorship?',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
-                        ),
-                      ),
-                    ],
+                  Expanded(
+                    child: _buildNavigationButton(
+                      Icons.chat_bubble_outline,
+                      'Conversations',
+                      surfaceColor,
+                      textColor,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MentorshipConversationsPage(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  _buildBenefitItem(
-                    '🎯',
-                    'Personalized Guidance',
-                    'Get tailored advice for your specific goals and challenges',
-                    textColor,
-                    secondaryTextColor,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildBenefitItem(
-                    '🚀',
-                    'Accelerated Growth',
-                    'Learn from experienced professionals and avoid common pitfalls',
-                    textColor,
-                    secondaryTextColor,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildBenefitItem(
-                    '🤝',
-                    'Network Expansion',
-                    'Connect with industry leaders and expand your professional network',
-                    textColor,
-                    secondaryTextColor,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildNavigationButton(
+                      Icons.calendar_today_outlined,
+                      'Schedule',
+                      surfaceColor,
+                      textColor,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MySchedulePage(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildNavigationButton(
+                      Icons.person_outline,
+                      'My Mentors',
+                      surfaceColor,
+                      textColor,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MyMentorsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: SizedBox.shrink()),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Professional Fields
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Choose a professional field',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProfessionalFieldsPage(),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'View All',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFFBFAE01),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildProfessionalFields(surfaceColor, textColor, secondaryTextColor),
+              const SizedBox(height: 24),
+
+              // Upcoming Meetings
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Upcoming meetings',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const MySchedulePage()),
+                      );
+                    },
+                    child: Text(
+                      'View',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFFBFAE01),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildUpcomingMeetings(surfaceColor, textColor, secondaryTextColor),
+              const SizedBox(height: 24),
+
+              // Why Choose Mentorship
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: surfaceColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_outline, color: const Color(0xFFBFAE01), size: 24),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Why Choose Mentorship?',
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildBenefitItem('🎯', 'Personalized Guidance', 'Get tailored advice for your specific goals and challenges', textColor, secondaryTextColor),
+                    const SizedBox(height: 12),
+                    _buildBenefitItem('🚀', 'Accelerated Growth', 'Learn from experienced professionals and avoid common pitfalls', textColor, secondaryTextColor),
+                    const SizedBox(height: 12),
+                    _buildBenefitItem('🤝', 'Network Expansion', 'Connect with industry leaders and expand your professional network', textColor, secondaryTextColor),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -320,7 +323,37 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
     Color textColor,
     Color secondaryTextColor,
   ) {
-    final fields = MentorshipData.getProfessionalFields();
+    if (_loading && _fields.isEmpty) {
+      return SizedBox(
+        height: 160,
+        child: Center(child: CircularProgressIndicator(color: const Color(0xFFBFAE01))),
+      );
+    }
+    if (_error != null && _fields.isEmpty) {
+      return SizedBox(
+        height: 160,
+        child: Center(
+          child: Text(
+            _error!,
+            style: GoogleFonts.inter(color: Colors.red),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    final fields = _fields;
+    if (fields.isEmpty) {
+      return SizedBox(
+        height: 160,
+        child: Center(
+          child: Text(
+            'No fields available',
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, color: secondaryTextColor),
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
       height: 160,
@@ -367,19 +400,11 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: _getFieldColor(
-                            field.name,
-                          ).withValues(alpha: 26),
+                          color: _getFieldColor(field.name).withValues(alpha: 26),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Center(
-                          child: Text(
-                            field.icon,
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: _getFieldColor(field.name),
-                            ),
-                          ),
+                          child: Text(field.icon, style: TextStyle(fontSize: 20, color: _getFieldColor(field.name))),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -395,10 +420,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                       ),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFBFAE01),
                           borderRadius: BorderRadius.circular(12),
@@ -444,8 +466,25 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
     Color textColor,
     Color secondaryTextColor,
   ) {
-    final sessions = MentorshipData.getUpcomingSessions();
+    if (_loading && _upcoming.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01))),
+      );
+    }
 
+    final sessions = _upcoming;
     if (sessions.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(24),
@@ -454,7 +493,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 13),
+              color: Colors.black.withValues(alpha: 0),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -487,9 +526,10 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
       ),
       child: Column(
         children: sessions.take(2).map((session) {
-          final isLast =
-              sessions.indexOf(session) == sessions.length - 1 ||
-              sessions.indexOf(session) == 1;
+          final idx = sessions.indexOf(session);
+          final isLast = idx == sessions.length - 1 || idx == 1;
+          final avatar = session.mentorAvatar ??
+              'https://ui-avatars.com/api/?name=${Uri.encodeComponent(session.mentorName)}';
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -504,10 +544,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
             ),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundImage: NetworkImage(session.mentorAvatar),
-                ),
+                CircleAvatar(radius: 24, backgroundImage: NetworkImage(avatar)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -532,7 +569,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _formatDateTime(session.scheduledTime),
+                        _formatDateTime(session.scheduledAt),
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -550,11 +587,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: IconButton(
-                    icon: const Icon(
-                      Icons.videocam,
-                      color: Colors.white,
-                      size: 20,
-                    ),
+                    icon: const Icon(Icons.videocam, color: Colors.white, size: 20),
                     onPressed: () {
                       // Join meeting
                     },
@@ -598,32 +631,15 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
   ) {
     return Row(
       children: [
-        Text(
-          icon,
-          style: TextStyle(fontSize: 20, color: const Color(0xFFBFAE01)),
-        ),
+        Text(icon, style: TextStyle(fontSize: 20, color: const Color(0xFFBFAE01))),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                ),
-              ),
+              Text(title, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
               const SizedBox(height: 4),
-              Text(
-                description,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                  color: secondaryTextColor,
-                ),
-              ),
+              Text(description, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, color: secondaryTextColor)),
             ],
           ),
         ),

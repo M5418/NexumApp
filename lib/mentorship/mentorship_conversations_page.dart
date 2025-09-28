@@ -1,208 +1,255 @@
+// c:\Users\dehou\nexum-app\lib\mentorship\mentorship_conversations_page.dart
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../data/mentorship_data.dart';
+import '../core/mentorship_api.dart';
 import 'mentorship_chat_page.dart';
 
 class MentorshipConversationsPage extends StatefulWidget {
   const MentorshipConversationsPage({super.key});
-
   @override
-  State<MentorshipConversationsPage> createState() =>
-      _MentorshipConversationsPageState();
+  State<MentorshipConversationsPage> createState() => _MentorshipConversationsPageState();
 }
 
-class _MentorshipConversationsPageState
-    extends State<MentorshipConversationsPage> {
+class _MentorshipConversationsPageState extends State<MentorshipConversationsPage> {
+  final _api = MentorshipApi();
+  bool _loading = true;
+  String? _error;
+  List<MentorshipConversationSummary> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final list = await _api.listConversations();
+      if (!mounted) return;
+      setState(() => _items = list);
+    } catch (e) {
+      if (!mounted) return;
+      String msg = 'Failed to load conversations';
+      if (e is DioException) {
+        final code = e.response?.statusCode;
+        msg = code == null ? '$msg: network error' : '$msg (HTTP $code)';
+      } else {
+        msg = '$msg: $e';
+      }
+      setState(() => _error = msg);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _formatTimeOrDate(DateTime? dt) {
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(dt.year, dt.month, dt.day);
+    if (d == today) {
+      final t = TimeOfDay.fromDateTime(dt);
+      return t.format(context);
+    }
+    if (d == today.subtract(const Duration(days: 1))) {
+      return 'Yesterday';
+    }
+    return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    // Or use intl if available
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark
-        ? const Color(0xFF0C0C0C)
-        : const Color(0xFFF1F4F8);
-    final surfaceColor = isDark
-        ? const Color(0xFF000000)
-        : const Color(0xFFFFFFFF);
-    final textColor = isDark
-        ? const Color(0xFFFFFFFF)
-        : const Color(0xFF000000);
-    final secondaryTextColor = const Color(0xFF666666);
-
-    final mentors = MentorshipData.getMyMentors();
+    final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+    final card = isDark ? Colors.black : Colors.white;
+    final text = isDark ? Colors.white : Colors.black;
+    const secondary = Color(0xFF666666);
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: surfaceColor,
+        backgroundColor: card,
         elevation: 0,
-        title: Text(
-          'Mentorship Chats',
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: textColor,
-          ),
-        ),
         centerTitle: false,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: Text('Mentorship Chats', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, color: text)),
+        leading: IconButton(icon: Icon(Icons.arrow_back, color: text), onPressed: () => Navigator.pop(context)),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: mentors.length,
-        itemBuilder: (context, index) {
-          final mentor = mentors[index];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 13),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => MentorshipChatPage(
-                        mentorName: mentor.name,
-                        mentorAvatar: mentor.avatar,
-                        isOnline: mentor.isOnline,
-                      ),
+      body: _loading && _items.isEmpty
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
+          : _error != null && _items.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!, style: GoogleFonts.inter(color: Colors.red), textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: _load,
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01)),
+                          child: Text('Retry', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600)),
+                        ),
+                      ],
                     ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 28,
-                            backgroundImage: NetworkImage(mentor.avatar),
-                          ),
-                          if (mentor.isOnline)
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: surfaceColor,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                )
+              : RefreshIndicator(
+                  color: const Color(0xFFBFAE01),
+                  onRefresh: _load,
+                  child: _items.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    mentor.name,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  _getLastMessageTime(index),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w400,
-                                    color: secondaryTextColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              mentor.profession,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFFBFAE01),
+                            const SizedBox(height: 120),
+                            Center(
+                              child: Text(
+                                'No conversations yet',
+                                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, color: secondary),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _getLastMessage(index),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w400,
-                                      color: secondaryTextColor,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (_hasUnreadMessages(index))
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    margin: const EdgeInsets.only(left: 8),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFFBFAE01),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                              ],
                             ),
                           ],
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _items.length,
+                          itemBuilder: (context, i) {
+                            final c = _items[i];
+                            final m = c.mentor;
+                            final avatar = m.avatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(m.name)}';
+                            final subtitle = (c.lastMessageText == null || c.lastMessageText!.trim().isEmpty)
+                                ? _label(c.lastMessageType)
+                                : c.lastMessageText!;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: card,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 10, offset: const Offset(0, 2))],
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => MentorshipChatPage(
+                                          mentorUserId: m.id,
+                                          mentorName: m.name,
+                                          mentorAvatar: avatar,
+                                          isOnline: m.isOnline,
+                                          conversationId: c.id,
+                                        ),
+                                      ),
+                                    );
+                                    await _load();
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      children: [
+                                        Stack(
+                                          children: [
+                                            CircleAvatar(radius: 28, backgroundImage: NetworkImage(avatar)),
+                                            if (m.isOnline)
+                                              Positioned(
+                                                bottom: 0,
+                                                right: 0,
+                                                child: Container(
+                                                  width: 16,
+                                                  height: 16,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.green,
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(color: card, width: 2),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      m.name,
+                                                      style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: text),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    _formatTimeOrDate(c.lastMessageAt),
+                                                    style: GoogleFonts.inter(fontSize: 12, color: secondary),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(m.profession ?? '', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFFBFAE01))),
+                                              const SizedBox(height: 6),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      subtitle,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: GoogleFonts.inter(fontSize: 14, color: secondary),
+                                                    ),
+                                                  ),
+                                                  if (c.unreadCount > 0)
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFFBFAE01),
+                                                        borderRadius: BorderRadius.circular(10),
+                                                      ),
+                                                      child: Text(
+                                                        '${c.unreadCount}',
+                                                        style: GoogleFonts.inter(fontSize: 12, color: Colors.black, fontWeight: FontWeight.w700),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      ),
-                    ],
-                  ),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 
-  String _getLastMessage(int index) {
-    final messages = [
-      'Perfect! For our next session, I\'ll prepare a diversified portfolio strategy...',
-      'Great question! Let me share some insights about startup funding rounds...',
-      'The marketing campaign metrics look promising. Let\'s discuss optimization...',
-    ];
-    return messages[index % messages.length];
-  }
-
-  String _getLastMessageTime(int index) {
-    final times = ['2m', '1h', '3h'];
-    return times[index % times.length];
-  }
-
-  bool _hasUnreadMessages(int index) {
-    return index == 0; // Only first conversation has unread messages
+  String _label(String? t) {
+    switch ((t ?? '').toLowerCase()) {
+      case 'image':
+        return 'Photo';
+      case 'video':
+        return 'Video';
+      case 'voice':
+        return 'Voice message';
+      case 'file':
+        return 'File';
+      default:
+        return '';
+    }
   }
 }
