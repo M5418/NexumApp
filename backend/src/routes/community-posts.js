@@ -457,6 +457,27 @@ router.get('/:communityId/posts', async (req, res) => {
   }
 });
 
+// Get single community post
+router.get('/:communityId/posts/:postId', async (req, res) => {
+    try {
+      const communityId = ensureCommunityOr404(req.params.communityId);
+      if (!communityId) return fail(res, 'community_not_found', 404);
+      const { postId } = req.params;
+  
+      const [rows] = await pool.query(
+        'SELECT * FROM community_posts WHERE id = ? AND community_id = ? LIMIT 1',
+        [postId, communityId]
+      );
+      if (rows.length === 0) return fail(res, 'not_found', 404);
+  
+      const post = (await hydratePosts(rows, req.user.id))[0];
+      return res.json(ok({ post }));
+    } catch (error) {
+      console.error('Get community post error:', error);
+      return fail(res, 'internal_error', 500);
+    }
+  });
+
 /**
  * Part 2: Interactions + Comments with notifications
  */

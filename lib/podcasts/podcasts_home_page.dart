@@ -14,7 +14,7 @@ import 'podcast_search_page.dart';
 
 // Podcast model used across pages (e.g., PodcastDetailsPage imports this).
 class Podcast {
-  final String id;
+    final String id;
   final String title;
   final String? author;
   final String? coverUrl;
@@ -22,6 +22,7 @@ class Podcast {
   final int? durationSec;
   final String? language;
   final String? category;
+  final String? description;
   final List<String> tags;
   final DateTime? createdAt;
 
@@ -40,6 +41,7 @@ class Podcast {
     this.durationSec,
     this.language,
     this.category,
+    this.description,
     this.tags = const [],
     this.createdAt,
     this.likes = 0,
@@ -49,20 +51,31 @@ class Podcast {
     this.meFavorite = false,
   });
 
-  factory Podcast.fromApi(Map<String, dynamic> m) {
+   factory Podcast.fromApi(Map<String, dynamic> m) {
     final counts = Map<String, dynamic>.from(m['counts'] ?? {});
     final me = Map<String, dynamic>.from(m['me'] ?? {});
     return Podcast(
       id: (m['id'] ?? '').toString(),
       title: (m['title'] ?? '').toString(),
       author: m['author']?.toString(),
-      coverUrl: (m['coverUrl'] ?? '').toString().isEmpty ? null : (m['coverUrl'] as String),
-      audioUrl: (m['audioUrl'] ?? '').toString().isEmpty ? null : (m['audioUrl'] as String),
-      durationSec: m['durationSec'] == null ? null : int.tryParse(m['durationSec'].toString()),
+      coverUrl: ((m['coverUrl'] ?? m['cover_url'])?.toString() ?? '').isNotEmpty
+          ? (m['coverUrl'] ?? m['cover_url']).toString()
+          : null,
+      audioUrl: ((m['audioUrl'] ?? m['audio_url'])?.toString() ?? '').isNotEmpty
+          ? (m['audioUrl'] ?? m['audio_url']).toString()
+          : null,
+      durationSec: (m['durationSec'] ?? m['duration_sec']) == null
+          ? null
+          : int.tryParse((m['durationSec'] ?? m['duration_sec']).toString()),
       language: m['language']?.toString(),
       category: m['category']?.toString(),
+      description: m['description']?.toString(),
       tags: List<String>.from((m['tags'] ?? const []) as List),
-      createdAt: m['createdAt'] != null ? DateTime.tryParse(m['createdAt'].toString()) : null,
+      createdAt: m['createdAt'] != null
+          ? DateTime.tryParse(m['createdAt'].toString())
+          : (m['created_at'] != null
+              ? DateTime.tryParse(m['created_at'].toString())
+              : null),
       likes: int.tryParse((counts['likes'] ?? 0).toString()) ?? 0,
       favorites: int.tryParse((counts['favorites'] ?? 0).toString()) ?? 0,
       plays: int.tryParse((counts['plays'] ?? 0).toString()) ?? 0,

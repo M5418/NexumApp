@@ -8,6 +8,23 @@ class AutoPlayVideo extends StatefulWidget {
   final double height;
   final BorderRadius? borderRadius;
 
+  // Global mute controller: toggling this will mute/unmute ALL AutoPlayVideo instances
+  static final ValueNotifier<bool> muteNotifier = ValueNotifier<bool>(true);
+  static bool get isMuted => muteNotifier.value;
+  static void setMuted(bool muted) => muteNotifier.value = muted;
+  static void toggleGlobalMute() => setMuted(!isMuted);
+
+  // Global "currently playing" tracker (only one should play at any time)
+  static final ValueNotifier<String?> playingNotifier =
+      ValueNotifier<String?>(null);
+  static String? get currentPlayerId => playingNotifier.value;
+  static void setCurrentPlayer(String? id) => playingNotifier.value = id;
+  static void ensureCurrent(String id) {
+    if (playingNotifier.value != id) {
+      playingNotifier.value = id;
+    }
+  }
+
   const AutoPlayVideo({
     super.key,
     required this.videoUrl,
@@ -23,13 +40,34 @@ class AutoPlayVideo extends StatefulWidget {
 class _AutoPlayVideoState extends State<AutoPlayVideo> {
   late VideoPlayerController _controller;
   bool _isInitialized = false;
-  bool _isMuted = true;
   bool _isVisible = false;
+
+  // Stable id for this instance during runtime
+  late final String _id = UniqueKey().toString();
+
+  late VoidCallback _muteListener;
+  late VoidCallback _playingListener;
 
   @override
   void initState() {
     super.initState();
     _initializeVideo();
+
+    // Listen to global mute changes and apply to this controller
+    _muteListener = () {
+      if (!mounted) return;
+      _applyMute();
+      setState(() {});
+    };
+    AutoPlayVideo.muteNotifier.addListener(_muteListener);
+
+    // Listen to the global "who is allowed to play" updates
+    _playingListener = () {
+      if (!mounted) return;
+      _syncWithGlobalPlaying();
+      setState(() {});
+    };
+    AutoPlayVideo.playingNotifier.addListener(_playingListener);
   }
 
   void _initializeVideo() {
@@ -37,15 +75,18 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
     _controller
         .initialize()
         .then((_) {
-          if (mounted) {
-            setState(() {
-              _isInitialized = true;
-            });
-            _controller.setLooping(true);
-            _controller.setVolume(_isMuted ? 0.0 : 1.0);
-            if (_isVisible) {
-              _controller.play();
-            }
+          if (!mounted) return;
+          setState(() {
+            _isInitialized = true;
+          });
+          _controller.setLooping(true);
+          _controller.setVolume(AutoPlayVideo.isMuted ? 0.0 : 1.0);
+
+          // If this is visible on init, request to become the current player.
+          if (_isVisible) {
+            AutoPlayVideo.ensureCurrent(_id);
+          } else {
+            _controller.pause();
           }
         })
         .catchError((error) {
@@ -53,32 +94,82 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
         });
   }
 
-  void _onVisibilityChanged(VisibilityInfo info) {
-    final isVisible = info.visibleFraction >= 0.5;
-    if (_isVisible != isVisible) {
-      setState(() {
-        _isVisible = isVisible;
-      });
+  void _applyMute() {
+    if (_isInitialized) {
+      _controller.setVolume(AutoPlayVideo.isMuted ? 0.0 : 1.0);
+    }
+  }
 
-      if (_isInitialized) {
-        if (isVisible) {
+  void _syncWithGlobalPlaying() {
+    if (!_isInitialized) return;
+    final current = AutoPlayVideo.currentPlayerId;
+
+    if (current == _id) {
+      // I am the chosen one. Play only if visible; otherwise keep paused.
+      if (_isVisible) {
+        if (!_controller.value.isPlaying) {
           _controller.play();
-        } else {
+        }
+      } else {
+        if (_controller.value.isPlaying) {
           _controller.pause();
         }
+      }
+    } else {
+      // Not the chosen one: ensure paused.
+      if (_controller.value.isPlaying) {
+        _controller.pause();
       }
     }
   }
 
-  void _toggleMute() {
-    setState(() {
-      _isMuted = !_isMuted;
-      _controller.setVolume(_isMuted ? 0.0 : 1.0);
-    });
+  void _onVisibilityChanged(VisibilityInfo info) {
+    final nowVisible = info.visibleFraction >= 0.5;
+    if (_isVisible != nowVisible) {
+      setState(() {
+        _isVisible = nowVisible;
+      });
+    }
+
+    if (!_isInitialized) return;
+
+    if (nowVisible) {
+      // Claim the player slot for this instance.
+      AutoPlayVideo.ensureCurrent(_id);
+    } else {
+      // No longer visible: pause and release the slot if this was current.
+      if (_controller.value.isPlaying) {
+        _controller.pause();
+      }
+      if (AutoPlayVideo.currentPlayerId == _id) {
+        AutoPlayVideo.setCurrentPlayer(null);
+      }
+    }
+  }
+
+  void _toggleGlobalMute() {
+    AutoPlayVideo.toggleGlobalMute(); // this updates ALL feed videos
+  }
+
+  void _onTapTogglePlayPause() {
+    if (!_isInitialized) return;
+
+    if (_controller.value.isPlaying) {
+      _controller.pause();
+      // If I was the current player, release the slot.
+      if (AutoPlayVideo.currentPlayerId == _id) {
+        AutoPlayVideo.setCurrentPlayer(null);
+      }
+    } else {
+      // Request to be the current player (this will pause others).
+      AutoPlayVideo.ensureCurrent(_id);
+    }
   }
 
   @override
   void dispose() {
+    AutoPlayVideo.muteNotifier.removeListener(_muteListener);
+    AutoPlayVideo.playingNotifier.removeListener(_playingListener);
     _controller.dispose();
     super.dispose();
   }
@@ -122,12 +213,20 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
                 ),
               ),
 
-            // Mute/Unmute button
+            // Tap overlay to request play/pause for this item (honors single-player rule)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _onTapTogglePlayPause,
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+
+            // Global Mute/Unmute button (affects ALL AutoPlayVideo instances)
             Positioned(
               bottom: 12,
               right: 12,
               child: GestureDetector(
-                onTap: _toggleMute,
+                onTap: _toggleGlobalMute,
                 child: Container(
                   width: 36,
                   height: 36,
@@ -136,27 +235,11 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    _isMuted ? Icons.volume_off : Icons.volume_up,
+                    AutoPlayVideo.isMuted ? Icons.volume_off : Icons.volume_up,
                     color: Colors.white,
                     size: 18,
                   ),
                 ),
-              ),
-            ),
-
-            // Play/Pause overlay (tap to toggle)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: () {
-                  if (_isInitialized) {
-                    if (_controller.value.isPlaying) {
-                      _controller.pause();
-                    } else {
-                      _controller.play();
-                    }
-                  }
-                },
-                child: Container(color: Colors.transparent),
               ),
             ),
           ],

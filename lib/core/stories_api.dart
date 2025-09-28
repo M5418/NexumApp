@@ -73,6 +73,12 @@ class StoryItem {
   final DateTime expiresAt;
   final bool viewed;
 
+  // New
+  final int viewsCount;
+  final bool liked;
+  final int likesCount;
+  final int commentsCount;
+
   StoryItem({
     required this.id,
     required this.mediaType,
@@ -85,6 +91,10 @@ class StoryItem {
     required this.createdAt,
     required this.expiresAt,
     required this.viewed,
+    this.viewsCount = 0,
+    this.liked = false,
+    this.likesCount = 0,
+    this.commentsCount = 0,
   });
 
   factory StoryItem.fromJson(Map<String, dynamic> json) {
@@ -100,6 +110,10 @@ class StoryItem {
       createdAt: DateTime.parse(json['created_at'] as String),
       expiresAt: DateTime.parse(json['expires_at'] as String),
       viewed: json['viewed'] as bool,
+      viewsCount: (json['viewers_count'] as int?) ?? 0,
+      liked: (json['liked'] as bool?) ?? false,
+      likesCount: (json['likes_count'] as int?) ?? 0,
+      commentsCount: (json['comments_count'] as int?) ?? 0,
     );
   }
 }
@@ -156,6 +170,15 @@ class StoriesApi {
       await _dio.post('/api/stories/$storyId/view');
     } catch (e) {
       debugPrint('🔴 StoriesApi.markStoryViewed error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> likeStory(String storyId) async {
+    try {
+      await _dio.post('/api/stories/$storyId/like');
+    } catch (e) {
+      debugPrint('🔴 StoriesApi.likeStory error: $e');
       rethrow;
     }
   }

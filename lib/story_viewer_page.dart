@@ -20,36 +20,53 @@ class StoryItem {
   final String? audioUrl;
   final String? audioTitle;
 
+  // New (UI-state mirrors backend)
+  final bool liked;
+  final int likesCount;
+  final int commentsCount;
+
   const StoryItem.image({
     required this.imageUrl,
     this.audioUrl,
     this.audioTitle,
-  }) : type = StoryMediaType.image,
-       videoUrl = null,
-       text = null,
-       backgroundColor = null;
+    this.liked = false,
+    this.likesCount = 0,
+    this.commentsCount = 0,
+  })  : type = StoryMediaType.image,
+        videoUrl = null,
+        text = null,
+        backgroundColor = null;
 
-  const StoryItem.video({required this.videoUrl})
-    : type = StoryMediaType.video,
-      imageUrl = null,
-      text = null,
-      backgroundColor = null,
-      audioUrl = null,
-      audioTitle = null;
+  const StoryItem.video({
+    required this.videoUrl,
+    this.liked = false,
+    this.likesCount = 0,
+    this.commentsCount = 0,
+  })  : type = StoryMediaType.video,
+        imageUrl = null,
+        text = null,
+        backgroundColor = null,
+        audioUrl = null,
+        audioTitle = null;
 
-  const StoryItem.text({required this.text, this.backgroundColor})
-    : type = StoryMediaType.text,
-      imageUrl = null,
-      videoUrl = null,
-      audioUrl = null,
-      audioTitle = null;
+  const StoryItem.text({
+    required this.text,
+    this.backgroundColor,
+    this.liked = false,
+    this.likesCount = 0,
+    this.commentsCount = 0,
+  })  : type = StoryMediaType.text,
+        imageUrl = null,
+        videoUrl = null,
+        audioUrl = null,
+        audioTitle = null;
 }
 
 class StoryUser {
   final String userId;
-  final String name;
-  final String handle;
-  final String avatarUrl;
+  final String name;     // Full name
+  final String handle;   // @username (for other uses)
+  final String? avatarUrl; // Nullable; only show when provided
   final List<StoryItem> items;
   final List<String?> itemIds;
 
@@ -57,14 +74,14 @@ class StoryUser {
     required this.userId,
     required this.name,
     required this.handle,
-    required this.avatarUrl,
+    this.avatarUrl,
     required this.items,
     required this.itemIds,
   });
 }
 
 class StoryViewerPage extends StatefulWidget {
-  final List<Map<String, dynamic>> rings; // From SampleData.getSampleStories()
+  final List<Map<String, dynamic>> rings; // From Home rings
   final int initialRingIndex;
 
   const StoryViewerPage({
@@ -128,9 +145,8 @@ class _StoryViewerPageState extends State<StoryViewerPage>
 
   Future<void> _initFromBackend() async {
     try {
-      final filtered = widget.rings
-          .where((r) => (r['isMine'] as bool?) != true)
-          .toList();
+      final filtered =
+          widget.rings.where((r) => (r['isMine'] as bool?) != true).toList();
 
       // Fetch all users' stories in parallel
       final responses = await Future.wait(
@@ -149,11 +165,19 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                 imageUrl: it.mediaUrl,
                 audioUrl: it.audioUrl,
                 audioTitle: it.audioTitle,
+                liked: it.liked,
+                likesCount: it.likesCount,
+                commentsCount: it.commentsCount,
               ));
               ids.add(it.id);
               break;
             case 'video':
-              items.add(StoryItem.video(videoUrl: it.mediaUrl));
+              items.add(StoryItem.video(
+                videoUrl: it.mediaUrl,
+                liked: it.liked,
+                likesCount: it.likesCount,
+                commentsCount: it.commentsCount,
+              ));
               ids.add(it.id);
               break;
             case 'text':
@@ -161,7 +185,13 @@ class _StoryViewerPageState extends State<StoryViewerPage>
               if (it.backgroundColor != null) {
                 bg = _parseHexColor(it.backgroundColor!);
               }
-              items.add(StoryItem.text(text: it.textContent, backgroundColor: bg));
+              items.add(StoryItem.text(
+                text: it.textContent,
+                backgroundColor: bg,
+                liked: it.liked,
+                likesCount: it.likesCount,
+                commentsCount: it.commentsCount,
+              ));
               ids.add(it.id);
               break;
             default:
@@ -173,8 +203,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             userId: u.id,
             name: u.name,
             handle: '@${u.username}',
-            avatarUrl: u.avatarUrl ??
-                'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+            avatarUrl: u.avatarUrl, // no forced fallback
             items: items,
             itemIds: ids,
           ),
@@ -193,6 +222,9 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       if (!mounted) return;
       setState(() {
         _loading = false;
+        if (_frames.isNotEmpty) {
+          _liked = _frames[_currentIndex].item.liked;
+        }
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _frames.isEmpty) return;
@@ -309,7 +341,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         await p.play(UrlSource(audioUrl));
       }
     }
-    // Mark as viewed in backend if possible
+    // Mark as viewed
     final sid = frame.storyId;
     if (sid != null) {
       unawaited(_storiesApi.markStoryViewed(sid));
@@ -427,6 +459,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       unawaited(a.resume());
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -445,120 +478,124 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                   ),
                 )
               : SafeArea(
-        bottom: false,
-        child: NotificationListener<OverscrollNotification>(
-          onNotification: (n) {
-            if (_currentIndex == _frames.length - 1 && n.overscroll > 0) {
-              Navigator.of(context).maybePop();
-            }
-            return false;
-          },
-          child: Stack(
-            children: [
-              PageView.builder(
-                controller: _pageController,
-                itemCount: _frames.length,
-                onPageChanged: (i) async {
-                  setState(() {
-                    _currentIndex = i;
-                    _liked = false;
-                  });
-                  await _startPlaybackForFrame(_frames[i]);
-                },
-                itemBuilder: (context, index) => _buildFrame(_frames[index]),
-              ),
+                  bottom: false,
+                  child: NotificationListener<OverscrollNotification>(
+                    onNotification: (n) {
+                      if (_currentIndex == _frames.length - 1 &&
+                          n.overscroll > 0) {
+                        Navigator.of(context).maybePop();
+                      }
+                      return false;
+                    },
+                    child: Stack(
+                      children: [
+                        PageView.builder(
+                          controller: _pageController,
+                          itemCount: _frames.length,
+                          onPageChanged: (i) async {
+                            setState(() {
+                              _currentIndex = i;
+                              _liked = _frames[i].item.liked;
+                              _commentController.clear();
+                            });
+                            await _startPlaybackForFrame(_frames[i]);
+                          },
+                          itemBuilder: (context, index) =>
+                              _buildFrame(_frames[index]),
+                        ),
 
-              // Top gradient for readability
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 120,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 153), // ~0.6
-                        Colors.transparent,
+                        // Top gradient
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            height: 120,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 153),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Progress bars
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          right: 8,
+                          child: _buildProgressBars(),
+                        ),
+
+                        // Header
+                        Positioned(top: 40, left: 12, right: 12, child: _header()),
+
+                        // Tap zones
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: 80, // below progress + header
+                          bottom: 120, // above comment bar
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onLongPressStart: (_) => _pauseStory(),
+                            onLongPressEnd: (_) => _resumeStory(),
+                            onLongPressCancel: _resumeStory,
+                            child: Row(
+                              children: [
+                                // Left 1/3 = previous
+                                Expanded(
+                                  flex: 1,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: _goToPreviousStory,
+                                  ),
+                                ),
+                                // Right 2/3 = next
+                                Expanded(
+                                  flex: 2,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: _goToNextStory,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Bottom gradient
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            height: 160,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 153),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Comment + actions bar
+                        Positioned(
+                            left: 12, right: 12, bottom: 24, child: _commentBar()),
                       ],
                     ),
                   ),
                 ),
-              ),
-
-              // Progress bars (per current user's story count)
-              Positioned(
-                top: 8,
-                left: 8,
-                right: 8,
-                child: _buildProgressBars(),
-              ),
-
-              // Header
-              Positioned(top: 40, left: 12, right: 12, child: _header()),
-
-              // Tap zones to navigate left/right like Instagram stories
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 80, // below progress + header
-                bottom: 120, // above comment bar
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onLongPressStart: (_) => _pauseStory(),
-                  onLongPressEnd: (_) => _resumeStory(),
-                  onLongPressCancel: _resumeStory,
-                  child: Row(
-                    children: [
-                      // Left 1/3 = previous
-                      Expanded(
-                        flex: 1,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _goToPreviousStory,
-                        ),
-                      ),
-                      // Right 2/3 = next
-                      Expanded(
-                        flex: 2,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _goToNextStory,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Bottom gradient
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 160,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 153),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Comment + actions bar
-              Positioned(left: 12, right: 12, bottom: 24, child: _commentBar()),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -585,9 +622,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         }
         return Center(
           child: AspectRatio(
-            aspectRatio: vc.value.aspectRatio == 0
-                ? 9 / 16
-                : vc.value.aspectRatio,
+            aspectRatio: vc.value.aspectRatio == 0 ? 9 / 16 : vc.value.aspectRatio,
             child: VideoPlayer(vc),
           ),
         );
@@ -634,23 +669,25 @@ class _StoryViewerPageState extends State<StoryViewerPage>
           height: 36,
           clipBehavior: Clip.antiAlias,
           decoration: const BoxDecoration(shape: BoxShape.circle),
-          child: CachedNetworkImage(
-            imageUrl: f.user.avatarUrl,
-            fit: BoxFit.cover,
-            placeholder: (c, u) =>
-                Container(color: const Color(0xFF666666).withValues(alpha: 51)),
-            errorWidget: (c, u, e) =>
-                const Icon(Icons.person, color: Colors.white, size: 18),
-          ),
+          child: (f.user.avatarUrl != null && f.user.avatarUrl!.isNotEmpty)
+              ? CachedNetworkImage(
+                  imageUrl: f.user.avatarUrl!,
+                  fit: BoxFit.cover,
+                  placeholder: (c, u) =>
+                      Container(color: const Color(0xFF666666).withValues(alpha: 51)),
+                  errorWidget: (c, u, e) =>
+                      const Icon(Icons.person, color: Colors.white, size: 18),
+                )
+              : const Icon(Icons.person, color: Colors.white, size: 18),
         ),
         const SizedBox(width: 8),
-        // Handle + Connect
+        // Full name and subline
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                f.user.handle,
+                f.user.name, // Full name
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -681,16 +718,14 @@ class _StoryViewerPageState extends State<StoryViewerPage>
               children: [
                 const Icon(Icons.music_note, size: 16, color: Colors.black),
                 const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    f.item.audioTitle ?? 'Music',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
+                Text(
+                  f.item.audioTitle ?? 'Music',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
                   ),
                 ),
               ],
@@ -719,7 +754,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     );
   }
 
-  Widget _buildProgressBars() {
+    Widget _buildProgressBars() {
     final frame = _frames[_currentIndex];
     final total = frame.user.items.length;
     final active = frame.itemIndex;
@@ -773,6 +808,20 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   }
 
   Widget _commentBar() {
+    Future<void> _sendComment() async {
+      final text = _commentController.text.trim();
+      if (text.isEmpty || _frames.isEmpty) return;
+      final sid = _frames[_currentIndex].storyId;
+      if (sid == null) return;
+      try {
+        await _storiesApi.replyToStory(sid, text);
+        _commentController.clear();
+        _snack('Reply sent', const Color(0xFFBFAE01));
+      } catch (e) {
+        _snack('Failed to reply', Colors.red);
+      }
+    }
+
     return Row(
       children: [
         // Comment field
@@ -797,27 +846,15 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                     fontSize: 14,
                   ),
                 ),
-                onSubmitted: (_) async {
-                  final text = _commentController.text.trim();
-                  if (text.isEmpty || _frames.isEmpty) return;
-                  final sid = _frames[_currentIndex].storyId;
-                  if (sid == null) return;
-                  try {
-                    await _storiesApi.replyToStory(sid, text);
-                    _commentController.clear();
-                    _snack('Reply sent', const Color(0xFFBFAE01));
-                  } catch (e) {
-                    _snack('Failed to reply', Colors.red);
-                  }
-                },
+                onSubmitted: (_) => _sendComment(),
               ),
             ),
           ),
         ),
         const SizedBox(width: 10),
-        // Share button (paper plane)
+        // Send comment button (sends a chat message to the user)
         GestureDetector(
-          onTap: _share,
+          onTap: _sendComment,
           child: Container(
             width: 46,
             height: 46,
@@ -829,9 +866,36 @@ class _StoryViewerPageState extends State<StoryViewerPage>
           ),
         ),
         const SizedBox(width: 10),
+        // Share button (explicit share icon)
+        GestureDetector(
+          onTap: _share,
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 64),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.ios_share, color: Colors.black),
+          ),
+        ),
+        const SizedBox(width: 10),
         // Like button
         GestureDetector(
-          onTap: () => setState(() => _liked = !_liked),
+          onTap: () async {
+            final sid = _frames.isNotEmpty ? _frames[_currentIndex].storyId : null;
+            if (sid == null) return;
+            try {
+              // Uses StoriesApi.likeStory (void). Toggle UI state locally.
+              await _storiesApi.likeStory(sid);
+              if (!mounted) return;
+              setState(() {
+                _liked = !_liked;
+              });
+            } catch (e) {
+              _snack('Failed to like', Colors.red);
+            }
+          },
           child: Container(
             width: 46,
             height: 46,

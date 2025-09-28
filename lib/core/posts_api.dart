@@ -439,6 +439,10 @@ class PostsApi {
 
     final repostedBy = repostAuthorRaw.isNotEmpty
         ? RepostedBy(
+            userId: (repostAuthorRaw['id'] ??
+                    repostAuthorRaw['user_id'] ??
+                    repostAuthorRaw['uid'])
+                ?.toString(),
             userName:
                 (repostAuthorRaw['name'] ?? repostAuthorRaw['username'] ?? 'User')
                     .toString(),

@@ -39,6 +39,52 @@ const batchCreateSchema = z.object({
   items: z.array(createStorySchema).min(1).max(10),
 });
 
+function parseJsonArray(x) {
+  try {
+    if (!x) return [];
+    const v = typeof x === 'string' ? JSON.parse(x) : x;
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function uniqueAdd(arr, id) {
+  const s = new Set(arr || []);
+  s.add(id);
+  return Array.from(s);
+}
+function uniqueRemove(arr, id) {
+  const s = new Set(arr || []);
+  s.delete(id);
+  return Array.from(s);
+}
+function normalizePair(a, b) { return a < b ? [a, b] : [b, a]; }
+
+async function findExistingConversation(a, b) {
+  const [userA, userB] = normalizePair(a, b);
+  const [existing] = await pool.execute(
+    'SELECT id FROM conversations WHERE user_a_id = ? AND user_b_id = ? LIMIT 1',
+    [userA, userB]
+  );
+  return existing.length > 0 ? existing[0].id : null;
+}
+async function areConnected(a, b) {
+  const [rows] = await pool.execute(
+    'SELECT 1 FROM connections WHERE (from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?) LIMIT 1',
+    [a, b, b, a]
+  );
+  return rows.length > 0;
+}
+async function createConversation(a, b) {
+  const [userA, userB] = normalizePair(a, b);
+  const id = generateId();
+  await pool.execute(
+    'INSERT INTO conversations (id, user_a_id, user_b_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+    [id, userA, userB]
+  );
+  return id;
+}
+
 async function getUserMap(userIds) {
   if (!userIds || userIds.length === 0) return {};
   const unique = [...new Set(userIds)];
@@ -126,7 +172,11 @@ router.post('/', async (req, res) => {
       created_at: story.created_at,
       expires_at: story.expires_at,
       viewers_count: story.viewers_count,
+      likes_count: Number(story.likes_count || 0),
+      comments_count: Number(story.comments_count || 0),
+      liked: false,
     }}));
+
   } catch (err) {
     if (err instanceof z.ZodError) return fail(res, 'validation_error', 400, err.errors);
     console.error('Create story error:', err);
@@ -282,24 +332,33 @@ router.get('/:userId', async (req, res) => {
     const uMap = await getUserMap([userId]);
     const items = rows
       .filter(s => !anyInaccessible.includes(s.id))
-      .map(s => ({
-        id: s.id,
-        media_type: s.media_type,
-        media_url: s.media_url,
-        text_content: s.text_content,
-        background_color: s.background_color,
-        audio_url: s.audio_url,
-        audio_title: s.audio_title,
-        thumbnail_url: s.thumbnail_url,
-        created_at: s.created_at,
-        expires_at: s.expires_at,
-        viewed: !!s.has_viewed,
-      }));
+      .map(s => {
+        const likedBy = parseJsonArray(s.liked_by);
+        return {
+          id: s.id,
+          media_type: s.media_type,
+          media_url: s.media_url,
+          text_content: s.text_content,
+          background_color: s.background_color,
+          audio_url: s.audio_url,
+          audio_title: s.audio_title,
+          thumbnail_url: s.thumbnail_url,
+          created_at: s.created_at,
+          expires_at: s.expires_at,
+          viewed: !!s.has_viewed,
+          viewers_count: Number(s.viewers_count || 0),
+          likes_count: Number(s.likes_count || 0),
+          comments_count: Number(s.comments_count || 0),
+          liked: likedBy.includes(meId),
+        };
+      });
 
     return res.json(ok({
       user: { id: userId, ...(uMap[userId] || { name: 'User', username: '@user', avatarUrl: null }) },
       items,
     }));
+
+
   } catch (err) {
     console.error('Get user stories error:', err);
     return fail(res, 'internal_error', 500);
@@ -333,6 +392,45 @@ router.post('/:storyId/view', async (req, res) => {
   }
 });
 
+// POST /api/stories/:storyId/like
+router.post('/:storyId/like', async (req, res) => {
+  try {
+    const meId = req.user.id;
+    const { storyId } = req.params;
+
+    const [rows] = await pool.execute('SELECT * FROM stories WHERE id = ? LIMIT 1', [storyId]);
+    if (rows.length === 0) return fail(res, 'not_found', 404);
+    const s = rows[0];
+
+    const allowed = await canViewStory(s.user_id, meId, s.privacy);
+    if (!allowed) return fail(res, 'forbidden', 403);
+
+    const likedBy = parseJsonArray(s.liked_by);
+    let liked;
+    let newLikedBy;
+    let newCount;
+
+    if (likedBy.includes(meId)) {
+      newLikedBy = uniqueRemove(likedBy, meId);
+      liked = false;
+    } else {
+      newLikedBy = uniqueAdd(likedBy, meId);
+      liked = true;
+    }
+    newCount = newLikedBy.length;
+
+    await pool.execute(
+      'UPDATE stories SET liked_by = ?, likes_count = ? WHERE id = ?',
+      [JSON.stringify(newLikedBy), newCount, storyId]
+    );
+
+    return res.json(ok({ liked, likes_count: newCount }));
+  } catch (err) {
+    console.error('Toggle like error:', err);
+    return fail(res, 'internal_error', 500);
+  }
+});
+
 // POST /api/stories/:storyId/reply
 router.post('/:storyId/reply', async (req, res) => {
   try {
@@ -345,37 +443,52 @@ router.post('/:storyId/reply', async (req, res) => {
     if (rows.length === 0) return fail(res, 'not_found', 404);
     const s = rows[0];
 
-    const allowed = await canViewStory(s.user_id, meId, s.privacy);
-    if (!allowed) return fail(res, 'forbidden', 403);
+    // Privacy check
+    const canView = await canViewStory(s.user_id, meId, s.privacy);
+    if (!canView) return fail(res, 'forbidden', 403);
 
-    // Create or get conversation
-    function normalizePair(a, b) { return a < b ? [a, b] : [b, a]; }
-    async function getOrCreateConversation(userId, otherUserId) {
-      const [a, b] = normalizePair(userId, otherUserId);
-      const [existing] = await pool.execute('SELECT * FROM conversations WHERE user_a_id = ? AND user_b_id = ? LIMIT 1', [a, b]);
-      if (existing.length > 0) return existing[0].id;
-      const id = generateId();
-      await pool.execute('INSERT INTO conversations (id, user_a_id, user_b_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())', [id, a, b]);
-      return id;
+    // Relationship gating: allow if conversation exists OR they are connected
+    let conversationId = await findExistingConversation(meId, s.user_id);
+    if (!conversationId) {
+      const connected = await areConnected(meId, s.user_id);
+      if (!connected) {
+        return fail(res, 'cannot_comment_no_relationship', 403);
+      }
+      conversationId = await createConversation(meId, s.user_id);
     }
 
-    const conversationId = await getOrCreateConversation(meId, s.user_id);
-
     const receiverId = s.user_id === meId ? meId : s.user_id;
-    const msgId = generateId();
-    const msgText = text;
 
+    // Create a placeholder "Story" message so the actual comment can reply to it (reply bubble in chat)
+    const placeholderId = generateId();
     await pool.execute(
       `INSERT INTO chat_messages (id, conversation_id, sender_id, receiver_id, type, text, created_at, updated_at)
        VALUES (?, ?, ?, ?, 'text', ?, NOW(), NOW())`,
-      [msgId, conversationId, meId, receiverId, msgText]
+      [placeholderId, conversationId, meId, receiverId, 'Story']
+    );
+
+    // Insert the actual reply, referencing the placeholder
+    const msgId = generateId();
+    await pool.execute(
+      `INSERT INTO chat_messages (id, conversation_id, sender_id, receiver_id, type, text, reply_to_message_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'text', ?, ?, NOW(), NOW())`,
+      [msgId, conversationId, meId, receiverId, text, placeholderId]
     );
 
     await pool.execute(
       `UPDATE conversations
           SET last_message_type = 'text', last_message_text = ?, last_message_at = NOW(), updated_at = NOW()
         WHERE id = ?`,
-      [msgText, conversationId]
+      [text, conversationId]
+    );
+
+    // Update story commented_by + comments_count
+    const commentedBy = parseJsonArray(s.commented_by);
+    const newCommentedBy = uniqueAdd(commentedBy, meId);
+    const newCommentsCount = newCommentedBy.length;
+    await pool.execute(
+      'UPDATE stories SET commented_by = ?, comments_count = ? WHERE id = ?',
+      [JSON.stringify(newCommentedBy), newCommentsCount, storyId]
     );
 
     return res.json(ok({ conversation_id: conversationId }));

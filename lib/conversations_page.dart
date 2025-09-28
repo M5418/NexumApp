@@ -737,22 +737,22 @@ class _ConversationsPageState extends State<ConversationsPage>
                       width: 0.6,
                     ),
                   ),
-                  child: IconButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ConversationSearchPage(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(
-                      Icons.search,
-                      size: 18,
-                      color: Color(0xFF666666),
-                    ),
-                    padding: EdgeInsets.zero,
+            child: IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ConversationSearchPage(),
                   ),
+                );
+              },
+              icon: const Icon(
+                Icons.search,
+                size: 18,
+                color: Color(0xFF666666),
+              ),
+              padding: EdgeInsets.zero,
+            ),
                 ),
                 const SizedBox(width: 12),
                 Container(

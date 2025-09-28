@@ -2,7 +2,7 @@
 import express from 'express';
 import pool from '../db/db.js';
 import { ok, fail } from '../utils/response.js';
-import { COMMUNITIES, COMMUNITY_BY_ID } from '../data/communities.js';
+import { COMMUNITIES, COMMUNITY_BY_ID, slugify } from '../data/communities.js';
 import { topicsFromInterests } from '../data/interest-mapping.js';
 
 const router = express.Router();
@@ -96,24 +96,41 @@ router.get('/my', async (req, res) => {
       }
     }
 
+    // Posts counts for these communities
+    const slugs = myTopics.map((topicName) => slugify(topicName));
+    const postsById = new Map();
+    if (slugs.length > 0) {
+      const placeholders = slugs.map(() => '?').join(',');
+      const [postRows] = await pool.query(
+        `SELECT community_id, COUNT(*) AS cnt
+           FROM community_posts
+          WHERE community_id IN (${placeholders})
+          GROUP BY community_id`,
+        slugs
+      );
+      for (const r of postRows) {
+        postsById.set(String(r.community_id), Number(r.cnt || 0));
+      }
+    }
+
     // Build response from communities dataset
     const data = myTopics
       .map((topicName) => {
-        const slug = topicName
-          .toLowerCase()
-          .replace(/&/g, 'and')
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        const base = COMMUNITY_BY_ID[slug];
+        const id = slugify(topicName);
+        const base = COMMUNITY_BY_ID[id];
         if (!base) return null;
+        const memberCount = countsByTopic.get(topicName) || 0;
+        const postsCount = postsById.get(base.id) || 0;
         return {
           id: base.id,
           name: base.name,
           bio: base.bio,
           avatarUrl: base.avatarUrl,
           coverUrl: base.coverUrl,
-          friendsInCommon: `+${countsByTopic.get(topicName) || 0}`,
+          friendsInCommon: `+${memberCount}`, // keep for existing UI
           unreadPosts: 0,
+          memberCount,
+          postsCount,
         };
       })
       .filter(Boolean);
@@ -143,7 +160,20 @@ router.get('/:id', async (req, res) => {
       if (userTopics.includes(targetTopic)) memberCount++;
     }
 
-    return res.json(ok({ ...community, memberCount }));
+    // Posts count for this community
+    const [pc] = await pool.execute(
+      `SELECT COUNT(*) AS cnt FROM community_posts WHERE community_id = ?`,
+      [id]
+    );
+    const postsCount = pc?.[0]?.cnt ? Number(pc[0].cnt) : 0;
+
+    return res.json(
+      ok({
+        ...community,
+        memberCount,
+        postsCount,
+      })
+    );
   } catch (e) {
     console.error('Community get error:', e);
     return fail(res, 'internal_error', 500);

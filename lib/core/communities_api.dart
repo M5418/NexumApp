@@ -12,6 +12,10 @@ class ApiCommunity {
   final String friendsInCommon;
   final int unreadPosts;
 
+  // Added stats
+  final int postsCount;
+  final int memberCount;
+
   ApiCommunity({
     required this.id,
     required this.name,
@@ -20,6 +24,8 @@ class ApiCommunity {
     this.coverUrl,
     this.friendsInCommon = '+0',
     this.unreadPosts = 0,
+    this.postsCount = 0,
+    this.memberCount = 0,
   });
 
   factory ApiCommunity.fromJson(Map<String, dynamic> j) {
@@ -31,6 +37,8 @@ class ApiCommunity {
       coverUrl: j['coverUrl']?.toString(),
       friendsInCommon: (j['friendsInCommon'] ?? '+0').toString(),
       unreadPosts: (j['unreadPosts'] is num) ? (j['unreadPosts'] as num).toInt() : 0,
+      postsCount: (j['postsCount'] is num) ? (j['postsCount'] as num).toInt() : 0,
+      memberCount: (j['memberCount'] is num) ? (j['memberCount'] as num).toInt() : 0,
     );
   }
 }
@@ -87,6 +95,20 @@ class CommunitiesApi {
         .toList();
     debugPrint('Loaded ${items.length} communities');
     return items;
+  }
+
+  Future<ApiCommunity> details(String communityId) async {
+    final resp = await _dio.get('/api/communities/$communityId');
+    final data = resp.data;
+    if (data is Map && data['ok'] == true) {
+      final d = Map<String, dynamic>.from(data['data'] ?? {});
+      return ApiCommunity.fromJson(d);
+    }
+    if (data is Map) {
+      // sometimes backend might not wrap in ok/data in dev
+      return ApiCommunity.fromJson(Map<String, dynamic>.from(data));
+    }
+    throw Exception('Failed to load community details');
   }
 
   Future<List<ApiCommunityMember>> members(String communityId) async {

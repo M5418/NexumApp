@@ -216,9 +216,10 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
           ),
           const SizedBox(height: 12),
 
+      
           Text(
-            (podcast as dynamic).description?.toString().isNotEmpty == true
-                ? (podcast as dynamic).description
+            (podcast.description ?? '').isNotEmpty
+                ? podcast.description!
                 : 'No description provided.',
             style: GoogleFonts.inter(
               fontSize: 14,

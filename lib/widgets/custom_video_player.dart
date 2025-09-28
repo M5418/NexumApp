@@ -8,12 +8,18 @@ class CustomVideoPlayer extends StatefulWidget {
   final VoidCallback? onLike;
   final VoidCallback? onUnlike;
 
+  // New: startMuted and callback
+  final bool startMuted;
+  final ValueChanged<bool>? onMuteChanged;
+
   const CustomVideoPlayer({
     super.key,
     required this.videoUrl,
     this.isLiked = false,
     this.onLike,
     this.onUnlike,
+    this.startMuted = false,
+    this.onMuteChanged,
   });
 
   @override
@@ -30,9 +36,13 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
   late AnimationController _likeAnimationController;
   late Animation<double> _likeAnimation;
 
+  // New: mute state
+  late bool _isMuted;
+
   @override
   void initState() {
     super.initState();
+    _isMuted = widget.startMuted;
     _initializeVideo();
     _likeAnimationController = AnimationController(
       duration: const Duration(milliseconds: 600),
@@ -54,6 +64,7 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
           _isInitialized = true;
         });
         _controller!.setLooping(true);
+        _controller!.setVolume(_isMuted ? 0.0 : 1.0); // apply mute on init
         _controller!.play();
         _controller!.addListener(_videoListener);
       }
@@ -82,6 +93,15 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
         _controller!.play();
       }
     }
+  }
+
+  // New: mute toggle
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+    _controller?.setVolume(_isMuted ? 0.0 : 1.0);
+    widget.onMuteChanged?.call(_isMuted);
   }
 
   void _handleDoubleTap() {
@@ -185,6 +205,27 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
             ),
           ),
 
+        // New: Mute/Unmute button
+        Positioned(
+          top: 16,
+          right: 16,
+          child: GestureDetector(
+            onTap: _toggleMute,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(153),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _isMuted ? Icons.volume_off : Icons.volume_up,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+        ),
+
         // Like animation
         if (_showLikeAnimation)
           Center(
@@ -264,7 +305,7 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
         if (_currentSpeed != 1.0)
           Positioned(
             top: 20,
-            right: 20,
+            right: 60,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(

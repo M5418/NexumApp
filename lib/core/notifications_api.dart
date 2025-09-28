@@ -42,11 +42,12 @@ class AppNotification {
   factory AppNotification.fromMap(Map<String, dynamic> m) {
     final actor = Map<String, dynamic>.from(m['actor'] ?? {});
     final navigate = Map<String, dynamic>.from(m['navigate'] ?? {});
+    final parsedCreated = _parseDate(m['created_at']).toLocal(); // ensure LOCAL
     return AppNotification(
       id: (m['id'] ?? '').toString(),
       type: (m['type'] ?? '').toString(),
       isRead: (m['is_read'] ?? false) == true,
-      createdAt: _parseDate(m['created_at']),
+      createdAt: parsedCreated,
       actorId: (actor['id'] ?? '').toString(),
       actorName: (actor['name'] ?? 'User').toString(),
       actorUsername: (actor['username'] ?? '@user').toString(),
@@ -65,27 +66,37 @@ class AppNotification {
     );
   }
 
-  // Helper for UI: compact time like '3hr ago' or date like '18 May 2025'
+  // Compact relative label in LOCAL time: 'Just now', '5min ago', '3hr ago', 'Yesterday', '3d ago', or date.
   String timeLabel({DateTime? now}) {
-    final n = now ?? DateTime.now();
-    final diff = n.difference(createdAt).abs();
-    if (diff.inMinutes < 60) {
-      final m = diff.inMinutes.clamp(1, 59);
-      return '${m}min ago';
-    }
-    if (diff.inHours < 24) {
-      final h = diff.inHours.clamp(1, 23);
-      return '${h}hr ago';
-    }
-    // show calendar date
-    return DateFormat('d MMM yyyy').format(createdAt);
+    final n = (now ?? DateTime.now()).toLocal();
+    final dt = createdAt.toLocal();
+
+    final diff = n.difference(dt);
+    final seconds = diff.inSeconds.abs();
+    if (seconds < 45) return 'Just now';
+
+    final minutes = diff.inMinutes.abs();
+    if (minutes < 60) return '${minutes}min ago';
+
+    final hours = diff.inHours.abs();
+    if (hours < 24) return '${hours}hr ago';
+
+    final days = diff.inDays.abs();
+    if (days == 1) return 'Yesterday';
+    if (days < 7) return '${days}d ago';
+
+    return DateFormat('d MMM yyyy').format(dt);
   }
 
   static DateTime _parseDate(dynamic v) {
     if (v == null) return DateTime.now();
     final s = v.toString();
+
+    // ISO-8601 (e.g., '2025-09-28T01:42:15.000Z' or with offset)
     final iso = DateTime.tryParse(s);
     if (iso != null) return iso;
+
+    // Common MySQL DATETIME/TIMESTAMP string without timezone: treat as LOCAL clock time
     final m = RegExp(
       r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$',
     ).firstMatch(s);
@@ -97,8 +108,7 @@ class AppNotification {
       final minute = int.parse(m.group(5)!);
       final second = int.parse(m.group(6)!);
       final ms = int.tryParse(m.group(7) ?? '0') ?? 0;
-      // Treat server timestamps as UTC-safe
-      return DateTime.utc(year, month, day, hour, minute, second, ms);
+      return DateTime(year, month, day, hour, minute, second, ms); // local
     }
     return DateTime.now();
   }
@@ -131,5 +141,27 @@ class NotificationsApi {
 
   Future<void> markAllRead() async {
     await _dio.post('/api/notifications/read-all');
+  }
+
+  // Unread notifications count with graceful fallback.
+  Future<int> unreadCount() async {
+    try {
+      final res = await _dio.get('/api/notifications/unread-count');
+      final body = Map<String, dynamic>.from(res.data ?? {});
+      final data = Map<String, dynamic>.from(body['data'] ?? body);
+      final dynamic raw = data['unread'] ?? data['count'] ?? data['unread_count'] ?? 0;
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+      if (raw is String) return int.tryParse(raw) ?? 0;
+      return 0;
+    } catch (_) {
+      try {
+        // Fallback: sample a page and count locally
+        final items = await list(limit: 50, offset: 0);
+        return items.where((n) => !n.isRead).length;
+      } catch (__) {
+        return 0;
+      }
+    }
   }
 }

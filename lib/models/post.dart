@@ -19,11 +19,13 @@ class PostCounts {
 }
 
 class RepostedBy {
+  final String? userId;
   final String userName;
   final String userAvatarUrl;
   final String? actionType;
 
   const RepostedBy({
+    this.userId,
     required this.userName,
     required this.userAvatarUrl,
     this.actionType,

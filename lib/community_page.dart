@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 
 import 'models/post.dart';
 import 'core/community_posts_api.dart';
+import 'core/communities_api.dart';
 import 'community_post_page.dart';
 import 'theme_provider.dart';
 import 'widgets/post_card.dart';
@@ -30,55 +31,100 @@ class _CommunityPageState extends State<CommunityPage> {
   List<Post> _posts = [];
   int _selectedTabIndex = 0;
 
-  // Loading state for community posts
+  // Loading states
   bool _loadingPosts = false;
+  bool _loadingDetails = false;
 
-  // Sample media albums for the Media tab (can be replaced later with real media)
-  final List<Map<String, String>> _mediaAlbums = [
-    {
-      'title': 'Green Moments',
-      'year': '2024',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=600&h=400&fit=crop',
-    },
-    {
-      'title': 'Joyful Faces',
-      'year': '2024',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1511988617509-a57c8a288659?w=600&h=400&fit=crop',
-    },
-    {
-      'title': 'Community Day',
-      'year': '2023',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=600&h=400&fit=crop',
-    },
-    {
-      'title': 'Project Smile',
-      'year': '2023',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1529665253569-6d01c0eaf7b6?w=600&h=400&fit=crop',
-    },
-  ];
+  // Community details
+  ApiCommunity? _community;
+
+  // Media items aggregated from posts
+  final List<_CommunityMediaItem> _mediaItems = [];
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadAll();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadAll() async {
+    await Future.wait<void>([
+      _loadDetails(),
+      _loadPostsAndBuildMedia(),
+    ]);
+  }
+
+  Future<void> _loadDetails() async {
+    setState(() {
+      _loadingDetails = true;
+    });
+    try {
+      final c = await CommunitiesApi().details(widget.communityId);
+      if (!mounted) return;
+      setState(() {
+        _community = c;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // Non-blocking; show a toast
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to load community details: ${_toError(e)}',
+            style: GoogleFonts.inter(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingDetails = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadPostsAndBuildMedia() async {
     setState(() {
       _loadingPosts = true;
     });
 
     try {
       final list = await CommunityPostsApi()
-          .list(widget.communityId, limit: 20, offset: 0);
+          .list(widget.communityId, limit: 100, offset: 0);
       if (!mounted) return;
       setState(() {
         _posts = list;
       });
+
+      // Build media list: all images and videos (exclude repost rows to avoid duplicates)
+      _mediaItems
+        ..clear();
+      for (final p in list) {
+        if (p.isRepost) continue; // exclude repost media to avoid duplicates
+        if (p.mediaType == MediaType.video && p.videoUrl != null) {
+          _mediaItems.add(_CommunityMediaItem(
+            postId: p.id,
+            url: p.videoUrl!,
+            isVideo: true,
+          ));
+        } else if (p.mediaType == MediaType.image && p.imageUrls.isNotEmpty) {
+          _mediaItems.add(_CommunityMediaItem(
+            postId: p.id,
+            url: p.imageUrls.first,
+            isVideo: false,
+          ));
+        } else if (p.mediaType == MediaType.images && p.imageUrls.isNotEmpty) {
+          for (final u in p.imageUrls) {
+            _mediaItems.add(_CommunityMediaItem(
+              postId: p.id,
+              url: u,
+              isVideo: false,
+            ));
+          }
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -365,7 +411,7 @@ class _CommunityPageState extends State<CommunityPage> {
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
-      await _loadData(); // refresh feed to include repost header/counts
+      await _loadPostsAndBuildMedia(); // refresh feed and media
     } on DioException catch (e) {
       final code = e.response?.statusCode ?? 0;
       final data = e.response?.data;
@@ -410,7 +456,7 @@ class _CommunityPageState extends State<CommunityPage> {
                 backgroundColor: const Color(0xFF9E9E9E),
               ),
             );
-            await _loadData();
+            await _loadPostsAndBuildMedia();
           } catch (e2) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -459,7 +505,7 @@ class _CommunityPageState extends State<CommunityPage> {
     );
   }
 
-    @override
+  @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
@@ -477,7 +523,7 @@ class _CommunityPageState extends State<CommunityPage> {
             elevation: 0,
             centerTitle: true,
             title: Text(
-              widget.communityName,
+              _community?.name ?? widget.communityName,
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -511,7 +557,6 @@ class _CommunityPageState extends State<CommunityPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Tab content area should not exceed 650px height
                 SizedBox(
                   height: 650,
                   child: _selectedTabIndex == 0
@@ -581,13 +626,39 @@ class _CommunityPageState extends State<CommunityPage> {
                                         ),
                                       ),
                                       const SizedBox(height: 8),
+                                      if (_loadingDetails)
+                                        const Padding(
+                                          padding: EdgeInsets.all(8.0),
+                                          child: LinearProgressIndicator(),
+                                        ),
                                       Text(
-                                        'People of Purpose is a community of changemakers, dreamers, and doers—united by passion and driven by impact. We uplift, serve, and grow together, creating meaningful change in our lives, our communities, and the world around us.\n\nFound at the heart of the community since 2015.',
+                                        _community?.bio.isNotEmpty == true
+                                            ? _community!.bio
+                                            : 'A vibrant community.',
                                         style: GoogleFonts.inter(
                                           fontSize: 14,
                                           height: 1.5,
                                           color: const Color(0xFF666666),
                                         ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Wrap(
+                                        spacing: 10,
+                                        runSpacing: 10,
+                                        children: [
+                                          _chipStat(
+                                            icon: Icons.article_outlined,
+                                            label:
+                                                '${_community?.postsCount ?? _posts.length} Posts',
+                                            isDark: isDark,
+                                          ),
+                                          _chipStat(
+                                            icon: Icons.people_outline,
+                                            label:
+                                                '${_community?.memberCount ?? 0} Members',
+                                            isDark: isDark,
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -615,116 +686,124 @@ class _CommunityPageState extends State<CommunityPage> {
                                       ),
                                     ],
                                   ),
-                                  child: GridView.builder(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    gridDelegate:
-                                        const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      mainAxisSpacing: 8,
-                                      crossAxisSpacing: 8,
-                                      childAspectRatio: 1.2,
-                                    ),
-                                    itemCount: _mediaAlbums.length,
-                                    itemBuilder: (context, index) {
-                                      final album = _mediaAlbums[index];
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          color: isDark
-                                              ? Colors.black
-                                              : Colors.white,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: isDark
-                                                  ? Colors.black
-                                                      .withValues(alpha: 0)
-                                                  : Colors.black
-                                                      .withValues(alpha: 13),
-                                              blurRadius: 6,
-                                              offset: const Offset(0, 1),
-                                            ),
-                                          ],
-                                          border: Border.all(
-                                            color: const Color(
-                                              0xFF666666,
-                                            ).withValues(alpha: 26),
-                                            width: 0.6,
+                                  child: _loadingPosts
+                                      ? const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(16.0),
+                                            child: CircularProgressIndicator(),
                                           ),
-                                        ),
-                                        clipBehavior: Clip.antiAlias,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              child: CachedNetworkImage(
-                                                imageUrl:
-                                                    album['imageUrl'] ?? '',
-                                                fit: BoxFit.cover,
-                                                width: double.infinity,
-                                                placeholder: (context, url) =>
-                                                    SizedBox(
-                                                  height: 160,
-                                                  width: double.infinity,
-                                                  child: Image.network(
-                                                    'https://picsum.photos/1200/400?random=42',
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                errorWidget:
-                                                    (context, url, error) =>
-                                                        SizedBox(
-                                                  height: 160,
-                                                  width: double.infinity,
-                                                  child: Image.network(
-                                                    'https://picsum.photos/1200/400?random=42',
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.all(8.0),
-                                              child: Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                      album['title'] ?? '',
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: GoogleFonts.inter(
-                                                        fontSize: 13,
-                                                        fontWeight:
-                                                            FontWeight.w600,
+                                        )
+                                      : GridView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          gridDelegate:
+                                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 2,
+                                            mainAxisSpacing: 8,
+                                            crossAxisSpacing: 8,
+                                            childAspectRatio: 1.0,
+                                          ),
+                                          itemCount: _mediaItems.length,
+                                          itemBuilder: (context, index) {
+                                            final item = _mediaItems[index];
+                                            return GestureDetector(
+                                              onTap: () => _onPostTap(item.postId),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                child: Stack(
+                                                  fit: StackFit.expand,
+                                                  children: [
+                                                    if (!item.isVideo)
+                                                      CachedNetworkImage(
+                                                        imageUrl: item.url,
+                                                        fit: BoxFit.cover,
+                                                        placeholder: (c, _) =>
+                                                            Container(
+                                                          color: isDark
+                                                              ? const Color(
+                                                                  0xFF121212)
+                                                              : const Color(
+                                                                  0xFFEFEFEF),
+                                                        ),
+                                                        errorWidget:
+                                                            (c, _, __) =>
+                                                                Container(
+                                                          color: isDark
+                                                              ? const Color(
+                                                                  0xFF121212)
+                                                              : const Color(
+                                                                  0xFFEFEFEF),
+                                                        ),
+                                                      )
+                                                    else
+                                                      Container(
                                                         color: isDark
-                                                            ? Colors.white
-                                                            : Colors.black,
+                                                            ? const Color(
+                                                                0xFF121212)
+                                                            : const Color(
+                                                                0xFFEFEFEF),
+                                                        child: Center(
+                                                          child: Icon(
+                                                            Icons
+                                                                .play_circle_fill,
+                                                          size: 48,
+                                                            color: Colors
+                                                                .white70,
+                                                          ),
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    '• ${album['year'] ?? ''}',
-                                                    style: GoogleFonts.inter(
-                                                      fontSize: 12,
-                                                      color: const Color(
-                                                        0xFF666666,
+                                                    if (item.isVideo)
+                                                      Positioned(
+                                                        bottom: 6,
+                                                        right: 6,
+                                                        child: Container(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            horizontal: 6,
+                                                            vertical: 2,
+                                                          ),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Colors
+                                                                .black54,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        8),
+                                                          ),
+                                                          child: Row(
+                                                            children: [
+                                                              const Icon(
+                                                                Icons
+                                                                    .videocam_outlined,
+                                                                color: Colors
+                                                                    .white,
+                                                                size: 14,
+                                                              ),
+                                                              const SizedBox(
+                                                                  width: 4),
+                                                              Text(
+                                                                'Video',
+                                                                style: GoogleFonts
+                                                                    .inter(
+                                                                  fontSize: 11,
+                                                                  color: Colors
+                                                                      .white,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            );
+                                          },
                                         ),
-                                      );
-                                    },
-                                  ),
                                 ),
                               ),
                             ),
@@ -737,15 +816,52 @@ class _CommunityPageState extends State<CommunityPage> {
     );
   }
 
+  Widget _chipStat({
+    required IconData icon,
+    required String label,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF111111) : const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF666666).withValues(alpha: 26),
+          width: 0.6,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: isDark ? Colors.white70 : Colors.black87),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: isDark ? Colors.white : Colors.black,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCommunityHeader(bool isDark) {
     final cardColor = isDark ? Colors.black : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
     const secondaryTextColor = Color(0xFF666666);
 
-    final handle = widget.communityName.toLowerCase().replaceAll(
+    final displayName = _community?.name ?? widget.communityName;
+    final handle = displayName.toLowerCase().replaceAll(
       RegExp(r"[^a-z0-9]"),
       '',
     );
+
+    final coverUrl = _community?.coverUrl;
+    final avatarUrl = _community?.avatarUrl;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
@@ -778,34 +894,40 @@ class _CommunityPageState extends State<CommunityPage> {
           ),
           const SizedBox(height: 8),
 
-          // Cover with avatar + Joined chip
+          // Cover with avatar + stats chips
           Stack(
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(25),
-                child: CachedNetworkImage(
-                  imageUrl:
-                      'https://images.unsplash.com/photo-1520974735194-6c0a1a1a6bb3?w=1400&h=500&fit=crop',
-                  height: 160,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => SizedBox(
-                    height: 160,
-                    width: double.infinity,
-                    child: Image.network(
-                      'https://picsum.photos/1200/400?random=42',
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  errorWidget: (context, url, error) => SizedBox(
-                    height: 160,
-                    width: double.infinity,
-                    child: Image.network(
-                      'https://picsum.photos/1200/400?random=42',
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
+                child: coverUrl != null && coverUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: coverUrl,
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => SizedBox(
+                          height: 160,
+                          width: double.infinity,
+                          child: Container(
+                            color: isDark ? const Color(0xFF111111) : const Color(0xFFEFEFEF),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => SizedBox(
+                          height: 160,
+                          width: double.infinity,
+                          child: Container(
+                            color: isDark ? const Color(0xFF111111) : const Color(0xFFEFEFEF),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        height: 160,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF111111) : const Color(0xFFEFEFEF),
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
               ),
               Positioned(
                 left: 16,
@@ -814,106 +936,90 @@ class _CommunityPageState extends State<CommunityPage> {
                   radius: 56,
                   backgroundColor: Colors.white,
                   child: ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl:
-                          'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop',
-                      width: 104,
-                      height: 104,
-                      fit: BoxFit.cover,
-                    ),
+                    child: avatarUrl != null && avatarUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: avatarUrl,
+                            width: 104,
+                            height: 104,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            width: 104,
+                            height: 104,
+                            color: isDark ? const Color(0xFF222222) : const Color(0xFFDDDDDD),
+                            child: Center(
+                              child: Text(
+                                displayName.isNotEmpty ? displayName[0].toUpperCase() : 'C',
+                                style: GoogleFonts.inter(
+                                  fontSize: 40,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                              ),
+                            ),
+                          ),
                   ),
                 ),
               ),
+              // Stats chips
               Positioned(
-                right: 16,
+                right: 12,
                 bottom: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0C0C0C),
-                    borderRadius: BorderRadius.all(Radius.circular(16)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check, color: Colors.white, size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Joined',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    _chipStat(
+                      icon: Icons.article_outlined,
+                      label: '${_community?.postsCount ?? _posts.length} Posts',
+                      isDark: isDark,
+                    ),
+                    _chipStat(
+                      icon: Icons.people_outline,
+                      label: '${_community?.memberCount ?? 0} Members',
+                      isDark: isDark,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 12),
 
-          // Stats row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildStatItem('298.2k', 'Contributor', isDark),
-              Container(
-                width: 1,
-                height: 24,
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                color: secondaryTextColor.withValues(alpha: 51),
-              ),
-              _buildStatItem('1,920', 'Post', isDark),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Community title & tagline
+          // Title
           Text(
-            widget.communityName,
+            displayName,
             style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
               color: textColor,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            'Building dreams, learning daily, growing with purpose ✨',
-            style: GoogleFonts.inter(fontSize: 14, color: secondaryTextColor),
-          ),
+          if (_community?.bio.isNotEmpty == true)
+            Text(
+              _community!.bio,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: const Color(0xFF666666),
+                height: 1.4,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildStatItem(String value, String label, bool isDark) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: isDark ? Colors.white : Colors.black,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: const Color(0xFF666666),
-          ),
-        ),
-      ],
-    );
-  }
+class _CommunityMediaItem {
+  final String postId;
+  final String url;
+  final bool isVideo;
+
+  _CommunityMediaItem({
+    required this.postId,
+    required this.url,
+    required this.isVideo,
+  });
 }

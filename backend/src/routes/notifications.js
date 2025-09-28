@@ -50,6 +50,7 @@ router.get('/', async (req, res) => {
     const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 20));
     const offset = Math.max(0, Number(req.query.offset) || 0);
 
+    // Force consistent collation in JOIN and WHERE to avoid "Illegal mix of collations"
     const [rows] = await pool.query(
       `SELECT
          n.*,
@@ -58,8 +59,9 @@ router.get('/', async (req, res) => {
          ap.username   AS actor_username,
          ap.profile_photo_url AS actor_avatar_url
        FROM notifications n
-       LEFT JOIN profiles ap ON ap.user_id = n.actor_id
-       WHERE n.user_id = ?
+       LEFT JOIN profiles ap
+         ON ap.user_id COLLATE utf8mb4_0900_ai_ci = n.actor_id COLLATE utf8mb4_0900_ai_ci
+       WHERE n.user_id COLLATE utf8mb4_0900_ai_ci = ?
        ORDER BY n.created_at DESC
        LIMIT ? OFFSET ?`,
       [userId, limit, offset]
@@ -94,7 +96,10 @@ router.get('/', async (req, res) => {
           case 'community_comment_added':
           case 'community_comment_liked':
           case 'community_post_tagged':
-            return { type: 'community_post', params: { communityId: r.community_id, postId: r.community_post_id } };
+            return {
+              type: 'community_post',
+              params: { communityId: r.community_id, postId: r.community_post_id }
+            };
 
           case 'connection_received':
             return { type: 'user_profile', params: { userId: r.other_user_id || r.actor_id } };

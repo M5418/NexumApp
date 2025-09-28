@@ -15,6 +15,7 @@ class PostCard extends StatefulWidget {
   final Function(String postId)? onRepost;
   final Function(String postId)? onTap;
   final bool? isDarkMode;
+  final String? currentUserId;
 
   const PostCard({
     super.key,
@@ -26,6 +27,7 @@ class PostCard extends StatefulWidget {
     this.onRepost,
     this.onTap,
     this.isDarkMode,
+    this.currentUserId,
   });
 
   @override
@@ -39,6 +41,15 @@ class _PostCardState extends State<PostCard> {
     setState(() {
       _showTranslation = !_showTranslation;
     });
+  }
+
+  String _effectivePostId() {
+    if (widget.post.isRepost &&
+        (widget.post.originalPostId != null &&
+            widget.post.originalPostId!.isNotEmpty)) {
+      return widget.post.originalPostId!;
+    }
+    return widget.post.id;
   }
 
   String _getTimeAgo(DateTime dateTime) {
@@ -87,17 +98,17 @@ class _PostCardState extends State<PostCard> {
     final bookmarkColor = const Color(0xFFBFAE01);
 
     // Build repost header text and avatar/icon
-    String repostHeaderText() {
+        String repostHeaderText() {
       final rb = widget.post.repostedBy;
-      if (rb != null && (rb.actionType ?? '').isNotEmpty) {
-        // Auth user reposted
-        return 'you reposted this';
-      }
-      if (rb != null && rb.userName.trim().isNotEmpty) {
-        // Another user reposted
-        return '${rb.userName} reposted this';
-      }
-      // Fallback when repost author is not provided by backend
+      if (rb == null) return 'Reposted';
+
+      final isSelf = ((rb.userId != null &&
+              widget.currentUserId != null &&
+              rb.userId == widget.currentUserId) ||
+          ((rb.actionType ?? '').isNotEmpty)); // fallback when backend flags self
+
+      if (isSelf) return 'You reposted this!';
+      if (rb.userName.trim().isNotEmpty) return '${rb.userName} reposted this!';
       return 'Reposted';
     }
 
@@ -124,7 +135,7 @@ class _PostCardState extends State<PostCard> {
     }
 
     return GestureDetector(
-      onTap: () => widget.onTap?.call(widget.post.id),
+      onTap: () => widget.onTap?.call(_effectivePostId()),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
         padding: const EdgeInsets.all(20),
@@ -356,12 +367,12 @@ class _PostCardState extends State<PostCard> {
                     onTap: () {
                       if (widget.post.userReaction != null) {
                         widget.onReactionChanged?.call(
-                          widget.post.id,
+                          _effectivePostId(),
                           widget.post.userReaction!,
                         );
                       } else {
                         widget.onReactionChanged?.call(
-                          widget.post.id,
+                          _effectivePostId(),
                           ReactionType.like,
                         );
                       }
@@ -376,7 +387,10 @@ class _PostCardState extends State<PostCard> {
                         position,
                         widget.post,
                         (postId, reaction) {
-                          widget.onReactionChanged?.call(postId, reaction);
+                          widget.onReactionChanged?.call(
+                            _effectivePostId(),
+                            reaction,
+                          );
                         },
                       );
                     },
@@ -404,7 +418,7 @@ class _PostCardState extends State<PostCard> {
 
                 // Comment button
                 GestureDetector(
-                  onTap: () => widget.onComment?.call(widget.post.id),
+                  onTap: () => widget.onComment?.call(_effectivePostId()),
                   child: Row(
                     children: [
                       Icon(
@@ -428,7 +442,7 @@ class _PostCardState extends State<PostCard> {
 
                 // Share button
                 GestureDetector(
-                  onTap: () => widget.onShare?.call(widget.post.id),
+                  onTap: () => widget.onShare?.call(_effectivePostId()),
                   child: Row(
                     children: [
                       Icon(
@@ -452,7 +466,7 @@ class _PostCardState extends State<PostCard> {
 
                 // Repost button
                 GestureDetector(
-                  onTap: () => widget.onRepost?.call(widget.post.id),
+                  onTap: () => widget.onRepost?.call(_effectivePostId()),
                   child: Row(
                     children: [
                       Icon(Icons.repeat, size: 20, color: secondaryTextColor),
@@ -472,7 +486,7 @@ class _PostCardState extends State<PostCard> {
 
                 // Bookmark button
                 GestureDetector(
-                  onTap: () => widget.onBookmarkToggle?.call(widget.post.id),
+                  onTap: () => widget.onBookmarkToggle?.call(_effectivePostId()),
                   child: Row(
                     children: [
                       Icon(
