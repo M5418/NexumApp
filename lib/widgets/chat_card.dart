@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../conversations_page.dart';
+import '../models/message.dart';
 
 class ChatCard extends StatelessWidget {
   final ChatItem chat;
@@ -29,7 +30,7 @@ class ChatCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 13),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -49,7 +50,7 @@ class ChatCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF666666).withValues(alpha: 51),
+                    color: const Color(0xFF666666).withValues(alpha: 0.20),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: const Icon(
@@ -62,7 +63,7 @@ class ChatCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF666666).withValues(alpha: 51),
+                    color: const Color(0xFF666666).withValues(alpha: 0.20),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: const Icon(
@@ -174,14 +175,16 @@ class ChatCard extends StatelessWidget {
 
   IconData _getMessageTypeIcon(MessageType type) {
     switch (type) {
-      case MessageType.images:
-        return Icons.camera_alt;
+      case MessageType.image:
+        return Icons.image;
       case MessageType.video:
         return Icons.videocam;
       case MessageType.voice:
         return Icons.mic;
       case MessageType.text:
         return Icons.message;
+      case MessageType.file:
+        return Icons.insert_drive_file;
     }
   }
 
@@ -189,12 +192,14 @@ class ChatCard extends StatelessWidget {
     switch (chat.lastType) {
       case MessageType.text:
         return chat.lastText ?? '';
-      case MessageType.images:
+      case MessageType.image:
         return chat.lastText ?? 'Images';
       case MessageType.video:
         return chat.lastText ?? 'Video';
       case MessageType.voice:
         return chat.lastText ?? 'Voice note';
+      case MessageType.file:
+        return chat.lastText ?? 'Attachment';
     }
   }
 }

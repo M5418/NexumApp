@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import 'feed_preferences_page.dart';
 import 'content_controls_page.dart';
 import 'language_region_page.dart';
@@ -8,23 +9,354 @@ import 'privacy_visibility_page.dart';
 import 'blocked_muted_accounts_page.dart';
 import 'security_login_page.dart';
 import 'notification_preferences_page.dart';
+
 import 'core/auth_api.dart';
 import 'core/api_client.dart';
 import 'services/auth_service.dart';
 import 'app_wrapper.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   final bool? isDarkMode;
 
   const SettingsPage({super.key, this.isDarkMode});
 
   @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  final GlobalKey<NavigatorState> _panelNavigatorKey = GlobalKey<NavigatorState>();
+
+  int _selectedIndex = 0;
+
+  late final List<_NavItem> _items = [
+    _NavItem(
+      icon: Icons.account_circle_outlined,
+      title: 'Account Center',
+      builder: () => const AccountCenterPage(),
+    ),
+    _NavItem(
+      icon: Icons.feed_outlined,
+      title: 'Feed Preferences',
+      builder: () => const FeedPreferencesPage(),
+    ),
+    _NavItem(
+      icon: Icons.tune,
+      title: 'Content Controls',
+      builder: () => const ContentControlsPage(),
+    ),
+    _NavItem(
+      icon: Icons.notifications_outlined,
+      title: 'Notification Preferences',
+      builder: () => const NotificationPreferencesPage(),
+    ),
+    _NavItem(
+      icon: Icons.language,
+      title: 'Language & Region',
+      builder: () => const LanguageRegionPage(),
+    ),
+    _NavItem(
+      icon: Icons.privacy_tip_outlined,
+      title: 'Privacy & Visibility',
+      builder: () => const PrivacyVisibilityPage(),
+    ),
+    _NavItem(
+      icon: Icons.block_outlined,
+      title: 'Blocked & Muted Accounts',
+      builder: () => const BlockedMutedAccountsPage(),
+    ),
+    _NavItem(
+      icon: Icons.security,
+      title: 'Security & Login',
+      builder: () => const SecurityLoginPage(),
+    ),
+    _NavItem(
+      icon: Icons.exit_to_app,
+      title: 'Logout',
+      builder: null,
+      isLogout: true,
+    ),
+  ];
+
+  @override
   Widget build(BuildContext context) {
-    final isDark =
-        isDarkMode ?? Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark
-        ? const Color(0xFF0C0C0C)
-        : const Color(0xFFF1F4F8);
+    final theme = Theme.of(context);
+    final isDark = widget.isDarkMode ?? theme.brightness == Brightness.dark;
+    final width = MediaQuery.of(context).size.width;
+    final isWide = width >= 900;
+
+    return isWide
+        ? _buildDesktop(context, isDark)
+        : _buildMobile(context, isDark);
+  }
+
+  // Desktop header: back button + "NEXUM"
+  Widget _buildDesktopHeader(bool isDark) {
+    final barColor = isDark ? Colors.black : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    return Material(
+      color: barColor,
+      elevation: isDark ? 0 : 2,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(4, 10, 12, 10),
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(Icons.arrow_back, color: textColor),
+              onPressed: () => Navigator.pop(context),
+              tooltip: 'Back',
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'NEXUM',
+              style: GoogleFonts.inika(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============== Desktop/Web two-column layout ==============
+  Widget _buildDesktop(BuildContext context, bool isDark) {
+    final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+    final textColor = isDark ? Colors.white : Colors.black;
+
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1280),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildDesktopHeader(isDark),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left nav: small width
+                        Container(
+                          width: 280,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Left panel header
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(
+                                  'Settings',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ),
+                              const Divider(height: 1),
+                              Expanded(
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  itemCount: _items.length,
+                                  separatorBuilder: (_, __) => const SizedBox(height: 2),
+                                  itemBuilder: (context, index) {
+                                    final item = _items[index];
+                                    final selected = index == _selectedIndex && !item.isLogout;
+                                    return _leftTile(
+                                      isDark: isDark,
+                                      selected: selected,
+                                      icon: item.icon,
+                                      title: item.title,
+                                      onTap: () => _handleLeftTap(index),
+                                      isLogout: item.isLogout,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Right panel: displays the selected settings page
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              color: isDark ? Colors.black : Colors.white,
+                              child: Navigator(
+                                key: _panelNavigatorKey,
+                                onGenerateInitialRoutes: (_, __) {
+                                  final initial = _items[_selectedIndex];
+                                  final builder = initial.builder ?? () => const SizedBox.shrink();
+                                  return [
+                                    MaterialPageRoute(builder: (_) => builder()),
+                                  ];
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _leftTile({
+    required bool isDark,
+    required bool selected,
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    bool isLogout = false,
+  }) {
+    final baseColor = isDark ? Colors.white : Colors.black87;
+    final selectedBg = const Color(0xFFBFAE01).withOpacity(0.12);
+    final selectedColor = const Color(0xFFBFAE01);
+
+    return Material(
+      color: selected ? selectedBg : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: isLogout
+                    ? Colors.red
+                    : (selected ? selectedColor : baseColor),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: isLogout
+                        ? Colors.red
+                        : (selected ? selectedColor : baseColor),
+                  ),
+                ),
+              ),
+              if (!isLogout)
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleLeftTap(int index) async {
+    final item = _items[index];
+    if (item.isLogout) {
+      final confirmed = await _confirmLogout(context);
+      if (confirmed == true) {
+        await _performLogout();
+      }
+      return;
+    }
+
+    setState(() => _selectedIndex = index);
+    final builder = item.builder!;
+    // Replace right-panel route with the selected page
+    _panelNavigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => builder()),
+      (route) => false,
+    );
+  }
+
+  Future<bool?> _confirmLogout(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Log out?',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          'Are you sure you want to log out?',
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Logout',
+              style: GoogleFonts.inter(color: const Color(0xFFBFAE01)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performLogout() async {
+    try {
+      // Try to invalidate server session (ignore errors)
+      try {
+        await AuthApi().logout();
+      } catch (_) {}
+
+      // Clear local state and token
+      await AuthService().signOut();
+
+      // Remove Authorization header from shared Dio client
+      ApiClient().dio.options.headers.remove('Authorization');
+
+      // Reset navigation to AppWrapper
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AppWrapper()),
+          (_) => false,
+        );
+      }
+    } catch (_) {
+      // Best-effort logout; ignore failures
+    }
+  }
+
+  // ============== Mobile (existing list layout, with logout confirm) ==============
+  Widget _buildMobile(BuildContext context, bool isDark) {
+    final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final cardColor = isDark ? const Color(0xFF000000) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
 
@@ -52,7 +384,7 @@ class SettingsPage extends StatelessWidget {
           children: [
             const SizedBox(height: 20),
 
-            // Personalization & Preferences Section
+            // Personalization & Preferences
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
@@ -60,7 +392,7 @@ class SettingsPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0),
+                    color: Colors.black.withOpacity(0),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -86,9 +418,7 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const AccountCenterPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const AccountCenterPage()),
                       );
                     },
                     isDark: isDark,
@@ -99,9 +429,7 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const FeedPreferencesPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const FeedPreferencesPage()),
                       );
                     },
                     isDark: isDark,
@@ -112,9 +440,7 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const ContentControlsPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const ContentControlsPage()),
                       );
                     },
                     isDark: isDark,
@@ -125,9 +451,7 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const NotificationPreferencesPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const NotificationPreferencesPage()),
                       );
                     },
                     isDark: isDark,
@@ -138,9 +462,7 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const LanguageRegionPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const LanguageRegionPage()),
                       );
                     },
                     isLast: true,
@@ -152,7 +474,7 @@ class SettingsPage extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // Account & Security Section
+            // Account & Security
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
@@ -160,7 +482,7 @@ class SettingsPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0),
+                    color: Colors.black.withOpacity(0),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -186,9 +508,7 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const PrivacyVisibilityPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const PrivacyVisibilityPage()),
                       );
                     },
                     isDark: isDark,
@@ -199,9 +519,7 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const BlockedMutedAccountsPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const BlockedMutedAccountsPage()),
                       );
                     },
                     isDark: isDark,
@@ -212,37 +530,23 @@ class SettingsPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const SecurityLoginPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const SecurityLoginPage()),
                       );
                     },
-                    isLast: false,
                     isDark: isDark,
                   ),
                   _buildSettingsItem(
                     icon: Icons.exit_to_app,
                     title: 'Logout',
                     onTap: () async {
-                      // Try to invalidate server-side session (ignore errors)
-                      try { await AuthApi().logout(); } catch (_) {}
-
-                      // Clear local auth state and token
-                      await AuthService().signOut();
-
-                      // Remove Authorization header from shared Dio client
-                      ApiClient().dio.options.headers.remove('Authorization');
-
-                      // Reset navigation to AppWrapper so it decides SignIn vs Home
-                      if (context.mounted) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const AppWrapper()),
-                          (route) => false,
-                        );
+                      final confirmed = await _confirmLogout(context);
+                      if (confirmed == true) {
+                        await _performLogout();
                       }
                     },
                     isLast: true,
                     isDark: isDark,
+                    logoutDanger: true,
                   ),
                 ],
               ),
@@ -261,22 +565,25 @@ class SettingsPage extends StatelessWidget {
     required VoidCallback onTap,
     bool isLast = false,
     bool? isDark,
+    bool logoutDanger = false,
   }) {
     final textColor = isDark ?? false ? Colors.white : Colors.black87;
-    final dividerColor = isDark ?? false
-        ? Colors.grey.withValues(alpha: 51)
-        : Colors.grey.withValues(alpha: 51);
+    final dividerColor = Colors.grey.withOpacity(0.2);
 
     return Column(
       children: [
         ListTile(
-          leading: Icon(icon, color: textColor, size: 24),
+          leading: Icon(
+            icon,
+            color: logoutDanger ? Colors.red : textColor,
+            size: 24,
+          ),
           title: Text(
             title,
             style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: textColor,
+              color: logoutDanger ? Colors.red : textColor,
             ),
           ),
           trailing: const Icon(
@@ -297,4 +604,18 @@ class SettingsPage extends StatelessWidget {
       ],
     );
   }
+}
+
+class _NavItem {
+  final IconData icon;
+  final String title;
+  final Widget Function()? builder;
+  final bool isLogout;
+
+  _NavItem({
+    required this.icon,
+    required this.title,
+    required this.builder,
+    this.isLogout = false,
+  });
 }

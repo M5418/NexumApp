@@ -8,8 +8,53 @@ import 'package:video_player/video_player.dart';
 import 'core/stories_api.dart' as backend;
 
 import 'widgets/share_bottom_sheet.dart';
+import 'widgets/report_bottom_sheet.dart';
 
 enum StoryMediaType { image, video, text }
+
+// Popup wrapper to show a centered story viewer dialog
+class StoryViewerPopup {
+  static Future<T?> show<T>(
+    BuildContext context, {
+    required List<Map<String, dynamic>> rings,
+    required int initialRingIndex,
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'View Story',
+      barrierColor: Colors.black.withValues(alpha:0.5),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900, maxHeight: 860),
+            child: Material(
+              color: Colors.transparent,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: StoryViewerPage(
+                  rings: rings,
+                  initialRingIndex: initialRingIndex,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (_, anim, __, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
 
 class StoryItem {
   final StoryMediaType type;
@@ -645,7 +690,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     }
   }
 
-  Widget _header() {
+   Widget _header() {
     final f = _frames[_currentIndex];
     return Row(
       children: [
@@ -750,9 +795,33 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             ),
           ),
         ),
+        const SizedBox(width: 8),
+        // Report button
+        GestureDetector(
+          onTap: () {
+            final sid = f.storyId;
+            if (sid == null) return;
+            ReportBottomSheet.show(
+              context,
+              targetType: 'story',
+              targetId: sid,
+              authorName: f.user.name,
+              authorUsername: f.user.handle,
+            );
+          },
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 204),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.flag_outlined, size: 18, color: Colors.red),
+          ),
+        ),
       ],
     );
-  }
+  }  
 
     Widget _buildProgressBars() {
     final frame = _frames[_currentIndex];
@@ -808,7 +877,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   }
 
   Widget _commentBar() {
-    Future<void> _sendComment() async {
+    Future<void> sendComment() async {
       final text = _commentController.text.trim();
       if (text.isEmpty || _frames.isEmpty) return;
       final sid = _frames[_currentIndex].storyId;
@@ -846,7 +915,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                     fontSize: 14,
                   ),
                 ),
-                onSubmitted: (_) => _sendComment(),
+                onSubmitted: (_) => sendComment(),
               ),
             ),
           ),
@@ -854,7 +923,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         const SizedBox(width: 10),
         // Send comment button (sends a chat message to the user)
         GestureDetector(
-          onTap: _sendComment,
+          onTap: sendComment,
           child: Container(
             width: 46,
             height: 46,

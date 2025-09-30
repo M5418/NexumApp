@@ -1,22 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class MonetizationAnalyticsPage extends StatefulWidget {
+class MonetizationAnalyticsPage extends StatelessWidget {
   const MonetizationAnalyticsPage({super.key});
 
   @override
-  State<MonetizationAnalyticsPage> createState() =>
-      _MonetizationAnalyticsPageState();
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final background = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+    final text = isDark ? Colors.white : Colors.black;
+
+    return Scaffold(
+      backgroundColor: background,
+      appBar: AppBar(
+        backgroundColor: background,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: text),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Monetization Analytics',
+          style: GoogleFonts.inter(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: text,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: const MonetizationAnalyticsView(),
+    );
+  }
 }
 
-class _MonetizationAnalyticsPageState extends State<MonetizationAnalyticsPage> {
+/// Reusable analytics panel (no AppBar/Scaffold).
+class MonetizationAnalyticsView extends StatefulWidget {
+  const MonetizationAnalyticsView({super.key});
+
+  @override
+  State<MonetizationAnalyticsView> createState() => _MonetizationAnalyticsViewState();
+}
+
+class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
   final List<String> _periods = ['7d', '30d', '90d', '12m'];
   String _selectedPeriod = '30d';
 
   final List<String> _types = ['All', 'Text', 'Image', 'Video', 'Podcast'];
   String _selectedType = 'All';
 
-  // Demo dataset: posts (Text/Image/Video) and podcasts, with earnings & engagement
+  // Demo dataset
   final List<_ItemStat> _items = const [
     _ItemStat(
       title: 'Morning routine tips',
@@ -111,19 +144,16 @@ class _MonetizationAnalyticsPageState extends State<MonetizationAnalyticsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final background = isDark
-        ? const Color(0xFF0C0C0C)
-        : const Color(0xFFF1F4F8);
+    final background = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final card = isDark ? const Color(0xFF000000) : Colors.white;
-    final text = isDark ? Colors.white : Colors.black;
 
     final maxDays = _selectedPeriod == '7d'
         ? 7
         : _selectedPeriod == '30d'
-        ? 30
-        : _selectedPeriod == '90d'
-        ? 90
-        : 365;
+            ? 30
+            : _selectedPeriod == '90d'
+                ? 90
+                : 365;
 
     final filtered = _items.where((e) {
       final within = e.ageDays <= maxDays;
@@ -133,50 +163,18 @@ class _MonetizationAnalyticsPageState extends State<MonetizationAnalyticsPage> {
 
     final totalEarnings = filtered.fold<double>(0.0, (s, e) => s + e.earnings);
     final totalImpressions = filtered.fold<int>(0, (s, e) => s + e.impressions);
-    final totalEngagement = filtered.fold<int>(
-      0,
-      (s, e) => s + e.likes + e.comments + e.shares + e.bookmarks,
-    );
+    final totalEngagement =
+        filtered.fold<int>(0, (s, e) => s + e.likes + e.comments + e.shares + e.bookmarks);
 
-    final cpm = totalImpressions > 0
-        ? (totalEarnings / (totalImpressions / 1000)).toDouble()
-        : 0.0;
+    final cpm = totalImpressions > 0 ? (totalEarnings / (totalImpressions / 1000)).toDouble() : 0.0;
 
     final revenueTrend = [
-      12.0,
-      18.0,
-      14.0,
-      22.0,
-      26.0,
-      19.0,
-      31.0,
-      28.0,
-      34.0,
-      30.0,
-      36.0,
-      42.0,
+      12.0, 18.0, 14.0, 22.0, 26.0, 19.0, 31.0, 28.0, 34.0, 30.0, 36.0, 42.0,
     ];
 
-    return Scaffold(
-      backgroundColor: background,
-      appBar: AppBar(
-        backgroundColor: background,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: text),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Monetization Analytics',
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: text,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: ListView(
+    return Container(
+      color: background,
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           // Filters
@@ -193,11 +191,8 @@ class _MonetizationAnalyticsPageState extends State<MonetizationAnalyticsPage> {
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
                     ),
-                    items: _periods
-                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                        .toList(),
-                    onChanged: (v) =>
-                        setState(() => _selectedPeriod = v ?? '30d'),
+                    items: _periods.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (v) => setState(() => _selectedPeriod = v ?? '30d'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -210,11 +205,8 @@ class _MonetizationAnalyticsPageState extends State<MonetizationAnalyticsPage> {
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
                     ),
-                    items: _types
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
-                    onChanged: (v) =>
-                        setState(() => _selectedType = v ?? 'All'),
+                    items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                    onChanged: (v) => setState(() => _selectedType = v ?? 'All'),
                   ),
                 ),
               ],
@@ -318,30 +310,28 @@ class _MonetizationAnalyticsPageState extends State<MonetizationAnalyticsPage> {
   }
 
   Widget _card({required Color color, required Widget child}) => Container(
-    decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-      ],
-    ),
-    padding: const EdgeInsets.all(12),
-    child: child,
-  );
+        padding: const EdgeInsets.all(12),
+        child: child,
+      );
 
   Widget _itemTile(_ItemStat e) {
     final engagement = e.likes + e.comments + e.shares + e.bookmarks;
     final icon = e.type == 'Podcast'
         ? Icons.podcasts
         : (e.type == 'Video'
-              ? Icons.play_circle_fill
-              : (e.type == 'Image'
-                    ? Icons.image_outlined
-                    : Icons.text_snippet_outlined));
+            ? Icons.play_circle_fill
+            : (e.type == 'Image' ? Icons.image_outlined : Icons.text_snippet_outlined));
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       leading: Icon(icon),
@@ -388,13 +378,13 @@ class _MonetizationAnalyticsPageState extends State<MonetizationAnalyticsPage> {
   }
 
   Widget _pill(String k, String v) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: const Color(0xFFE0E0E0)),
-    ),
-    child: Text('$k: $v', style: GoogleFonts.inter(fontSize: 12)),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE0E0E0)),
+        ),
+        child: Text('$k: $v', style: GoogleFonts.inter(fontSize: 12)),
+      );
 }
 
 class _ItemStat {

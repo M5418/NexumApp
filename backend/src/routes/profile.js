@@ -7,7 +7,8 @@ import { generateId } from '../utils/id-generator.js';
 const router = express.Router();
 
 const experienceSchema = z.object({
-  title: z.string().min(1).max(200)
+  title: z.string().min(1).max(200),
+  subtitle: z.string().min(1).max(200).optional(),
 });
 
 const trainingSchema = z.object({
@@ -32,13 +33,17 @@ const profileSchema = z.object({
   postal_code: z.string().max(20).optional(),
   country: z.string().max(100).optional(),
   profile_photo_url: z.string().url().optional(),
-  cover_photo_url: z.string().url().optional()
+  cover_photo_url: z.string().url().optional(),
+  // NEW feed preferences
+  show_reposts: z.boolean().optional(),
+  show_suggested_posts: z.boolean().optional(),
+  prioritize_interests: z.boolean().optional(),
 });
 
 // Get current user's profile
 router.get('/me', async (req, res) => {
   try {
-    const [rows] = await pool.execute(
+   const [rows] = await pool.execute(
       `SELECT 
           u.id AS user_id,
           u.email,
@@ -59,6 +64,9 @@ router.get('/me', async (req, res) => {
           p.country,
           p.profile_photo_url,
           p.cover_photo_url,
+          p.show_reposts,
+          p.show_suggested_posts,
+          p.prioritize_interests,
           p.created_at AS profile_created_at,
           p.updated_at AS profile_updated_at,
           -- Convenience: computed full name
@@ -98,6 +106,7 @@ router.get('/me', async (req, res) => {
     return fail(res, 'internal_error', 500);
   }
 });
+
 // Get another user's profile by ID
 router.get('/:userId', async (req, res) => {
   try {
@@ -124,6 +133,9 @@ router.get('/:userId', async (req, res) => {
           p.country,
           p.profile_photo_url,
           p.cover_photo_url,
+          p.show_reposts,
+          p.show_suggested_posts,
+          p.prioritize_interests,
           p.created_at AS profile_created_at,
           p.updated_at AS profile_updated_at,
           TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))) AS full_name,

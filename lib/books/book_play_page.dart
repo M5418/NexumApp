@@ -159,7 +159,11 @@ class _BookPlayPageState extends State<BookPlayPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isWide = MediaQuery.of(context).size.width >= 1000;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
+    // Make the cover smaller on desktop (right panel) but keep full-width on mobile
+    final coverMaxWidth = isWide ? 250.0 : double.infinity;
 
     final playing = _player.playerState.playing;
     final totalSeconds = (_duration.inSeconds <= 0 ? 1 : _duration.inSeconds).toDouble();
@@ -191,31 +195,36 @@ class _BookPlayPageState extends State<BookPlayPage> {
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      const SizedBox(height: 40),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: (widget.book.coverUrl ?? '').isNotEmpty
-                              ? Image.network(
-                                  widget.book.coverUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => Container(
-                                    color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                                    child: const Center(
-                                      child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 64),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: coverMaxWidth),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: AspectRatio(
+                              aspectRatio: 1,
+                              child: (widget.book.coverUrl ?? '').isNotEmpty
+                                  ? Image.network(
+                                      widget.book.coverUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) => Container(
+                                        color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                        child: const Center(
+                                          child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 64),
+                                        ),
+                                      ),
+                                    )
+                                  : Container(
+                                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                      child: const Center(
+                                        child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 64),
+                                      ),
                                     ),
-                                  ),
-                                )
-                              : Container(
-                                  color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                                  child: const Center(
-                                    child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 64),
-                                  ),
-                                ),
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
                       Text(
                         widget.book.title,
                         textAlign: TextAlign.center,
@@ -231,7 +240,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(fontSize: 16, color: const Color(0xFF666666)),
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 32),
 
                       // Progress bar
                       Column(
@@ -241,7 +250,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
                               activeTrackColor: const Color(0xFFBFAE01),
                               inactiveTrackColor: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
                               thumbColor: const Color(0xFFBFAE01),
-                              overlayColor: const Color(0xFFBFAE01).withValues(alpha: 51),
+                              overlayColor: const Color(0xFFBFAE01).withOpacity(0.2),
                               trackHeight: 4,
                               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                             ),
@@ -270,7 +279,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
                         ],
                       ),
 
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 32),
 
                       // Controls
                       Row(
@@ -288,7 +297,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
                                 boxShadow: [
                                   if (!isDark)
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 33),
+                                      color: Colors.black.withOpacity(0.13),
                                       blurRadius: 8,
                                       offset: const Offset(0, 4),
                                     ),

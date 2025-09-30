@@ -9,6 +9,7 @@ class ConnectionCard extends StatefulWidget {
   final String coverUrl;
   final String avatarUrl;
   final String fullName;
+  final String username; // NEW
   final String bio;
   final bool initialConnectionStatus;
   final bool theyConnectToYou;
@@ -20,6 +21,7 @@ class ConnectionCard extends StatefulWidget {
     required this.coverUrl,
     required this.avatarUrl,
     required this.fullName,
+    required this.username, // NEW
     required this.bio,
     this.initialConnectionStatus = false,
     this.theyConnectToYou = false,
@@ -63,7 +65,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
       },
       child: Container(
         width: 155,
-        height: 240,
+        height: 260,
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(25),
@@ -145,7 +147,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                 child: Column(
                   children: [
-                    // Name
+                    // Full name (1 line)
                     Text(
                       widget.fullName,
                       style: GoogleFonts.inter(
@@ -157,18 +159,33 @@ class _ConnectionCardState extends State<ConnectionCard> {
                       overflow: TextOverflow.ellipsis,
                     ),
 
+                    const SizedBox(height: 2),
+
+                    // Username (1 line)
+                    Text(
+                      widget.username.isNotEmpty ? widget.username : '',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF666666),
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
                     const SizedBox(height: 4),
 
-                    // Bio
+                    // Bio (1 line)
                     Text(
                       widget.bio,
                       style: GoogleFonts.inter(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w400,
                         color: const Color(0xFF666666),
                       ),
                       textAlign: TextAlign.center,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
 

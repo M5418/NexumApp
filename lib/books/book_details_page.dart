@@ -87,7 +87,12 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isWide = MediaQuery.of(context).size.width >= 1000;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
+    final coverAspect = isWide ? 0.75 : 1.2; // narrower on desktop
+    final coverMaxWidth = isWide ? 250.0 : double.infinity;
+
     return Scaffold(
       backgroundColor: bg,
       appBar: PreferredSize(
@@ -100,7 +105,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
+                color: Colors.black.withOpacity(0.06),
                 blurRadius: 12,
                 offset: const Offset(0, 8),
               ),
@@ -149,27 +154,32 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: AspectRatio(
-              aspectRatio: 1.2,
-              child: (book.coverUrl ?? '').isNotEmpty
-                  ? Image.network(
-                      book.coverUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                        child: const Center(
-                          child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 48),
+          Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: coverMaxWidth),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(
+                  aspectRatio: coverAspect,
+                  child: (book.coverUrl ?? '').isNotEmpty
+                      ? Image.network(
+                          book.coverUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                            child: const Center(
+                              child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 48),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                          child: const Center(
+                            child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 48),
+                          ),
                         ),
-                      ),
-                    )
-                  : Container(
-                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                      child: const Center(
-                        child: Icon(Icons.menu_book_outlined, color: Color(0xFFBFAE01), size: 48),
-                      ),
-                    ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -213,7 +223,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
           ),
           const SizedBox(height: 12),
 
-          // Since Book.description was removed from the model, show a safe fallback text.
+          // Description fallback
           Text(
             'No description provided.',
             style: GoogleFonts.inter(

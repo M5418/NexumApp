@@ -45,6 +45,13 @@ class _MessageBubbleState extends State<MessageBubble>
     0.72, 0.42, 0.83, 0.53, 0.68, 0.61, 0.43, 0.79, 0.34, 0.56,
   ];
 
+  // Responsive max bubble width
+  double _bubbleContentWidth(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    // <= 600px: mobile/narrow
+    return w <= 600 ? 180 : 220;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -192,47 +199,51 @@ class _MessageBubbleState extends State<MessageBubble>
     final hasFiles = attachments.any((a) => a.type == MediaType.document);
     final hasVoice = _hasVoice();
 
-    if (hasVoice) return _buildVoiceMessage(isDark);
+    if (hasVoice) return _buildVoiceMessage(context, isDark);
     if (hasMedia) return _buildMixedMediaMessage(context, isDark);
-    if (hasFiles) return _buildFilesMessage(isDark);
+    if (hasFiles) return _buildFilesMessage(context, isDark);
 
     switch (widget.message.type) {
       case MessageType.text:
-        return _buildTextMessage(isDark);
+        return _buildTextMessage(context, isDark);
       case MessageType.image:
         return _buildImageMessage(context, isDark);
       case MessageType.video:
-        return _buildVideoMessage(isDark);
+        return _buildVideoMessage(context, isDark);
       case MessageType.voice:
-        return _buildVoiceMessage(isDark);
+        return _buildVoiceMessage(context, isDark);
       case MessageType.file:
-        return _buildFileMessage(isDark);
+        return _buildFileMessage(context, isDark);
     }
   }
 
-  Widget _buildTextMessage(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: widget.message.isFromCurrentUser
-            ? const Color(0xFF007AFF)
-            : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
-          Text(
-            widget.message.content,
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              color: widget.message.isFromCurrentUser
-                  ? Colors.white
-                  : (isDark ? Colors.white : Colors.black),
+  Widget _buildTextMessage(BuildContext context, bool isDark) {
+    final maxW = _bubbleContentWidth(context);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxW),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: widget.message.isFromCurrentUser
+              ? const Color(0xFF007AFF)
+              : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+            Text(
+              widget.message.content,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: widget.message.isFromCurrentUser
+                    ? Colors.white
+                    : (isDark ? Colors.white : Colors.black),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -247,86 +258,89 @@ class _MessageBubbleState extends State<MessageBubble>
         .where((a) => a.type == MediaType.image || a.type == MediaType.video)
         .toList();
 
-    return GestureDetector(
-      onTap: () async {
-        if (media.isEmpty) return;
-        final allChatMedia = _getAllChatMedia();
-        final firstUrl =
-            media.first.type == MediaType.video && media.first.thumbnailUrl != null
-                ? media.first.thumbnailUrl!
-                : media.first.url;
-        final initialIndex = _getInitialMediaIndex(firstUrl);
+    final maxW = _bubbleContentWidth(context);
 
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ImageSwipePage(
-              mediaUrls: allChatMedia,
-              initialIndex: initialIndex,
-            ),
-          ),
-        );
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxW),
+      child: GestureDetector(
+        onTap: () async {
+          if (media.isEmpty) return;
+          final allChatMedia = _getAllChatMedia();
+          final firstUrl = media.first.type == MediaType.video &&
+                  media.first.thumbnailUrl != null
+              ? media.first.thumbnailUrl!
+              : media.first.url;
+          final initialIndex = _getInitialMediaIndex(firstUrl);
 
-        if (result != null &&
-            result['action'] == 'reply' &&
-            widget.onReply != null) {
-          widget.onReply!();
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.message.replyTo != null) _buildReplyPreview(isDark),
-            if (widget.message.replyTo != null) const SizedBox(height: 4),
-            if (media.length == 1)
-              _buildMediaTile(
-                media.first,
-                width: 270,
-                height: 140,
-                radius: 16,
-                isVideo: media.first.type == MediaType.video,
-              )
-            else if (media.length == 2)
-              _buildTwoMedia(media)
-            else if (media.length == 3)
-              _buildTripleMosaic(media)
-            else
-              _buildGridMosaic(media),
-            const SizedBox(height: 4),
-            // counts row intentionally hidden
-            _buildMediaCountsRow(widget.message.attachments, isDark),
-            if (widget.message.content.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                widget.message.content,
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: widget.message.isFromCurrentUser
-                      ? Colors.white
-                      : (isDark ? Colors.white : Colors.black),
-                ),
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ImageSwipePage(
+                mediaUrls: allChatMedia,
+                initialIndex: initialIndex,
               ),
+            ),
+          );
+
+          if (result != null && result['action'] == 'reply' && widget.onReply != null) {
+            widget.onReply!();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+              if (widget.message.replyTo != null) const SizedBox(height: 4),
+              if (media.length == 1)
+                _buildMediaTile(
+                  media.first,
+                  width: maxW,
+                  height: 140,
+                  radius: 16,
+                  isVideo: media.first.type == MediaType.video,
+                )
+              else if (media.length == 2)
+                _buildTwoMedia(media, maxW)
+              else if (media.length == 3)
+                _buildTripleMosaic(context, media)
+              else
+                _buildGridMosaic(context, media),
+              const SizedBox(height: 4),
+              // counts row intentionally hidden
+              _buildMediaCountsRow(widget.message.attachments, isDark),
+              if (widget.message.content.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  widget.message.content,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: widget.message.isFromCurrentUser
+                        ? Colors.white
+                        : (isDark ? Colors.white : Colors.black),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTwoMedia(List<MediaAttachment> items) {
+  Widget _buildTwoMedia(List<MediaAttachment> items, double maxW) {
     const double spacing = 4;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildMediaTile(
           items[0],
-          width: 270,
+          width: maxW,
           height: 140,
           radius: 16,
           isVideo: items[0].type == MediaType.video,
@@ -334,7 +348,7 @@ class _MessageBubbleState extends State<MessageBubble>
         const SizedBox(height: spacing),
         _buildMediaTile(
           items[1],
-          width: 270,
+          width: maxW,
           height: 140,
           radius: 16,
           isVideo: items[1].type == MediaType.video,
@@ -343,34 +357,84 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildImageMessage(BuildContext context, bool isDark) {
+    Widget _buildImageMessage(BuildContext context, bool isDark) {
     final bubbleColor = widget.message.isFromCurrentUser
         ? const Color(0xFF007AFF)
         : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
+    final maxW = _bubbleContentWidth(context);
 
-    return GestureDetector(
-      onTap: () async {
-        final allChatMedia = _getAllChatMedia();
-        final initialIndex = _getInitialMediaIndex(
-          widget.message.attachments.first.url,
-        );
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxW),
+      child: GestureDetector(
+        onTap: () async {
+          final allChatMedia = _getAllChatMedia();
+          final initialIndex = _getInitialMediaIndex(
+            widget.message.attachments.first.url,
+          );
 
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ImageSwipePage(
-              mediaUrls: allChatMedia,
-              initialIndex: initialIndex,
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ImageSwipePage(
+                mediaUrls: allChatMedia,
+                initialIndex: initialIndex,
+              ),
             ),
-          ),
-        );
+          );
 
-        if (result != null &&
-            result['action'] == 'reply' &&
-            widget.onReply != null) {
-          widget.onReply!();
-        }
-      },
+          if (result != null && result['action'] == 'reply' && widget.onReply != null) {
+            widget.onReply!();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+              if (widget.message.replyTo != null) const SizedBox(height: 4),
+              if (widget.message.attachments.length == 1)
+                _buildSingleImage(widget.message.attachments.first, maxW)
+              else if (widget.message.attachments.length == 2)
+                _buildTwoImages(maxW)
+              else if (widget.message.attachments.length == 3)
+                _buildTripleMosaic(context, widget.message.attachments)
+              else
+                _buildGridMosaic(context, widget.message.attachments),
+              const SizedBox(height: 4),
+              // counts row intentionally hidden
+              _buildMediaCountsRow(widget.message.attachments, isDark),
+              if (widget.message.content.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  widget.message.content,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: widget.message.isFromCurrentUser
+                        ? Colors.white
+                        : (isDark ? Colors.white : Colors.black),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoMessage(BuildContext context, bool isDark) {
+    final bubbleColor = widget.message.isFromCurrentUser
+        ? const Color(0xFF007AFF)
+        : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
+    final maxW = _bubbleContentWidth(context);
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxW),
       child: Container(
         padding: const EdgeInsets.all(5),
         decoration: BoxDecoration(
@@ -383,13 +447,19 @@ class _MessageBubbleState extends State<MessageBubble>
             if (widget.message.replyTo != null) _buildReplyPreview(isDark),
             if (widget.message.replyTo != null) const SizedBox(height: 4),
             if (widget.message.attachments.length == 1)
-              _buildSingleImage(widget.message.attachments.first)
+              _buildMediaTile(
+                widget.message.attachments.first,
+                width: maxW,
+                height: 140,
+                radius: 16,
+                isVideo: true,
+              )
             else if (widget.message.attachments.length == 2)
-              _buildTwoImages()
+              _buildTwoImages(maxW)
             else if (widget.message.attachments.length == 3)
-              _buildTripleMosaic(widget.message.attachments)
+              _buildTripleMosaic(context, widget.message.attachments)
             else
-              _buildGridMosaic(widget.message.attachments),
+              _buildVideosGridMosaic(context, widget.message.attachments),
             const SizedBox(height: 4),
             // counts row intentionally hidden
             _buildMediaCountsRow(widget.message.attachments, isDark),
@@ -411,96 +481,50 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildVideoMessage(bool isDark) {
-    final bubbleColor = widget.message.isFromCurrentUser
-        ? const Color(0xFF007AFF)
-        : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
-
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: bubbleColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
-          if (widget.message.replyTo != null) const SizedBox(height: 4),
-          if (widget.message.attachments.length == 1)
-            _buildMediaTile(
-              widget.message.attachments.first,
-              width: 270,
-              height: 140,
-              radius: 16,
-              isVideo: true,
-            )
-          else if (widget.message.attachments.length == 2)
-            _buildTwoImages()
-          else if (widget.message.attachments.length == 3)
-            _buildTripleMosaic(widget.message.attachments)
-          else
-            _buildVideosGridMosaic(widget.message.attachments),
-          const SizedBox(height: 4),
-          // counts row intentionally hidden
-          _buildMediaCountsRow(widget.message.attachments, isDark),
-          if (widget.message.content.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              widget.message.content,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                color: widget.message.isFromCurrentUser
-                    ? Colors.white
-                    : (isDark ? Colors.white : Colors.black),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilesMessage(bool isDark) {
+  Widget _buildFilesMessage(BuildContext context, bool isDark) {
     final files = widget.message.attachments
         .where((a) => a.type == MediaType.document)
         .toList();
     final bubbleColor = widget.message.isFromCurrentUser
         ? const Color(0xFF007AFF)
         : (isDark ? const Color(0xFF2C2C2E) : Colors.white);
+    final maxW = _bubbleContentWidth(context);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: bubbleColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
-          if (widget.message.replyTo != null) const SizedBox(height: 6),
-          for (final f in files) ...[
-            _buildSingleFileRow(f, isDark),
-            if (f != files.last) const SizedBox(height: 8),
-          ],
-          const SizedBox(height: 6),
-          // counts row intentionally hidden
-          _buildMediaCountsRow(widget.message.attachments, isDark),
-          if (widget.message.content.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              widget.message.content,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                color: widget.message.isFromCurrentUser
-                    ? Colors.white
-                    : (isDark ? Colors.white : Colors.black),
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxW),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+            if (widget.message.replyTo != null) const SizedBox(height: 6),
+            for (final f in files) ...[
+              _buildSingleFileRow(f, isDark),
+              if (f != files.last) const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 6),
+            // counts row intentionally hidden
+            _buildMediaCountsRow(widget.message.attachments, isDark),
+            if (widget.message.content.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                widget.message.content,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: widget.message.isFromCurrentUser
+                      ? Colors.white
+                      : (isDark ? Colors.white : Colors.black),
+                ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -596,7 +620,7 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  MediaAttachment? _getVoiceAttachment() {
+    MediaAttachment? _getVoiceAttachment() {
     if (widget.message.attachments.isNotEmpty) {
       final voice = widget.message.attachments.firstWhere(
         (a) => a.type == MediaType.voice,
@@ -622,39 +646,43 @@ class _MessageBubbleState extends State<MessageBubble>
     return null;
   }
 
-  Widget _buildVoiceMessage(bool isDark) {
+  Widget _buildVoiceMessage(BuildContext context, bool isDark) {
     final att = _getVoiceAttachment();
+    final maxW = _bubbleContentWidth(context);
 
     if (att == null) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: widget.message.isFromCurrentUser
-              ? const Color(0xFF007AFF)
-              : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.mic_off,
-              color: widget.message.isFromCurrentUser
-                  ? Colors.white
-                  : const Color(0xFF007AFF),
-              size: 22,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Voice message unavailable',
-              style: GoogleFonts.inter(
-                fontSize: 14,
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxW),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: widget.message.isFromCurrentUser
+                ? const Color(0xFF007AFF)
+                : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.mic_off,
                 color: widget.message.isFromCurrentUser
                     ? Colors.white
-                    : (isDark ? Colors.white : Colors.black),
+                    : const Color(0xFF007AFF),
+                size: 22,
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Text(
+                'Voice message unavailable',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: widget.message.isFromCurrentUser
+                      ? Colors.white
+                      : (isDark ? Colors.white : Colors.black),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -682,83 +710,85 @@ class _MessageBubbleState extends State<MessageBubble>
         ? (effectiveCurrent.inMilliseconds / effectiveTotal.inMilliseconds)
         : 0.0;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: bubbleColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
-          if (widget.message.replyTo != null) const SizedBox(height: 6),
-          Row(
-            children: [
-              IconButton(
-                onPressed: _togglePlayback,
-                icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                color: widget.message.isFromCurrentUser
-                    ? Colors.white
-                    : const Color(0xFF007AFF),
-                iconSize: 24,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final waveWidth = constraints.maxWidth;
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapDown: (details) {
-                        if (effectiveTotal.inMilliseconds <= 0 ||
-                            _audioPlayer == null) {
-                          return;
-                        }
-                        final dx =
-                            details.localPosition.dx.clamp(0.0, waveWidth);
-                        final ratio =
-                            waveWidth <= 0 ? 0.0 : dx / waveWidth;
-                        final target = Duration(
-                          milliseconds:
-                              (effectiveTotal.inMilliseconds * ratio)
-                                  .clamp(0, effectiveTotal.inMilliseconds)
-                                  .toInt(),
-                        );
-                        _audioPlayer!.seek(target);
-                      },
-                      child: SizedBox(
-                        height: 18,
-                        width: double.infinity,
-                        child: CustomPaint(
-                          painter: VoiceWavePainter(
-                            inactiveColor: inactive,
-                            activeColor: active,
-                            progress: progress,
-                            animation: (_waveController?.value ?? 0.0),
-                            bars: _waveBase,
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxW),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+            if (widget.message.replyTo != null) const SizedBox(height: 6),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _togglePlayback,
+                  icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                  color: widget.message.isFromCurrentUser
+                      ? Colors.white
+                      : const Color(0xFF007AFF),
+                  iconSize: 24,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final waveWidth = constraints.maxWidth;
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) {
+                          if (effectiveTotal.inMilliseconds <= 0 ||
+                              _audioPlayer == null) {
+                            return;
+                          }
+                          final dx =
+                              details.localPosition.dx.clamp(0.0, waveWidth);
+                          final ratio = waveWidth <= 0 ? 0.0 : dx / waveWidth;
+                          final target = Duration(
+                            milliseconds:
+                                (effectiveTotal.inMilliseconds * ratio)
+                                    .clamp(0, effectiveTotal.inMilliseconds)
+                                    .toInt(),
+                          );
+                          _audioPlayer!.seek(target);
+                        },
+                        child: SizedBox(
+                          height: 18,
+                          width: double.infinity,
+                          child: CustomPaint(
+                            painter: VoiceWavePainter(
+                              inactiveColor: inactive,
+                              activeColor: active,
+                              progress: progress,
+                              animation: (_waveController?.value ?? 0.0),
+                              bars: _waveBase,
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _formatDuration(
-                  effectiveTotal.inMilliseconds > 0
-                      ? effectiveTotal
-                      : (att.duration ?? Duration.zero),
+                const SizedBox(width: 8),
+                Text(
+                  _formatDuration(
+                    effectiveTotal.inMilliseconds > 0
+                        ? effectiveTotal
+                        : (att.duration ?? Duration.zero),
+                  ),
+                  style: GoogleFonts.inter(fontSize: 12, color: subTextColor),
                 ),
-                style: GoogleFonts.inter(fontSize: 12, color: subTextColor),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -787,74 +817,76 @@ class _MessageBubbleState extends State<MessageBubble>
     }
   }
 
-  Widget _buildFileMessage(bool isDark) {
+  Widget _buildFileMessage(BuildContext context, bool isDark) {
     final attachment = widget.message.attachments.first;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: widget.message.isFromCurrentUser
-            ? const Color(0xFF007AFF)
-            : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.message.replyTo != null) _buildReplyPreview(isDark),
-          if (widget.message.replyTo != null) const SizedBox(height: 6),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: widget.message.isFromCurrentUser
-                      ? Colors.white.withValues(alpha: 51)
-                      : const Color(0xFF007AFF).withValues(alpha: 51),
-                  borderRadius: BorderRadius.circular(8),
+    final maxW = _bubbleContentWidth(context);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxW),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: widget.message.isFromCurrentUser
+              ? const Color(0xFF007AFF)
+              : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.message.replyTo != null) _buildReplyPreview(isDark),
+            if (widget.message.replyTo != null) const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: widget.message.isFromCurrentUser
+                        ? Colors.white.withValues(alpha: 51)
+                        : const Color(0xFF007AFF).withValues(alpha: 51),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.description,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                 ),
-                child: Icon(
-                  Icons.description,
-                  color: widget.message.isFromCurrentUser
-                      ? Colors.white
-                      : const Color(0xFF007AFF),
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      attachment.fileName ?? 'Document',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: widget.message.isFromCurrentUser
-                            ? Colors.white
-                            : (isDark ? Colors.white : Colors.black),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (attachment.fileSize != null)
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        _formatFileSize(attachment.fileSize!),
+                        attachment.fileName ?? 'Document',
                         style: GoogleFonts.inter(
-                          fontSize: 12,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                           color: widget.message.isFromCurrentUser
-                              ? Colors.white70
-                              : const Color(0xFF666666),
+                              ? Colors.white
+                              : (isDark ? Colors.white : Colors.black),
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                  ],
+                      if (attachment.fileSize != null)
+                        Text(
+                          _formatFileSize(attachment.fileSize!),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: widget.message.isFromCurrentUser
+                                ? Colors.white70
+                                : const Color(0xFF666666),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -895,16 +927,16 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildSingleImage(MediaAttachment attachment) {
+  Widget _buildSingleImage(MediaAttachment attachment, double maxW) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: CachedNetworkImage(
         imageUrl: attachment.url,
-        width: 270,
+        width: maxW,
         height: 140,
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
-          width: 270,
+          width: maxW,
           height: 140,
           decoration: BoxDecoration(
             color: const Color(0xFF666666).withValues(alpha: 51),
@@ -913,7 +945,7 @@ class _MessageBubbleState extends State<MessageBubble>
           child: const Center(child: CircularProgressIndicator()),
         ),
         errorWidget: (context, url, error) => Container(
-          width: 270,
+          width: maxW,
           height: 140,
           decoration: BoxDecoration(
             color: const Color(0xFF666666).withValues(alpha: 51),
@@ -929,14 +961,14 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildTwoImages() {
+  Widget _buildTwoImages(double maxW) {
     const double spacing = 4;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildMediaTile(
           widget.message.attachments[0],
-          width: 270,
+          width: maxW,
           height: 140,
           radius: 16,
           isVideo: widget.message.attachments[0].type == MediaType.video,
@@ -944,7 +976,7 @@ class _MessageBubbleState extends State<MessageBubble>
         const SizedBox(height: spacing),
         _buildMediaTile(
           widget.message.attachments[1],
-          width: 270,
+          width: maxW,
           height: 140,
           radius: 16,
           isVideo: widget.message.attachments[1].type == MediaType.video,
@@ -1030,8 +1062,8 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildGridMosaic(List<MediaAttachment> attachments) {
-    const double contentWidth = 270;
+  Widget _buildGridMosaic(BuildContext context, List<MediaAttachment> attachments) {
+    final double contentWidth = _bubbleContentWidth(context);
     const double spacing = 4;
     const double tileHeight = 140;
     final double tileWidth = (contentWidth - spacing) / 2;
@@ -1074,8 +1106,8 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildVideosGridMosaic(List<MediaAttachment> attachments) {
-    const double contentWidth = 270;
+  Widget _buildVideosGridMosaic(BuildContext context, List<MediaAttachment> attachments) {
+    final double contentWidth = _bubbleContentWidth(context);
     const double spacing = 4;
     const double tileHeight = 140;
     final double tileWidth = (contentWidth - spacing) / 2;
@@ -1117,8 +1149,8 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildTripleMosaic(List<MediaAttachment> attachments) {
-    const double contentWidth = 270;
+  Widget _buildTripleMosaic(BuildContext context, List<MediaAttachment> attachments) {
+    final double contentWidth = _bubbleContentWidth(context);
     const double mosaicHeight = 140;
     const double spacing = 4;
     final double leftWidth = ((contentWidth - spacing) * 2 / 3).floorToDouble();

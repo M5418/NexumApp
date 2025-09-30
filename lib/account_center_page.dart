@@ -1,8 +1,16 @@
+// File: lib/account_center_page.dart
+// Lines: 1-420
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/auth_api.dart';
 import 'core/token_store.dart';
+import 'core/profile_api.dart';
 import 'sign_in_page.dart';
+import 'change_password_page.dart';
+import 'change_email_page.dart';
+import 'kyc_verification_page.dart';
+import 'kyc_status_page.dart';
+import 'core/kyc_api.dart';
 
 class AccountCenterPage extends StatefulWidget {
   const AccountCenterPage({super.key});
@@ -12,10 +20,11 @@ class AccountCenterPage extends StatefulWidget {
 }
 
 class _AccountCenterPageState extends State<AccountCenterPage> {
-  bool _googleLinked = true;
-  bool _appleLinked = false;
-  bool _twitterLinked = false;
+  // Profile Data
   String _email = '';
+  String _fullName = '';
+  String _username = '';
+  String _avatarUrl = '';
 
   @override
   void initState() {
@@ -25,20 +34,43 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
 
   Future<void> _loadMe() async {
     try {
+      // Email from auth
       final authApi = AuthApi();
       final response = await authApi.me();
 
       if (response['ok'] == true && response['data'] != null) {
-        final email = response['data']['email'] as String? ?? '';
+        final email = (response['data']['email'] ?? '').toString();
         if (mounted) {
           setState(() {
             _email = email;
           });
         }
       } else {
-        throw Exception('Failed to load user data');
+        throw Exception('Failed to load auth user');
+      }
+
+      // Profile details (avatar, full name, username)
+      try {
+        final profApi = ProfileApi();
+        final profRes = await profApi.me();
+        final body = Map<String, dynamic>.from(profRes);
+        final data = Map<String, dynamic>.from(body['data'] ?? {});
+        final fullName = (data['full_name'] ?? '').toString();
+        final username = (data['username'] ?? '').toString();
+        final avatarUrl = (data['profile_photo_url'] ?? '').toString();
+
+        if (mounted) {
+          setState(() {
+            _fullName = fullName;
+            _username = username;
+            _avatarUrl = avatarUrl;
+          });
+        }
+      } catch (_) {
+        // profile optional; keep defaults
       }
     } catch (_) {
+      // Not authenticated: redirect to sign in if no token
       final t = await TokenStore.read();
       if (t == null || t.isEmpty) {
         if (mounted) {
@@ -81,6 +113,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
+          // Profile Information
           _buildCard(
             color: cardColor,
             child: Column(
@@ -89,17 +122,28 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                 _sectionTitle('Profile Information'),
                 const SizedBox(height: 12),
                 ListTile(
-                  leading: const CircleAvatar(
-                    backgroundImage: NetworkImage(
-                      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-                    ),
+                  leading: CircleAvatar(
+                    backgroundColor: isDark ? Colors.grey[800] : Colors.grey[300],
+                    backgroundImage: _avatarUrl.isNotEmpty
+                        ? NetworkImage(_avatarUrl)
+                        : null,
+                    child: _avatarUrl.isEmpty
+                        ? Text(
+                            (_fullName.isNotEmpty ? _fullName[0] : 'U').toUpperCase(),
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          )
+                        : null,
                   ),
                   title: Text(
-                    'Ludovic Carl',
+                    _fullName.isNotEmpty ? _fullName : 'User',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
-                    '@ludovic.carl',
+                    _username.isNotEmpty ? '@$_username' : '',
                     style: GoogleFonts.inter(color: const Color(0xFF666666)),
                   ),
                 ),
@@ -108,40 +152,93 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                   'Email',
                   _email.isNotEmpty ? _email : 'user@example.com',
                 ),
-                _infoRow('Phone', '+1 (555) 123-4567'),
+                _infoRow('Phone', 'No phone number added yet'),
               ],
             ),
           ),
           const SizedBox(height: 16),
+
+          // Account / Security (replaces Connected Accounts)
           _buildCard(
             color: cardColor,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Connected Accounts'),
+                _sectionTitle('Account & Security'),
                 const SizedBox(height: 8),
-                _switchTile(
-                  icon: Icons.g_mobiledata,
-                  title: 'Google',
-                  value: _googleLinked,
-                  onChanged: (v) => setState(() => _googleLinked = v),
+                _navTile(
+                  icon: Icons.lock_outline,
+                  title: 'Change Password',
+                  subtitle: 'Update your password',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ChangePasswordPage(currentEmail: _email),
+                      ),
+                    );
+                  },
                 ),
-                _switchTile(
-                  icon: Icons.apple,
-                  title: 'Apple',
-                  value: _appleLinked,
-                  onChanged: (v) => setState(() => _appleLinked = v),
+                _navTile(
+                  icon: Icons.email_outlined,
+                  title: 'Change Email',
+                  subtitle: 'Update your email address',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ChangeEmailPage(currentEmail: _email),
+                      ),
+                    );
+                  },
                 ),
-                _switchTile(
-                  icon: Icons.alternate_email,
-                  title: 'Twitter (X)',
-                  value: _twitterLinked,
-                  onChanged: (v) => setState(() => _twitterLinked = v),
+                _navTile(
+                  icon: Icons.verified_user_outlined,
+                  title: 'Verify KYC',
+                  subtitle: 'Verify your identity',
+                  onTap: () async {
+                    final res = await KycApi().getMine();
+                    if (res['ok'] == true) {
+                      final data = res['data'];
+                      final status = (data == null) ? null : (data['status'] ?? '').toString();
+                      if (data == null || status == 'rejected') {
+                        // Not submitted yet or rejected -> go to verification form
+                        if (!mounted) return;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const KycVerificationPage()),
+                        );
+                      } else {
+                        // pending or approved -> go to status page
+                        if (!mounted) return;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const KycStatusPage()),
+                        );
+                      }
+                    } else {
+                      // On error default to form
+                      if (!mounted) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const KycVerificationPage()),
+                      );
+                    }
+                  },
+                ),
+                _navTile(
+                  icon: Icons.phone_outlined,
+                  title: 'Change Phone Number',
+                  subtitle: 'Add or update your phone',
+                  onTap: () => _showSnack('Change phone number coming soon'),
+                  isLast: true,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
+
+          // Data & Permissions
           _buildCard(
             color: cardColor,
             child: Column(
@@ -152,26 +249,26 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                 _navTile(
                   icon: Icons.download_outlined,
                   title: 'Download Your Data',
-                  subtitle: 'Request a copy of your data',
-                  onTap: () => _showSnack('Data download requested'),
+                  subtitle: 'Coming soon',
+                  onTap: () => _showSnack('Coming soon'),
                 ),
                 _navTile(
                   icon: Icons.receipt_long_outlined,
                   title: 'Ads Preferences',
-                  subtitle: 'Control personalized ads',
-                  onTap: () => _showSnack('Ads preferences opened'),
+                  subtitle: 'Coming soon',
+                  onTap: () => _showSnack('Coming soon'),
                 ),
                 _navTile(
                   icon: Icons.person_off_outlined,
                   title: 'Deactivate Account',
-                  subtitle: 'Temporarily disable your account',
-                  onTap: () => _confirm(context, 'Deactivate account?'),
+                  subtitle: 'Coming soon',
+                  onTap: () => _showSnack('Coming soon'),
                 ),
                 _navTile(
                   icon: Icons.delete_outline,
                   title: 'Delete Account',
                   subtitle: 'Permanently delete your account',
-                  onTap: () => _confirm(context, 'Delete account permanently?'),
+                  onTap: _handleDeleteAccount,
                   isLast: true,
                 ),
               ],
@@ -228,27 +325,6 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
     );
   }
 
-  Widget _switchTile({
-    required IconData icon,
-    required String title,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return SwitchListTile.adaptive(
-      value: value,
-      onChanged: onChanged,
-      title: Row(
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 8),
-          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
-        ],
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-      activeTrackColor: const Color(0xFFBFAE01),
-    );
-  }
-
   Widget _navTile({
     required IconData icon,
     required String title,
@@ -289,8 +365,44 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
     ).showSnackBar(SnackBar(content: Text(text, style: GoogleFonts.inter())));
   }
 
-  Future<void> _confirm(BuildContext context, String title) async {
-    await showDialog<void>(
+  Future<void> _handleDeleteAccount() async {
+    final confirmed = await _confirm(
+      context,
+      'Delete account permanently?',
+      'This action will permanently delete your account and all associated data. This cannot be undone.',
+      confirmText: 'Delete',
+    );
+    if (confirmed != true) return;
+
+    try {
+      final api = AuthApi();
+      final res = await api.deleteAccount();
+      final ok = (res['ok'] == true);
+      if (!ok) {
+        final err = (res['error'] ?? 'delete_failed').toString();
+        _showSnack('Failed to delete account: $err');
+        return;
+      }
+
+      // Clear local token and navigate to sign-in
+      await TokenStore.clear();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SignInPage()),
+        (_) => false,
+      );
+    } catch (_) {
+      _showSnack('Failed to delete account');
+    }
+  }
+
+  Future<bool?> _confirm(
+    BuildContext context,
+    String title,
+    String message, {
+    String confirmText = 'Continue',
+  }) async {
+    return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
@@ -298,18 +410,18 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
           style: GoogleFonts.inter(fontWeight: FontWeight.w600),
         ),
         content: Text(
-          'This is a placeholder action. Backend integration required.',
+          message,
           style: GoogleFonts.inter(),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(ctx, false),
             child: Text('Cancel', style: GoogleFonts.inter()),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              'Continue',
+              confirmText,
               style: GoogleFonts.inter(color: const Color(0xFFBFAE01)),
             ),
           ),

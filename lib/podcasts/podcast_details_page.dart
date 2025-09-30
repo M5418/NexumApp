@@ -31,7 +31,6 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
     try {
       final api = PodcastsApi.create();
       if (podcast.meLiked) {
-        // no explicit unlike endpoint for "like" here; using /like DELETE
         await api.unlike(podcast.id);
         if (!mounted) return;
         setState(() {
@@ -89,7 +88,11 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isWide = MediaQuery.of(context).size.width >= 1000;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
+    // Desktop: limit cover width to 250px
+    final coverMaxWidth = isWide ? 250.0 : double.infinity;
 
     return Scaffold(
       backgroundColor: bg,
@@ -101,7 +104,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
+                color: Colors.black.withOpacity(0.06),
                 blurRadius: 12,
                 offset: const Offset(0, 8),
               ),
@@ -138,10 +141,12 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                 IconButton(
                   tooltip: podcast.meFavorite ? 'Unfavorite' : 'Favorite',
                   onPressed: _togglingFav ? null : _toggleFavorite,
-                  icon: const Icon(
-                    Icons.star,
-                    color: Color(0xFFBFAE01),
-                  ),
+                  icon: const Icon(Icons.star, color: Color(0xFFBFAE01)),
+                ),
+                IconButton(
+                  tooltip: 'Add to playlist',
+                  onPressed: () => showAddToPlaylistSheet(context, podcast),
+                  icon: const Icon(Icons.playlist_add, color: Color(0xFFBFAE01)),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -152,27 +157,32 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: (podcast.coverUrl ?? '').isNotEmpty
-                  ? Image.network(
-                      podcast.coverUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                        child: const Center(
-                          child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 48),
+          Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: coverMaxWidth),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: (podcast.coverUrl ?? '').isNotEmpty
+                      ? Image.network(
+                          podcast.coverUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                            child: const Center(
+                              child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 48),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                          child: const Center(
+                            child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 48),
+                          ),
                         ),
-                      ),
-                    )
-                  : Container(
-                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                      child: const Center(
-                        child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 48),
-                      ),
-                    ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -215,19 +225,14 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
             ],
           ),
           const SizedBox(height: 12),
-
-      
           Text(
-            (podcast.description ?? '').isNotEmpty
-                ? podcast.description!
-                : 'No description provided.',
+            (podcast.description ?? '').isNotEmpty ? podcast.description! : 'No description provided.',
             style: GoogleFonts.inter(
               fontSize: 14,
               height: 1.4,
               color: isDark ? const Color(0xFFE0E0E0) : const Color(0xFF333333),
             ),
           ),
-
           const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -235,10 +240,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
               ElevatedButton.icon(
                 onPressed: (podcast.audioUrl ?? '').isNotEmpty
                     ? () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => PlayerPage(podcast: podcast)),
-                        );
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(podcast: podcast)));
                       }
                     : null,
                 icon: const Icon(Icons.play_arrow, color: Colors.white),
@@ -255,10 +257,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
               ElevatedButton.icon(
                 onPressed: () => showAddToPlaylistSheet(context, podcast),
                 icon: const Icon(Icons.playlist_add, color: Colors.black),
-                label: Text(
-                  'Add to playlist',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black),
-                ),
+                label: Text('Add to playlist', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFBFAE01),
                   foregroundColor: Colors.black,

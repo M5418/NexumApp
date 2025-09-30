@@ -15,6 +15,54 @@ import 'core/stories_api.dart';
 
 enum StoryComposeType { image, video, text, mixed }
 
+// Popup wrapper to show a centered story composer dialog
+class StoryComposerPopup {
+  static Future<T?> show<T>(BuildContext context, {required StoryComposeType type}) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Compose Story',
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900, maxHeight: 860),
+            child: Material(
+              color: Colors.transparent,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: _pageForType(type),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (_, anim, __, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  static Widget _pageForType(StoryComposeType type) {
+    switch (type) {
+      case StoryComposeType.text:
+        return const TextStoryComposerPage();
+      case StoryComposeType.image:
+      case StoryComposeType.video:
+      case StoryComposeType.mixed:
+        return const MixedMediaStoryComposerPage();
+    }
+  }
+}
+
 // Bottom sheet to pick the composer type
 class StoryTypePicker {
   static void show(

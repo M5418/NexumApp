@@ -1,3 +1,5 @@
+// File: backend/src/server.js
+// Lines: 1-103
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -22,6 +24,8 @@ import podcastsRoutes from './routes/podcasts.js';
 import mentorshipRoutes from './routes/mentorship.js';
 import searchRoutes from './routes/search.js';
 import notificationsRoutes from './routes/notifications.js';
+import kycRoutes from './routes/kyc.js';
+import reportsRoutes from './routes/reports.js'; // <— NEW
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -82,8 +86,14 @@ app.use('/api/mentorship', authMiddleware, mentorshipRoutes);
 // Notifications
 app.use('/api/notifications', authMiddleware, notificationsRoutes);
 
+// Reports (NEW)
+app.use('/api/reports', authMiddleware, reportsRoutes);
+
 // Search
 app.use('/api/search', authMiddleware, searchRoutes);
+
+// KYC
+app.use('/api/kyc', authMiddleware, kycRoutes);
 
 // Errors
 app.use((err, req, res, next) => {

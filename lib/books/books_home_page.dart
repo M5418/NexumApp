@@ -87,6 +87,8 @@ class BooksHomePage extends StatefulWidget {
 }
 
 class _BooksHomePageState extends State<BooksHomePage> {
+  final GlobalKey<NavigatorState> _rightNavKey = GlobalKey<NavigatorState>();
+
   String _selectedLanguage = 'All';
   List<Book> _books = [];
   bool _loading = true;
@@ -96,6 +98,10 @@ class _BooksHomePageState extends State<BooksHomePage> {
   final int _limit = 20;
   bool _hasMore = true;
   final _controller = ScrollController();
+
+  // Desktop search
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
@@ -107,6 +113,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
   @override
   void dispose() {
     _controller.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -118,9 +125,19 @@ class _BooksHomePageState extends State<BooksHomePage> {
     return set.toList();
   }
 
-  List<Book> get _filteredBooks => _selectedLanguage == 'All'
-      ? _books
-      : _books.where((b) => (b.language ?? '') == _selectedLanguage).toList();
+  List<Book> get _filteredBooks =>
+      _selectedLanguage == 'All' ? _books : _books.where((b) => (b.language ?? '') == _selectedLanguage).toList();
+
+  List<Book> get _filteredDesktopBooks {
+    final base = _filteredBooks;
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return base;
+    return base.where((b) {
+      final t = b.title.toLowerCase();
+      final a = (b.author ?? '').toLowerCase();
+      return t.contains(q) || a.contains(q);
+    }).toList();
+  }
 
   void _onScroll() {
     if (!_hasMore || _loading) return;
@@ -175,7 +192,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
     return 'Just now';
   }
 
-  Future<void> _openCreate() async {
+  Future<void> _openCreateMobile() async {
     final changed = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CreateBookPage()),
@@ -185,31 +202,380 @@ class _BooksHomePageState extends State<BooksHomePage> {
     }
   }
 
-  Future<void> _toggleFavorite(Book b) async {
-    try {
-      final api = BooksApi.create();
-      if (b.meFavorite) {
-        await api.unfavorite(b.id);
-        setState(() {
-          b.meFavorite = false;
-          b.favorites = (b.favorites - 1).clamp(0, 1 << 30);
-        });
-      } else {
-        await api.favorite(b.id);
-        setState(() {
-          b.meFavorite = true;
-          b.favorites = b.favorites + 1;
-        });
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update favorite: $e')),
-      );
+  Future<void> _openCreateDesktop() async {
+    final changed = await CreateBookPage.showPopup<bool>(context);
+    if (changed == true && mounted) {
+      await _fetchBooks(reset: true);
     }
+  }
+
+  void _openInRightPanel(Book b) {
+    _rightNavKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => BookDetailsPage(book: b)),
+      (route) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 1000;
+    return isWide ? _buildDesktop(context) : _buildMobile(context);
+  }
+
+  // Desktop header: back + "NEXUM"
+  Widget _buildDesktopHeader(bool isDark) {
+    final barColor = isDark ? Colors.black : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    return Material(
+      color: barColor,
+      elevation: isDark ? 0 : 2,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(4, 10, 12, 10),
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(Icons.arrow_back, color: textColor),
+              onPressed: () => Navigator.pop(context),
+              tooltip: 'Back',
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'NEXUM',
+              style: GoogleFonts.inter(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =========================
+  // Desktop (Web) two-column
+  // =========================
+  Widget _buildDesktop(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1280),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildDesktopHeader(isDark),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left column: search + language + list + create
+                        Container(
+                          width: 360,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              if (!isDark)
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              // Row: Search + Language + Add
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Container(
+                                        height: 38,
+                                        decoration: BoxDecoration(
+                                          color: isDark ? const Color(0xFF111111) : const Color(0xFFF7F7F7),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
+                                          ),
+                                        ),
+                                        child: TextField(
+                                          controller: _searchCtrl,
+                                          onChanged: (v) => setState(() => _query = v),
+                                          decoration: InputDecoration(
+                                            hintText: 'Search books...',
+                                            hintStyle: GoogleFonts.inter(color: const Color(0xFF999999), fontSize: 13),
+                                            border: InputBorder.none,
+                                            prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFFBFAE01)),
+                                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                                          ),
+                                          style: GoogleFonts.inter(fontSize: 14),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _LanguageFilter(
+                                      selected: _selectedLanguage,
+                                      options: _languages,
+                                      onChanged: (v) => setState(() => _selectedLanguage = v),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      tooltip: 'Create book',
+                                      onPressed: _openCreateDesktop,
+                                      icon: Icon(Icons.add, color: isDark ? Colors.white : const Color(0xFF666666)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Divider(height: 1),
+                              // List of books
+                              Expanded(
+                                child: _error != null
+                                    ? ListView(
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.all(24),
+                                            child: Text(_error!, style: GoogleFonts.inter(color: Colors.red)),
+                                          ),
+                                        ],
+                                      )
+                                    : RefreshIndicator(
+                                        color: const Color(0xFFBFAE01),
+                                        onRefresh: () => _fetchBooks(reset: true),
+                                        child: ListView.separated(
+                                          controller: _controller,
+                                          padding: const EdgeInsets.all(12),
+                                          itemCount: _filteredDesktopBooks.length + (_loading ? 1 : 0),
+                                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                          itemBuilder: (ctx, idx) {
+                                            if (idx >= _filteredDesktopBooks.length) {
+                                              return const Center(
+                                                child: Padding(
+                                                  padding: EdgeInsets.all(16),
+                                                  child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
+                                                ),
+                                              );
+                                            }
+                                            final b = _filteredDesktopBooks[idx];
+                                            return GestureDetector(
+                                              onTap: () => _openInRightPanel(b),
+                                              child: Container(
+                                                width: 360,
+                                                height: 140,
+                                                decoration: BoxDecoration(
+                                                  color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  boxShadow: [
+                                                    if (!isDark)
+                                                      BoxShadow(
+                                                        color: Colors.black.withOpacity(0.06),
+                                                        blurRadius: 8,
+                                                        offset: const Offset(0, 2),
+                                                      ),
+                                                  ],
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    ClipRRect(
+                                                      borderRadius: const BorderRadius.only(
+                                                        topLeft: Radius.circular(12),
+                                                        bottomLeft: Radius.circular(12),
+                                                      ),
+                                                      child: SizedBox(
+                                                        width: 80,
+                                                        height: 140,
+                                                        child: (b.coverUrl ?? '').isNotEmpty
+                                                            ? Image.network(
+                                                                b.coverUrl!,
+                                                                fit: BoxFit.cover,
+                                                                errorBuilder: (ctx, error, stackTrace) => Container(
+                                                                  color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                                                  child: const Icon(
+                                                                    Icons.menu_book_outlined,
+                                                                    color: Color(0xFFBFAE01),
+                                                                    size: 24,
+                                                                  ),
+                                                                ),
+                                                              )
+                                                            : Container(
+                                                                color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                                                child: const Icon(
+                                                                  Icons.menu_book_outlined,
+                                                                  color: Color(0xFFBFAE01),
+                                                                  size: 24,
+                                                                ),
+                                                              ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: Padding(
+                                                        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            Text(
+                                                              b.title,
+                                                              maxLines: 2,
+                                                              overflow: TextOverflow.ellipsis,
+                                                              style: GoogleFonts.inter(
+                                                                fontSize: 14,
+                                                                fontWeight: FontWeight.w600,
+                                                                color: isDark ? Colors.white : Colors.black,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 2),
+                                                            Text(
+                                                              b.author ?? 'Unknown',
+                                                              style: GoogleFonts.inter(
+                                                                fontSize: 13,
+                                                                color: const Color(0xFF999999),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 4),
+                                                            Row(
+                                                              children: [
+                                                                Text(
+                                                                  _timeAgo(b.createdAt),
+                                                                  style: GoogleFonts.inter(
+                                                                    fontSize: 10,
+                                                                    color: const Color(0xFF999999),
+                                                                  ),
+                                                                ),
+                                                                const Spacer(),
+                                                                Text(
+                                                                  (b.language ?? '').isEmpty ? '—' : b.language!,
+                                                                  style: GoogleFonts.inter(
+                                                                    fontSize: 10,
+                                                                    color: const Color(0xFF999999),
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            const SizedBox(height: 6),
+                                                            Row(
+                                                              children: [
+                                                                Icon(Icons.favorite, size: 14, color: Colors.pink.shade300),
+                                                                const SizedBox(width: 4),
+                                                                Text('${b.likes}',
+                                                                    style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                                                const SizedBox(width: 10),
+                                                                const Icon(Icons.star, size: 14, color: Color(0xFFBFAE01)),
+                                                                const SizedBox(width: 4),
+                                                                Text('${b.favorites}',
+                                                                    style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                                                const SizedBox(width: 10),
+                                                                Icon(Icons.menu_book, size: 14, color: isDark ? Colors.white : Colors.black),
+                                                                const SizedBox(width: 4),
+                                                                Text('${b.reads}',
+                                                                    style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                                                const SizedBox(width: 10),
+                                                                Icon(Icons.play_arrow, size: 14, color: isDark ? Colors.white : Colors.black),
+                                                                const SizedBox(width: 4),
+                                                                Text('${b.plays}',
+                                                                    style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999))),
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Padding(
+                                                      padding: const EdgeInsets.only(right: 12),
+                                                      child: Column(
+                                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                                        children: [
+                                                          IconButton(
+                                                            onPressed: () {
+                                                              setState(() {
+                                                                b.meFavorite = !b.meFavorite;
+                                                                b.favorites = b.meFavorite
+                                                                    ? b.favorites + 1
+                                                                    : (b.favorites - 1).clamp(0, 1 << 30);
+                                                              });
+                                                            },
+                                                            icon: Icon(
+                                                              b.meFavorite ? Icons.star : Icons.star_border,
+                                                              size: 22,
+                                                              color: const Color(0xFFBFAE01),
+                                                            ),
+                                                          ),
+                                                          GestureDetector(
+                                                            onTap: () => _openInRightPanel(b),
+                                                            child: Container(
+                                                              width: 32,
+                                                              height: 32,
+                                                              decoration: const BoxDecoration(
+                                                                color: Color(0xFFBFAE01),
+                                                                shape: BoxShape.circle,
+                                                              ),
+                                                              child: const Icon(
+                                                                Icons.play_arrow,
+                                                                color: Colors.black,
+                                                                size: 18,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Right panel: nested Navigator to show details/read/play
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              color: isDark ? Colors.black : Colors.white,
+                              child: Navigator(
+                                key: _rightNavKey,
+                                onGenerateInitialRoutes: (_, __) {
+                                  return [
+                                    MaterialPageRoute(
+                                      builder: (_) => const _BooksPlaceholder(),
+                                    ),
+                                  ];
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+    // =========================
+  // Mobile (unchanged)
+  // =========================
+  Widget _buildMobile(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
@@ -223,7 +589,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(25)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0),
+                color: Colors.black.withOpacity(0),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -264,7 +630,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    onPressed: _openCreate,
+                    onPressed: _openCreateMobile,
                     icon: Icon(Icons.add, color: isDark ? Colors.white : const Color(0xFF666666)),
                   ),
                 ],
@@ -314,7 +680,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                         boxShadow: [
                           if (!isDark)
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0),
+                              color: Colors.black.withOpacity(0),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -435,22 +801,21 @@ class _BooksHomePageState extends State<BooksHomePage> {
                                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                   children: [
                                     IconButton(
-                                      onPressed: () => _toggleFavorite(b),
-                                      icon: Icon(
-                                        b.meFavorite ? Icons.star : Icons.star_border,
-                                        size: 22,
-                                        color: const Color(0xFFBFAE01),
-                                      ),
+                                      onPressed: () {
+                                        // toggled locally in list item
+                                        setState(() {
+                                          b.meFavorite = !b.meFavorite;
+                                          b.favorites =
+                                              b.meFavorite ? b.favorites + 1 : (b.favorites - 1).clamp(0, 1 << 30);
+                                        });
+                                      },
+                                      icon: const Icon(Icons.star_border, size: 22, color: Color(0xFFBFAE01)),
                                     ),
                                     GestureDetector(
-                                      onTap: () => b.audioUrl != null && b.audioUrl!.isNotEmpty
-                                          ? Navigator.push(
-                                              ctx,
-                                              MaterialPageRoute(
-                                                builder: (ctx) => BookDetailsPage(book: b),
-                                              ),
-                                            )
-                                          : null,
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (ctx) => BookDetailsPage(book: b)),
+                                      ),
                                       child: Container(
                                         width: 32,
                                         height: 32,
@@ -523,6 +888,27 @@ class _LanguageFilter extends StatelessWidget {
               const SizedBox(width: 4),
               const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFFBFAE01)),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BooksPlaceholder extends StatelessWidget {
+  const _BooksPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      backgroundColor: isDark ? Colors.black : Colors.white,
+      body: Center(
+        child: Text(
+          'Select a book from the left list',
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            color: isDark ? Colors.white70 : const Color(0xFF666666),
           ),
         ),
       ),

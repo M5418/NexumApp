@@ -1,5 +1,7 @@
+// File: lib/widgets/report_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/reports_api.dart';
 
 enum ReportReason {
   poorEngagement,
@@ -22,14 +24,19 @@ class ReportOption {
 }
 
 class ReportBottomSheet extends StatefulWidget {
-  final String postId;
-  final String authorName;
-  final Function(String postId, ReportReason reason, String comment)? onReport;
+  // Generic target
+  final String targetType; // 'post' | 'story' | 'user'
+  final String targetId;
+  final String authorName; // display name (post/story owner or user full name)
+  final String? authorUsername; // like '@username'
+  final Function(String targetId, String cause, String comment)? onReport;
 
   const ReportBottomSheet({
     super.key,
-    required this.postId,
+    required this.targetType,
+    required this.targetId,
     required this.authorName,
+    this.authorUsername,
     this.onReport,
   });
 
@@ -38,17 +45,21 @@ class ReportBottomSheet extends StatefulWidget {
 
   static void show(
     BuildContext context, {
-    required String postId,
+    required String targetType, // 'post' | 'story' | 'user'
+    required String targetId,
     required String authorName,
-    Function(String postId, ReportReason reason, String comment)? onReport,
+    String? authorUsername,
+    Function(String targetId, String cause, String comment)? onReport,
   }) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => ReportBottomSheet(
-        postId: postId,
+        targetType: targetType,
+        targetId: targetId,
         authorName: authorName,
+        authorUsername: authorUsername,
         onReport: onReport,
       ),
     );
@@ -59,19 +70,19 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
   ReportReason? _selectedReason;
   bool _isSubmitting = false;
   final TextEditingController _commentController = TextEditingController();
+  final ReportsApi _api = ReportsApi();
 
   final List<ReportOption> _reportOptions = [
     ReportOption(
       reason: ReportReason.poorEngagement,
       title: 'Poor Engagement',
       description:
-          'This post doesn\'t engage their audience or lacks meaningful content.',
+          'This content does not engage the audience or lacks meaningful value.',
     ),
     ReportOption(
       reason: ReportReason.irrelevantContent,
       title: 'Irrelevant Content',
-      description:
-          'Content doesn\'t match the community or platform guidelines.',
+      description: 'Content does not match the community or platform guidelines.',
     ),
     ReportOption(
       reason: ReportReason.overposting,
@@ -82,7 +93,7 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
       reason: ReportReason.harmfulContent,
       title: 'Harmful Content',
       description:
-          'Contains false or harmful information that violates our policies.',
+          'Contains false/harmful information or violates our policies.',
     ),
     ReportOption(
       reason: ReportReason.privacyViolation,
@@ -97,40 +108,69 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
     super.dispose();
   }
 
-  void _selectReason(ReportReason reason) {
-    setState(() {
-      _selectedReason = reason;
-    });
+  String _causeCode(ReportReason r) {
+    switch (r) {
+      case ReportReason.poorEngagement:
+        return 'poor_engagement';
+      case ReportReason.irrelevantContent:
+        return 'irrelevant_content';
+      case ReportReason.overposting:
+        return 'overposting';
+      case ReportReason.harmfulContent:
+        return 'harmful_content';
+      case ReportReason.privacyViolation:
+        return 'privacy_violation';
+    }
+  }
+
+  String _titleForTarget() {
+    switch (widget.targetType) {
+      case 'user':
+        return "What's wrong with this user?";
+      case 'story':
+        return "What's wrong with this story?";
+      case 'post':
+      default:
+        return "What's wrong with this post?";
+    }
   }
 
   Future<void> _submitReport() async {
     if (_selectedReason == null) return;
 
-    setState(() {
-      _isSubmitting = true;
-    });
+    setState(() => _isSubmitting = true);
 
-    // Simulate processing time
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final cause = _causeCode(_selectedReason!);
+      await _api.create(
+        targetType: widget.targetType,
+        targetId: widget.targetId,
+        cause: cause,
+        comment: _commentController.text,
+      );
 
-    widget.onReport?.call(
-      widget.postId,
-      _selectedReason!,
-      _commentController.text,
-    );
+      if (!mounted) return;
 
-    if (mounted) {
       Navigator.pop(context);
-
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Report submitted successfully. We\'ll review this content.',
+            'Report submitted. Our team will review it.',
             style: GoogleFonts.inter(),
           ),
           backgroundColor: const Color(0xFF4CAF50),
           duration: const Duration(seconds: 3),
+        ),
+      );
+
+      widget.onReport?.call(widget.targetId, cause, _commentController.text);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit report', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
         ),
       );
     }
@@ -163,11 +203,32 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // Target info
+          Row(
+            children: [
+              Icon(Icons.flag_outlined, color: Colors.red.shade400),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Reporting ${widget.authorName}${(widget.authorUsername != null && widget.authorUsername!.isNotEmpty) ? ' (${widget.authorUsername})' : ''}',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
 
           // Title
           Text(
-            'What\'s wrong with this post?',
+            _titleForTarget(),
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -175,14 +236,12 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Report options
-          ...(_reportOptions.map(
-            (option) => _buildReportOption(option, isDark),
-          )),
+          ...(_reportOptions.map((option) => _buildReportOption(option, isDark))),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Comment text field
           Container(
@@ -207,19 +266,16 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Submit button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _selectedReason != null && !_isSubmitting
-                  ? _submitReport
-                  : null,
+              onPressed: _selectedReason != null && !_isSubmitting ? _submitReport : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _selectedReason != null
-                    ? Colors.red
-                    : const Color(0xFFE0E0E0),
+                backgroundColor:
+                    _selectedReason != null ? Colors.red : const Color(0xFFE0E0E0),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -227,7 +283,7 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
                 elevation: 0,
               ),
               child: _isSubmitting
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
@@ -260,7 +316,7 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: () => _selectReason(option.reason),
+        onTap: () => setState(() => _selectedReason = option.reason),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -289,6 +345,8 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
                             ? Colors.red
                             : (isDark ? Colors.white : Colors.black),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -297,6 +355,8 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
                         fontSize: 14,
                         color: const Color(0xFF666666),
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

@@ -14,8 +14,10 @@ import 'core/conversations_api.dart';
 import 'core/api_client.dart';
 import 'core/profile_api.dart';
 import 'podcasts/podcasts_api.dart';
-import 'chat_page.dart';
 import 'models/message.dart' hide MediaType;
+import 'widgets/report_bottom_sheet.dart';
+import 'chat_page.dart';
+
 
 class OtherUserProfilePage extends StatefulWidget {
   final String userId;
@@ -267,7 +269,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       }
     } else {
       // Fallbacks for alternate schemas
-      List<String> _parseImageUrls(dynamic v) {
+      List<String> parseImageUrls(dynamic v) {
         if (v == null) return [];
         if (v is List) return v.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
         if (v is String && v.isNotEmpty) {
@@ -283,7 +285,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
 
       final csVideo = (contentSource['video_url'] ?? '').toString();
       final csImageUrl = (contentSource['image_url'] ?? '').toString();
-      final csImageUrls = _parseImageUrls(contentSource['image_urls']);
+      final csImageUrls = parseImageUrls(contentSource['image_urls']);
 
       if (csVideo.isNotEmpty) {
         mediaType = MediaType.video;
@@ -1218,7 +1220,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
               ),
               onTap: () {
                 Navigator.pop(context);
-                // Add report functionality here
+                ReportBottomSheet.show(
+                  context,
+                  targetType: 'user',
+                  targetId: widget.userId,
+                  authorName: widget.userName,
+                );
               },
             ),
             ListTile(

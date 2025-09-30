@@ -148,7 +148,11 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isWide = MediaQuery.of(context).size.width >= 1000;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+
+    // Desktop: limit cover width to 250px
+    final coverMaxWidth = isWide ? 250.0 : double.infinity;
 
     final playing = _player.playerState.playing;
     final totalSeconds = (_duration.inSeconds <= 0 ? 1 : _duration.inSeconds).toDouble();
@@ -159,7 +163,10 @@ class _PlayerPageState extends State<PlayerPage> {
         backgroundColor: isDark ? Colors.black : Colors.white,
         elevation: 0,
         centerTitle: false,
-        title: Text('Now Playing', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black)),
+        title: Text(
+          'Now Playing',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
+        ),
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
       ),
       body: _loading
@@ -170,27 +177,32 @@ class _PlayerPageState extends State<PlayerPage> {
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      const SizedBox(height: 40),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: (widget.podcast.coverUrl ?? '').isNotEmpty
-                              ? Image.network(
-                                  widget.podcast.coverUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                                    child: const Center(child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 64)),
-                                  ),
-                                )
-                              : Container(
-                                  color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                                  child: const Center(child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 64)),
-                                ),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: coverMaxWidth),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: AspectRatio(
+                              aspectRatio: 1,
+                              child: (widget.podcast.coverUrl ?? '').isNotEmpty
+                                  ? Image.network(
+                                      widget.podcast.coverUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                        child: const Center(child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 64)),
+                                      ),
+                                    )
+                                  : Container(
+                                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                      child: const Center(child: Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 64)),
+                                    ),
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
                       Text(
                         widget.podcast.title,
                         textAlign: TextAlign.center,
@@ -202,7 +214,7 @@ class _PlayerPageState extends State<PlayerPage> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(fontSize: 16, color: const Color(0xFF666666)),
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 32),
 
                       // Progress bar
                       Column(
@@ -212,7 +224,7 @@ class _PlayerPageState extends State<PlayerPage> {
                               activeTrackColor: const Color(0xFFBFAE01),
                               inactiveTrackColor: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
                               thumbColor: const Color(0xFFBFAE01),
-                              overlayColor: const Color(0xFFBFAE01).withValues(alpha: 51),
+                              overlayColor: const Color(0xFFBFAE01).withOpacity(0.2),
                               trackHeight: 4,
                               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                             ),
@@ -235,7 +247,7 @@ class _PlayerPageState extends State<PlayerPage> {
                         ],
                       ),
 
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 32),
 
                       // Controls
                       Row(
@@ -252,7 +264,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                 boxShadow: [
                                   if (!isDark)
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 33),
+                                      color: Colors.black.withOpacity(0.13),
                                       blurRadius: 8,
                                       offset: const Offset(0, 4),
                                     ),

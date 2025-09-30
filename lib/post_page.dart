@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
@@ -77,6 +78,16 @@ class _PostPageState extends State<PostPage> {
         await _loadComments();
       }
     }
+  }
+
+  bool _isDesktopLayout(BuildContext context) {
+    if (kIsWeb) {
+      return MediaQuery.of(context).size.width >= 1000;
+    }
+    final p = Theme.of(context).platform;
+    return p == TargetPlatform.windows ||
+        p == TargetPlatform.macOS ||
+        p == TargetPlatform.linux;
   }
 
   Future<void> _loadCurrentUserId() async {
@@ -498,6 +509,64 @@ class _PostPageState extends State<PostPage> {
     );
   }
 
+  Future<void> _replyToCommentDesktop(String commentId) async {
+    if (_post == null) return;
+    final controller = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final reply = await showDialog<String>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+          title: Text('Reply', style: GoogleFonts.inter()),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 4,
+            style: GoogleFonts.inter(),
+            decoration: InputDecoration(
+              hintText: 'Write your reply...',
+              hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel', style: GoogleFonts.inter()),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: Text('Send', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (reply == null || reply.isEmpty) return;
+    try {
+      await PostsApi().addComment(_post!.id, content: reply, parentCommentId: commentId);
+      await _loadComments();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Reply posted!', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _submitComment() async {
     if (_post == null) return;
     final text = _commentController.text.trim();
@@ -552,40 +621,32 @@ class _PostPageState extends State<PostPage> {
       );
     }
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor =
         isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
-    final surfaceColor = isDark ? Colors.black : Colors.white;
+    final desktop = _isDesktopLayout(context);
 
     return Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
         child: Column(
           children: [
-            // Custom Header
+            // Header
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  // Back button
+                  // Back
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: surfaceColor,
+                        color: isDark ? Colors.black : Colors.white,
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0),
-                            blurRadius: 1,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
                       child: Icon(
                         Icons.arrow_back,
@@ -609,22 +670,15 @@ class _PostPageState extends State<PostPage> {
                     ),
                   ),
 
-                  // More button
+                  // More
                   GestureDetector(
                     onTap: _showPostOptions,
                     child: Container(
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: surfaceColor,
+                        color: isDark ? Colors.black : Colors.white,
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0),
-                            blurRadius: 1,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
                       child: Icon(
                         Icons.more_horiz,
@@ -637,386 +691,531 @@ class _PostPageState extends State<PostPage> {
               ),
             ),
 
-            // Content
+            // Body
             Expanded(
               child: _loadingPost && _post == null
                   ? const Center(child: CircularProgressIndicator())
                   : (_post == null
                       ? const SizedBox.shrink()
-                      : SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          child: Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: surfaceColor,
-                              borderRadius: BorderRadius.circular(25),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0),
-                                  blurRadius: 1,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Author info
-                                  Row(
-                                    children: [
-                                      Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          image: DecorationImage(
-                                            image: NetworkImage(_post!.authorAvatarUrl),
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _post!.authorName,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                                color: isDark ? Colors.white : Colors.black,
-                                              ),
-                                            ),
-                                            Text(
-                                              _getTimeAgo(_post!.createdAt),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 13,
-                                                color: const Color(0xFF666666),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(height: 16),
-
-                                  // Post text
-                                  if (_post!.text.isNotEmpty) ...[
-                                    Text(
-                                      _showTranslation
-                                          ? 'Translated: ${_post!.text}'
-                                          : _post!.text,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 16,
-                                        color: isDark ? Colors.white : Colors.black,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    GestureDetector(
-                                      onTap: _toggleTranslation,
-                                      child: Text(
-                                        _showTranslation ? 'Show Original' : 'Translate',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 14,
-                                          color: const Color(0xFFBFAE01),
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 20),
-                                  ],
-
-                                  // Media content
-                                  if (_post!.mediaType != MediaType.none) ...[
-                                    if ((_post!.mediaType == MediaType.image ||
-                                            _post!.mediaType == MediaType.images) &&
-                                        _post!.imageUrls.isNotEmpty)
-                                      MediaCarousel(
-                                        imageUrls: _post!.imageUrls,
-                                        height: 650,
-                                      ),
-                                    if (_post!.mediaType == MediaType.video &&
-                                        _post!.videoUrl != null)
-                                      AutoPlayVideo(
-                                        videoUrl: _post!.videoUrl!,
-                                        width: double.infinity,
-                                        height: 300,
-                                        borderRadius: BorderRadius.circular(25),
-                                      ),
-                                    const SizedBox(height: 16),
-                                  ],
-
-                                  // Engagement bar
-                                  Row(
-                                    children: [
-                                      // Like button
-                                      GestureDetector(
-                                        onTap: _toggleLike,
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              _isLiked
-                                                  ? Icons.thumb_up_alt
-                                                  : Icons.thumb_up_alt_outlined,
-                                              size: 20,
-                                              color: _isLiked
-                                                  ? const Color(0xFFBFAE01)
-                                                  : const Color(0xFF666666),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _post!.counts.likes.toString(),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 14,
-                                                color: const Color(0xFF666666),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 20),
-
-                                      // Comment count (tap to open full sheet)
-                                      GestureDetector(
-                                        onTap: _openCommentsSheet,
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.chat_bubble_outline,
-                                              size: 20,
-                                              color: Color(0xFF666666),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _post!.counts.comments.toString(),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 14,
-                                                color: const Color(0xFF666666),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 20),
-
-                                      // Share button
-                                      GestureDetector(
-                                        onTap: _showShareOptions,
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.share_outlined,
-                                              size: 20,
-                                              color: Color(0xFF666666),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _post!.counts.shares.toString(),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 14,
-                                                color: const Color(0xFF666666),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 20),
-
-                                      // Repost static (UI only)
-                                      Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.repeat,
-                                            size: 20,
-                                            color: Color(0xFF666666),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            _post!.counts.reposts.toString(),
-                                            style: GoogleFonts.inter(
-                                              fontSize: 14,
-                                              color: const Color(0xFF666666),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-
-                                      const Spacer(),
-
-                                      // Bookmark button
-                                      GestureDetector(
-                                        onTap: _toggleBookmark,
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              _isBookmarked
-                                                  ? Icons.bookmark
-                                                  : Icons.bookmark_border,
-                                              size: 20,
-                                              color: _isBookmarked
-                                                  ? const Color(0xFFBFAE01)
-                                                  : const Color(0xFF666666),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _post!.counts.bookmarks.toString(),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 14,
-                                                color: const Color(0xFF666666),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(height: 12),
-
-                                  // Post date
-                                  Text(
-                                    _getTimeAgo(_post!.createdAt),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: const Color(0xFF666666),
-                                    ),
-                                  ),
-
-                                  const SizedBox(height: 12),
-
-                                  // Separator
-                                  Container(
-                                    height: 0.2,
-                                    color: const Color(0xFF666666).withValues(alpha: 51),
-                                  ),
-
-                                  const SizedBox(height: 20),
-
-                                  // Comments section (preview)
-                                  if (_loadingComments)
-                                    const Center(child: CircularProgressIndicator())
-                                  else if (_comments.isNotEmpty) ...[
-                                    ..._comments.map(
-                                      (comment) => Padding(
-                                        padding: const EdgeInsets.only(bottom: 16),
-                                        child: CommentThread(
-                                          comment: comment,
-                                          isFirstReply: false,
-                                          onReply: (commentId) {
-                                            // Open full comments to reply with proper UI
-                                            _openCommentsSheet();
-                                          },
-                                          onLike: (commentId) {
-                                            // Inline like for comments handled in sheet; keep UI here
-                                          },
-                                        ),
-                                      ),
-                                    ),
-
-                                    // View all comments button
-                                    Center(
-                                      child: GestureDetector(
-                                        onTap: _openCommentsSheet,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 20,
-                                            vertical: 10,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFF5F5F5),
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            'View all comments',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: const Color(0xFF666666),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ),
-                        )),
-            ),
-
-            // Comment input card
-            Container(
-              margin: const EdgeInsets.all(10),
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                color: surfaceColor,
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _commentController,
-                      focusNode: _commentFocusNode,
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        hintText: 'Write a comment...',
-                        hintStyle: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: const Color(0xFF666666),
-                        ),
-                      ),
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: _submitComment,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        color: Colors.black,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.send,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                      : (desktop ? _buildDesktopBody(isDark) : _buildMobileBody(isDark))),
             ),
           ],
         ),
       ),
-      bottomNavigationBar: AnimatedNavbar(
-        selectedIndex: 0,
-        onTabChange: (index) {
-          Navigator.pop(context);
-        },
+      bottomNavigationBar: desktop
+          ? null
+          : AnimatedNavbar(
+              selectedIndex: 0,
+              onTabChange: (index) => Navigator.pop(context),
+            ),
+    );
+  }
+
+  // ====== Layouts ======
+
+  Widget _buildMobileBody(bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      child: Column(
+        children: [
+          _buildPostCard(isDark, showPreviewComments: true),
+          // Comment input card
+          Container(
+            margin: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black : Colors.white,
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    focusNode: _commentFocusNode,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Write a comment...',
+                      hintStyle: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: const Color(0xFF666666),
+                      ),
+                    ),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: _submitComment,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: Colors.black,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.send,
+                      size: 20,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopBody(bool isDark) {
+    final surfaceColor = isDark ? Colors.black : Colors.white;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left: post
+          Expanded(
+            flex: 5,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: _buildPostCard(isDark, showPreviewComments: false),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Right: comments
+          Expanded(
+            flex: 4,
+            child: Container(
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: Column(
+                children: [
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
+                      children: [
+                        Text('Comments',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : Colors.black,
+                            )),
+                        const Spacer(),
+                        const Icon(Icons.chat_bubble_outline,
+                            size: 18, color: Color(0xFF666666)),
+                        const SizedBox(width: 6),
+                        Text(
+                          (_post?.counts.comments ?? 0).toString(),
+                          style: GoogleFonts.inter(color: const Color(0xFF666666)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  // List
+                  Expanded(
+                    child: _loadingComments
+                        ? const Center(child: CircularProgressIndicator())
+                        : (_comments.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text(
+                                    'No comments yet',
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFF666666),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.all(16),
+                                itemCount: _comments.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 12),
+                                itemBuilder: (_, i) {
+                                  final c = _comments[i];
+                                  return CommentThread(
+                                    comment: c,
+                                    onReply: (id) => _replyToCommentDesktop(id),
+                                    onLike: (_) {}, // UI-only like in thread
+                                  );
+                                },
+                              )),
+                  ),
+
+                  // Composer
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 44,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1A1A1A)
+                                  : const Color(0xFFF7F7F7),
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Center(
+                              child: TextField(
+                                controller: _commentController,
+                                focusNode: _commentFocusNode,
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  hintText: 'Write a comment...',
+                                  hintStyle: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: const Color(0xFF666666),
+                                  ),
+                                ),
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                                onSubmitted: (_) => _submitComment(),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        GestureDetector(
+                          onTap: _submitComment,
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white : Colors.black,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.send,
+                              size: 20,
+                              color: isDark ? Colors.black : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ====== Post card (shared) ======
+
+  Widget _buildPostCard(bool isDark, {required bool showPreviewComments}) {
+    final surfaceColor = isDark ? Colors.black : Colors.white;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(25),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Author info
+            Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(
+                      image: NetworkImage(_post!.authorAvatarUrl),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _post!.authorName,
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      Text(
+                        _getTimeAgo(_post!.createdAt),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: const Color(0xFF666666),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Post text
+            if (_post!.text.isNotEmpty) ...[
+              Text(
+                _showTranslation ? 'Translated: ${_post!.text}' : _post!.text,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: _toggleTranslation,
+                child: Text(
+                  _showTranslation ? 'Show Original' : 'Translate',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: const Color(0xFFBFAE01),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Media content
+            if (_post!.mediaType != MediaType.none) ...[
+              if ((_post!.mediaType == MediaType.image ||
+                      _post!.mediaType == MediaType.images) &&
+                  _post!.imageUrls.isNotEmpty)
+                MediaCarousel(
+                  imageUrls: _post!.imageUrls,
+                  height: 650,
+                ),
+              if (_post!.mediaType == MediaType.video &&
+                  _post!.videoUrl != null)
+                AutoPlayVideo(
+                  videoUrl: _post!.videoUrl!,
+                  width: double.infinity,
+                  height: 300,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+              const SizedBox(height: 16),
+            ],
+
+            // Engagement bar
+            Row(
+              children: [
+                // Like button
+                GestureDetector(
+                  onTap: _toggleLike,
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isLiked
+                            ? Icons.thumb_up_alt
+                            : Icons.thumb_up_alt_outlined,
+                        size: 20,
+                        color: _isLiked
+                            ? const Color(0xFFBFAE01)
+                            : const Color(0xFF666666),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _post!.counts.likes.toString(),
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: const Color(0xFF666666),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 20),
+
+                // Comment count (mobile opens sheet)
+                GestureDetector(
+                  onTap: _openCommentsSheet,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.chat_bubble_outline,
+                        size: 20,
+                        color: Color(0xFF666666),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _post!.counts.comments.toString(),
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: const Color(0xFF666666),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 20),
+
+                // Share button
+                GestureDetector(
+                  onTap: _showShareOptions,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.share_outlined,
+                        size: 20,
+                        color: Color(0xFF666666),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _post!.counts.shares.toString(),
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: const Color(0xFF666666),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 20),
+
+                // Repost static (UI only)
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.repeat,
+                      size: 20,
+                      color: Color(0xFF666666),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _post!.counts.reposts.toString(),
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: const Color(0xFF666666),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const Spacer(),
+
+                // Bookmark button
+                GestureDetector(
+                  onTap: _toggleBookmark,
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isBookmarked
+                            ? Icons.bookmark
+                            : Icons.bookmark_border,
+                        size: 20,
+                        color: _isBookmarked
+                            ? const Color(0xFFBFAE01)
+                            : const Color(0xFF666666),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _post!.counts.bookmarks.toString(),
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: const Color(0xFF666666),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Post date
+            Text(
+              _getTimeAgo(_post!.createdAt),
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: const Color(0xFF666666),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Separator
+            Container(
+              height: 0.2,
+              color: const Color(0xFF666666).withOpacity(0.2),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Comments preview (mobile only)
+            if (showPreviewComments) ...[
+              if (_loadingComments)
+                const Center(child: CircularProgressIndicator())
+              else if (_comments.isNotEmpty) ...[
+                ..._comments.map(
+                  (comment) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: CommentThread(
+                      comment: comment,
+                      isFirstReply: false,
+                      onReply: (commentId) {
+                        _openCommentsSheet(); // full thread + reply UI
+                      },
+                      onLike: (_) {},
+                    ),
+                  ),
+                ),
+                Center(
+                  child: GestureDetector(
+                    onTap: _openCommentsSheet,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'View all comments',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF666666),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
       ),
     );
   }

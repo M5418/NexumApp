@@ -45,9 +45,10 @@ class PostOptionsMenu extends StatelessWidget {
                 Navigator.pop(context);
                 ReportBottomSheet.show(
                   context,
-                  postId: postId,
+                  targetType: 'post',
+                  targetId: postId,
                   authorName: authorName,
-                  onReport: (postId, reason, comment) {
+                  onReport: (targetId, cause, comment) {
                     onReport?.call();
                   },
                 );

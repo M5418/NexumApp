@@ -19,6 +19,16 @@ import 'core/api_client.dart';
 import 'podcasts/podcasts_api.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'core/kyc_api.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'core/notifications_api.dart';
+import 'widgets/badge_icon.dart';
+import 'notification_page.dart';
+import 'conversations_page.dart';
+import 'connections_page.dart';
+
+
+
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -53,10 +63,15 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _loadingPodcasts = true;
   String? _errorPodcasts;
 
+  // Notifications badge
+  int _unreadNotifications = 0;
+
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadUnreadNotifications();
+
   }
 
   @override
@@ -83,6 +98,16 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _loadingProfile = false;
       });
+    }
+  }
+    Future<void> _loadUnreadNotifications() async {
+    try {
+      final c = await NotificationsApi().unreadCount();
+      if (!mounted) return;
+      setState(() => _unreadNotifications = c);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _unreadNotifications = 0);
     }
   }
 
@@ -240,7 +265,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } else {
       // Fallbacks for alternate schemas
-      List<String> _parseImageUrls(dynamic v) {
+      List<String> parseImageUrls(dynamic v) {
         if (v == null) return [];
         if (v is List) return v.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
         if (v is String && v.isNotEmpty) {
@@ -256,7 +281,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       final csVideo = (contentSource['video_url'] ?? '').toString();
       final csImageUrl = (contentSource['image_url'] ?? '').toString();
-      final csImageUrls = _parseImageUrls(contentSource['image_urls']);
+      final csImageUrls = parseImageUrls(contentSource['image_urls']);
 
       if (csVideo.isNotEmpty) {
         mediaType = MediaType.video;
@@ -528,6 +553,77 @@ class _ProfilePageState extends State<ProfilePage> {
       });
     }
   }
+  bool _isWideLayout(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return kIsWeb && size.width >= 1280 && size.height >= 800;
+  }
+  
+    void _openPremium(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final desktop = _isWideLayout(context);
+
+    if (!desktop) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PremiumSubscriptionPage()),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900, maxHeight: 700),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF000000) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Premium',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            tooltip: 'Close',
+                            icon: Icon(Icons.close, color: isDark ? Colors.white70 : Colors.black87),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    // Body
+                    const Expanded(
+                      child: PremiumSubscriptionView(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -551,9 +647,7 @@ class _ProfilePageState extends State<ProfilePage> {
           final String username = (p['username'] ?? '').toString().trim();
           final String atUsername = username.isNotEmpty ? '@$username' : '';
           final String? bioText = p['bio'] as String?;
-          final String coverUrl =
-              (p['cover_photo_url'] as String?) ??
-                  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop';
+          final String? coverUrl = (p['cover_photo_url'] as String?);
           final String? profileUrl = p['profile_photo_url'] as String?;
           final List<Map<String, dynamic>> experiences = _parseListOfMap(
             p['professional_experiences'],
@@ -564,6 +658,9 @@ class _ProfilePageState extends State<ProfilePage> {
           final List<String> interests = _parseStringList(
             p['interest_domains'],
           );
+                    if (_isWideLayout(context)) {
+            return _buildDesktopProfile(context, isDark);
+          }
           return Scaffold(
             key: scaffoldKey,
             backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
@@ -578,30 +675,47 @@ class _ProfilePageState extends State<ProfilePage> {
                           height: 200,
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            image: DecorationImage(
-                              image: NetworkImage(coverUrl),
-                              fit: BoxFit.cover,
-                            ),
+                            color: isDark ? const Color(0xFF1A1A1A) : Colors.grey[200],
+                            image: (coverUrl != null && coverUrl.isNotEmpty)
+                                ? DecorationImage(
+                                    image: NetworkImage(coverUrl),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
                           ),
-                          child: SafeArea(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  InkWell(
-                                    onTap: () => scaffoldKey.currentState?.openEndDrawer(),
-                                    child: Icon(
-                                      Icons.more_horiz,
-                                      color: isDark ? Colors.white70 : Colors.white,
-                                    ),
+                          child: Stack(
+                            children: [
+                              SafeArea(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      InkWell(
+                                        onTap: () => scaffoldKey.currentState?.openEndDrawer(),
+                                        child: Icon(
+                                          Icons.more_horiz,
+                                          color: isDark ? Colors.white70 : Colors.black87,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
+                              if (coverUrl == null || coverUrl.isEmpty)
+                                Center(
+                                  child: Text(
+                                    'Add cover image',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: isDark ? Colors.white70 : const Color(0xFF666666),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  )
+                                ),
+                            ],
                           ),
-                        ),
-                        // Main Profile Card
+                        ),                       // Main Profile Card
                         Container(
                           margin: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
@@ -726,95 +840,156 @@ class _ProfilePageState extends State<ProfilePage> {
                                         children: [
                                           Expanded(
                                             child: ElevatedButton(
-                                              onPressed: () async {
-                                                // Map backend JSON to Edit page item types
-                                                final expItems = experiences
-                                                    .map(
-                                                      (e) => ExperienceItem(
-                                                        title: (e['title'] ?? '').toString(),
-                                                        subtitle: (e['subtitle'] as String?)?.toString(),
-                                                      ),
-                                                    )
-                                                    .toList();
-                                                final trainItems = trainings
-                                                    .map(
-                                                      (t) => TrainingItem(
-                                                        title: (t['title'] ?? '').toString(),
-                                                        subtitle: (t['subtitle'] as String?)?.toString(),
-                                                      ),
-                                                    )
-                                                    .toList();
-
-                                                final result = await Navigator.push<ProfileEditResult>(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) => EditProfilPage(
-                                                      fullName: fullName,
-                                                      username: (p['username'] ?? '').toString(),
-                                                      bio: bioText ?? '',
-                                                      profilePhotoUrl: profileUrl,
-                                                      coverPhotoUrl: coverUrl,
-                                                      experiences: expItems,
-                                                      trainings: trainItems,
-                                                      interests: interests,
+                                            onPressed: () async {
+                                              // Map backend JSON to Edit page item types
+                                              final expItems = experiences
+                                                  .map(
+                                                    (e) => ExperienceItem(
+                                                      title: (e['title'] ?? '').toString(),
+                                                      subtitle: (e['subtitle'] as String?)?.toString(),
                                                     ),
-                                                  ),
+                                                  )
+                                                  .toList();
+                                              final trainItems = trainings
+                                                  .map(
+                                                    (t) => TrainingItem(
+                                                      title: (t['title'] ?? '').toString(),
+                                                      subtitle: (t['subtitle'] as String?)?.toString(),
+                                                    ),
+                                                  )
+                                                  .toList();
+
+                                              // KYC gating for Full Name
+                                              bool canEditFullName = true;
+                                              try {
+                                                final kycRes = await KycApi().getMine();
+                                                final kycData = Map<String, dynamic>.from(kycRes['data'] ?? {});
+                                                if (kycData.isEmpty) {
+                                                  canEditFullName = true;
+                                                } else {
+                                                  final status = (kycData['status'] ?? '').toString().toLowerCase();
+                                                  final isApproved = ((kycData['is_approved'] ?? 0) == 1) || status == 'approved';
+                                                  final isRejected = ((kycData['is_rejected'] ?? 0) == 1) || status == 'rejected';
+                                                  if (status == 'pending' || isApproved) {
+                                                    canEditFullName = false;
+                                                  } else if (isRejected) {
+                                                    canEditFullName = true;
+                                                  } else {
+                                                    canEditFullName = false;
+                                                  }
+                                                }
+                                              } catch (_) {
+                                                canEditFullName = true;
+                                              }
+
+                                                final page = EditProfilPage(
+                                                  fullName: fullName,
+                                                  canEditFullName: canEditFullName,
+                                                  username: (p['username'] ?? '').toString(),
+                                                  bio: bioText ?? '',
+                                                  profilePhotoUrl: profileUrl,
+                                                  coverPhotoUrl: coverUrl,
+                                                  experiences: expItems,
+                                                  trainings: trainItems,
+                                                  interests: interests,
                                                 );
 
-                                                if (result != null) {
-                                                  final api = ProfileApi();
+                                                ProfileEditResult? result;
+                                                if (_isWideLayout(context)) {
+                                                  result = await showDialog<ProfileEditResult>(
+                                                    context: context,
+                                                    barrierDismissible: true,
+                                                    builder: (_) {
+                                                      return Dialog(
+                                                        backgroundColor: Colors.transparent,
+                                                        insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+                                                        child: Center(
+                                                          child: ConstrainedBox(
+                                                            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+                                                            child: ClipRRect(
+                                                              borderRadius: BorderRadius.circular(20),
+                                                              child: Material(
+                                                                color: isDark ? const Color(0xFF000000) : Colors.white,
+                                                                child: page, // keeps header + back button intact
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  );
+                                                } else {
+                                                  result = await Navigator.push<ProfileEditResult>(
+                                                    context,
+                                                    MaterialPageRoute(builder: (_) => page),
+                                                  );
+                                                }
+                                              if (!mounted) return;
+                                              if (result != null) {
+                                                final api = ProfileApi();
 
-                                                  // 1) Photos: upload new or clear removed
-                                                  try {
-                                                    if (result.profileImagePath != null && result.profileImagePath!.isNotEmpty) {
-                                                      await api.uploadAndAttachProfilePhoto(File(result.profileImagePath!));
-                                                    } else if ((result.profileImageUrl == null || result.profileImageUrl!.isEmpty) && (p['profile_photo_url'] != null)) {
-                                                      await api.update({'profile_photo_url': null});
-                                                    }
-
-                                                    if (result.coverImagePath != null && result.coverImagePath!.isNotEmpty) {
-                                                      await api.uploadAndAttachCoverPhoto(File(result.coverImagePath!));
-                                                    } else if ((result.coverImageUrl == null || result.coverImageUrl!.isEmpty) && (p['cover_photo_url'] != null)) {
-                                                      await api.update({'cover_photo_url': null});
-                                                    }
-                                                  } catch (_) {}
-
-                                                  // 2) Profile fields: username, bio, experiences, trainings, interests
-                                                  final updates = <String, dynamic>{};
-
-                                                  final newUsername = result.username.trim();
-                                                  if (newUsername.isNotEmpty && newUsername != (p['username'] ?? '')) {
-                                                    updates['username'] = newUsername;
+                                                // 1) Photos: upload new or clear removed
+                                                try {
+                                                  if (result.profileImagePath != null && result.profileImagePath!.isNotEmpty) {
+                                                    await api.uploadAndAttachProfilePhoto(File(result.profileImagePath!));
+                                                  } else if ((result.profileImageUrl == null || result.profileImageUrl!.isEmpty) && (p['profile_photo_url'] != null)) {
+                                                    await api.update({'profile_photo_url': null});
                                                   }
-                                                  updates['bio'] = result.bio;
 
-                                                  // professional_experiences expects [{title}]
-                                                  updates['professional_experiences'] = result.experiences
-                                                      .map((e) => {
-                                                            'title': e.title,
-                                                          })
-                                                      .toList();
+                                                  if (result.coverImagePath != null && result.coverImagePath!.isNotEmpty) {
+                                                    await api.uploadAndAttachCoverPhoto(File(result.coverImagePath!));
+                                                  } else if ((result.coverImageUrl == null || result.coverImageUrl!.isEmpty) && (p['cover_photo_url'] != null)) {
+                                                    await api.update({'cover_photo_url': null});
+                                                  }
+                                                } catch (_) {}
 
-                                                  // trainings expects [{title, subtitle?}]
-                                                  updates['trainings'] = result.trainings
-                                                      .map((t) {
-                                                        final m = <String, dynamic>{'title': t.title};
-                                                        if ((t.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = t.subtitle;
-                                                        return m;
-                                                      })
-                                                      .toList();
+                                                // 2) Profile fields
+                                                final updates = <String, dynamic>{};
 
-                                                  updates['interest_domains'] = result.interests;
-
-                                                  try {
-                                                    await api.update(updates);
-                                                  } catch (_) {}
+                                                // Full name -> first_name / last_name
+                                                final newFullName = result.fullName.trim();
+                                                if (newFullName.isNotEmpty && newFullName != fullName.trim()) {
+                                                  final parts = newFullName.split(RegExp(r'\s+'));
+                                                  final firstName = parts.isNotEmpty ? parts.first : '';
+                                                  final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+                                                  if (firstName.isNotEmpty) updates['first_name'] = firstName;
+                                                  updates['last_name'] = lastName;
                                                 }
 
-                                                // Refresh profile data after possible updates
-                                                await _loadProfile();
-                                              },
-                                              style: ElevatedButton.styleFrom(
+                                                final newUsername = result.username.trim();
+                                                if (newUsername.isNotEmpty && newUsername != (p['username'] ?? '')) {
+                                                  updates['username'] = newUsername;
+                                                }
+                                                updates['bio'] = result.bio;
+
+                                                // professional_experiences expects [{title, subtitle?}]
+                                                updates['professional_experiences'] = result.experiences
+                                                    .map((e) {
+                                                      final m = <String, dynamic>{'title': e.title};
+                                                      if ((e.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = e.subtitle;
+                                                      return m;
+                                                    })
+                                                    .toList();
+
+                                                // trainings expects [{title, subtitle?}]
+                                                updates['trainings'] = result.trainings
+                                                    .map((t) {
+                                                      final m = <String, dynamic>{'title': t.title};
+                                                      if ((t.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = t.subtitle;
+                                                      return m;
+                                                    })
+                                                    .toList();
+
+                                                updates['interest_domains'] = result.interests;
+
+                                                try {
+                                                  await api.update(updates);
+                                                } catch (_) {}
+                                              }
+
+                                              // Refresh profile data after possible updates
+                                              await _loadProfile();
+                                            },                                             style: ElevatedButton.styleFrom(
                                                 backgroundColor: const Color(0xFFBFAE01),
                                                 foregroundColor: isDark ? Colors.black : Colors.black,
                                                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -836,12 +1011,37 @@ class _ProfilePageState extends State<ProfilePage> {
                                           Expanded(
                                             child: OutlinedButton(
                                               onPressed: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) => const MyConnectionsPage(),
-                                                  ),
-                                                );
+                                                if (_isWideLayout(context)) {
+                                                  showDialog(
+                                                    context: context,
+                                                    barrierDismissible: true,
+                                                    builder: (_) {
+                                                      return Dialog(
+                                                        backgroundColor: Colors.transparent,
+                                                        insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+                                                        child: Center(
+                                                          child: ConstrainedBox(
+                                                            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+                                                            child: ClipRRect(
+                                                              borderRadius: BorderRadius.circular(20),
+                                                              child: Material(
+                                                                color: isDark ? const Color(0xFF000000) : Colors.white,
+                                                                child: const MyConnectionsPage(),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  );
+                                                } else {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) => const MyConnectionsPage(),
+                                                    ),
+                                                  );
+                                                }
                                               },
                                               style: OutlinedButton.styleFrom(
                                                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -919,20 +1119,38 @@ class _ProfilePageState extends State<ProfilePage> {
                                           ),
                                         ),
                                       ),
-                                    if (experiences.isNotEmpty)
-                                      ...experiences.map(
-                                        (exp) => Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            (exp['title'] ?? '').toString(),
-                                            style: GoogleFonts.inter(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: isDark ? Colors.white70 : Colors.black87,
+                                 
+                                  if (experiences.isNotEmpty)
+                                    ...experiences.map(
+                                      (exp) => Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              (exp['title'] ?? '').toString(),
+                                              style: GoogleFonts.inter(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                                color: isDark ? Colors.white70 : Colors.black87,
+                                              ),
                                             ),
                                           ),
-                                        ),
+                                          if ((exp['subtitle'] ?? '').toString().trim().isNotEmpty)
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Text(
+                                                (exp['subtitle'] ?? '').toString(),
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14,
+                                                  color: isDark ? Colors.white70 : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ),
+                                          const SizedBox(height: 8),
+                                        ],
                                       ),
+                                    ),
                                     const SizedBox(height: 20),
                                   ],
                                 ),
@@ -1064,7 +1282,852 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
+    Widget _buildDesktopTopNav(BuildContext context, bool isDark) {
+    final barColor = isDark ? Colors.black : Colors.white;
 
+    return Material(
+      color: barColor,
+      elevation: isDark ? 0 : 2,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Row: burger | title | notifications
+              Row(
+                children: [
+                  const Icon(Icons.menu, color: Color(0xFF666666)),
+                  const Spacer(),
+                  Text(
+                    'NEXUM',
+                    style: GoogleFonts.inika(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  const Spacer(),
+                  BadgeIcon(
+                    icon: Icons.notifications_outlined,
+                    badgeCount: _unreadNotifications,
+                    iconColor: const Color(0xFF666666),
+                                        onTap: () async {
+                      if (_isWideLayout(context)) {
+                        await showDialog(
+                          context: context,
+                          barrierDismissible: true,
+                          barrierColor: Colors.black26,
+                          builder: (_) {
+                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                            final size = MediaQuery.of(context).size;
+                            final double width = 420;
+                            final double height = size.height * 0.8;
+
+                            return SafeArea(
+                              child: Align(
+                                alignment: Alignment.topRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 16, right: 16),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: SizedBox(
+                                      width: width,
+                                      height: height,
+                                      child: Material(
+                                        color: isDark ? const Color(0xFF000000) : Colors.white,
+                                        child: const NotificationPage(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      } else {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const NotificationPage()),
+                        );
+                      }
+                      if (!mounted) return;
+                      await _loadUnreadNotifications();
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Top nav row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _navButton(
+                    isDark,
+                    icon: Icons.home_outlined,
+                    label: 'Home',
+                    onTap: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                  _navButton(
+                    isDark,
+                    icon: Icons.people_outline,
+                    label: 'Connections',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ConnectionsPage()),
+                      );
+                    },
+                  ),
+                  _navButton(
+                    isDark,
+                    icon: Icons.chat_bubble_outline,
+                    label: 'Conversations',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ConversationsPage(
+                            isDarkMode: isDark,
+                            onThemeToggle: () {},
+                            initialTabIndex: 0,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  _navButton(
+                    isDark,
+                    icon: Icons.person_outline,
+                    label: 'My Profil',
+                    selected: true,
+                    onTap: () {},
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navButton(
+    bool isDark, {
+    required IconData icon,
+    required String label,
+    bool selected = false,
+    VoidCallback? onTap,
+  }) {
+    final color = selected ? const Color(0xFFBFAE01) : const Color(0xFF666666);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: TextButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18, color: color),
+        label: Text(
+          label,
+          style: GoogleFonts.inter(fontSize: 14, color: color, fontWeight: FontWeight.w600),
+        ),
+        style: TextButton.styleFrom(
+          foregroundColor: color,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        ),
+      ),
+    );
+  }
+    Widget _buildDesktopProfile(BuildContext context, bool isDark) {
+    if (_loadingProfile) {
+      return Scaffold(
+        key: scaffoldKey,
+        backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+        endDrawer: _buildDrawer(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final p = _profile ?? {};
+    final String fullName = (() {
+      final fn = (p['full_name'] ?? '').toString().trim();
+      if (fn.isNotEmpty) return fn;
+      final f = (p['first_name'] ?? '').toString().trim();
+      final l = (p['last_name'] ?? '').toString().trim();
+      if (f.isNotEmpty || l.isNotEmpty) return ('$f $l').trim();
+      return 'User';
+    })();
+    final String username = (p['username'] ?? '').toString().trim();
+    final String atUsername = username.isNotEmpty ? '@$username' : '';
+    final String? bioText = p['bio'] as String?;
+    final String? coverUrl = (p['cover_photo_url'] as String?);
+    final String? profileUrl = p['profile_photo_url'] as String?;
+    final List<Map<String, dynamic>> experiences = _parseListOfMap(p['professional_experiences']);
+    final List<Map<String, dynamic>> trainings = _parseListOfMap(p['trainings']);
+    final List<String> interests = _parseStringList(p['interest_domains']);
+
+    return Scaffold(
+      key: scaffoldKey,
+      backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+      endDrawer: _buildDrawer(),
+      body: Column(
+        children: [
+          _buildDesktopTopNav(context, isDark),
+          Expanded( 
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1280),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left column: Profile card + Pro experience + Trainings + Interest
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              // Cover
+                              Container(
+                                height: 200,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF1A1A1A) : Colors.grey[200],
+                                  image: (coverUrl != null && coverUrl.isNotEmpty)
+                                      ? DecorationImage(
+                                          image: NetworkImage(coverUrl),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                                child: Stack(
+                                  children: [
+                                    SafeArea(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            InkWell(
+                                              onTap: () => scaffoldKey.currentState?.openEndDrawer(),
+                                              child: Icon(
+                                                Icons.more_horiz,
+                                                color: isDark ? Colors.white70 : Colors.black87,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    if (coverUrl == null || coverUrl.isEmpty)
+                                      Center(
+                                        child: Text(
+                                          'Add cover image',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: isDark ? Colors.white70 : const Color(0xFF666666),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+
+                              // Main Profile Card
+                              Container(
+                                margin: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF000000) : Colors.white,
+                                  borderRadius: BorderRadius.circular(25),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isDark
+                                          ? Colors.black.withValues(alpha: 0)
+                                          : Colors.black.withValues(alpha: 10),
+                                      blurRadius: 25,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  children: [
+                                    // Profile Avatar and Stats
+                                    Padding(
+                                      padding: const EdgeInsets.all(20),
+                                      child: Column(
+                                        children: [
+                                          // Avatar positioned to overlap cover
+                                          Transform.translate(
+                                            offset: const Offset(0, -50),
+                                            child: Container(
+                                              width: 120,
+                                              height: 120,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
+                                                  width: 4,
+                                                ),
+                                              ),
+                                              child: CircleAvatar(
+                                                radius: 58,
+                                                backgroundImage: (profileUrl != null && profileUrl.isNotEmpty)
+                                                    ? NetworkImage(profileUrl)
+                                                    : null,
+                                                child: (profileUrl == null || profileUrl.isEmpty)
+                                                    ? Text(
+                                                        (fullName.isNotEmpty ? fullName.substring(0, 1) : '?')
+                                                            .toUpperCase(),
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 40,
+                                                          fontWeight: FontWeight.w700,
+                                                          color: isDark ? Colors.white : Colors.black,
+                                                        ),
+                                                      )
+                                                    : null,
+                                              ),
+                                            ),
+                                          ),
+
+                                          // Stats Row
+                                          Transform.translate(
+                                            offset: const Offset(0, -30),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                _buildStatColumn(
+                                                  _formatCount(p['connections_total_count']),
+                                                  'Connections',
+                                                ),
+                                                const SizedBox(width: 40),
+                                                _buildStatColumn(
+                                                  _formatCount(p['connections_inbound_count']),
+                                                  'Connected',
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                          // Name and Bio
+                                          Transform.translate(
+                                            offset: const Offset(0, -20),
+                                            child: Column(
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      fullName,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 24,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: isDark ? Colors.white70 : Colors.black87,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    const Icon(Icons.verified, color: Color(0xFFBFAE01), size: 20),
+                                                  ],
+                                                ),
+                                                if (atUsername.isNotEmpty)
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(top: 4),
+                                                    child: Text(
+                                                      atUsername,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        color: isDark ? Colors.white70 : Colors.grey[600],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  bioText ?? '',
+                                                  textAlign: TextAlign.center,
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 14,
+                                                    color: isDark ? Colors.white70 : Colors.grey[600],
+                                                    height: 1.4,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                          // Action Buttons
+                                          Transform.translate(
+                                            offset: const Offset(0, -10),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: ElevatedButton(
+                                                    onPressed: () async {
+                                                      // Map backend JSON to Edit page item types
+                                                      final expItems = experiences
+                                                          .map((e) => ExperienceItem(
+                                                                title: (e['title'] ?? '').toString(),
+                                                                subtitle: (e['subtitle'] as String?)?.toString(),
+                                                              ))
+                                                          .toList();
+                                                      final trainItems = trainings
+                                                          .map((t) => TrainingItem(
+                                                                title: (t['title'] ?? '').toString(),
+                                                                subtitle: (t['subtitle'] as String?)?.toString(),
+                                                              ))
+                                                          .toList();
+
+                                                      // KYC gating for Full Name
+                                                      bool canEditFullName = true;
+                                                      try {
+                                                        final kycRes = await KycApi().getMine();
+                                                        final kycData = Map<String, dynamic>.from(kycRes['data'] ?? {});
+                                                        if (kycData.isEmpty) {
+                                                          canEditFullName = true;
+                                                        } else {
+                                                          final status =
+                                                              (kycData['status'] ?? '').toString().toLowerCase();
+                                                          final isApproved = ((kycData['is_approved'] ?? 0) == 1) ||
+                                                              status == 'approved';
+                                                          final isRejected = ((kycData['is_rejected'] ?? 0) == 1) ||
+                                                              status == 'rejected';
+                                                          if (status == 'pending' || isApproved) {
+                                                            canEditFullName = false;
+                                                          } else if (isRejected) {
+                                                            canEditFullName = true;
+                                                          } else {
+                                                            canEditFullName = false;
+                                                          }
+                                                        }
+                                                      } catch (_) {
+                                                        canEditFullName = true;
+                                                      }
+
+                                                      final page = EditProfilPage(
+                                                          fullName: fullName,
+                                                          canEditFullName: canEditFullName,
+                                                          username: (p['username'] ?? '').toString(),
+                                                          bio: bioText ?? '',
+                                                          profilePhotoUrl: profileUrl,
+                                                          coverPhotoUrl: coverUrl,
+                                                          experiences: expItems,
+                                                          trainings: trainItems,
+                                                          interests: interests,
+                                                        );
+
+                                                        ProfileEditResult? result;
+                                                        if (_isWideLayout(context)) {
+                                                          result = await showDialog<ProfileEditResult>(
+                                                            context: context,
+                                                            barrierDismissible: true,
+                                                            builder: (_) {
+                                                              return Dialog(
+                                                                backgroundColor: Colors.transparent,
+                                                                insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+                                                                child: Center(
+                                                                  child: ConstrainedBox(
+                                                                    constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+                                                                    child: ClipRRect(
+                                                                      borderRadius: BorderRadius.circular(20),
+                                                                      child: Material(
+                                                                        color: isDark ? const Color(0xFF000000) : Colors.white,
+                                                                        child: page, // keeps header + back button intact
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            },
+                                                          );
+                                                        } else {
+                                                          result = await Navigator.push<ProfileEditResult>(
+                                                            context,
+                                                            MaterialPageRoute(builder: (_) => page),
+                                                          );
+                                                        }
+                                                      if (!mounted) return;
+                                                      if (result != null) {
+                                                        final api = ProfileApi();
+
+                                                        // 1) Photos
+                                                        try {
+                                                          if (result.profileImagePath != null &&
+                                                              result.profileImagePath!.isNotEmpty) {
+                                                            await api.uploadAndAttachProfilePhoto(
+                                                                File(result.profileImagePath!));
+                                                          } else if ((result.profileImageUrl == null ||
+                                                                  result.profileImageUrl!.isEmpty) &&
+                                                              (p['profile_photo_url'] != null)) {
+                                                            await api.update({'profile_photo_url': null});
+                                                          }
+
+                                                          if (result.coverImagePath != null &&
+                                                              result.coverImagePath!.isNotEmpty) {
+                                                            await api.uploadAndAttachCoverPhoto(
+                                                                File(result.coverImagePath!));
+                                                          } else if ((result.coverImageUrl == null ||
+                                                                  result.coverImageUrl!.isEmpty) &&
+                                                              (p['cover_photo_url'] != null)) {
+                                                            await api.update({'cover_photo_url': null});
+                                                          }
+                                                        } catch (_) {}
+
+                                                        // 2) Profile fields
+                                                        final updates = <String, dynamic>{};
+
+                                                        // Full name -> first_name / last_name
+                                                        final newFullName = result.fullName.trim();
+                                                        if (newFullName.isNotEmpty &&
+                                                            newFullName != fullName.trim()) {
+                                                          final parts = newFullName.split(RegExp(r'\s+'));
+                                                          final firstName = parts.isNotEmpty ? parts.first : '';
+                                                          final lastName =
+                                                              parts.length > 1 ? parts.sublist(1).join(' ') : '';
+                                                          if (firstName.isNotEmpty) updates['first_name'] = firstName;
+                                                          updates['last_name'] = lastName;
+                                                        }
+
+                                                        final newUsername = result.username.trim();
+                                                        if (newUsername.isNotEmpty &&
+                                                            newUsername != (p['username'] ?? '')) {
+                                                          updates['username'] = newUsername;
+                                                        }
+                                                        updates['bio'] = result.bio;
+
+                                                        // professional_experiences expects [{title, subtitle?}]
+                                                        updates['professional_experiences'] = result.experiences
+                                                            .map((e) {
+                                                              final m = <String, dynamic>{'title': e.title};
+                                                              if ((e.subtitle ?? '').trim().isNotEmpty) {
+                                                                m['subtitle'] = e.subtitle;
+                                                              }
+                                                              return m;
+                                                            })
+                                                            .toList();
+
+                                                        // trainings expects [{title, subtitle?}]
+                                                        updates['trainings'] = result.trainings
+                                                            .map((t) {
+                                                              final m = <String, dynamic>{'title': t.title};
+                                                              if ((t.subtitle ?? '').trim().isNotEmpty) {
+                                                                m['subtitle'] = t.subtitle;
+                                                              }
+                                                              return m;
+                                                            })
+                                                            .toList();
+
+                                                        updates['interest_domains'] = result.interests;
+
+                                                        try {
+                                                          await api.update(updates);
+                                                        } catch (_) {}
+                                                      }
+
+                                                      // Refresh profile data after possible updates
+                                                      await _loadProfile();
+                                                    },
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: const Color(0xFFBFAE01),
+                                                      foregroundColor: isDark ? Colors.black : Colors.black,
+                                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(25),
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      'Edit Profile',
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w500,
+                                                        color: isDark ? Colors.black : Colors.black,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                                                                Expanded(
+                                                  child: OutlinedButton(
+                                                    onPressed: () {
+                                                      if (_isWideLayout(context)) {
+                                                        showDialog(
+                                                          context: context,
+                                                          barrierDismissible: true,
+                                                          builder: (_) {
+                                                            return Dialog(
+                                                              backgroundColor: Colors.transparent,
+                                                              insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+                                                              child: Center(
+                                                                child: ConstrainedBox(
+                                                                  constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+                                                                  child: ClipRRect(
+                                                                    borderRadius: BorderRadius.circular(20),
+                                                                    child: Material(
+                                                                      color: isDark ? const Color(0xFF000000) : Colors.white,
+                                                                      child: const MyConnectionsPage(),
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        );
+                                                      } else {
+                                                        Navigator.push(
+                                                          context,
+                                                          MaterialPageRoute(
+                                                            builder: (_) => const MyConnectionsPage(),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                    style: OutlinedButton.styleFrom(
+                                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(25),
+                                                      ),
+                                                      side: BorderSide(
+                                                        color: isDark ? Colors.white70 : Colors.grey[300]!,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      'My Connections',
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w500,
+                                                        color: isDark ? Colors.white70 : Colors.black,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Container(
+                                                  padding: const EdgeInsets.all(12),
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: isDark ? Colors.white70 : Colors.grey[300]!,
+                                                    ),
+                                                    borderRadius: BorderRadius.circular(40),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.person_add_outlined,
+                                                    size: 20,
+                                                    color: isDark ? Colors.white70 : Colors.black,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Professional Experiences Section
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(Icons.work, size: 20, color: isDark ? Colors.white70 : Colors.black87),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Professional Experiences',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDark ? Colors.white70 : Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          if (experiences.isEmpty)
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Text(
+                                                'No experiences added yet.',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14,
+                                                  color: isDark ? Colors.white70 : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ),
+                                          if (experiences.isNotEmpty)
+                                            ...experiences.map(
+                                              (exp) => Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Align(
+                                                    alignment: Alignment.centerLeft,
+                                                    child: Text(
+                                                      (exp['title'] ?? '').toString(),
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w500,
+                                                        color: isDark ? Colors.white70 : Colors.black87,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if ((exp['subtitle'] ?? '').toString().trim().isNotEmpty)
+                                                    Align(
+                                                      alignment: Alignment.centerLeft,
+                                                      child: Text(
+                                                        (exp['subtitle'] ?? '').toString(),
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 14,
+                                                          color: isDark ? Colors.white70 : Colors.grey[600],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  const SizedBox(height: 8),
+                                                ],
+                                              ),
+                                            ),
+                                          const SizedBox(height: 20),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Trainings Section
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(Icons.school, size: 20, color: isDark ? Colors.white70 : Colors.black87),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Trainings',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDark ? Colors.white70 : Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          if (trainings.isEmpty)
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Text(
+                                                'No trainings added yet.',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 14,
+                                                  color: isDark ? Colors.white70 : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ),
+                                          if (trainings.isNotEmpty)
+                                            ...trainings.map(
+                                              (tr) => Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Align(
+                                                    alignment: Alignment.centerLeft,
+                                                    child: Text(
+                                                      (tr['title'] ?? '').toString(),
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w500,
+                                                        color: isDark ? Colors.white70 : Colors.black87,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if ((tr['subtitle'] ?? '').toString().trim().isNotEmpty)
+                                                    Align(
+                                                      alignment: Alignment.centerLeft,
+                                                      child: Text(
+                                                        (tr['subtitle'] ?? '').toString(),
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 14,
+                                                          color: isDark ? Colors.white70 : Colors.grey[600],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  const SizedBox(height: 8),
+                                                ],
+                                              ),
+                                            ),
+                                          const SizedBox(height: 20),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Interest Section
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(Icons.favorite, size: 20, color: isDark ? Colors.white70 : Colors.black87),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Interest',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDark ? Colors.white70 : Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: interests.isNotEmpty
+                                                ? interests.map((i) => _buildInterestChip(i)).toList()
+                                                : [
+                                                    Text(
+                                                      'No interests selected yet.',
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        color: isDark ? Colors.white70 : Colors.grey[600],
+                                                      ),
+                                                    ),
+                                                  ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // Right column: Tabs (Activity, Posts, Podcasts, Media)
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              _buildTabSection(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   // Helper: Drawer menu
   Widget _buildDrawer() {
     return Consumer<ThemeProvider>(
@@ -1138,14 +2201,9 @@ class _ProfilePageState extends State<ProfilePage> {
                       color: isDark ? Colors.white70 : Colors.black87,
                     ),
                   ),
-                  onTap: () {
+                                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const PremiumSubscriptionPage(),
-                      ),
-                    );
+                    _openPremium(context);
                   },
                 ),
                 ListTile(

@@ -100,7 +100,7 @@ class _CommunityPageState extends State<CommunityPage> {
 
       // Build media list: all images and videos (exclude repost rows to avoid duplicates)
       _mediaItems
-        ..clear();
+        .clear();
       for (final p in list) {
         if (p.isRepost) continue; // exclude repost media to avoid duplicates
         if (p.mediaType == MediaType.video && p.videoUrl != null) {

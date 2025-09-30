@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +9,7 @@ import 'widgets/badge_icon.dart';
 import 'widgets/animated_navbar.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/comment_bottom_sheet.dart';
+import 'widgets/connection_card.dart';
 import 'connections_page.dart';
 import 'create_post_page.dart';
 import 'conversations_page.dart';
@@ -34,6 +36,8 @@ import 'core/auth_api.dart';
 import 'package:dio/dio.dart';
 import 'core/notifications_api.dart';
 import 'core/post_events.dart';
+import 'core/profile_api.dart'; // Feed preferences
+import 'core/users_api.dart';   // Suggested users (right column)
 
 class HomeFeedPage extends StatefulWidget {
   const HomeFeedPage({super.key});
@@ -46,6 +50,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   int _selectedNavIndex = 0;
   List<Post> _posts = [];
   List<stories_api.StoryRing> _storyRings = [];
+  List<Map<String, dynamic>> _suggestedUsers = [];
   int _conversationsInitialTabIndex = 0; // 0: Chats, 1: Communities
   String? _currentUserId;
 
@@ -55,14 +60,22 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   // Live updates between feed and post page
   StreamSubscription<PostUpdateEvent>? _postEventsSub;
 
+  // Feed preferences (defaults)
+  bool _prefShowReposts = true;
+  bool _prefShowSuggested = true;
+  bool _prefPrioritizeInterests = true;
+  List<String> _myInterests = [];
+
   @override
   void initState() {
     super.initState();
     _ensureAuth();
     () async {
       await _loadCurrentUserId();
+      await _loadFeedPrefs(); // load prefs before posts
       await _loadData();
       await _loadUnreadCount();
+      await _loadSuggestedUsers(); // for desktop right column
     }();
 
     // Subscribe to post update events to keep feed in sync with PostPage
@@ -100,6 +113,18 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
+      bool _useDesktopPopup(BuildContext context) {
+    if (kIsWeb) {
+      // On web, use width to decide "desktop" vs "mobile"
+      final w = MediaQuery.of(context).size.width;
+      return w >= 900;
+    }
+    final p = Theme.of(context).platform;
+    return p == TargetPlatform.windows ||
+        p == TargetPlatform.macOS ||
+        p == TargetPlatform.linux;
+  }
+
   Future<void> _loadCurrentUserId() async {
     try {
       final res = await AuthApi().me();
@@ -115,6 +140,48 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       setState(() {
         _currentUserId = null;
       });
+    }
+  }
+
+  Future<void> _loadFeedPrefs() async {
+    try {
+      final res = await ProfileApi().me();
+      final data = (res['ok'] == true && res['data'] != null)
+          ? Map<String, dynamic>.from(res['data'])
+          : Map<String, dynamic>.from(res);
+
+      final interestsRaw = data['interest_domains'];
+      final interestsList = (interestsRaw is List)
+          ? interestsRaw.map((e) => e.toString()).toList()
+          : <String>[];
+
+      if (!mounted) return;
+      setState(() {
+        _prefShowReposts = (data['show_reposts'] is bool)
+            ? data['show_reposts']
+            : (data['show_reposts'] == 1 ||
+                data['show_reposts'] == '1' ||
+                (data['show_reposts'] is String &&
+                    (data['show_reposts'] as String).toLowerCase() == 'true'));
+
+        _prefShowSuggested = (data['show_suggested_posts'] is bool)
+            ? data['show_suggested_posts']
+            : (data['show_suggested_posts'] == 1 ||
+                data['show_suggested_posts'] == '1' ||
+                (data['show_suggested_posts'] is String &&
+                    (data['show_suggested_posts'] as String).toLowerCase() == 'true'));
+
+        _prefPrioritizeInterests = (data['prioritize_interests'] is bool)
+            ? data['prioritize_interests']
+            : (data['prioritize_interests'] == 1 ||
+                data['prioritize_interests'] == '1' ||
+                (data['prioritize_interests'] is String &&
+                    (data['prioritize_interests'] as String).toLowerCase() == 'true'));
+
+        _myInterests = interestsList;
+      });
+    } catch (_) {
+      // Use defaults
     }
   }
 
@@ -138,9 +205,14 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     List<stories_api.StoryRing> rings = [];
     String? errMsg;
 
+    // Refresh preferences before fetching/applying filters
+    await _loadFeedPrefs();
+
     try {
       posts = await PostsApi().listFeed(limit: 20, offset: 0);
       posts = await _hydrateReposts(posts);
+      // Apply filters based on preferences
+      posts = _applyFeedFilters(posts);
     } catch (e) {
       errMsg = 'Posts failed: ${_toError(e)}';
     }
@@ -153,8 +225,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
 
     // Ensure "Your Story" ring shows even if you have no active stories
-    if (_currentUserId != null &&
-        !rings.any((r) => r.userId == _currentUserId)) {
+    if (_currentUserId != null && !rings.any((r) => r.userId == _currentUserId)) {
       rings = [
         stories_api.StoryRing(
           userId: _currentUserId!,
@@ -185,7 +256,22 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
-  // Fetch original posts for repost items when the backend didn't hydrate them.
+  Future<void> _loadSuggestedUsers() async {
+    try {
+      final list = await UsersApi().list();
+      if (!mounted) return;
+      setState(() {
+        _suggestedUsers = list
+            .where((u) => (u['id']?.toString() ?? '') != (_currentUserId ?? ''))
+            .take(12)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      });
+    } catch (_) {
+      // ignore suggestions errors
+    }
+  }
+    // Fetch original posts for repost items when the backend didn't hydrate them.
   Future<List<Post>> _hydrateReposts(List<Post> posts) async {
     if (posts.isEmpty) return posts;
     final api = PostsApi();
@@ -235,7 +321,64 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
     return e.toString();
   }
-    void _onNavTabChange(int index) {
+
+  // === FEED FILTERING HELPERS (hashtags + preference logic) ===
+  String _normTag(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  List<String> _extractTags(String text) {
+    final re = RegExp(r'#([A-Za-z0-9_]+)');
+    return re
+        .allMatches(text)
+        .map((m) => m.group(1) ?? '')
+        .where((s) => s.isNotEmpty)
+        .map(_normTag)
+        .toList();
+  }
+
+  List<String> _normInterests(List<String> list) =>
+      list.map((s) => _normTag(s)).toList();
+
+  List<Post> _applyFeedFilters(List<Post> items) {
+    if (items.isEmpty) return items;
+    final interestTokens = _normInterests(_myInterests);
+
+    // If the dataset has no hashtags at all, don't apply hashtag-based filters
+    final datasetHasTags = items.any((p) => _extractTags(p.text).isNotEmpty);
+
+    return items.where((p) {
+      // Repost visibility
+      if (!_prefShowReposts && p.isRepost) return false;
+
+      if (!datasetHasTags) return true;
+
+      // Hashtags in text (already hydrated to original content if repost)
+      final tags = _extractTags(p.text);
+      final hasAnyHashtag = tags.isNotEmpty;
+      final matchesInterest =
+          interestTokens.isNotEmpty && tags.any((t) => interestTokens.contains(t));
+
+      // Only enforce interest if user actually has interests set
+      final enforceInterest = _prefPrioritizeInterests && interestTokens.isNotEmpty;
+      final enforceSuggested = _prefShowSuggested;
+
+      // No hashtag filters requested
+      if (!enforceInterest && !enforceSuggested) return true;
+
+      if (enforceInterest && enforceSuggested) {
+        // Interest OR any hashtag
+        return matchesInterest || hasAnyHashtag;
+      } else if (enforceInterest) {
+        // Only interest matches
+        return matchesInterest;
+      } else {
+        // Only "suggested" (any hashtag)
+        return hasAnyHashtag;
+      }
+    }).toList();
+  }
+
+  void _onNavTabChange(int index) {
     setState(() {
       _selectedNavIndex = index;
       if (index != 3) {
@@ -283,9 +426,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   void _applyToOriginal(String originalId,
-      {required PostCounts counts,
-      ReactionType? userReaction,
-      bool? isBookmarked}) {
+      {required PostCounts counts, ReactionType? userReaction, bool? isBookmarked}) {
     final idxs = _indexesForOriginal(originalId);
     for (final i in idxs) {
       final p = _posts[i];
@@ -315,8 +456,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
     final prevPosts = List<Post>.from(_posts);
     setState(() {
-      _applyToOriginal(originalId,
-          counts: updatedCounts, isBookmarked: willBookmark);
+      _applyToOriginal(originalId, counts: updatedCounts, isBookmarked: willBookmark);
     });
 
     try {
@@ -339,8 +479,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Bookmark failed: ${_toError(e)}',
-              style: GoogleFonts.inter()),
+          content: Text('Bookmark failed: ${_toError(e)}', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -365,8 +504,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         bookmarks: base.counts.bookmarks,
       );
       setState(() {
-        _applyToOriginal(originalId,
-            counts: updatedCounts, userReaction: reaction);
+        _applyToOriginal(originalId, counts: updatedCounts, userReaction: reaction);
       });
       try {
         await PostsApi().like(originalId);
@@ -383,8 +521,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Like failed: ${_toError(e)}',
-                style: GoogleFonts.inter()),
+            content: Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -403,8 +540,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       );
 
       setState(() {
-        _applyToOriginal(originalId,
-            counts: updatedCounts, userReaction: null);
+        _applyToOriginal(originalId, counts: updatedCounts, userReaction: null);
       });
 
       try {
@@ -422,8 +558,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Unlike failed: ${_toError(e)}',
-                style: GoogleFonts.inter()),
+            content: Text('Unlike failed: ${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -433,8 +568,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
     // Different reaction but still a "like" concept: update icon only (no extra like API)
     setState(() {
-      _applyToOriginal(originalId,
-          counts: base.counts, userReaction: reaction);
+      _applyToOriginal(originalId, counts: base.counts, userReaction: reaction);
     });
   }
 
@@ -505,8 +639,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -555,8 +688,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Post comment failed: ${_toError(e)}',
-                  style: GoogleFonts.inter()),
+              content: Text('Post comment failed: ${_toError(e)}', style: GoogleFonts.inter()),
               backgroundColor: Colors.red,
             ),
           );
@@ -564,8 +696,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       },
       onReplyToComment: (commentId, replyText) async {
         try {
-          await PostsApi()
-              .addComment(originalId, content: replyText, parentCommentId: commentId);
+          await PostsApi().addComment(originalId, content: replyText, parentCommentId: commentId);
 
           // Count reply as part of comments for the action row
           final base = _baseForOriginal(originalId);
@@ -599,8 +730,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Reply failed: ${_toError(e)}',
-                  style: GoogleFonts.inter()),
+              content: Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
               backgroundColor: Colors.red,
             ),
           );
@@ -615,10 +745,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Repost this?',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-        content: Text('Are you sure you want to repost this?',
-            style: GoogleFonts.inter()),
+        title: Text('Repost this?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        content: Text('Are you sure you want to repost this?', style: GoogleFonts.inter()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -626,9 +754,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Repost',
-                style:
-                    GoogleFonts.inter(color: const Color(0xFFBFAE01))),
+            child: Text('Repost', style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
           ),
         ],
       ),
@@ -640,8 +766,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('Post reposted successfully', style: GoogleFonts.inter()),
+          content: Text('Post reposted successfully', style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
@@ -653,19 +778,14 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
       final isAlreadyReposted = code == 409 ||
           (data is Map &&
-              ((data['error'] ?? data['message'] ?? '')
-                  .toString()
-                  .toLowerCase()
-                  .contains('already')));
+              ((data['error'] ?? data['message'] ?? '').toString().toLowerCase().contains('already')));
 
       if (isAlreadyReposted) {
         final remove = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text('Remove repost?',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            content: Text('You already reposted this. Remove your repost?',
-                style: GoogleFonts.inter()),
+            title: Text('Remove repost?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            content: Text('You already reposted this. Remove your repost?', style: GoogleFonts.inter()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -673,8 +793,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child:
-                    Text('Remove', style: GoogleFonts.inter(color: Colors.red)),
+                child: Text('Remove', style: GoogleFonts.inter(color: Colors.red)),
               ),
             ],
           ),
@@ -694,8 +813,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to remove repost: ${_toError(e2)}',
-                    style: GoogleFonts.inter()),
+                content: Text('Failed to remove repost: ${_toError(e2)}', style: GoogleFonts.inter()),
                 backgroundColor: Colors.red,
               ),
             );
@@ -714,8 +832,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Repost failed: ${_toError(e)}',
-              style: GoogleFonts.inter()),
+          content: Text('Repost failed: ${_toError(e)}', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -730,26 +847,28 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     // Refresh after returning from Post page
     await _loadData();
   }
-    // Map story compose type to its page
-  Widget _composerPage(StoryComposeType type) {
-    switch (type) {
-      case StoryComposeType.text:
-        return const TextStoryComposerPage();
-      case StoryComposeType.image:
-      case StoryComposeType.video:
-      case StoryComposeType.mixed:
-        return const MixedMediaStoryComposerPage();
-    }
-  }
-
+    // ----------------------------
+  // BUILD
+  // ----------------------------
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         final isDark = themeProvider.isDarkMode;
-        final backgroundColor =
-            isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+        final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
+        // Desktop-web layouts
+                // Desktop-web layouts
+        if (kIsWeb) {
+          final size = MediaQuery.of(context).size;
+          final isLarge = size.width >= 1280 && size.height >= 800;
+          if (isLarge) {
+            // Large desktop web layout
+            return _buildDesktopLayout(context, isDark, backgroundColor);
+          }
+        }
+
+        // Mobile/tablet: keep existing design
         return Scaffold(
           backgroundColor: backgroundColor,
           body: _selectedNavIndex == 1
@@ -764,69 +883,632 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                       ? const ProfilePage()
                       : _selectedNavIndex == 5
                           ? const VideoScrollPage()
-                          : _buildHomeFeed(context, isDark, backgroundColor),
+                          : _buildHomeFeedMobile(context, isDark, backgroundColor),
           bottomNavigationBar: AnimatedNavbar(
             selectedIndex: _selectedNavIndex,
             onTabChange: _onNavTabChange,
             isDarkMode: isDark,
           ),
-          floatingActionButton:
-              (_selectedNavIndex == 0 || _selectedNavIndex == 1)
-                  ? FloatingActionButton(
-                      heroTag: 'toolsFabMain',
-                      onPressed: () => ToolsOverlay.show(
-                        context,
-                        onCommunities: () {
-                          setState(() {
-                            _conversationsInitialTabIndex = 1;
-                            _selectedNavIndex = 3;
-                          });
-                        },
-                        onPodcasts: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const PodcastsHomePage(),
-                            ),
-                          );
-                        },
-                        onBooks: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BooksHomePage(),
-                            ),
-                          );
-                        },
-                        onMentorship: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const MentorshipHomePage(),
-                            ),
-                          );
-                        },
-                        onVideos: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const VideoScrollPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      backgroundColor: const Color(0xFFBFAE01),
-                      foregroundColor: Colors.black,
-                      child: const Icon(Icons.widgets_outlined),
-                    )
-                  : null,
+          floatingActionButton: (_selectedNavIndex == 0 || _selectedNavIndex == 1)
+              ? FloatingActionButton(
+                  heroTag: 'toolsFabMain',
+                  onPressed: _showToolsOverlay,
+                  backgroundColor: const Color(0xFFBFAE01),
+                  foregroundColor: Colors.black,
+                  child: const Icon(Icons.widgets_outlined),
+                )
+              : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         );
       },
     );
   }
 
-  Widget _buildHomeFeed(
+  void _showToolsOverlay() {
+    ToolsOverlay.show(
+      context,
+      onCommunities: () {
+        setState(() {
+          _conversationsInitialTabIndex = 1;
+          _selectedNavIndex = 3;
+        });
+      },
+      onPodcasts: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const PodcastsHomePage()));
+      },
+      onBooks: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const BooksHomePage()));
+      },
+      onMentorship: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const MentorshipHomePage()));
+      },
+      onVideos: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const VideoScrollPage()));
+      },
+    );
+  }
+
+  // ===========================
+  // Desktop (Web) Layout
+  // ===========================
+  Widget _buildDesktopLayout(BuildContext context, bool isDark, Color backgroundColor) {
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              _buildDesktopTopNav(isDark),
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1280),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      child: _buildDesktopColumns(isDark),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            left: 24,
+            bottom: 24,
+            child: FloatingActionButton(
+              heroTag: 'createPostFabWeb',
+              onPressed: () => CreatePostPage.showPopup(context),
+              backgroundColor: const Color(0xFFBFAE01),
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.add),
+            ),
+          ),
+        ],
+      ),
+
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'toolsFabWeb',
+        onPressed: _showToolsOverlay,
+        backgroundColor: const Color(0xFFBFAE01),
+        foregroundColor: Colors.black,
+        child: const Icon(Icons.widgets_outlined),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  Widget _buildDesktopTopNav(bool isDark) {
+    final barColor = isDark ? Colors.black : Colors.white;
+    return Material(
+      color: barColor,
+      elevation: isDark ? 0 : 2,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Top row: burger | title | notifications
+              Row(
+                children: [
+                  Icon(Icons.menu, color: const Color(0xFF666666)),
+                  const Spacer(),
+                  Text(
+                    'NEXUM',
+                    style: GoogleFonts.inika(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  const Spacer(),
+                  BadgeIcon(
+                    icon: Icons.notifications_outlined,
+                    badgeCount: _unreadCount,
+                    iconColor: const Color(0xFF666666),
+                                        onTap: () async {
+                      if (_useDesktopPopup(context)) {
+                        await showDialog(
+                          context: context,
+                          barrierDismissible: true,
+                          barrierColor: Colors.black26,
+                          builder: (_) {
+                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                            final size = MediaQuery.of(context).size;
+                            final double width = 420;
+                            final double height = size.height * 0.8;
+                            return SafeArea(
+                              child: Align(
+                                alignment: Alignment.topRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 16, right: 16),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: SizedBox(
+                                      width: width,
+                                      height: height,
+                                      child: Material(
+                                        color: isDark ? const Color(0xFF000000) : Colors.white,
+                                        child: const NotificationPage(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      } else {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const NotificationPage()),
+                        );
+                      }
+                      if (!mounted) return;
+                      await _loadUnreadCount();
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Nav row in the center (Home | Connections | Conversations | My Profil)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _TopNavItem(
+                    icon: Icons.home_outlined,
+                    label: 'Home',
+                    selected: true,
+                    onTap: () {},
+                  ),
+                  _TopNavItem(
+                    icon: Icons.people_outline,
+                    label: 'Connections',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => ConnectionsPage(isDarkMode: isDark, onThemeToggle: () {})),
+                      );
+                    },
+                  ),
+                  _TopNavItem(
+                    icon: Icons.chat_bubble_outline,
+                    label: 'Conversations',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ConversationsPage(
+                            isDarkMode: isDark,
+                            onThemeToggle: () {},
+                            initialTabIndex: 0,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  _TopNavItem(
+                    icon: Icons.person_outline,
+                    label: 'My Profil',
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopColumns(bool isDark) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Left: Stories panel
+        SizedBox(width: 240, child: _buildLeftStoriesPanel(isDark)),
+
+        const SizedBox(width: 16),
+
+        // Center: Feed
+        Expanded(child: _buildCenterFeedPanel(isDark)),
+
+        const SizedBox(width: 16),
+
+        // Right: Suggestions panel
+        SizedBox(width: 360, child: _buildRightSuggestionsPanel(isDark)),
+      ],
+    );
+  }
+
+  Widget _buildLeftStoriesPanel(bool isDark) {
+    final cardColor = isDark ? Colors.black : Colors.white;
+    return Container(
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Stories',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.black,
+                )),
+            const SizedBox(height: 12),
+            // Vertical list of story rings
+            Expanded(
+              child: ListView.separated(
+                physics: const BouncingScrollPhysics(),
+                itemCount: _storyRings.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final ring = _storyRings[index];
+                  final isMine = ring.userId == _currentUserId;
+
+                  return Row(
+                    children: [
+                      story_widget.StoryRing(
+                        imageUrl: ring.thumbnailUrl ?? ring.avatarUrl,
+                        label: isMine
+                            ? 'Your Story'
+                            : (ring.name.isNotEmpty
+                                ? ring.name
+                                : (ring.username.startsWith('@')
+                                    ? ring.username
+                                    : '@${ring.username}')),
+                        isMine: isMine,
+                        isSeen: !ring.hasUnseen,
+                        onAddTap: isMine
+                            ? () {
+                                if (ring.storyCount > 0 && _currentUserId != null) {
+                                  MyStoriesBottomSheet.show(
+                                    context,
+                                    currentUserId: _currentUserId!,
+                                    onAddStory: () {
+                                      StoryTypePicker.show(
+                                        context,
+                                        onSelected: (type) async {
+                                         if (_useDesktopPopup(context)) {
+                                          await StoryComposerPopup.show(context, type: type);
+                                        } else {
+                                          await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                          );
+                                        }
+                                        },
+                                      );
+                                    },
+                                  );
+                                } else {
+                                  StoryTypePicker.show(
+                                    context,
+                                    onSelected: (type) async {
+                                      if (_useDesktopPopup(context)) {
+                                        await StoryComposerPopup.show(context, type: type);
+                                      } else {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                        );
+                                      }
+                                    },
+                                  );
+                                }
+                              }
+                            : null,
+                        onTap: () async {
+                          if (isMine) {
+                            if (ring.storyCount > 0 && _currentUserId != null) {
+                              MyStoriesBottomSheet.show(
+                                context,
+                                currentUserId: _currentUserId!,
+                                onAddStory: () {
+                                  StoryTypePicker.show(
+                                    context,
+                                    onSelected: (type) async {
+                                      if (_useDesktopPopup(context)) {
+                                        await StoryComposerPopup.show(context, type: type);
+                                      } else {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                        );
+                                      }
+                                    },
+                                  );
+                                },
+                              );
+                            } else {
+                              StoryTypePicker.show(
+                                context,
+                                onSelected: (type) async {
+                                  if (_useDesktopPopup(context)) {
+                                      await StoryComposerPopup.show(context, type: type);
+                                    } else {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                      );
+                                    }
+                                },
+                              );
+                            }
+                          } else {
+                            if (_useDesktopPopup(context)) {
+                              await StoryViewerPopup.show(
+                                context,
+                                rings: _storyRings
+                                    .map((r) => {
+                                          'userId': r.userId,
+                                          'imageUrl': r.thumbnailUrl ?? r.avatarUrl,
+                                          'label': r.name,
+                                          'isMine': r.userId == _currentUserId,
+                                          'isSeen': !r.hasUnseen,
+                                        })
+                                    .toList(),
+                                initialRingIndex: index,
+                              );
+                            } else {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => StoryViewerPage(
+                                    rings: _storyRings
+                                        .map((r) => {
+                                              'userId': r.userId,
+                                              'imageUrl': r.thumbnailUrl ?? r.avatarUrl,
+                                              'label': r.name,
+                                              'isMine': r.userId == _currentUserId,
+                                              'isSeen': !r.hasUnseen,
+                                            })
+                                        .toList(),
+                                    initialRingIndex: index,
+                                  ),
+                                ),
+                              );
+                            }
+                            await _loadData();
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+    Widget _buildCenterFeedPanel(bool isDark) {
+    return Container(
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListView.builder(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        itemCount: _posts.length,
+        itemBuilder: (context, index) {
+          return PostCard(
+            post: _posts[index],
+            onReactionChanged: _onReactionChanged,
+            onBookmarkToggle: _onBookmarkToggle,
+            onTap: _onPostTap,
+            onShare: _onShare,
+            onComment: _onComment,
+            onRepost: _onRepost,
+            isDarkMode: isDark,
+            currentUserId: _currentUserId,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRightSuggestionsPanel(bool isDark) {
+    final cardColor = isDark ? Colors.black : Colors.white;
+
+    List<Map<String, dynamic>> users = _suggestedUsers;
+    if (users.isEmpty) {
+      // Create a small placeholder list to avoid an empty panel
+      users = List.generate(6, (i) {
+        return {
+          'id': 'user_$i',
+          'name': 'User $i',
+          'username': '@user$i',
+          'bio': 'Hello Nexum',
+          'avatarUrl': '',
+          'coverUrl': '',
+        };
+      });
+    }
+
+    return Container(
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Row(
+              children: [
+                Text(
+                  'Connections',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => ConnectionsPage(isDarkMode: isDark, onThemeToggle: () {})),
+                    );
+                  },
+                  child: Text('See more', style: GoogleFonts.inter(fontSize: 13)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Card rail
+            SizedBox(
+              height: 276, // fits ConnectionCard height + padding
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: users.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, i) {
+                  final u = users[i];
+                  final uid = (u['id'] ?? '').toString();
+                  final fullName = _pickFullName(u);
+                  final username = _pickUsername(u);
+                  final bio = (u['bio'] ?? '').toString();
+                  final avatar = _pickAvatar(u);
+                  final cover = _pickCover(u);
+                  return ConnectionCard(
+                    userId: uid,
+                    coverUrl: cover,
+                    avatarUrl: avatar,
+                    fullName: fullName,
+                    username: username,
+                    bio: bio,
+                    initialConnectionStatus: false,
+                    theyConnectToYou: false,
+                    onMessage: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ConversationsPage(isDarkMode: isDark, onThemeToggle: () {}, initialTabIndex: 0),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Spacer for visual balance (tools are via FAB bottom-right)
+            Expanded(child: Container()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helpers to safely map user fields from /api/users/all
+  String _pickFullName(Map u) {
+    final name = (u['name'] ?? '').toString().trim();
+    if (name.isNotEmpty) return name;
+    final fn = (u['firstName'] ?? u['first_name'] ?? '').toString().trim();
+    final ln = (u['lastName'] ?? u['last_name'] ?? '').toString().trim();
+    final both = [fn, ln].where((s) => s.isNotEmpty).join(' ').trim();
+    if (both.isNotEmpty) return both;
+    final username = _pickUsername(u);
+    if (username.isNotEmpty) return username.replaceFirst('@', '');
+    final email = (u['email'] ?? '').toString();
+    if (email.contains('@')) return email.split('@').first;
+    return 'User';
+  }
+
+  String _pickUsername(Map u) {
+    final un = (u['username'] ?? u['userName'] ?? '').toString().trim();
+    if (un.isNotEmpty) return un.startsWith('@') ? un : '@$un';
+    final email = (u['email'] ?? '').toString();
+    if (email.contains('@')) return '@${email.split('@').first}';
+    return '@user';
+  }
+
+  String _pickAvatar(Map u) {
+    return (u['avatarUrl'] ??
+            u['avatar_url'] ??
+            u['imageUrl'] ??
+            u['image_url'] ??
+            '')
+        .toString();
+  }
+
+  String _pickCover(Map u) {
+    final cover = (u['coverUrl'] ?? u['cover_url'] ?? '').toString();
+    if (cover.isNotEmpty) return cover;
+    // fallback to avatar to avoid empty image blocks
+    return _pickAvatar(u);
+  }
+
+  // Warning page for small web sizes
+  Widget _buildTooSmallWeb(Color backgroundColor, bool isDark) {
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      body: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              if (!isDark)
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+            ],
+          ),
+          child: Text(
+            'Screen too small!',
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================
+  // Mobile layout (unchanged)
+  // ===========================
+  Widget _buildHomeFeedMobile(
     BuildContext context,
     bool isDark,
     Color backgroundColor,
@@ -944,8 +1626,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                 // Full ring AND plus icon follow the same conditions
                                 onAddTap: isMine
                                     ? () {
-                                        if (ring.storyCount > 0 &&
-                                            _currentUserId != null) {
+                                        if (ring.storyCount > 0 && _currentUserId != null) {
                                           MyStoriesBottomSheet.show(
                                             context,
                                             currentUserId: _currentUserId!,
@@ -953,14 +1634,14 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                               StoryTypePicker.show(
                                                 context,
                                                 onSelected: (type) async {
+                                                if (_useDesktopPopup(context)) {
+                                                  await StoryComposerPopup.show(context, type: type);
+                                                } else {
                                                   await Navigator.push(
                                                     context,
-                                                    MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          _composerPage(type),
-                                                    ),
+                                                    MaterialPageRoute(builder: (_) => _composerPage(type)),
                                                   );
-                                                  await _loadData();
+                                                }
                                                 },
                                               );
                                             },
@@ -969,14 +1650,14 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                           StoryTypePicker.show(
                                             context,
                                             onSelected: (type) async {
-                                              await Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      _composerPage(type),
-                                                ),
-                                              );
-                                              await _loadData();
+                                              if (_useDesktopPopup(context)) {
+                                                await StoryComposerPopup.show(context, type: type);
+                                              } else {
+                                                await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                                );
+}
                                             },
                                           );
                                         }
@@ -984,8 +1665,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     : null,
                                 onTap: () async {
                                   if (isMine) {
-                                    if (ring.storyCount > 0 &&
-                                        _currentUserId != null) {
+                                    if (ring.storyCount > 0 && _currentUserId != null) {
                                       MyStoriesBottomSheet.show(
                                         context,
                                         currentUserId: _currentUserId!,
@@ -993,14 +1673,14 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                           StoryTypePicker.show(
                                             context,
                                             onSelected: (type) async {
-                                              await Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      _composerPage(type),
-                                                ),
-                                              );
-                                              await _loadData();
+                                              if (_useDesktopPopup(context)) {
+                                                await StoryComposerPopup.show(context, type: type);
+                                              } else {
+                                                await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                                );
+                                              }
                                             },
                                           );
                                         },
@@ -1009,37 +1689,51 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                       StoryTypePicker.show(
                                         context,
                                         onSelected: (type) async {
-                                          await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  _composerPage(type),
-                                            ),
-                                          );
-                                          await _loadData(); // refresh rings after composing
+                                          if (_useDesktopPopup(context)) {
+                                            await StoryComposerPopup.show(context, type: type);
+                                          } else {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                            );
+                                          }
                                         },
                                       );
                                     }
                                   } else {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => StoryViewerPage(
-                                          rings: _storyRings
-                                              .map((r) => {
-                                                    'userId': r.userId,
-                                                    'imageUrl': r.thumbnailUrl ??
-                                                        r.avatarUrl,
-                                                    'label': r.name,
-                                                    'isMine': r.userId ==
-                                                        _currentUserId,
-                                                    'isSeen': !r.hasUnseen,
-                                                  })
-                                              .toList(),
-                                          initialRingIndex: index,
+                                    if (_useDesktopPopup(context)) {
+                                      await StoryViewerPopup.show(
+                                        context,
+                                        rings: _storyRings
+                                            .map((r) => {
+                                                  'userId': r.userId,
+                                                  'imageUrl': r.thumbnailUrl ?? r.avatarUrl,
+                                                  'label': r.name,
+                                                  'isMine': r.userId == _currentUserId,
+                                                  'isSeen': !r.hasUnseen,
+                                                })
+                                            .toList(),
+                                        initialRingIndex: index,
+                                      );
+                                    } else {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => StoryViewerPage(
+                                            rings: _storyRings
+                                                .map((r) => {
+                                                      'userId': r.userId,
+                                                      'imageUrl': r.thumbnailUrl ?? r.avatarUrl,
+                                                      'label': r.name,
+                                                      'isMine': r.userId == _currentUserId,
+                                                      'isSeen': !r.hasUnseen,
+                                                    })
+                                                .toList(),
+                                            initialRingIndex: index,
+                                          ),
                                         ),
-                                      ),
-                                    );
+                                      );
+                                    }
                                     await _loadData(); // refresh rings after viewing
                                   }
                                 },
@@ -1062,21 +1756,68 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             padding: const EdgeInsets.only(top: 10, bottom: 20),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
-              return PostCard(
-                post: _posts[index],
-                onReactionChanged: _onReactionChanged,
-                onBookmarkToggle: _onBookmarkToggle,
-                onTap: _onPostTap,
-                onShare: _onShare,
-                onComment: _onComment,
-                onRepost: _onRepost,
-                isDarkMode: isDark,
-                currentUserId: _currentUserId,
-              );
+                return PostCard(
+                  post: _posts[index],
+                  onReactionChanged: _onReactionChanged,
+                  onBookmarkToggle: _onBookmarkToggle,
+                  onTap: _onPostTap,
+                  onShare: _onShare,
+                  onComment: _onComment,
+                  onRepost: _onRepost,
+                  isDarkMode: isDark,
+                  currentUserId: _currentUserId,
+                );
               }, childCount: _posts.length),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Map story compose type to its page
+  Widget _composerPage(StoryComposeType type) {
+    switch (type) {
+      case StoryComposeType.text:
+        return const TextStoryComposerPage();
+      case StoryComposeType.image:
+      case StoryComposeType.video:
+      case StoryComposeType.mixed:
+        return const MixedMediaStoryComposerPage();
+    }
+  }
+}
+
+// Simple top navigation item used in desktop header
+class _TopNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _TopNavItem({
+    required this.icon,
+    required this.label,
+    this.selected = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? const Color(0xFFBFAE01) : const Color(0xFF666666);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: TextButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18, color: color),
+        label: Text(
+          label,
+          style: GoogleFonts.inter(fontSize: 14, color: color, fontWeight: FontWeight.w600),
+        ),
+        style: TextButton.styleFrom(
+          foregroundColor: color,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        ),
       ),
     );
   }

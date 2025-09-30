@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'core/profile_api.dart';
 import 'interest_selection_page.dart';
 
 class ExperienceItem {
@@ -25,6 +27,7 @@ class ProfileEditResult {
   final String? coverImagePath; // local path if picked
   final String? profileImageUrl; // keep original if not changed
   final String? coverImageUrl; // keep original if not changed
+  final String fullName; // may be unchanged if editing is disabled
   final String username;
   final String bio;
   final List<ExperienceItem> experiences;
@@ -36,6 +39,7 @@ class ProfileEditResult {
     this.coverImagePath,
     this.profileImageUrl,
     this.coverImageUrl,
+    required this.fullName,
     required this.username,
     required this.bio,
     required this.experiences,
@@ -45,7 +49,8 @@ class ProfileEditResult {
 }
 
 class EditProfilPage extends StatefulWidget {
-  final String fullName; // immutable (not editable)
+  final String fullName;
+  final bool canEditFullName;
   final String username;
   final String bio;
   final String? profilePhotoUrl;
@@ -57,6 +62,7 @@ class EditProfilPage extends StatefulWidget {
   const EditProfilPage({
     super.key,
     required this.fullName,
+    required this.canEditFullName,
     required this.username,
     required this.bio,
     this.profilePhotoUrl,
@@ -73,6 +79,7 @@ class EditProfilPage extends StatefulWidget {
 class _EditProfilPageState extends State<EditProfilPage> {
   final ImagePicker _picker = ImagePicker();
 
+  late TextEditingController _fullNameController;
   late TextEditingController _usernameController;
   late TextEditingController _bioController;
 
@@ -82,6 +89,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
   String? _remoteProfileUrl;
   String? _remoteCoverUrl;
 
+  bool _uploadingCover = false;
+  bool _uploadingProfile = false;
+
   // Lists
   late List<ExperienceItem> _experiences;
   late List<TrainingItem> _trainings;
@@ -90,6 +100,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
   @override
   void initState() {
     super.initState();
+    _fullNameController = TextEditingController(text: widget.fullName);
     _usernameController = TextEditingController(text: widget.username);
     _bioController = TextEditingController(text: widget.bio);
 
@@ -103,6 +114,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
 
   @override
   void dispose() {
+    _fullNameController.dispose();
     _usernameController.dispose();
     _bioController.dispose();
     super.dispose();
@@ -197,6 +209,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
         );
         if (!mounted) return;
         if (picked != null) {
+          // Show local preview immediately
           setState(() {
             if (isCover) {
               _localCoverPath = picked.path;
@@ -206,23 +219,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
               _remoteProfileUrl = null;
             }
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Photo selected successfully!',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              backgroundColor: const Color(0xFFBFAE01),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+
+          // Upload to backend and switch to network URL when done
+          await _uploadPicked(picked, isCover: isCover);
         }
       } catch (_) {
         if (!mounted) return;
@@ -257,7 +256,77 @@ class _EditProfilPageState extends State<EditProfilPage> {
     }
   }
 
+  String _extOf(String path) {
+    final i = path.lastIndexOf('.');
+    if (i == -1 || i == path.length - 1) return 'jpg';
+    return path.substring(i + 1).toLowerCase();
+  }
+
+  Future<void> _uploadPicked(XFile picked, {required bool isCover}) async {
+    final api = ProfileApi();
+    setState(() {
+      if (isCover) {
+        _uploadingCover = true;
+      } else {
+        _uploadingProfile = true;
+      }
+    });
+
+    try {
+      String url;
+      if (kIsWeb) {
+        final bytes = await picked.readAsBytes();
+        final ext = _extOf(picked.path);
+        url = await api.uploadBytes(bytes, ext: ext);
+        await api
+            .update({isCover ? 'cover_photo_url' : 'profile_photo_url': url});
+      } else {
+        final file = File(picked.path);
+        url = isCover
+            ? await api.uploadAndAttachCoverPhoto(file)
+            : await api.uploadAndAttachProfilePhoto(file);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        if (isCover) {
+          _remoteCoverUrl = url;
+          _localCoverPath = null; // prefer network after upload
+        } else {
+          _remoteProfileUrl = url;
+          _localProfilePath = null; // prefer network after upload
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Photo uploaded', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFFBFAE01),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Upload failed. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        if (isCover) {
+          _uploadingCover = false;
+        } else {
+          _uploadingProfile = false;
+        }
+      });
+    }
+  }
+
   ImageProvider? _coverProvider() {
+    // Prefer local until upload flips to remote URL
     final p = _localCoverPath;
     if (p != null && p.isNotEmpty) {
       return FileImage(File(p));
@@ -405,6 +474,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
       coverImagePath: _localCoverPath,
       profileImageUrl: _remoteProfileUrl,
       coverImageUrl: _remoteCoverUrl,
+      fullName: widget.canEditFullName
+          ? _fullNameController.text.trim()
+          : widget.fullName,
       username: _usernameController.text.trim(),
       bio: _bioController.text.trim(),
       experiences: _experiences,
@@ -417,18 +489,21 @@ class _EditProfilPageState extends State<EditProfilPage> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final hasCover = _coverProvider() != null;
+
+    final initialLetter =
+        (widget.fullName.isNotEmpty ? widget.fullName.substring(0, 1) : '?')
+            .toUpperCase();
 
     return Scaffold(
-      backgroundColor: isDarkMode
-          ? const Color(0xFF0C0C0C)
-          : const Color(0xFFF1F4F8),
+      backgroundColor:
+          isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(100.0),
         child: Container(
           decoration: BoxDecoration(
-            color: isDarkMode
-                ? const Color(0xFF000000)
-                : const Color(0xFFFFFFFF),
+            color:
+                isDarkMode ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
             borderRadius: const BorderRadius.only(
               bottomLeft: Radius.circular(25),
               bottomRight: Radius.circular(25),
@@ -465,7 +540,6 @@ class _EditProfilPageState extends State<EditProfilPage> {
                         ),
                       ),
                       const Spacer(),
-                      // Removed per request: top-right Save button (use bottom bar only)
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -485,20 +559,56 @@ class _EditProfilPageState extends State<EditProfilPage> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    height: 200,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: isDarkMode
-                          ? const Color(0xFF1A1A1A)
-                          : Colors.white,
-                      image: _coverProvider() != null
-                          ? DecorationImage(
-                              image: _coverProvider()!,
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
+                  child: Stack(
+                    children: [
+                      Container(
+                        height: 200,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: isDarkMode
+                              ? const Color(0xFF1A1A1A)
+                              : Colors.white,
+                          image: hasCover
+                              ? DecorationImage(
+                                  image: _coverProvider()!,
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: !hasCover
+                            ? Center(
+                                child: Text(
+                                  'Add cover image',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: isDarkMode
+                                        ? Colors.white70
+                                        : const Color(0xFF666666),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+                      if (_uploadingCover)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: Container(
+                              color: Colors.black.withOpacity(0.25),
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 32,
+                                  height: 32,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                    color: Color(0xFFBFAE01),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 Positioned(
@@ -506,9 +616,8 @@ class _EditProfilPageState extends State<EditProfilPage> {
                   right: 12,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: isDarkMode
-                          ? const Color(0xFF000000)
-                          : Colors.white,
+                      color:
+                          isDarkMode ? const Color(0xFF000000) : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
@@ -550,8 +659,41 @@ class _EditProfilPageState extends State<EditProfilPage> {
                                 ? const Color(0xFF1A1A1A)
                                 : Colors.white,
                             backgroundImage: _profileProvider(),
+                            child: _profileProvider() == null
+                                ? Text(
+                                    initialLetter,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 40,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDarkMode
+                                          ? Colors.white
+                                          : Colors.black,
+                                    ),
+                                  )
+                                : null,
                           ),
                         ),
+                        if (_uploadingProfile)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black.withOpacity(0.25),
+                                ),
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 28,
+                                    height: 28,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: Color(0xFFBFAE01),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         Positioned(
                           bottom: 6,
                           right: 6,
@@ -580,7 +722,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
             ),
             const SizedBox(height: 48),
 
-            // Full name (read-only)
+            // Full name (gated by KYC)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
@@ -592,11 +734,13 @@ class _EditProfilPageState extends State<EditProfilPage> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    controller: TextEditingController(text: widget.fullName),
-                    enabled: false,
-                    decoration: const InputDecoration(
-                      hintText: 'Full name is immutable after verification',
-                      border: OutlineInputBorder(
+                    controller: _fullNameController,
+                    enabled: widget.canEditFullName,
+                    decoration: InputDecoration(
+                      hintText: widget.canEditFullName
+                          ? 'Enter your full name'
+                          : 'Full name cannot be changed while KYC is pending/approved',
+                      border: const OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(20)),
                       ),
                     ),
@@ -893,18 +1037,54 @@ class _EditProfilPageState extends State<EditProfilPage> {
   }
 
   Future<void> _openInterestPicker() async {
-    final selected = await Navigator.push<List<String>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => InterestSelectionPage(
-          initialSelected: _interests,
-          returnSelectedOnPop: true,
+    List<String>? selected;
+    final size = MediaQuery.of(context).size;
+    final desktop = kIsWeb && size.width >= 1280 && size.height >= 800;
+
+    if (desktop) {
+      selected = await showDialog<List<String>>(
+        context: context,
+        barrierDismissible: true,
+        builder: (_) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+            child: Center(
+              child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(maxWidth: 980, maxHeight: 760),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Material(
+                    color: isDark ? const Color(0xFF000000) : Colors.white,
+                    child: InterestSelectionPage(
+                      initialSelected: _interests,
+                      returnSelectedOnPop: true,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      selected = await Navigator.push<List<String>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => InterestSelectionPage(
+            initialSelected: _interests,
+            returnSelectedOnPop: true,
+          ),
         ),
-      ),
-    );
+      );
+    }
+
     if (!mounted) return;
     if (selected != null) {
-      setState(() => _interests = selected);
+      setState(() => _interests = selected!);
     }
   }
 }

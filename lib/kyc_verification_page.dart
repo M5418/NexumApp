@@ -1,6 +1,13 @@
+// File: lib/kyc_verification_page.dart
+// Lines: 1-430
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'sign_in_page.dart';
+import 'core/kyc_api.dart';
+import 'kyc_status_page.dart';
+import 'package:file_picker/file_picker.dart';
+import 'core/files_api.dart';
+import 'core/profile_api.dart';
+import 'account_center_page.dart';
 
 enum DocumentType { passport, nationalId, drivingLicense }
 
@@ -22,6 +29,17 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
   bool _frontDocumentUploaded = false;
   bool _backDocumentUploaded = false;
   bool _selfieUploaded = false;
+
+  // Uploaded URLs
+  String? _frontUrl;
+  String? _backUrl;
+  String? _selfieUrl;
+
+  // New input controllers
+  final _documentNumberController = TextEditingController();
+  final _expiryDateController = TextEditingController(); // YYYY-MM-DD
+
+  bool _submitting = false;
 
   final List<Map<String, String>> _countries = [
     {'name': 'United States', 'flag': '🇺🇸', 'code': 'US'},
@@ -154,6 +172,12 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                           }),
                           isDarkMode,
                         ),
+                        const SizedBox(height: 24),
+
+                        // New fields (keep design language)
+                        _textField(isDarkMode, _documentNumberController, 'Document number'),
+                        const SizedBox(height: 16),
+                        _textField(isDarkMode, _expiryDateController, 'Expiry date (YYYY-MM-DD)'),
                         const SizedBox(height: 32),
 
                         // Document Upload Section
@@ -169,14 +193,11 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                           width: double.infinity,
                           height: 52,
                           child: ElevatedButton(
-                            onPressed: _canSubmit()
-                                ? () {
-                                    // KYC submission logic - UI only
-                                    _showSubmissionDialog(context);
-                                  }
+                            onPressed: (_canSubmit() && !_submitting)
+                                ? _submit
                                 : null,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _canSubmit()
+                              backgroundColor: (_canSubmit() && !_submitting)
                                   ? const Color(0xFFBFAE01)
                                   : const Color(0xFF666666),
                               shape: RoundedRectangleBorder(
@@ -196,25 +217,18 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Back to Sign In
+                        // Back to Account Center
                         Center(
                           child: GestureDetector(
                             onTap: () {
-                              Navigator.pushAndRemoveUntil(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const SignInPage(),
-                                ),
-                                (route) => false,
-                              );
+                              Navigator.pop(context);
                             },
                             child: Text(
-                              'Back to Sign In',
+                              'Back to Account Center',
                               style: GoogleFonts.inter(
                                 fontSize: 16,
                                 color: const Color(0xFFBFAE01),
-                                fontWeight: FontWeight.w500,
-                              ),
+                                fontWeight: FontWeight.w500),
                             ),
                           ),
                         ),
@@ -242,6 +256,31 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
           color: isDarkMode ? Colors.white : Colors.black,
         ),
       ),
+    );
+  }
+
+  Widget _textField(bool isDarkMode, TextEditingController controller, String hint, {int maxLines = 1}) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(25),
+          borderSide: BorderSide(color: isDarkMode ? Colors.white : Colors.black, width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(25),
+          borderSide: BorderSide(color: isDarkMode ? Colors.white : Colors.black, width: 1.5),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(25)),
+          borderSide: BorderSide(color: Color(0xFFBFAE01), width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      ),
+      style: GoogleFonts.inter(color: isDarkMode ? Colors.white : Colors.black),
     );
   }
 
@@ -274,7 +313,8 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
       ],
     );
   }
-
+  // File: lib/kyc_verification_page.dart
+// Lines: 431-820
   Widget _buildDocumentOption(
     DocumentType type,
     String title,
@@ -292,6 +332,9 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
           _frontDocumentUploaded = false;
           _backDocumentUploaded = false;
           _selfieUploaded = false;
+          _frontUrl = null;
+          _backUrl = null;
+          _selfieUrl = null;
         });
       },
       child: Container(
@@ -478,8 +521,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
           'Front of ${_getDocumentName()}',
           'Upload a clear photo of the front',
           _frontDocumentUploaded,
-          () =>
-              setState(() => _frontDocumentUploaded = !_frontDocumentUploaded),
+          () => _handleUploadTap('front'),
           isDarkMode,
         ),
         const SizedBox(height: 16),
@@ -490,8 +532,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
             'Back of ${_getDocumentName()}',
             'Upload a clear photo of the back',
             _backDocumentUploaded,
-            () =>
-                setState(() => _backDocumentUploaded = !_backDocumentUploaded),
+            () => _handleUploadTap('back'),
             isDarkMode,
           ),
           const SizedBox(height: 16),
@@ -502,7 +543,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
           'Selfie with Document',
           'Take a selfie holding your document',
           _selfieUploaded,
-          () => setState(() => _selfieUploaded = !_selfieUploaded),
+          () => _handleUploadTap('selfie'),
           isDarkMode,
         ),
       ],
@@ -590,6 +631,8 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
         !_selfieUploaded) {
       return false;
     }
+    // Require document number
+    if (_documentNumberController.text.trim().isEmpty) return false;
 
     // For National ID and Driving License, back photo is also required
     if (_selectedDocumentType != DocumentType.passport &&
@@ -598,6 +641,120 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
     }
 
     return true;
+  }
+
+  void _showSnack(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text, style: GoogleFonts.inter())),
+    );
+  }
+
+  Future<void> _handleUploadTap(String kind) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final f = result.files.first;
+      final bytes = f.bytes;
+      final ext = (f.extension ?? '').toLowerCase();
+      if (bytes == null) {
+        _showSnack('Could not read file');
+        return;
+      }
+
+      final filesApi = FilesApi();
+      final res = await filesApi.uploadBytes(bytes, ext: ext.isEmpty ? 'bin' : ext);
+      final uploadedUrl = (res['url'] ?? '').toString();
+
+      if (uploadedUrl.isEmpty) {
+        _showSnack('Upload failed');
+        return;
+      }
+
+      setState(() {
+        if (kind == 'front') {
+          _frontUrl = uploadedUrl;
+          _frontDocumentUploaded = true;
+        } else if (kind == 'back') {
+          _backUrl = uploadedUrl;
+          _backDocumentUploaded = true;
+        } else if (kind == 'selfie') {
+          _selfieUrl = uploadedUrl;
+          _selfieUploaded = true;
+        }
+      });
+    } catch (_) {
+      _showSnack('File selection/upload failed');
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_canSubmit()) return;
+
+    setState(() => _submitting = true);
+    try {
+      // Map selected type to a string value
+      final String docType = () {
+        switch (_selectedDocumentType) {
+          case DocumentType.passport:
+            return 'passport';
+          case DocumentType.nationalId:
+            return 'national_id';
+          case DocumentType.drivingLicense:
+            return 'driving_license';
+          default:
+            return 'unknown';
+        }
+      }();
+
+      // Derive simple file name markers based on toggles
+      final List<String> files = [];
+      if (_frontDocumentUploaded) files.add('front');
+      if (_selectedDocumentType != DocumentType.passport && _backDocumentUploaded) files.add('back');
+      if (_selfieUploaded) files.add('selfie');
+
+      // Get user's full name from profile (no UI change)
+      String? fullName;
+      try {
+        final prof = await ProfileApi().me();
+        final body = Map<String, dynamic>.from(prof);
+        final data = Map<String, dynamic>.from(body['data'] ?? {});
+        final fn = (data['full_name'] ?? '').toString();
+        if (fn.isNotEmpty) fullName = fn;
+      } catch (_) {}
+
+      final res = await KycApi().submit(
+        fullName: fullName,
+        documentType: docType,
+        documentNumber: _documentNumberController.text.trim(),
+        issuePlace: _selectedIssuingCountry != 'Select Country' ? _selectedIssuingCountry : null,
+        expiryDate: _expiryDateController.text.trim().isEmpty ? null : _expiryDateController.text.trim(),
+        country: _selectedResidenceCountry != 'Select Country' ? _selectedResidenceCountry : null,
+        uploadedFileNames: files.isEmpty ? null : files,
+        frontUrl: _frontUrl,
+        backUrl: _backUrl,
+        selfieUrl: _selfieUrl,
+      );
+
+      if (res['ok'] == true) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const KycStatusPage()),
+        );
+      } else {
+        _showSnack((res['error'] ?? 'submit_failed').toString());
+      }
+    } catch (_) {
+      _showSnack('Network error');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   void _showSubmissionDialog(BuildContext context) {
@@ -625,7 +782,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                 Navigator.of(context).pop();
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(builder: (context) => const SignInPage()),
+                  MaterialPageRoute(builder: (context) => const AccountCenterPage()),
                   (route) => false,
                 );
               },
