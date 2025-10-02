@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_name_page.dart';
+import 'responsive/responsive_breakpoints.dart';
 
 class ProfileFlowStart extends StatelessWidget {
   const ProfileFlowStart({super.key});
@@ -9,220 +10,399 @@ class ProfileFlowStart extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: isDarkMode
-          ? const Color(0xFF0C0C0C)
-          : const Color(0xFFF1F4F8),
-      appBar: AppBar(
-        backgroundColor: isDarkMode
-            ? const Color(0xFF000000)
-            : const Color(0xFFFFFFFF),
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: isDarkMode ? Colors.white : Colors.black,
+    if (context.isMobile) {
+      // MOBILE: original layout unchanged
+      return Scaffold(
+        backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+        appBar: AppBar(
+          backgroundColor: isDarkMode ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: isDarkMode ? Colors.white : Colors.black),
+            onPressed: () => Navigator.pop(context),
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Profile Setup',
-          style: GoogleFonts.inter(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: isDarkMode ? Colors.white : Colors.black,
+          title: Text(
+            'Profile Setup',
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? Colors.white : Colors.black,
+            ),
           ),
-        ),
-        centerTitle: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            bottomLeft: Radius.circular(25),
-            bottomRight: Radius.circular(25),
+          centerTitle: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(25),
+              bottomRight: Radius.circular(25),
+            ),
           ),
         ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-              // Title
-              Text(
-                'Complete Your Profile',
-                style: GoogleFonts.inter(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: isDarkMode ? Colors.white : Colors.black,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 24),
+                Text(
+                  'Complete Your Profile',
+                  style: GoogleFonts.inter(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: isDarkMode ? Colors.white : Colors.black,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              // Description
-              Text(
-                'Help others connect with you by completing your profile in just a few steps.',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.normal,
-                  color: const Color(0xFF666666),
+                const SizedBox(height: 8),
+                Text(
+                  'Help others connect with you by completing your profile in just a few steps.',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: const Color(0xFF666666),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 40),
-
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      // Progress Steps
-                      _buildProgressStep(
-                        context,
-                        stepNumber: 1,
-                        title: 'Personal Information',
-                        description: 'Add your name and username',
-                        icon: Icons.person_outline,
-                        isDarkMode: isDarkMode,
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildProgressStep(
-                        context,
-                        stepNumber: 2,
-                        title: 'Birthday',
-                        description: 'Tell us when you were born',
-                        icon: Icons.cake_outlined,
-                        isDarkMode: isDarkMode,
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildProgressStep(
-                        context,
-                        stepNumber: 3,
-                        title: 'Gender',
-                        description: 'Select your gender identity',
-                        icon: Icons.people_outline,
-                        isDarkMode: isDarkMode,
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildProgressStep(
-                        context,
-                        stepNumber: 4,
-                        title: 'Location',
-                        description: 'Share your address details',
-                        icon: Icons.location_on_outlined,
-                        isDarkMode: isDarkMode,
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildProgressStep(
-                        context,
-                        stepNumber: 5,
-                        title: 'Profile Photo',
-                        description: 'Add a profile picture (optional)',
-                        icon: Icons.photo_camera_outlined,
-                        isDarkMode: isDarkMode,
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildProgressStep(
-                        context,
-                        stepNumber: 6,
-                        title: 'Cover Photo',
-                        description: 'Add a cover image (optional)',
-                        icon: Icons.image_outlined,
-                        isDarkMode: isDarkMode,
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Estimated Time
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFBFAE01).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: const Color(
-                              0xFFBFAE01,
-                            ).withValues(alpha: 0.3),
-                            width: 1,
+                const SizedBox(height: 40),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildProgressStep(
+                          context,
+                          stepNumber: 1,
+                          title: 'Personal Information',
+                          description: 'Add your name and username',
+                          icon: Icons.person_outline,
+                          isDarkMode: isDarkMode,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildProgressStep(
+                          context,
+                          stepNumber: 2,
+                          title: 'Birthday',
+                          description: 'Tell us when you were born',
+                          icon: Icons.cake_outlined,
+                          isDarkMode: isDarkMode,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildProgressStep(
+                          context,
+                          stepNumber: 3,
+                          title: 'Gender',
+                          description: 'Select your gender identity',
+                          icon: Icons.people_outline,
+                          isDarkMode: isDarkMode,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildProgressStep(
+                          context,
+                          stepNumber: 4,
+                          title: 'Location',
+                          description: 'Share your address details',
+                          icon: Icons.location_on_outlined,
+                          isDarkMode: isDarkMode,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildProgressStep(
+                          context,
+                          stepNumber: 5,
+                          title: 'Profile Photo',
+                          description: 'Add a profile picture (optional)',
+                          icon: Icons.photo_camera_outlined,
+                          isDarkMode: isDarkMode,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildProgressStep(
+                          context,
+                          stepNumber: 6,
+                          title: 'Cover Photo',
+                          description: 'Add a cover image (optional)',
+                          icon: Icons.image_outlined,
+                          isDarkMode: isDarkMode,
+                        ),
+                        const SizedBox(height: 32),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFBFAE01).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.access_time, color: Color(0xFFBFAE01), size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Estimated Time',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFFBFAE01),
+                                      ),
+                                    ),
+                                    Text(
+                                      '3-5 minutes to complete',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        color: const Color(0xFF666666),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.access_time,
-                              color: Color(0xFFBFAE01),
-                              size: 24,
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ProfileNamePage()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFBFAE01),
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    ),
+                    child: Text(
+                      'Start Profile Setup',
+                      style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // DESKTOP (tablet/desktop/largeDesktop): centered popup card
+    return Scaffold(
+      backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Material(
+                color: isDarkMode ? const Color(0xFF000000) : Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    children: [
+                      // Header row (replacing app bar)
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.close, color: isDarkMode ? Colors.white : Colors.black),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Profile Setup',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? Colors.white : Colors.black,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Estimated Time',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFFBFAE01),
-                                    ),
-                                  ),
-                                  Text(
-                                    '3-5 minutes to complete',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.normal,
-                                      color: const Color(0xFF666666),
-                                    ),
-                                  ),
-                                ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Divider(height: 1, color: Color(0x1A666666)),
+
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 8),
+                              Text(
+                                'Complete Your Profile',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDarkMode ? Colors.white : Colors.black,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(
+                                'Help others connect with you by completing your profile in just a few steps.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  color: const Color(0xFF666666),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              _buildProgressStep(
+                                context,
+                                stepNumber: 1,
+                                title: 'Personal Information',
+                                description: 'Add your name and username',
+                                icon: Icons.person_outline,
+                                isDarkMode: isDarkMode,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildProgressStep(
+                                context,
+                                stepNumber: 2,
+                                title: 'Birthday',
+                                description: 'Tell us when you were born',
+                                icon: Icons.cake_outlined,
+                                isDarkMode: isDarkMode,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildProgressStep(
+                                context,
+                                stepNumber: 3,
+                                title: 'Gender',
+                                description: 'Select your gender identity',
+                                icon: Icons.people_outline,
+                                isDarkMode: isDarkMode,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildProgressStep(
+                                context,
+                                stepNumber: 4,
+                                title: 'Location',
+                                description: 'Share your address details',
+                                icon: Icons.location_on_outlined,
+                                isDarkMode: isDarkMode,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildProgressStep(
+                                context,
+                                stepNumber: 5,
+                                title: 'Profile Photo',
+                                description: 'Add a profile picture (optional)',
+                                icon: Icons.photo_camera_outlined,
+                                isDarkMode: isDarkMode,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildProgressStep(
+                                context,
+                                stepNumber: 6,
+                                title: 'Cover Photo',
+                                description: 'Add a cover image (optional)',
+                                icon: Icons.image_outlined,
+                                isDarkMode: isDarkMode,
+                              ),
+                              const SizedBox(height: 20),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFBFAE01).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time, color: Color(0xFFBFAE01), size: 24),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Estimated Time',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: const Color(0xFFBFAE01),
+                                            ),
+                                          ),
+                                          Text(
+                                            '3-5 minutes to complete',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
+                                              color: const Color(0xFF666666),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            _pushWithPopupTransition(context, const ProfileNamePage());
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFBFAE01),
+                            foregroundColor: Colors.black,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                          ),
+                          child: Text(
+                            'Start Profile Setup',
+                            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-              const SizedBox(height: 24),
-              // Start Button
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ProfileNamePage(),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFBFAE01),
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                  ),
-                  child: Text(
-                    'Start Profile Setup',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  void _pushWithPopupTransition(BuildContext context, Widget page) {
+    Navigator.of(context).push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    ));
   }
 
   Widget _buildProgressStep(
@@ -246,7 +426,6 @@ class ProfileFlowStart extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Step Number Circle
           Container(
             width: 40,
             height: 40,
@@ -267,12 +446,8 @@ class ProfileFlowStart extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-
-          // Icon
           Icon(icon, size: 24, color: isDarkMode ? Colors.white : Colors.black),
           const SizedBox(width: 16),
-
-          // Text Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,7 +465,6 @@ class ProfileFlowStart extends StatelessWidget {
                   description,
                   style: GoogleFonts.inter(
                     fontSize: 14,
-                    fontWeight: FontWeight.normal,
                     color: const Color(0xFF666666),
                   ),
                 ),

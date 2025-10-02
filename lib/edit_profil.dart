@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io' show File;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -83,9 +84,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
   late TextEditingController _usernameController;
   late TextEditingController _bioController;
 
-  // Images
-  String? _localProfilePath;
-  String? _localCoverPath;
+  // Images - store bytes for web compatibility
+  Uint8List? _localProfileBytes;
+  Uint8List? _localCoverBytes;
   String? _remoteProfileUrl;
   String? _remoteCoverUrl;
 
@@ -150,9 +151,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
                 },
               ),
               if ((isCover &&
-                      (_localCoverPath != null || _remoteCoverUrl != null)) ||
+                      (_localCoverBytes != null || _remoteCoverUrl != null)) ||
                   (!isCover &&
-                      (_localProfilePath != null || _remoteProfileUrl != null)))
+                      (_localProfileBytes != null || _remoteProfileUrl != null)))
                 ListTile(
                   leading: const Icon(Icons.delete_outline, color: Colors.red),
                   title: Text(
@@ -163,10 +164,10 @@ class _EditProfilPageState extends State<EditProfilPage> {
                     Navigator.pop(context);
                     setState(() {
                       if (isCover) {
-                        _localCoverPath = null;
+                        _localCoverBytes = null;
                         _remoteCoverUrl = null;
                       } else {
-                        _localProfilePath = null;
+                        _localProfileBytes = null;
                         _remoteProfileUrl = null;
                       }
                     });
@@ -184,73 +185,81 @@ class _EditProfilPageState extends State<EditProfilPage> {
     required ImageSource source,
     required bool isCover,
   }) async {
-    PermissionStatus status;
-    try {
-      if (source == ImageSource.camera) {
-        status = await Permission.camera.request();
-      } else {
-        status = await Permission.photos.request();
-      }
-    } catch (_) {
-      status = source == ImageSource.camera
-          ? await Permission.camera.request()
-          : await Permission.storage.request();
-    }
-
-    if (!mounted) return;
-
-    if (status.isGranted) {
+    if (!kIsWeb) {
+      PermissionStatus status;
       try {
-        final XFile? picked = await _picker.pickImage(
-          source: source,
-          imageQuality: 85,
-          maxWidth: 2048,
-          maxHeight: 2048,
-        );
-        if (!mounted) return;
-        if (picked != null) {
-          // Show local preview immediately
-          setState(() {
-            if (isCover) {
-              _localCoverPath = picked.path;
-              _remoteCoverUrl = null;
-            } else {
-              _localProfilePath = picked.path;
-              _remoteProfileUrl = null;
-            }
-          });
-
-          // Upload to backend and switch to network URL when done
-          await _uploadPicked(picked, isCover: isCover);
+        if (source == ImageSource.camera) {
+          status = await Permission.camera.request();
+        } else {
+          status = await Permission.photos.request();
         }
       } catch (_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unexpected error occurred.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        status = source == ImageSource.camera
+            ? await Permission.camera.request()
+            : await Permission.storage.request();
       }
-    } else if (status.isDenied) {
+
+      if (!mounted) return;
+
+      if (!status.isGranted) {
+        if (status.isDenied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permission denied. Please allow access to continue.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } else if (status.isPermanentlyDenied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Access permanently denied. Please enable in settings.',
+              ),
+              backgroundColor: Colors.red,
+              action: SnackBarAction(
+                label: 'Settings',
+                textColor: Colors.white,
+                onPressed: () => openAppSettings(),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
+      if (!mounted) return;
+      if (picked != null) {
+        // Read bytes for web compatibility
+        final bytes = await picked.readAsBytes();
+        
+        // Show local preview immediately
+        setState(() {
+          if (isCover) {
+            _localCoverBytes = bytes;
+            _remoteCoverUrl = null;
+          } else {
+            _localProfileBytes = bytes;
+            _remoteProfileUrl = null;
+          }
+        });
+
+        // Upload to backend and switch to network URL when done
+        await _uploadPicked(picked, isCover: isCover);
+      }
+    } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Permission denied. Please allow access to continue.'),
+          content: Text('Unexpected error occurred.'),
           backgroundColor: Colors.red,
-        ),
-      );
-    } else if (status.isPermanentlyDenied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Access permanently denied. Please enable in settings.',
-          ),
-          backgroundColor: Colors.red,
-          action: SnackBarAction(
-            label: 'Settings',
-            textColor: Colors.white,
-            onPressed: () => openAppSettings(),
-          ),
         ),
       );
     }
@@ -291,10 +300,10 @@ class _EditProfilPageState extends State<EditProfilPage> {
       setState(() {
         if (isCover) {
           _remoteCoverUrl = url;
-          _localCoverPath = null; // prefer network after upload
+          _localCoverBytes = null; // prefer network after upload
         } else {
           _remoteProfileUrl = url;
-          _localProfilePath = null; // prefer network after upload
+          _localProfileBytes = null; // prefer network after upload
         }
       });
 
@@ -327,9 +336,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
 
   ImageProvider? _coverProvider() {
     // Prefer local until upload flips to remote URL
-    final p = _localCoverPath;
-    if (p != null && p.isNotEmpty) {
-      return FileImage(File(p));
+    final bytes = _localCoverBytes;
+    if (bytes != null) {
+      return MemoryImage(bytes);
     }
     final u = _remoteCoverUrl;
     if (u != null && u.isNotEmpty) {
@@ -339,9 +348,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
   }
 
   ImageProvider? _profileProvider() {
-    final p = _localProfilePath;
-    if (p != null && p.isNotEmpty) {
-      return FileImage(File(p));
+    final bytes = _localProfileBytes;
+    if (bytes != null) {
+      return MemoryImage(bytes);
     }
     final u = _remoteProfileUrl;
     if (u != null && u.isNotEmpty) {
@@ -470,8 +479,8 @@ class _EditProfilPageState extends State<EditProfilPage> {
 
   void _save() {
     final result = ProfileEditResult(
-      profileImagePath: _localProfilePath,
-      coverImagePath: _localCoverPath,
+      profileImagePath: null, // Not used on web
+      coverImagePath: null, // Not used on web
       profileImageUrl: _remoteProfileUrl,
       coverImageUrl: _remoteCoverUrl,
       fullName: widget.canEditFullName
@@ -485,7 +494,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
     );
     Navigator.pop(context, result);
   }
-
+  
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;

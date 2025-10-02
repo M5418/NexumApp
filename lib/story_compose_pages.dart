@@ -467,7 +467,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
     await s3.put(
       putUrl,
       data: bytes,
-      options: Options(headers: {'Content-Type': mime, 'Content-Length': bytes.length}),
+       options: Options(headers: {'Content-Type': mime}),
     );
 
     try {

@@ -139,14 +139,16 @@ class _PostPageState extends State<PostPage> {
       final posts = await PostsApi().listFeed(limit: 50, offset: 0);
       final found = posts.firstWhere(
         (p) => p.id == widget.postId,
-        orElse: () => posts.isNotEmpty ? posts.first : throw Exception('Post not found'),
+        orElse: () =>
+            posts.isNotEmpty ? posts.first : throw Exception('Post not found'),
       );
       _applyPost(found);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Load post failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('Load post failed: ${_toError(e)}',
+              style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -176,7 +178,8 @@ class _PostPageState extends State<PostPage> {
       // Keep UI, just notify
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('Load comments failed: ${_toError(e)}',
+              style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -216,7 +219,8 @@ class _PostPageState extends State<PostPage> {
       onMute: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_post!.authorName} muted', style: GoogleFonts.inter()),
+            content:
+                Text('${_post!.authorName} muted', style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF666666),
           ),
         );
@@ -247,7 +251,8 @@ class _PostPageState extends State<PostPage> {
     final wasLiked = _isLiked;
 
     // Optimistic update
-    final newLikes = (original.counts.likes + (wasLiked ? -1 : 1)).clamp(0, 1 << 30);
+    final newLikes =
+        (original.counts.likes + (wasLiked ? -1 : 1)).clamp(0, 1 << 30);
     final updatedCounts = PostCounts(
       likes: newLikes,
       comments: original.counts.comments,
@@ -290,7 +295,8 @@ class _PostPageState extends State<PostPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${wasLiked ? 'Unlike' : 'Like'} failed: ${_toError(e)}',
+          content: Text(
+              '${wasLiked ? 'Unlike' : 'Like'} failed: ${_toError(e)}',
               style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
@@ -349,7 +355,8 @@ class _PostPageState extends State<PostPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Bookmark failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('Bookmark failed: ${_toError(e)}',
+              style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -370,7 +377,8 @@ class _PostPageState extends State<PostPage> {
       onCopyLink: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Link copied to clipboard', style: GoogleFonts.inter()),
+            content:
+                Text('Link copied to clipboard', style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF9E9E9E),
           ),
         );
@@ -424,7 +432,8 @@ class _PostPageState extends State<PostPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('Load comments failed: ${_toError(e)}',
+              style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -478,7 +487,8 @@ class _PostPageState extends State<PostPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Post comment failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              content: Text('Post comment failed: ${_toError(e)}',
+                  style: GoogleFonts.inter()),
               backgroundColor: Colors.red,
             ),
           );
@@ -486,8 +496,8 @@ class _PostPageState extends State<PostPage> {
       },
       onReplyToComment: (commentId, replyText) async {
         try {
-          await PostsApi()
-              .addComment(_post!.id, content: replyText, parentCommentId: commentId);
+          await PostsApi().addComment(_post!.id,
+              content: replyText, parentCommentId: commentId);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -500,7 +510,8 @@ class _PostPageState extends State<PostPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              content: Text('Reply failed: ${_toError(e)}',
+                  style: GoogleFonts.inter()),
               backgroundColor: Colors.red,
             ),
           );
@@ -538,7 +549,8 @@ class _PostPageState extends State<PostPage> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: Text('Send', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+              child: Text('Send',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
             ),
           ],
         );
@@ -547,7 +559,8 @@ class _PostPageState extends State<PostPage> {
 
     if (reply == null || reply.isEmpty) return;
     try {
-      await PostsApi().addComment(_post!.id, content: reply, parentCommentId: commentId);
+      await PostsApi()
+          .addComment(_post!.id, content: reply, parentCommentId: commentId);
       await _loadComments();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -560,7 +573,8 @@ class _PostPageState extends State<PostPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content:
+              Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -615,13 +629,15 @@ class _PostPageState extends State<PostPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to post comment: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('Failed to post comment: ${_toError(e)}',
+              style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
     }
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor =
@@ -697,7 +713,9 @@ class _PostPageState extends State<PostPage> {
                   ? const Center(child: CircularProgressIndicator())
                   : (_post == null
                       ? const SizedBox.shrink()
-                      : (desktop ? _buildDesktopBody(isDark) : _buildMobileBody(isDark))),
+                      : (desktop
+                          ? _buildDesktopBody(isDark)
+                          : _buildMobileBody(isDark))),
             ),
           ],
         ),
@@ -816,7 +834,8 @@ class _PostPageState extends State<PostPage> {
                         const SizedBox(width: 6),
                         Text(
                           (_post?.counts.comments ?? 0).toString(),
-                          style: GoogleFonts.inter(color: const Color(0xFF666666)),
+                          style:
+                              GoogleFonts.inter(color: const Color(0xFF666666)),
                         ),
                       ],
                     ),
@@ -1128,9 +1147,7 @@ class _PostPageState extends State<PostPage> {
                   child: Row(
                     children: [
                       Icon(
-                        _isBookmarked
-                            ? Icons.bookmark
-                            : Icons.bookmark_border,
+                        _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                         size: 20,
                         color: _isBookmarked
                             ? const Color(0xFFBFAE01)
@@ -1202,7 +1219,7 @@ class _PostPageState extends State<PostPage> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        'View all comments',
+                        'View all commentairoauiueiwr',
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,

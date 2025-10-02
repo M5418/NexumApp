@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'connect_friends_page.dart';
 import 'core/profile_api.dart';
+import 'responsive/responsive_breakpoints.dart';
 
 class InterestSelectionPage extends StatefulWidget {
   final List<String>? initialSelected;
@@ -530,15 +531,17 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
         'interest_domains': _selectedInterests.toList(),
       });
       if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ConnectFriendsPage(
-            firstName: widget.firstName,
-            lastName: widget.lastName,
-          ),
-        ),
+
+      final next = ConnectFriendsPage(
+        firstName: widget.firstName,
+        lastName: widget.lastName,
       );
+
+      if (!context.isMobile) {
+        _pushWithPopupTransition(context, next);
+      } else {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -574,235 +577,321 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
           Navigator.pop(context, _selectedInterests.toList());
         }
       },
-      child: Scaffold(
-        backgroundColor: isDarkMode
-            ? const Color(0xFF0C0C0C)
-            : const Color(0xFFF1F4F8),
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(100.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF000000) : Colors.white,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(25),
-                bottomRight: Radius.circular(25),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 26),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+      child: context.isMobile ? _buildMobile(context, isDarkMode) : _buildDesktop(context, isDarkMode),
+    );
+  }
+
+  Widget _buildMobile(BuildContext context, bool isDarkMode) {
+    return Scaffold(
+      backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(100.0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF000000) : Colors.white,
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(25),
+              bottomRight: Radius.circular(25),
             ),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  children: [
-                    const Spacer(),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.arrow_back,
-                            color: isDarkMode ? Colors.white : Colors.black,
-                          ),
-                          onPressed: () {
-                            if (widget.returnSelectedOnPop) {
-                              Navigator.pop(
-                                context,
-                                _selectedInterests.toList(),
-                              );
-                            } else {
-                              Navigator.pop(context);
-                            }
-                          },
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 26),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                children: [
+                  const Spacer(),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_back,
+                          color: isDarkMode ? Colors.white : Colors.black,
                         ),
-                        Text(
-                          'Interests',
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
-                          ),
+                        onPressed: () {
+                          if (widget.returnSelectedOnPop) {
+                            Navigator.pop(
+                              context,
+                              _selectedInterests.toList(),
+                            );
+                          } else {
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                      Text(
+                        'Interests',
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: isDarkMode ? Colors.white : Colors.black,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ),
             ),
           ),
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 20),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: _contentBody(context, isDarkMode, gridColumns: 3),
+        ),
+      ),
+    );
+  }
 
-                // Title and Description
-                Text(
-                  'Select Your Interest',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: isDarkMode ? Colors.white : Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Select more interests to refine your experience.\nUp to ${_selectedInterests.length}/$_maxInterests',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.normal,
-                    color: const Color(0xFF999999),
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // Interests Grid
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _interestCategories.length,
-                    itemBuilder: (context, index) {
-                      final category = _interestCategories.keys.elementAt(
-                        index,
-                      );
-                      final interests = _interestCategories.values.elementAt(
-                        index,
-                      );
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildDesktop(BuildContext context, bool isDarkMode) {
+    return Scaffold(
+      backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Material(
+                color: isDarkMode ? const Color(0xFF000000) : Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    children: [
+                      // Header row (replaces app bar)
+                      Row(
                         children: [
+                          IconButton(
+                            icon: Icon(Icons.close, color: isDarkMode ? Colors.white : Colors.black),
+                            onPressed: () {
+                              if (widget.returnSelectedOnPop) {
+                                Navigator.pop(context, _selectedInterests.toList());
+                              } else {
+                                Navigator.pop(context);
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            category,
+                            'Interests',
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               color: isDarkMode ? Colors.white : Colors.black,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 3,
-                                  childAspectRatio: 2.5,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                ),
-                            itemCount: interests.length,
-                            itemBuilder: (context, interestIndex) {
-                              final interest = interests[interestIndex];
-                              final isSelected = _selectedInterests.contains(
-                                interest,
-                              );
-
-                              return GestureDetector(
-                                onTap: () => _toggleInterest(interest),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? const Color(0xFFBFAE01)
-                                        : (isDarkMode
-                                              ? const Color(0xFF1A1A1A)
-                                              : Colors.white),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? const Color(0xFFBFAE01)
-                                          : (isDarkMode
-                                                ? const Color(0xFF333333)
-                                                : const Color(0xFFE0E0E0)),
-                                      width: 1,
-                                    ),
-                                    boxShadow: [
-                                      if (!isDarkMode)
-                                        BoxShadow(
-                                          color: Colors.black.withValues(
-                                            alpha: 13,
-                                          ),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      interest,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: isSelected
-                                            ? Colors.black
-                                            : (isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 16),
                         ],
-                      );
-                    },
-                  ),
-                ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Divider(height: 1, color: Color(0x1A666666)),
 
-                const SizedBox(height: 20),
-
-                // Continue Button (hidden in edit mode)
-                widget.returnSelectedOnPop
-                    ? const SizedBox.shrink()
-                    : SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _selectedInterests.isNotEmpty && !_isSaving
-                              ? _saveAndContinue
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                _selectedInterests.isNotEmpty && !_isSaving
-                                ? const Color(0xFFBFAE01)
-                                : (isDarkMode
-                                      ? const Color(0xFF333333)
-                                      : const Color(0xFFE0E0E0)),
-                            foregroundColor:
-                                _selectedInterests.isNotEmpty && !_isSaving
-                                ? Colors.black
-                                : (isDarkMode ? Colors.grey : Colors.grey),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(28),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: _contentBody(context, isDarkMode, gridColumns: 5),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (!widget.returnSelectedOnPop)
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: _selectedInterests.isNotEmpty && !_isSaving ? _saveAndContinue : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _selectedInterests.isNotEmpty && !_isSaving
+                                  ? const Color(0xFFBFAE01)
+                                  : (isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
+                              foregroundColor: _selectedInterests.isNotEmpty && !_isSaving
+                                  ? Colors.black
+                                  : (isDarkMode ? Colors.grey : Colors.grey),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(28),
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            _isSaving ? 'Saving...' : 'Continue',
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                            child: Text(
+                              _isSaving ? 'Saving...' : 'Continue',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                const SizedBox(height: 20),
-              ],
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _contentBody(BuildContext context, bool isDarkMode, {required int gridColumns}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+
+        // Title and Description
+        Text(
+          'Select Your Interest',
+          style: GoogleFonts.inter(
+            fontSize: context.isMobile ? 18 : 20,
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.white : Colors.black,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Select more interests to refine your experience.\nUp to ${_selectedInterests.length}/$_maxInterests',
+          style: GoogleFonts.inter(
+            fontSize: context.isMobile ? 14 : 15,
+            color: const Color(0xFF999999),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Interests Blocks
+        ..._interestCategories.entries.map((entry) {
+          final category = entry.key;
+          final interests = entry.value;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                category,
+                style: GoogleFonts.inter(
+                  fontSize: context.isMobile ? 18 : 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode ? Colors.white : Colors.black,
+                ),
+              ),
+              const SizedBox(height: 8),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: gridColumns,
+                  childAspectRatio: 2.5,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: interests.length,
+                itemBuilder: (context, i) {
+                  final interest = interests[i];
+                  final isSelected = _selectedInterests.contains(interest);
+                  return GestureDetector(
+                    onTap: () => _toggleInterest(interest),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFFBFAE01)
+                            : (isDarkMode ? const Color(0xFF1A1A1A) : Colors.white),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFFBFAE01)
+                              : (isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          if (!isDarkMode)
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 13),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          interest,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected
+                                ? Colors.black
+                                : (isDarkMode ? Colors.white : Colors.black),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          );
+        }),
+
+        // Continue Button (mobile only; desktop renders button in footer)
+        if (context.isMobile && !widget.returnSelectedOnPop) ...[
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: _selectedInterests.isNotEmpty && !_isSaving ? _saveAndContinue : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _selectedInterests.isNotEmpty && !_isSaving
+                    ? const Color(0xFFBFAE01)
+                    : (isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
+                foregroundColor: _selectedInterests.isNotEmpty && !_isSaving
+                    ? Colors.black
+                    : (isDarkMode ? Colors.grey : Colors.grey),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+              child: Text(
+                _isSaving ? 'Saving...' : 'Continue',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ],
+    );
+  }
+
+  void _pushWithPopupTransition(BuildContext context, Widget page) {
+    Navigator.of(context).push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    ));
   }
 }

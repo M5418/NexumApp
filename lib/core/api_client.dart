@@ -19,25 +19,27 @@ class ApiClient {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final t = await TokenStore.read();
-          debugPrint(' Token from storage: $t');
+          debugPrint('🔑 [${DateTime.now().toIso8601String()}] Token check for ${options.method} ${options.path}');
+          debugPrint('   Token: ${t != null ? "EXISTS (${t.substring(0, 20)}...)" : "NULL"}');
           if (t != null && t.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $t';
-            debugPrint(' Added Authorization header');
+            debugPrint('   ✅ Authorization header added');
           } else {
-            debugPrint(' No token found in storage');
+            debugPrint('   ⚠️  NO TOKEN - Request will be unauthorized');
           }
-          debugPrint(' Request headers: ${options.headers}');
           handler.next(options);
         },
         onResponse: (response, handler) {
-          debugPrint(' Response status: ${response.statusCode}');
-          debugPrint(' Response data: ${response.data}');
+          debugPrint('✅ [${DateTime.now().toIso8601String()}] ${response.statusCode} ${response.requestOptions.path}');
           handler.next(response);
         },
         onError: (error, handler) {
-          debugPrint(
-            ' API Error: ${error.response?.statusCode} - ${error.response?.data}',
-          );
+          final statusCode = error.response?.statusCode;
+          final path = error.requestOptions.path;
+          debugPrint('❌ [${DateTime.now().toIso8601String()}] Error $statusCode on $path');
+          if (statusCode == 401) {
+            debugPrint('   🚨 401 UNAUTHORIZED - but NOT auto-logging out');
+          }
           handler.next(error);
         },
       ),

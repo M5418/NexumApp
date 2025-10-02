@@ -38,6 +38,7 @@ import 'core/notifications_api.dart';
 import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
 import 'core/users_api.dart';   // Suggested users (right column)
+import 'responsive/responsive_breakpoints.dart';
 
 class HomeFeedPage extends StatefulWidget {
   const HomeFeedPage({super.key});
@@ -69,7 +70,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   @override
   void initState() {
     super.initState();
-    _ensureAuth();
     () async {
       await _loadCurrentUserId();
       await _loadFeedPrefs(); // load prefs before posts
@@ -798,6 +798,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             ],
           ),
         );
+        if (!mounted) return;
         if (remove == true) {
           try {
             await PostsApi().unrepost(originalId);
@@ -857,15 +858,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         final isDark = themeProvider.isDarkMode;
         final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
-        // Desktop-web layouts
-                // Desktop-web layouts
-        if (kIsWeb) {
-          final size = MediaQuery.of(context).size;
-          final isLarge = size.width >= 1280 && size.height >= 800;
-          if (isLarge) {
-            // Large desktop web layout
-            return _buildDesktopLayout(context, isDark, backgroundColor);
-          }
+                // Responsive: desktop and largeDesktop → desktop layout; others → mobile
+        if (kIsWeb && (context.isDesktop || context.isLargeDesktop)) {
+          return _buildDesktopLayout(context, isDark, backgroundColor);
         }
 
         // Mobile/tablet: keep existing design
@@ -1473,37 +1468,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     return _pickAvatar(u);
   }
 
-  // Warning page for small web sizes
-  Widget _buildTooSmallWeb(Color backgroundColor, bool isDark) {
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.black : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              if (!isDark)
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-            ],
-          ),
-          child: Text(
-            'Screen too small!',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : Colors.black,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+
 
   // ===========================
   // Mobile layout (unchanged)

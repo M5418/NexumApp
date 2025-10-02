@@ -1,12 +1,14 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+// File: lib/core/env.dart
+import 'package:flutter/foundation.dart' show kReleaseMode;
 
-const _kApiBaseUrlConfigured = String.fromEnvironment(
+// Defaults: prod in release, dev in debug/profile.
+// Override anytime with:
+//   --dart-define=API_BASE=https://api.nexum-connects.com
+//   --dart-define=API_BASE=http://localhost:3000
+const String kDefaultApiBaseProd = 'https://api.nexum-connects.com';
+const String kDefaultApiBaseDev  = 'http://localhost:3000';
+
+const String kApiBaseUrl = String.fromEnvironment(
   'API_BASE',
-  defaultValue: 'http://10.0.2.2:8080',
+  defaultValue: kReleaseMode ? kDefaultApiBaseProd : kDefaultApiBaseDev,
 );
-
-final String kApiBaseUrl = kIsWeb &&
-        (_kApiBaseUrlConfigured.contains('10.0.2.2') ||
-            _kApiBaseUrlConfigured.contains('0.0.0.0'))
-    ? 'http://localhost:8080'
-    : _kApiBaseUrlConfigured;

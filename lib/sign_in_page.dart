@@ -29,8 +29,8 @@ class _SignInPageState extends State<SignInPage> {
     super.initState();
     // Prefill default dev credentials in debug mode only
     if (kDebugMode) {
-      _emailController.text = 'test04@gmail.com';
-      _passwordController.text = 'Test04@!';
+      _emailController.text = 'maroufguy7@gmail.com';
+      _passwordController.text = 'Marouf0@!';
     }
   }
 
@@ -140,6 +140,7 @@ class _SignInPageState extends State<SignInPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep provider if you need dark text color logic elsewhere
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
 
@@ -147,13 +148,12 @@ class _SignInPageState extends State<SignInPage> {
       body: Container(
         height: MediaQuery.of(context).size.height,
         width: MediaQuery.of(context).size.width,
-        decoration: BoxDecoration(
+        // Match Sign-Up page gradient exactly
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: isDarkMode
-                ? [const Color(0xFF0C0C0C), const Color(0xFF0C0C0C)]
-                : [const Color(0xFFFFFFFF), const Color(0xFFFFFFFF)],
+            colors: [Color(0xFFFFFFFF), Color(0xFF0C0C0C)],
           ),
         ),
         child: SafeArea(

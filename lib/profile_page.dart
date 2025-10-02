@@ -2348,15 +2348,17 @@ class _ProfilePageState extends State<ProfilePage> {
                       color: Colors.red,
                     ),
                   ),
-                  onTap: () async {
+                                    onTap: () async {
                     Navigator.pop(context);
                     final ctx = context;
                     await TokenStore.clear();
+                    // Remove Authorization header from Dio client
+                    ApiClient().dio.options.headers.remove('Authorization');
                     try {
                       await AuthApi().logout();
                     } catch (_) {}
                     if (ctx.mounted) {
-                      Navigator.of(ctx).pushAndRemoveUntil(
+                      Navigator.of(ctx, rootNavigator: true).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (_) => const SignInPage()),
                         (route) => false,
                       );
