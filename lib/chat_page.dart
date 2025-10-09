@@ -13,6 +13,7 @@ import 'core/audio_recorder.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io';
+import 'dart:async';
 import 'core/profile_api.dart';
 import 'widgets/media_preview_page.dart';
 
@@ -46,6 +47,8 @@ class _ChatPageState extends State<ChatPage> {
   bool _isRecording = false;
   bool _isLoading = false;
   String? _loadError;
+  Timer? _pollTimer;
+  bool _isRefreshing = false;
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -60,10 +63,11 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _initLoad();
-  }
+void initState() {
+  super.initState();
+  _initLoad();
+  _startPolling();
+}
 
   void _initLoad() {
     if (widget.conversationId != null && widget.conversationId!.isNotEmpty) {
@@ -149,6 +153,63 @@ class _ChatPageState extends State<ChatPage> {
       }
     } catch (_) {}
   }
+  void _startPolling() {
+  _pollTimer?.cancel();
+  // Poll every 3 seconds for new messages when we have a conversation ID
+  _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+    if (!mounted) return;
+    if (_resolvedConversationId == null) return;
+    if (_isLoading || _isRefreshing) return; // avoid overlapping calls
+    await _refreshMessages();
+  });
+}
+
+Future<void> _refreshMessages() async {
+  if (_resolvedConversationId == null) return;
+  try {
+    _isRefreshing = true;
+
+    // Check if user is near bottom to decide whether to auto-scroll after update
+    final bool wasAtBottom = _scrollController.hasClients &&
+        (_scrollController.position.maxScrollExtent - _scrollController.position.pixels) < 120;
+
+    final records = await _messagesApi.list(_resolvedConversationId!, limit: 50);
+    final mapped = records.map(_toUiMessage).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(mapped);
+      _messageReactions.clear();
+      for (final r in records) {
+        if (r.reaction != null && r.reaction!.isNotEmpty) {
+          _messageReactions[r.id] = r.reaction!;
+        } else if (r.myReaction != null && r.myReaction!.isNotEmpty) {
+          _messageReactions[r.id] = r.myReaction!;
+        }
+      }
+    });
+
+    if (wasAtBottom) {
+      _scrollToBottom();
+    }
+
+    // Mark all as read in this conversation after refresh
+    await _markRead();
+  } catch (_) {
+    // swallow refresh error silently to avoid spamming the user
+  } finally {
+    _isRefreshing = false;
+  }
+}
+
+@override
+void dispose() {
+  _pollTimer?.cancel();
+  _scrollController.dispose();
+  super.dispose();
+}
 
   Message _toUiMessage(MessageRecord r) {
     final isFromCurrentUser = r.senderId != widget.otherUser.id;
