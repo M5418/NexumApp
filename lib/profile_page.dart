@@ -2475,63 +2475,111 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-    Widget _buildActivityTab() {
-    if (_loadingActivity) return const Center(child: CircularProgressIndicator());
-    if (_errorActivity != null) return Center(child: Text(_errorActivity!));
-    if (_activityPosts.isEmpty) {
-      return ListView(
-        primary: false,
-        padding: const EdgeInsets.only(top: 10, bottom: 20),
-        children: [
-          Center(child: Text('No recent activity yet.')),
-        ],
-      );
-    }
-    return ListView.builder(
-      primary: false,
-      padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: _activityPosts.length,
-      itemBuilder: (context, index) {
-        return PostCard(
-          post: _activityPosts[index],
-          onReactionChanged: (postId, reaction) {},
-          onBookmarkToggle: (postId) {},
-          onShare: (postId) {},
-          onComment: (postId) {},
-          onRepost: (postId) {},
-        );
-      },
+Widget _buildActivityTab() {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  if (_loadingActivity) return const Center(child: CircularProgressIndicator());
+
+  if (_errorActivity != null) {
+    return Center(
+      child: Text(
+        _errorActivity!,
+        style: GoogleFonts.inter(
+          fontSize: 14,
+          color: isDark ? Colors.white70 : const Color(0xFF666666),
+        ),
+      ),
     );
   }
 
-  Widget _buildPostsTab() {
-    if (_loadingMyPosts) return const Center(child: CircularProgressIndicator());
-    if (_errorMyPosts != null) return Center(child: Text(_errorMyPosts!));
-    if (_myPosts.isEmpty) {
-      return ListView(
-        primary: false,
-        padding: const EdgeInsets.only(top: 10, bottom: 20),
-        children: [
-          Center(child: Text('No posts yet.')),
-        ],
-      );
-    }
-    return ListView.builder(
+  if (_activityPosts.isEmpty) {
+    return ListView(
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: _myPosts.length,
-      itemBuilder: (context, index) {
-        return HomePostCard(
-          post: _myPosts[index],
-          onReactionChanged: (postId, reaction) {},
-          onBookmarkToggle: (postId) {},
-          onShare: (postId) {},
-          onComment: (postId) {},
-          onRepost: (postId) {},
-        );
-      },
+      children: [
+        Center(
+          child: Text(
+            'No recent activity yet.',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: isDark ? Colors.white70 : const Color(0xFF666666),
+            ),
+          ),
+        ),
+      ],
     );
   }
+
+  return ListView.builder(
+    primary: false,
+    padding: const EdgeInsets.only(top: 10, bottom: 20),
+    itemCount: _activityPosts.length,
+    itemBuilder: (context, index) {
+      return PostCard(
+        post: _activityPosts[index],
+        isDarkMode: isDark,
+        onReactionChanged: (postId, reaction) {},
+        onBookmarkToggle: (postId) {},
+        onShare: (postId) {},
+        onComment: (postId) {},
+        onRepost: (postId) {},
+      );
+    },
+  );
+}
+
+Widget _buildPostsTab() {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  if (_loadingMyPosts) return const Center(child: CircularProgressIndicator());
+
+  if (_errorMyPosts != null) {
+    return Center(
+      child: Text(
+        _errorMyPosts!,
+        style: GoogleFonts.inter(
+          fontSize: 14,
+          color: isDark ? Colors.white70 : const Color(0xFF666666),
+        ),
+      ),
+    );
+  }
+
+  if (_myPosts.isEmpty) {
+    return ListView(
+      primary: false,
+      padding: const EdgeInsets.only(top: 10, bottom: 20),
+      children: [
+        Center(
+          child: Text(
+            'No posts yet.',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: isDark ? Colors.white70 : const Color(0xFF666666),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  return ListView.builder(
+    primary: false,
+    padding: const EdgeInsets.only(top: 10, bottom: 20),
+    itemCount: _myPosts.length,
+    itemBuilder: (context, index) {
+      return HomePostCard(
+        post: _myPosts[index],
+        isDarkMode: isDark,
+        onReactionChanged: (postId, reaction) {},
+        onBookmarkToggle: (postId) {},
+        onShare: (postId) {},
+        onComment: (postId) {},
+        onRepost: (postId) {},
+      );
+    },
+  );
+}
 
   Widget _buildPodcastsTab() {
     if (_loadingPodcasts) return const Center(child: CircularProgressIndicator());

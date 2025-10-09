@@ -1005,32 +1005,34 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
               ),
             ],
           ),
-          Positioned(
-            left: 24,
-            bottom: 24,
-            child: FloatingActionButton(
-              heroTag: 'createPostFabWeb',
-              onPressed: () async {
-                final created = await CreatePostPage.showPopup<bool>(context);
-                if (created == true) {
-                  await _loadData();
-                }
-              },
-              backgroundColor: const Color(0xFFBFAE01),
-              foregroundColor: Colors.black,
-              child: const Icon(Icons.add),
+          if (_desktopSectionIndex == 0)
+            Positioned(
+              left: 24,
+              bottom: 24,
+              child: FloatingActionButton(
+                heroTag: 'createPostFabWeb',
+                onPressed: () async {
+                  final created = await CreatePostPage.showPopup<bool>(context);
+                  if (created == true) {
+                    await _loadData();
+                  }
+                },
+                backgroundColor: const Color(0xFFBFAE01),
+                foregroundColor: Colors.black,
+                child: const Icon(Icons.add),
+              ),
             ),
-          ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'toolsFabWeb',
-        onPressed: _showToolsOverlay,
-        backgroundColor: const Color(0xFFBFAE01),
-        foregroundColor: Colors.black,
-        child: const Icon(Icons.widgets_outlined),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+            floatingActionButton: (_desktopSectionIndex == 0 || _desktopSectionIndex == 1)
+          ? FloatingActionButton(
+              heroTag: 'toolsFabWeb',
+              onPressed: _showToolsOverlay,
+              backgroundColor: const Color(0xFFBFAE01),
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.widgets_outlined),
+            )
+          : null,
     );
   }
 

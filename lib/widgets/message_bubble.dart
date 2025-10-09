@@ -6,6 +6,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/message.dart';
 import '../image_swipe_page.dart';
+import '../core/time_utils.dart';
 
 class MessageBubble extends StatefulWidget {
   final Message message;
@@ -724,7 +725,7 @@ class _MessageBubbleState extends State<MessageBubble>
           children: [
             if (widget.message.replyTo != null) _buildReplyPreview(isDark),
             if (widget.message.replyTo != null) const SizedBox(height: 6),
-            Row(
+                        Row(
               children: [
                 IconButton(
                   onPressed: _togglePlayback,
@@ -736,7 +737,7 @@ class _MessageBubbleState extends State<MessageBubble>
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 3),
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -776,7 +777,7 @@ class _MessageBubbleState extends State<MessageBubble>
                     },
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 3),
                 Text(
                   _formatDuration(
                     effectiveTotal.inMilliseconds > 0
@@ -1205,7 +1206,7 @@ class _MessageBubbleState extends State<MessageBubble>
       child: Align(
         alignment: align,
         child: Text(
-          '${widget.message.timestamp.hour.toString().padLeft(2, '0')}:${widget.message.timestamp.minute.toString().padLeft(2, '0')}',
+          TimeUtils.relativeLabel(widget.message.timestamp, locale: 'en_short'),
           style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
         ),
       ),

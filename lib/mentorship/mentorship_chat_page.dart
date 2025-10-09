@@ -643,8 +643,9 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
       body: Column(children: [
         Expanded(
           child: Builder(builder: (_) {
-            if (_loading)
+            if (_loading) {
               return const Center(child: CircularProgressIndicator());
+            }
             if (_err != null) {
               return Center(
                 child: Padding(
@@ -685,7 +686,9 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
     int c = 0;
     for (int i = 0; i < _messages.length; i++) {
       if (i == 0 ||
-          !_sameDay(_messages[i].timestamp, _messages[i - 1].timestamp)) c++;
+          !_sameDay(_messages[i].timestamp, _messages[i - 1].timestamp)) {
+        c++;
+      }
     }
     return c;
   }
@@ -698,8 +701,9 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
     for (int i = 0; i < _messages.length; i++) {
       if (i == 0 ||
           !_sameDay(_messages[i].timestamp, _messages[i - 1].timestamp)) {
-        if (msgIdx == i + passed)
+        if (msgIdx == i + passed) {
           return _daySep(_messages[i].timestamp, isDark);
+        }
         passed++;
         msgIdx--;
       }
