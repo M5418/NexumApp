@@ -31,11 +31,14 @@ import 'responsive/responsive_breakpoints.dart';
 
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final bool hideDesktopTopNav;
+
+  const ProfilePage({super.key, this.hideDesktopTopNav = false});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
+
 
 class _ProfilePageState extends State<ProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
@@ -1474,7 +1477,7 @@ class _ProfilePageState extends State<ProfilePage> {
       endDrawer: _buildDrawer(),
       body: Column(
         children: [
-          _buildDesktopTopNav(context, isDark),
+          if (!widget.hideDesktopTopNav) _buildDesktopTopNav(context, isDark),
           Expanded( 
             child: Center(
               child: ConstrainedBox(

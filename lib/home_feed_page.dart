@@ -37,7 +37,7 @@ import 'package:dio/dio.dart';
 import 'core/notifications_api.dart';
 import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
-import 'core/users_api.dart';   // Suggested users (right column)
+import 'core/users_api.dart'; // Suggested users (right column)
 import 'responsive/responsive_breakpoints.dart';
 
 class HomeFeedPage extends StatefulWidget {
@@ -54,8 +54,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   List<Map<String, dynamic>> _suggestedUsers = [];
   int _conversationsInitialTabIndex = 0; // 0: Chats, 1: Communities
   String? _currentUserId;
-  int _desktopSectionIndex = 0; // 0=Home, 1=Connections, 2=Conversations, 3=Profile
-  
+  int _desktopSectionIndex =
+      0; // 0=Home, 1=Connections, 2=Conversations, 3=Profile
+
   // Unread notifications badge
   int _unreadCount = 0;
 
@@ -84,7 +85,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       if (!mounted) return;
       setState(() {
         _posts = _posts.map((p) {
-          if (p.id == e.originalPostId || p.originalPostId == e.originalPostId) {
+          if (p.id == e.originalPostId ||
+              p.originalPostId == e.originalPostId) {
             return p.copyWith(
               counts: e.counts,
               userReaction: e.userReaction ?? p.userReaction,
@@ -114,7 +116,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
-      bool _useDesktopPopup(BuildContext context) {
+  bool _useDesktopPopup(BuildContext context) {
     if (kIsWeb) {
       // On web, use width to decide "desktop" vs "mobile"
       final w = MediaQuery.of(context).size.width;
@@ -170,14 +172,16 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             : (data['show_suggested_posts'] == 1 ||
                 data['show_suggested_posts'] == '1' ||
                 (data['show_suggested_posts'] is String &&
-                    (data['show_suggested_posts'] as String).toLowerCase() == 'true'));
+                    (data['show_suggested_posts'] as String).toLowerCase() ==
+                        'true'));
 
         _prefPrioritizeInterests = (data['prioritize_interests'] is bool)
             ? data['prioritize_interests']
             : (data['prioritize_interests'] == 1 ||
                 data['prioritize_interests'] == '1' ||
                 (data['prioritize_interests'] is String &&
-                    (data['prioritize_interests'] as String).toLowerCase() == 'true'));
+                    (data['prioritize_interests'] as String).toLowerCase() ==
+                        'true'));
 
         _myInterests = interestsList;
       });
@@ -226,7 +230,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
 
     // Ensure "Your Story" ring shows even if you have no active stories
-    if (_currentUserId != null && !rings.any((r) => r.userId == _currentUserId)) {
+    if (_currentUserId != null &&
+        !rings.any((r) => r.userId == _currentUserId)) {
       rings = [
         stories_api.StoryRing(
           userId: _currentUserId!,
@@ -272,7 +277,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       // ignore suggestions errors
     }
   }
-    // Fetch original posts for repost items when the backend didn't hydrate them.
+
+  // Fetch original posts for repost items when the backend didn't hydrate them.
   Future<List<Post>> _hydrateReposts(List<Post> posts) async {
     if (posts.isEmpty) return posts;
     final api = PostsApi();
@@ -356,11 +362,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       // Hashtags in text (already hydrated to original content if repost)
       final tags = _extractTags(p.text);
       final hasAnyHashtag = tags.isNotEmpty;
-      final matchesInterest =
-          interestTokens.isNotEmpty && tags.any((t) => interestTokens.contains(t));
+      final matchesInterest = interestTokens.isNotEmpty &&
+          tags.any((t) => interestTokens.contains(t));
 
       // Only enforce interest if user actually has interests set
-      final enforceInterest = _prefPrioritizeInterests && interestTokens.isNotEmpty;
+      final enforceInterest =
+          _prefPrioritizeInterests && interestTokens.isNotEmpty;
       final enforceSuggested = _prefShowSuggested;
 
       // No hashtag filters requested
@@ -427,7 +434,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   void _applyToOriginal(String originalId,
-      {required PostCounts counts, ReactionType? userReaction, bool? isBookmarked}) {
+      {required PostCounts counts,
+      ReactionType? userReaction,
+      bool? isBookmarked}) {
     final idxs = _indexesForOriginal(originalId);
     for (final i in idxs) {
       final p = _posts[i];
@@ -457,7 +466,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
     final prevPosts = List<Post>.from(_posts);
     setState(() {
-      _applyToOriginal(originalId, counts: updatedCounts, isBookmarked: willBookmark);
+      _applyToOriginal(originalId,
+          counts: updatedCounts, isBookmarked: willBookmark);
     });
 
     try {
@@ -480,7 +490,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Bookmark failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('Bookmark failed: ${_toError(e)}',
+              style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -505,7 +516,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         bookmarks: base.counts.bookmarks,
       );
       setState(() {
-        _applyToOriginal(originalId, counts: updatedCounts, userReaction: reaction);
+        _applyToOriginal(originalId,
+            counts: updatedCounts, userReaction: reaction);
       });
       try {
         await PostsApi().like(originalId);
@@ -522,7 +534,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            content:
+                Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -559,7 +572,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Unlike failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            content: Text('Unlike failed: ${_toError(e)}',
+                style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -587,7 +601,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       onCopyLink: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Link copied to clipboard', style: GoogleFonts.inter()),
+            content:
+                Text('Link copied to clipboard', style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF9E9E9E),
           ),
         );
@@ -640,7 +655,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('Load comments failed: ${_toError(e)}',
+              style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -689,7 +705,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Post comment failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              content: Text('Post comment failed: ${_toError(e)}',
+                  style: GoogleFonts.inter()),
               backgroundColor: Colors.red,
             ),
           );
@@ -697,7 +714,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       },
       onReplyToComment: (commentId, replyText) async {
         try {
-          await PostsApi().addComment(originalId, content: replyText, parentCommentId: commentId);
+          await PostsApi().addComment(originalId,
+              content: replyText, parentCommentId: commentId);
 
           // Count reply as part of comments for the action row
           final base = _baseForOriginal(originalId);
@@ -731,7 +749,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              content: Text('Reply failed: ${_toError(e)}',
+                  style: GoogleFonts.inter()),
               backgroundColor: Colors.red,
             ),
           );
@@ -746,8 +765,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Repost this?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-        content: Text('Are you sure you want to repost this?', style: GoogleFonts.inter()),
+        title: Text('Repost this?',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        content: Text('Are you sure you want to repost this?',
+            style: GoogleFonts.inter()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -755,7 +776,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Repost', style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
+            child: Text('Repost',
+                style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
           ),
         ],
       ),
@@ -767,7 +789,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Post reposted successfully', style: GoogleFonts.inter()),
+          content:
+              Text('Post reposted successfully', style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
@@ -779,14 +802,19 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
       final isAlreadyReposted = code == 409 ||
           (data is Map &&
-              ((data['error'] ?? data['message'] ?? '').toString().toLowerCase().contains('already')));
+              ((data['error'] ?? data['message'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains('already')));
 
       if (isAlreadyReposted) {
         final remove = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text('Remove repost?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            content: Text('You already reposted this. Remove your repost?', style: GoogleFonts.inter()),
+            title: Text('Remove repost?',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            content: Text('You already reposted this. Remove your repost?',
+                style: GoogleFonts.inter()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -794,7 +822,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text('Remove', style: GoogleFonts.inter(color: Colors.red)),
+                child:
+                    Text('Remove', style: GoogleFonts.inter(color: Colors.red)),
               ),
             ],
           ),
@@ -815,7 +844,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to remove repost: ${_toError(e2)}', style: GoogleFonts.inter()),
+                content: Text('Failed to remove repost: ${_toError(e2)}',
+                    style: GoogleFonts.inter()),
                 backgroundColor: Colors.red,
               ),
             );
@@ -834,7 +864,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Repost failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content:
+              Text('Repost failed: ${_toError(e)}', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -849,7 +880,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     // Refresh after returning from Post page
     await _loadData();
   }
-    // ----------------------------
+
+  // ----------------------------
   // BUILD
   // ----------------------------
   @override
@@ -857,9 +889,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         final isDark = themeProvider.isDarkMode;
-        final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+        final backgroundColor =
+            isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
-                // Responsive: desktop and largeDesktop → desktop layout; others → mobile
+        // Responsive: desktop and largeDesktop → desktop layout; others → mobile
         if (kIsWeb && (context.isDesktop || context.isLargeDesktop)) {
           return _buildDesktopLayout(context, isDark, backgroundColor);
         }
@@ -879,21 +912,23 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                       ? const ProfilePage()
                       : _selectedNavIndex == 5
                           ? const VideoScrollPage()
-                          : _buildHomeFeedMobile(context, isDark, backgroundColor),
+                          : _buildHomeFeedMobile(
+                              context, isDark, backgroundColor),
           bottomNavigationBar: AnimatedNavbar(
             selectedIndex: _selectedNavIndex,
             onTabChange: _onNavTabChange,
             isDarkMode: isDark,
           ),
-          floatingActionButton: (_selectedNavIndex == 0 || _selectedNavIndex == 1)
-              ? FloatingActionButton(
-                  heroTag: 'toolsFabMain',
-                  onPressed: _showToolsOverlay,
-                  backgroundColor: const Color(0xFFBFAE01),
-                  foregroundColor: Colors.black,
-                  child: const Icon(Icons.widgets_outlined),
-                )
-              : null,
+          floatingActionButton:
+              (_selectedNavIndex == 0 || _selectedNavIndex == 1)
+                  ? FloatingActionButton(
+                      heroTag: 'toolsFabMain',
+                      onPressed: _showToolsOverlay,
+                      backgroundColor: const Color(0xFFBFAE01),
+                      foregroundColor: Colors.black,
+                      child: const Icon(Icons.widgets_outlined),
+                    )
+                  : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         );
       },
@@ -910,16 +945,20 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         });
       },
       onPodcasts: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const PodcastsHomePage()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const PodcastsHomePage()));
       },
       onBooks: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const BooksHomePage()));
+        Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const BooksHomePage()));
       },
       onMentorship: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const MentorshipHomePage()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const MentorshipHomePage()));
       },
       onVideos: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const VideoScrollPage()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const VideoScrollPage()));
       },
     );
   }
@@ -927,7 +966,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   // ===========================
   // Desktop (Web) Layout
   // ===========================
-  Widget _buildDesktopLayout(BuildContext context, bool isDark, Color backgroundColor) {
+  Widget _buildDesktopLayout(
+      BuildContext context, bool isDark, Color backgroundColor) {
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Stack(
@@ -935,34 +975,34 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           Column(
             children: [
               _buildDesktopTopNav(isDark),
-             Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1280),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                    child: IndexedStack(
-                      index: _desktopSectionIndex,
-                      children: [
-                        _buildDesktopColumns(isDark), // Home
-                        ConnectionsPage(
-                          isDarkMode: isDark,
-                          onThemeToggle: () {},
-                          hideDesktopTopNav: true,
-                        ),
-                        ConversationsPage(
-                          isDarkMode: isDark,
-                          onThemeToggle: () {},
-                          initialTabIndex: _conversationsInitialTabIndex,
-                          hideDesktopTopNav: true,
-                        ),
-                        const ProfilePage(), // Can be switched to embedded later if desired
-                      ],
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1280),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      child: IndexedStack(
+                        index: _desktopSectionIndex,
+                        children: [
+                          _buildDesktopColumns(isDark), // Home
+                          ConnectionsPage(
+                            isDarkMode: isDark,
+                            onThemeToggle: () {},
+                            hideDesktopTopNav: true,
+                          ),
+                          ConversationsPage(
+                            isDarkMode: isDark,
+                            onThemeToggle: () {},
+                            initialTabIndex: _conversationsInitialTabIndex,
+                            hideDesktopTopNav: true,
+                          ),
+                          const ProfilePage(hideDesktopTopNav: true),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
             ],
           ),
           Positioned(
@@ -983,7 +1023,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           ),
         ],
       ),
-
       floatingActionButton: FloatingActionButton(
         heroTag: 'toolsFabWeb',
         onPressed: _showToolsOverlay,
@@ -995,116 +1034,122 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     );
   }
 
-Widget _buildDesktopTopNav(bool isDark) {
-  final barColor = isDark ? Colors.black : Colors.white;
-  return Material(
-    color: barColor,
-    elevation: isDark ? 0 : 2,
-    child: SafeArea(
-      bottom: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.menu, color: const Color(0xFF666666)),
-                const Spacer(),
-                Text(
-                  'NEXUM',
-                  style: GoogleFonts.inika(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black,
+  Widget _buildDesktopTopNav(bool isDark) {
+    final barColor = isDark ? Colors.black : Colors.white;
+    return Material(
+      color: barColor,
+      elevation: isDark ? 0 : 2,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.menu, color: const Color(0xFF666666)),
+                  const Spacer(),
+                  Text(
+                    'NEXUM',
+                    style: GoogleFonts.inika(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
                   ),
-                ),
-                const Spacer(),
-                BadgeIcon(
-                  icon: Icons.notifications_outlined,
-                  badgeCount: _unreadCount,
-                  iconColor: const Color(0xFF666666),
-                  onTap: () async {
-                    final size = MediaQuery.of(context).size;
-                    final desktop = kIsWeb && size.width >= 1280 && size.height >= 800;
-                    if (desktop) {
-                      await showDialog(
-                        context: context,
-                        barrierDismissible: true,
-                        barrierColor: Colors.black26,
-                        builder: (_) {
-                          final isDark = Theme.of(context).brightness == Brightness.dark;
-                          final double width = 420;
-                          final double height = size.height * 0.8;
-                          return SafeArea(
-                            child: Align(
-                              alignment: Alignment.topRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 16, right: 16),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: SizedBox(
-                                    width: width,
-                                    height: height,
-                                    child: Material(
-                                      color: isDark ? const Color(0xFF000000) : Colors.white,
-                                      child: const NotificationPage(),
+                  const Spacer(),
+                  BadgeIcon(
+                    icon: Icons.notifications_outlined,
+                    badgeCount: _unreadCount,
+                    iconColor: const Color(0xFF666666),
+                    onTap: () async {
+                      final size = MediaQuery.of(context).size;
+                      final desktop =
+                          kIsWeb && size.width >= 1280 && size.height >= 800;
+                      if (desktop) {
+                        await showDialog(
+                          context: context,
+                          barrierDismissible: true,
+                          barrierColor: Colors.black26,
+                          builder: (_) {
+                            final isDark =
+                                Theme.of(context).brightness == Brightness.dark;
+                            final double width = 420;
+                            final double height = size.height * 0.8;
+                            return SafeArea(
+                              child: Align(
+                                alignment: Alignment.topRight,
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 16, right: 16),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: SizedBox(
+                                      width: width,
+                                      height: height,
+                                      child: Material(
+                                        color: isDark
+                                            ? const Color(0xFF000000)
+                                            : Colors.white,
+                                        child: const NotificationPage(),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      );
-                    } else {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const NotificationPage()),
-                      );
-                    }
-                    if (!mounted) return;
-                    await _loadUnreadCount();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _TopNavItem(
-                  icon: Icons.home_outlined,
-                  label: 'Home',
-                  selected: _desktopSectionIndex == 0,
-                  onTap: () => setState(() => _desktopSectionIndex = 0),
-                ),
-                _TopNavItem(
-                  icon: Icons.people_outline,
-                  label: 'Connections',
-                  selected: _desktopSectionIndex == 1,
-                  onTap: () => setState(() => _desktopSectionIndex = 1),
-                ),
-                _TopNavItem(
-                  icon: Icons.chat_bubble_outline,
-                  label: 'Conversations',
-                  selected: _desktopSectionIndex == 2,
-                  onTap: () => setState(() => _desktopSectionIndex = 2),
-                ),
-                _TopNavItem(
-                  icon: Icons.person_outline,
-                  label: 'My Profil',
-                  selected: _desktopSectionIndex == 3,
-                  onTap: () => setState(() => _desktopSectionIndex = 3),
-                ),
-              ],
-            ),
-          ],
+                            );
+                          },
+                        );
+                      } else {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const NotificationPage()),
+                        );
+                      }
+                      if (!mounted) return;
+                      await _loadUnreadCount();
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _TopNavItem(
+                    icon: Icons.home_outlined,
+                    label: 'Home',
+                    selected: _desktopSectionIndex == 0,
+                    onTap: () => setState(() => _desktopSectionIndex = 0),
+                  ),
+                  _TopNavItem(
+                    icon: Icons.people_outline,
+                    label: 'Connections',
+                    selected: _desktopSectionIndex == 1,
+                    onTap: () => setState(() => _desktopSectionIndex = 1),
+                  ),
+                  _TopNavItem(
+                    icon: Icons.chat_bubble_outline,
+                    label: 'Conversations',
+                    selected: _desktopSectionIndex == 2,
+                    onTap: () => setState(() => _desktopSectionIndex = 2),
+                  ),
+                  _TopNavItem(
+                    icon: Icons.person_outline,
+                    label: 'My Profil',
+                    selected: _desktopSectionIndex == 3,
+                    onTap: () => setState(() => _desktopSectionIndex = 3),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildDesktopColumns(bool isDark) {
     return Row(
@@ -1179,7 +1224,8 @@ Widget _buildDesktopTopNav(bool isDark) {
                         isSeen: !ring.hasUnseen,
                         onAddTap: isMine
                             ? () {
-                                if (ring.storyCount > 0 && _currentUserId != null) {
+                                if (ring.storyCount > 0 &&
+                                    _currentUserId != null) {
                                   MyStoriesBottomSheet.show(
                                     context,
                                     currentUserId: _currentUserId!,
@@ -1187,14 +1233,18 @@ Widget _buildDesktopTopNav(bool isDark) {
                                       StoryTypePicker.show(
                                         context,
                                         onSelected: (type) async {
-                                         if (_useDesktopPopup(context)) {
-                                          await StoryComposerPopup.show(context, type: type);
-                                        } else {
-                                          await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(builder: (_) => _composerPage(type)),
-                                          );
-                                        }
+                                          if (_useDesktopPopup(context)) {
+                                            await StoryComposerPopup.show(
+                                                context,
+                                                type: type);
+                                          } else {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      _composerPage(type)),
+                                            );
+                                          }
                                         },
                                       );
                                     },
@@ -1204,11 +1254,14 @@ Widget _buildDesktopTopNav(bool isDark) {
                                     context,
                                     onSelected: (type) async {
                                       if (_useDesktopPopup(context)) {
-                                        await StoryComposerPopup.show(context, type: type);
+                                        await StoryComposerPopup.show(context,
+                                            type: type);
                                       } else {
                                         await Navigator.push(
                                           context,
-                                          MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                          MaterialPageRoute(
+                                              builder: (_) =>
+                                                  _composerPage(type)),
                                         );
                                       }
                                     },
@@ -1227,11 +1280,14 @@ Widget _buildDesktopTopNav(bool isDark) {
                                     context,
                                     onSelected: (type) async {
                                       if (_useDesktopPopup(context)) {
-                                        await StoryComposerPopup.show(context, type: type);
+                                        await StoryComposerPopup.show(context,
+                                            type: type);
                                       } else {
                                         await Navigator.push(
                                           context,
-                                          MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                          MaterialPageRoute(
+                                              builder: (_) =>
+                                                  _composerPage(type)),
                                         );
                                       }
                                     },
@@ -1243,13 +1299,15 @@ Widget _buildDesktopTopNav(bool isDark) {
                                 context,
                                 onSelected: (type) async {
                                   if (_useDesktopPopup(context)) {
-                                      await StoryComposerPopup.show(context, type: type);
-                                    } else {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => _composerPage(type)),
-                                      );
-                                    }
+                                    await StoryComposerPopup.show(context,
+                                        type: type);
+                                  } else {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) => _composerPage(type)),
+                                    );
+                                  }
                                 },
                               );
                             }
@@ -1260,7 +1318,8 @@ Widget _buildDesktopTopNav(bool isDark) {
                                 rings: _storyRings
                                     .map((r) => {
                                           'userId': r.userId,
-                                          'imageUrl': r.thumbnailUrl ?? r.avatarUrl,
+                                          'imageUrl':
+                                              r.thumbnailUrl ?? r.avatarUrl,
                                           'label': r.name,
                                           'isMine': r.userId == _currentUserId,
                                           'isSeen': !r.hasUnseen,
@@ -1276,9 +1335,11 @@ Widget _buildDesktopTopNav(bool isDark) {
                                     rings: _storyRings
                                         .map((r) => {
                                               'userId': r.userId,
-                                              'imageUrl': r.thumbnailUrl ?? r.avatarUrl,
+                                              'imageUrl':
+                                                  r.thumbnailUrl ?? r.avatarUrl,
                                               'label': r.name,
-                                              'isMine': r.userId == _currentUserId,
+                                              'isMine':
+                                                  r.userId == _currentUserId,
                                               'isSeen': !r.hasUnseen,
                                             })
                                         .toList(),
@@ -1301,7 +1362,8 @@ Widget _buildDesktopTopNav(bool isDark) {
       ),
     );
   }
-    Widget _buildCenterFeedPanel(bool isDark) {
+
+  Widget _buildCenterFeedPanel(bool isDark) {
     return Container(
       height: double.infinity,
       decoration: BoxDecoration(
@@ -1382,10 +1444,13 @@ Widget _buildDesktopTopNav(bool isDark) {
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => ConnectionsPage(isDarkMode: isDark, onThemeToggle: () {})),
+                      MaterialPageRoute(
+                          builder: (_) => ConnectionsPage(
+                              isDarkMode: isDark, onThemeToggle: () {})),
                     );
                   },
-                  child: Text('See more', style: GoogleFonts.inter(fontSize: 13)),
+                  child:
+                      Text('See more', style: GoogleFonts.inter(fontSize: 13)),
                 ),
               ],
             ),
@@ -1419,7 +1484,10 @@ Widget _buildDesktopTopNav(bool isDark) {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => ConversationsPage(isDarkMode: isDark, onThemeToggle: () {}, initialTabIndex: 0),
+                          builder: (_) => ConversationsPage(
+                              isDarkMode: isDark,
+                              onThemeToggle: () {},
+                              initialTabIndex: 0),
                         ),
                       );
                     },
@@ -1474,8 +1542,6 @@ Widget _buildDesktopTopNav(bool isDark) {
     // fallback to avatar to avoid empty image blocks
     return _pickAvatar(u);
   }
-
-
 
   // ===========================
   // Mobile layout (unchanged)
@@ -1598,7 +1664,8 @@ Widget _buildDesktopTopNav(bool isDark) {
                                 // Full ring AND plus icon follow the same conditions
                                 onAddTap: isMine
                                     ? () {
-                                        if (ring.storyCount > 0 && _currentUserId != null) {
+                                        if (ring.storyCount > 0 &&
+                                            _currentUserId != null) {
                                           MyStoriesBottomSheet.show(
                                             context,
                                             currentUserId: _currentUserId!,
@@ -1606,14 +1673,20 @@ Widget _buildDesktopTopNav(bool isDark) {
                                               StoryTypePicker.show(
                                                 context,
                                                 onSelected: (type) async {
-                                                if (_useDesktopPopup(context)) {
-                                                  await StoryComposerPopup.show(context, type: type);
-                                                } else {
-                                                  await Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(builder: (_) => _composerPage(type)),
-                                                  );
-                                                }
+                                                  if (_useDesktopPopup(
+                                                      context)) {
+                                                    await StoryComposerPopup
+                                                        .show(context,
+                                                            type: type);
+                                                  } else {
+                                                    await Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                          builder: (_) =>
+                                                              _composerPage(
+                                                                  type)),
+                                                    );
+                                                  }
                                                 },
                                               );
                                             },
@@ -1623,13 +1696,17 @@ Widget _buildDesktopTopNav(bool isDark) {
                                             context,
                                             onSelected: (type) async {
                                               if (_useDesktopPopup(context)) {
-                                                await StoryComposerPopup.show(context, type: type);
+                                                await StoryComposerPopup.show(
+                                                    context,
+                                                    type: type);
                                               } else {
                                                 await Navigator.push(
                                                   context,
-                                                  MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                                  MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          _composerPage(type)),
                                                 );
-}
+                                              }
                                             },
                                           );
                                         }
@@ -1637,7 +1714,8 @@ Widget _buildDesktopTopNav(bool isDark) {
                                     : null,
                                 onTap: () async {
                                   if (isMine) {
-                                    if (ring.storyCount > 0 && _currentUserId != null) {
+                                    if (ring.storyCount > 0 &&
+                                        _currentUserId != null) {
                                       MyStoriesBottomSheet.show(
                                         context,
                                         currentUserId: _currentUserId!,
@@ -1646,11 +1724,15 @@ Widget _buildDesktopTopNav(bool isDark) {
                                             context,
                                             onSelected: (type) async {
                                               if (_useDesktopPopup(context)) {
-                                                await StoryComposerPopup.show(context, type: type);
+                                                await StoryComposerPopup.show(
+                                                    context,
+                                                    type: type);
                                               } else {
                                                 await Navigator.push(
                                                   context,
-                                                  MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                                  MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          _composerPage(type)),
                                                 );
                                               }
                                             },
@@ -1662,11 +1744,15 @@ Widget _buildDesktopTopNav(bool isDark) {
                                         context,
                                         onSelected: (type) async {
                                           if (_useDesktopPopup(context)) {
-                                            await StoryComposerPopup.show(context, type: type);
+                                            await StoryComposerPopup.show(
+                                                context,
+                                                type: type);
                                           } else {
                                             await Navigator.push(
                                               context,
-                                              MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                              MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      _composerPage(type)),
                                             );
                                           }
                                         },
@@ -1679,9 +1765,11 @@ Widget _buildDesktopTopNav(bool isDark) {
                                         rings: _storyRings
                                             .map((r) => {
                                                   'userId': r.userId,
-                                                  'imageUrl': r.thumbnailUrl ?? r.avatarUrl,
+                                                  'imageUrl': r.thumbnailUrl ??
+                                                      r.avatarUrl,
                                                   'label': r.name,
-                                                  'isMine': r.userId == _currentUserId,
+                                                  'isMine': r.userId ==
+                                                      _currentUserId,
                                                   'isSeen': !r.hasUnseen,
                                                 })
                                             .toList(),
@@ -1695,9 +1783,12 @@ Widget _buildDesktopTopNav(bool isDark) {
                                             rings: _storyRings
                                                 .map((r) => {
                                                       'userId': r.userId,
-                                                      'imageUrl': r.thumbnailUrl ?? r.avatarUrl,
+                                                      'imageUrl':
+                                                          r.thumbnailUrl ??
+                                                              r.avatarUrl,
                                                       'label': r.name,
-                                                      'isMine': r.userId == _currentUserId,
+                                                      'isMine': r.userId ==
+                                                          _currentUserId,
                                                       'isSeen': !r.hasUnseen,
                                                     })
                                                 .toList(),
@@ -1784,7 +1875,8 @@ class _TopNavItem extends StatelessWidget {
         icon: Icon(icon, size: 18, color: color),
         label: Text(
           label,
-          style: GoogleFonts.inter(fontSize: 14, color: color, fontWeight: FontWeight.w600),
+          style: GoogleFonts.inter(
+              fontSize: 14, color: color, fontWeight: FontWeight.w600),
         ),
         style: TextButton.styleFrom(
           foregroundColor: color,
