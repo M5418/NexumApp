@@ -5,6 +5,7 @@ import 'package:readmore/readmore.dart';
 import '../models/post.dart';
 import 'auto_play_video.dart';
 import 'reaction_picker.dart';
+import '../core/time_utils.dart';
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -52,16 +53,6 @@ class _PostCardState extends State<PostCard> {
     return widget.post.id;
   }
 
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inDays > 0) return '${difference.inDays}d ago';
-    if (difference.inHours > 0) return '${difference.inHours}h ago';
-    if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
-    return 'now';
-  }
-
   IconData _getReactionIcon(ReactionType? reaction) {
     switch (reaction) {
       case ReactionType.diamond:
@@ -98,7 +89,7 @@ class _PostCardState extends State<PostCard> {
     final bookmarkColor = const Color(0xFFBFAE01);
 
     // Build repost header text and avatar/icon
-        String repostHeaderText() {
+    String repostHeaderText() {
       final rb = widget.post.repostedBy;
       if (rb == null) return 'Reposted';
 
@@ -198,7 +189,7 @@ class _PostCardState extends State<PostCard> {
                         ),
                       ),
                       Text(
-                        _getTimeAgo(widget.post.createdAt),
+                        TimeUtils.relativeLabel(widget.post.createdAt, locale: 'en_short'),
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: secondaryTextColor,

@@ -28,6 +28,21 @@ function Write-Section {
   Write-Host "=== $Message ===" -ForegroundColor Cyan
 }
 
+# Find repo root (directory containing pubspec.yaml), walking up from this script
+function Find-RepoRoot {
+  param([Parameter(Mandatory=$true)][string]$Start)
+  $dir = Resolve-Path $Start
+  for ($i=0; $i -lt 6; $i++) {
+    if (Test-Path (Join-Path $dir "pubspec.yaml")) { return $dir }
+    $parent = Split-Path $dir -Parent
+    if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $dir) { break }
+    $dir = $parent
+  }
+  throw "Could not find Flutter project root (pubspec.yaml) starting from '$Start'."
+}
+
+$repoRoot = Find-RepoRoot -Start $PSScriptRoot
+
 # 0) Requirements
 Test-Cmd -Name "aws"
 Test-Cmd -Name "flutter"
@@ -35,7 +50,7 @@ Test-Cmd -Name "flutter"
 # 1) Build Flutter web
 if (-not $SkipBuild) {
   Write-Section -Message "Building Flutter web (auto-detecting --web-renderer support)"
-  Push-Location (Join-Path $PSScriptRoot "..")
+  Push-Location $repoRoot
 
   flutter clean
   flutter pub get
@@ -55,7 +70,8 @@ if (-not $SkipBuild) {
   Write-Section -Message "Skipping build (using existing build/web)"
 }
 
-$webDir = Join-Path (Join-Path $PSScriptRoot "..") "build\web"
+# Use build output from repo root
+$webDir = Join-Path $repoRoot "build\web"
 if (-not (Test-Path $webDir)) {
   throw "Not found: $webDir. Build step failed? Check Flutter logs above. You can run: flutter build web --release"
 }

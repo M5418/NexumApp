@@ -12,7 +12,6 @@ import 'notification_page.dart';
 import 'conversations_page.dart';
 import 'profile_page.dart';
 
-
 import 'core/users_api.dart';
 import 'core/connections_api.dart';
 import 'core/profile_api.dart';
@@ -29,6 +28,7 @@ import 'podcasts/podcasts_api.dart';
 import 'models/message.dart' hide MediaType;
 import 'chat_page.dart';
 import 'create_post_page.dart';
+import 'responsive/responsive_breakpoints.dart';
 
 class User {
   final String id;
@@ -77,8 +77,14 @@ class User {
 class ConnectionsPage extends StatefulWidget {
   final bool? isDarkMode;
   final VoidCallback? onThemeToggle;
+  final bool hideDesktopTopNav;
 
-  const ConnectionsPage({super.key, this.isDarkMode, this.onThemeToggle});
+  const ConnectionsPage({
+    super.key,
+    this.isDarkMode,
+    this.onThemeToggle,
+    this.hideDesktopTopNav = false,
+  });
 
   @override
   State<ConnectionsPage> createState() => _ConnectionsPageState();
@@ -193,7 +199,12 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   }
 
   String _pickAvatar(Map m) {
-    return (m['avatarUrl'] ?? m['avatar_url'] ?? m['imageUrl'] ?? m['image_url'] ?? '').toString();
+    return (m['avatarUrl'] ??
+            m['avatar_url'] ??
+            m['imageUrl'] ??
+            m['image_url'] ??
+            '')
+        .toString();
   }
 
   String _pickCover(Map m) {
@@ -201,7 +212,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
     if (cover.isNotEmpty) return cover;
     return _pickAvatar(m);
   }
-    // -----------------------------
+
+  // -----------------------------
   // Selection + profile details
   // -----------------------------
   void _selectUser(User user) {
@@ -232,8 +244,9 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
     }
   }
 
-  User? get _selectedUser =>
-      (_selectedUserId == null) ? null : users.where((u) => u.id == _selectedUserId).cast<User?>().firstOrNull;
+  User? get _selectedUser => (_selectedUserId == null)
+      ? null
+      : users.where((u) => u.id == _selectedUserId).cast<User?>().firstOrNull;
 
   bool _isUserConnected(String id) {
     final u = users.where((x) => x.id == id).firstOrNull;
@@ -271,17 +284,19 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) {
         final isDark = widget.isDarkMode ?? themeProvider.isDarkMode;
-        final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+        final backgroundColor =
+            isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
-        if (kIsWeb) {
-          final size = MediaQuery.of(context).size;
-          final isLarge = size.width >= 1280 && size.height >= 800;
-          if (isLarge) {
-            return _buildDesktop(context, isDark, backgroundColor);
+        if (kIsWeb && (context.isDesktop || context.isLargeDesktop)) {
+          if (widget.hideDesktopTopNav) {
+            return Container(
+              color: backgroundColor,
+              child: _buildDesktopBody(context, isDark, backgroundColor),
+            );
           }
+          return _buildDesktop(context, isDark, backgroundColor);
         }
-
-        // Mobile / non-web
+          // Mobile / tablet / non-web
         return _buildMobile(context, isDark, backgroundColor);
       },
     );
@@ -290,57 +305,54 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   // -----------------------------
   // Desktop Layout
   // -----------------------------
-  Widget _buildDesktop(BuildContext context, bool isDark, Color backgroundColor) {
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              _buildDesktopTopNav(context, isDark),
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1280),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left: grid (wider)
-                          Expanded(
-                            flex: 1,
-                            child: _buildLeftGridPanel(isDark),
-                          ),
-                          const SizedBox(width: 16),
-                          // Right: details
-                          Expanded(
-                            flex: 2,
-                            child: _buildRightDetailsPanel(isDark),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+ Widget _buildDesktop(BuildContext context, bool isDark, Color backgroundColor) {
+  return Scaffold(
+    backgroundColor: backgroundColor,
+    body: Stack(
+      children: [
+        Column(
+          children: [
+            _buildDesktopTopNav(context, isDark),
+            Expanded(child: _buildDesktopBody(context, isDark, backgroundColor)),
+          ],
+        ),
+        Positioned(
+          left: 24,
+          bottom: 24,
+          child: FloatingActionButton(
+            heroTag: 'createPostFabConnections',
+            onPressed: () async {
+              final created = await CreatePostPage.showPopup<bool>(context);
+              // optional: refresh something if needed
+            },
+            backgroundColor: const Color(0xFFBFAE01),
+            foregroundColor: Colors.black,
+            child: const Icon(Icons.add),
           ),
-          Positioned(
-            left: 24,
-            bottom: 24,
-            child: FloatingActionButton(
-              heroTag: 'createPostFabConnections',
-              onPressed: () => CreatePostPage.showPopup(context),
-              backgroundColor: const Color(0xFFBFAE01),
-              foregroundColor: Colors.black,
-              child: const Icon(Icons.add),
-            ),
-          ),
-        ],
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _buildDesktopBody(BuildContext context, bool isDark, Color backgroundColor) {
+  return Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1280),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 1, child: _buildLeftGridPanel(isDark)),
+            const SizedBox(width: 16),
+            Expanded(flex: 2, child: _buildRightDetailsPanel(isDark)),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildDesktopTopNav(BuildContext context, bool isDark) {
     final barColor = isDark ? Colors.black : Colors.white;
@@ -372,31 +384,36 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                     icon: Icons.notifications_outlined,
                     badgeCount: _unreadCount,
                     iconColor: const Color(0xFF666666),
-                                        onTap: () async {
+                    onTap: () async {
                       // Desktop-style: top-right popup
                       final size = MediaQuery.of(context).size;
-                      final desktop = kIsWeb && size.width >= 1280 && size.height >= 800;
+                      final desktop =
+                          kIsWeb && size.width >= 1280 && size.height >= 800;
                       if (desktop) {
                         await showDialog(
                           context: context,
                           barrierDismissible: true,
                           barrierColor: Colors.black26,
                           builder: (_) {
-                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                            final isDark =
+                                Theme.of(context).brightness == Brightness.dark;
                             final double width = 420;
                             final double height = size.height * 0.8;
                             return SafeArea(
                               child: Align(
                                 alignment: Alignment.topRight,
                                 child: Padding(
-                                  padding: const EdgeInsets.only(top: 16, right: 16),
+                                  padding:
+                                      const EdgeInsets.only(top: 16, right: 16),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(16),
                                     child: SizedBox(
                                       width: width,
                                       height: height,
                                       child: Material(
-                                        color: isDark ? const Color(0xFF000000) : Colors.white,
+                                        color: isDark
+                                            ? const Color(0xFF000000)
+                                            : Colors.white,
                                         child: const NotificationPage(),
                                       ),
                                     ),
@@ -409,7 +426,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                       } else {
                         await Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const NotificationPage()),
+                          MaterialPageRoute(
+                              builder: (_) => const NotificationPage()),
                         );
                       }
                       if (!mounted) return;
@@ -472,7 +490,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       ),
     );
   }
-    Widget _buildLeftGridPanel(bool isDark) {
+
+  Widget _buildLeftGridPanel(bool isDark) {
     final cardColor = isDark ? Colors.black : Colors.white;
     return Container(
       height: double.infinity,
@@ -502,7 +521,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
             const SizedBox(height: 12),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : (_error != null)
                       ? Center(
                           child: Text(
@@ -514,7 +534,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                         )
                       : GridView.builder(
                           physics: const BouncingScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
@@ -559,7 +580,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         ),
         child: Center(
           child: Text(
-            'Select a user',
+            'Select a usersss',
             style: GoogleFonts.inter(
               fontSize: 16,
               color: isDark ? Colors.white70 : Colors.black54,
@@ -590,10 +611,12 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       child: _RightProfilePanel(user: u, isDark: isDark),
     );
   }
+
   // -----------------------------
   // Mobile / Non-web Layout
   // -----------------------------
-  Widget _buildMobile(BuildContext context, bool isDark, Color backgroundColor) {
+  Widget _buildMobile(
+      BuildContext context, bool isDark, Color backgroundColor) {
     final appBarColor = isDark ? Colors.black : Colors.white;
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -634,30 +657,36 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                       const SizedBox(width: 12),
                       OutlinedIconButton(
                         icon: Icons.notifications_outlined,
-                                                onPressed: () async {
+                        onPressed: () async {
                           final size = MediaQuery.of(context).size;
-                          final desktop = kIsWeb && size.width >= 1280 && size.height >= 800;
+                          final desktop = kIsWeb &&
+                              size.width >= 1280 &&
+                              size.height >= 800;
                           if (desktop) {
                             await showDialog(
                               context: context,
                               barrierDismissible: true,
                               barrierColor: Colors.black26,
                               builder: (_) {
-                                final isDark = Theme.of(context).brightness == Brightness.dark;
+                                final isDark = Theme.of(context).brightness ==
+                                    Brightness.dark;
                                 final double width = 420;
                                 final double height = size.height * 0.8;
                                 return SafeArea(
                                   child: Align(
                                     alignment: Alignment.topRight,
                                     child: Padding(
-                                      padding: const EdgeInsets.only(top: 16, right: 16),
+                                      padding: const EdgeInsets.only(
+                                          top: 16, right: 16),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(16),
                                         child: SizedBox(
                                           width: width,
                                           height: height,
                                           child: Material(
-                                            color: isDark ? const Color(0xFF000000) : Colors.white,
+                                            color: isDark
+                                                ? const Color(0xFF000000)
+                                                : Colors.white,
                                             child: const NotificationPage(),
                                           ),
                                         ),
@@ -670,13 +699,13 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                           } else {
                             await Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const NotificationPage()),
+                              MaterialPageRoute(
+                                  builder: (_) => const NotificationPage()),
                             );
                           }
                           if (!mounted) return;
                           await _loadUnreadCount();
                         },
-                        
                       ),
                     ],
                   ),
@@ -701,7 +730,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                 : Padding(
                     padding: const EdgeInsets.all(16),
                     child: GridView.builder(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 1,
@@ -751,7 +781,9 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                 onInvitationSent: (_) {
                   setState(() => activeInviteUser = null);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Invitation sent to ${activeInviteUser!.fullName}')),
+                    SnackBar(
+                        content: Text(
+                            'Invitation sent to ${activeInviteUser!.fullName}')),
                   );
                 },
               ),
@@ -761,8 +793,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       ),
     );
   }
-  
-    // -----------------------------
+
+  // -----------------------------
   // Small web warning
   // -----------------------------
   Widget _buildTooSmallWeb(bool isDark, Color backgroundColor) {
@@ -814,7 +846,7 @@ class _TopNavItem extends StatelessWidget {
   });
 
   @override
-   Widget build(BuildContext context) {
+  Widget build(BuildContext context) {
     final color = selected ? const Color(0xFFBFAE01) : const Color(0xFF666666);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -855,7 +887,9 @@ class _UserGridTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cardColor = isDark ? Colors.black : Colors.white;
-    final borderColor = selected ? const Color(0xFFBFAE01) : (isDark ? const Color(0xFF1F1F1F) : const Color(0xFFEAEAEA));
+    final borderColor = selected
+        ? const Color(0xFFBFAE01)
+        : (isDark ? const Color(0xFF1F1F1F) : const Color(0xFFEAEAEA));
 
     return InkWell(
       onTap: onTap,
@@ -883,10 +917,13 @@ class _UserGridTile extends StatelessWidget {
               height: 56,
               decoration: BoxDecoration(
                 image: (user.coverUrl.isNotEmpty)
-                    ? DecorationImage(image: NetworkImage(user.coverUrl), fit: BoxFit.cover)
+                    ? DecorationImage(
+                        image: NetworkImage(user.coverUrl), fit: BoxFit.cover)
                     : null,
                 color: user.coverUrl.isEmpty
-                    ? (isDark ? const Color(0xFF0E0E0E) : const Color(0xFFEDEDED))
+                    ? (isDark
+                        ? const Color(0xFF0E0E0E)
+                        : const Color(0xFFEDEDED))
                     : null,
               ),
             ),
@@ -903,11 +940,15 @@ class _UserGridTile extends StatelessWidget {
                     border: Border.all(color: cardColor, width: 3),
                   ),
                   child: CircleAvatar(
-                    backgroundColor: isDark ? const Color(0xFF1F1F1F) : Colors.white,
-                    backgroundImage: user.avatarUrl.isNotEmpty ? NetworkImage(user.avatarUrl) : null,
+                    backgroundColor:
+                        isDark ? const Color(0xFF1F1F1F) : Colors.white,
+                    backgroundImage: user.avatarUrl.isNotEmpty
+                        ? NetworkImage(user.avatarUrl)
+                        : null,
                     child: user.avatarUrl.isEmpty
                         ? Text(
-                            (user.fullName.isNotEmpty ? user.fullName[0] : 'U').toUpperCase(),
+                            (user.fullName.isNotEmpty ? user.fullName[0] : 'U')
+                                .toUpperCase(),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -926,7 +967,8 @@ class _UserGridTile extends StatelessWidget {
                 children: [
                   Text(
                     user.fullName,
-                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
+                    style: GoogleFonts.inter(
+                        fontSize: 13, fontWeight: FontWeight.w700),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -949,20 +991,27 @@ class _UserGridTile extends StatelessWidget {
                   const SizedBox(height: 6),
                   if (user.isConnected)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF3F3F3),
+                        color: isDark
+                            ? const Color(0xFF1F1F1F)
+                            : const Color(0xFFF3F3F3),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0),
+                          color: isDark
+                              ? const Color(0xFF2A2A2A)
+                              : const Color(0xFFE0E0E0),
                         ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.check_circle, size: 14, color: Color(0xFF4CAF50)),
+                          const Icon(Icons.check_circle,
+                              size: 14, color: Color(0xFF4CAF50)),
                           const SizedBox(width: 4),
-                          Text('Connected', style: GoogleFonts.inter(fontSize: 11)),
+                          Text('Connected',
+                              style: GoogleFonts.inter(fontSize: 11)),
                         ],
                       ),
                     ),
@@ -975,6 +1024,7 @@ class _UserGridTile extends StatelessWidget {
     );
   }
 }
+
 class _RightProfilePanel extends StatefulWidget {
   final User user;
   final bool isDark;
@@ -1033,7 +1083,6 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     _loadActivity();
     _loadPodcasts();
   }
-
 
   @override
   void didUpdateWidget(covariant _RightProfilePanel oldWidget) {
@@ -1104,7 +1153,9 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       if (value is String) {
         final decoded = jsonDecode(value);
         if (decoded is List) {
-          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          return decoded
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
         }
         return [];
       }
@@ -1175,7 +1226,8 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       setState(() {
         _userProfile = data;
         _profilePhotoUrl = profileUrl.isNotEmpty ? profileUrl : null;
-        _coverPhotoUrl = coverUrl.isNotEmpty ? coverUrl : (widget.user.coverUrl);
+        _coverPhotoUrl =
+            coverUrl.isNotEmpty ? coverUrl : (widget.user.coverUrl);
         _experiences = experiences;
         _trainings = trainings;
         _interests = interests;
@@ -1205,8 +1257,10 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     final contentSource = original.isNotEmpty ? original : p;
 
     final author = asMap(contentSource['author']);
-    final authorName = (author['name'] ?? author['username'] ?? 'User').toString();
-    final authorAvatar = (author['avatarUrl'] ?? author['avatar_url'] ?? '').toString();
+    final authorName =
+        (author['name'] ?? author['username'] ?? 'User').toString();
+    final authorAvatar =
+        (author['avatarUrl'] ?? author['avatar_url'] ?? '').toString();
 
     Map<String, dynamic> countsMap = {};
     final directCounts = asMap(p['counts']);
@@ -1237,17 +1291,25 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     }
 
     if (mediaList.isNotEmpty) {
-      final asMaps = mediaList.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      final asMaps = mediaList
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
 
-      String urlOf(Map<String, dynamic> m) => (m['url'] ?? m['src'] ?? m['link'] ?? '').toString();
+      String urlOf(Map<String, dynamic> m) =>
+          (m['url'] ?? m['src'] ?? m['link'] ?? '').toString();
 
       final videos = asMaps.where((m) {
-        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '').toString().toLowerCase();
+        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '')
+            .toString()
+            .toLowerCase();
         return t.contains('video');
       }).toList();
 
       final images = asMaps.where((m) {
-        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '').toString().toLowerCase();
+        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '')
+            .toString()
+            .toLowerCase();
         return t.contains('image') || t.contains('photo') || t.isEmpty;
       }).toList();
 
@@ -1265,12 +1327,17 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     } else {
       List<String> parseImageUrls(dynamic v) {
         if (v == null) return [];
-        if (v is List) return v.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+        if (v is List) {
+          return v.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+        }
         if (v is String && v.isNotEmpty) {
           try {
             final decoded = jsonDecode(v);
             if (decoded is List) {
-              return decoded.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+              return decoded
+                  .map((e) => e.toString())
+                  .where((e) => e.isNotEmpty)
+                  .toList();
             }
           } catch (_) {}
         }
@@ -1306,8 +1373,11 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     RepostedBy? repostedBy;
     if (repostAuthor.isNotEmpty) {
       repostedBy = RepostedBy(
-        userName: (repostAuthor['name'] ?? repostAuthor['username'] ?? 'User').toString(),
-        userAvatarUrl: (repostAuthor['avatarUrl'] ?? repostAuthor['avatar_url'] ?? '').toString(),
+        userName: (repostAuthor['name'] ?? repostAuthor['username'] ?? 'User')
+            .toString(),
+        userAvatarUrl:
+            (repostAuthor['avatarUrl'] ?? repostAuthor['avatar_url'] ?? '')
+                .toString(),
         actionType: 'reposted this',
       );
     }
@@ -1325,7 +1395,10 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       userName: authorName,
       userAvatarUrl: authorAvatar,
       createdAt: _parseCreatedAt(
-        p['created_at'] ?? p['createdAt'] ?? contentSource['created_at'] ?? contentSource['createdAt'],
+        p['created_at'] ??
+            p['createdAt'] ??
+            contentSource['created_at'] ??
+            contentSource['createdAt'],
       ),
       text: text,
       mediaType: mediaType,
@@ -1342,9 +1415,13 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       isBookmarked: bookmarkedByMe,
       isRepost: isRepost,
       repostedBy: repostedBy,
-      originalPostId: (p['repost_of'] ?? original['id'] ?? original['post_id'] ?? '').toString().isEmpty
-          ? null
-          : (p['repost_of'] ?? original['id'] ?? original['post_id']).toString(),
+      originalPostId:
+          (p['repost_of'] ?? original['id'] ?? original['post_id'] ?? '')
+                  .toString()
+                  .isEmpty
+              ? null
+              : (p['repost_of'] ?? original['id'] ?? original['post_id'])
+                  .toString(),
     );
   }
 
@@ -1404,7 +1481,8 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
         if (post.isRepost) continue;
         if (post.mediaType == MediaType.image && post.imageUrls.isNotEmpty) {
           urls.add(post.imageUrls.first);
-        } else if (post.mediaType == MediaType.images && post.imageUrls.isNotEmpty) {
+        } else if (post.mediaType == MediaType.images &&
+            post.imageUrls.isNotEmpty) {
           urls.addAll(post.imageUrls);
         }
       }
@@ -1464,7 +1542,8 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
         final uid = (p['user_id'] ?? p['userId'] ?? '').toString();
 
         // Priority: reposted > shared > bookmarked > liked
-        if (uid == widget.user.id && (p['repost_of'] != null && p['repost_of'].toString().isNotEmpty)) {
+        if (uid == widget.user.id &&
+            (p['repost_of'] != null && p['repost_of'].toString().isNotEmpty)) {
           return 'reposted_this';
         }
 
@@ -1664,12 +1743,14 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
           fullName: widget.user.fullName,
           bio: widget.user.bio,
           avatarUrl: widget.user.avatarUrl,
-          coverUrl: _coverPhotoUrl.isNotEmpty ? _coverPhotoUrl : widget.user.coverUrl,
+          coverUrl:
+              _coverPhotoUrl.isNotEmpty ? _coverPhotoUrl : widget.user.coverUrl,
           onClose: () => Navigator.pop(ctx),
           onInvitationSent: (_) {
             Navigator.pop(ctx);
             ScaffoldMessenger.of(ctx).showSnackBar(
-              SnackBar(content: Text('Invitation sent to ${widget.user.fullName}')),
+              SnackBar(
+                  content: Text('Invitation sent to ${widget.user.fullName}')),
             );
           },
         ),
@@ -1694,10 +1775,12 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       return u.isNotEmpty ? '@$u' : widget.user.username;
     })();
 
-    final String coverUrl = _coverPhotoUrl.isNotEmpty ? _coverPhotoUrl : widget.user.coverUrl;
-    final String profileUrl = (_profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty)
-        ? _profilePhotoUrl!
-        : widget.user.avatarUrl;
+    final String coverUrl =
+        _coverPhotoUrl.isNotEmpty ? _coverPhotoUrl : widget.user.coverUrl;
+    final String profileUrl =
+        (_profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty)
+            ? _profilePhotoUrl!
+            : widget.user.avatarUrl;
 
     return SingleChildScrollView(
       child: Column(
@@ -1708,7 +1791,8 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
             height: 200,
             decoration: BoxDecoration(
               image: (coverUrl.isNotEmpty)
-                  ? DecorationImage(image: NetworkImage(coverUrl), fit: BoxFit.cover)
+                  ? DecorationImage(
+                      image: NetworkImage(coverUrl), fit: BoxFit.cover)
                   : null,
               color: coverUrl.isEmpty
                   ? (isDark ? Colors.black : Colors.grey[300])
@@ -1748,20 +1832,28 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: isDark ? const Color(0xFF000000) : Colors.white,
+                              color: isDark
+                                  ? const Color(0xFF000000)
+                                  : Colors.white,
                               width: 4,
                             ),
                           ),
                           child: CircleAvatar(
                             radius: 58,
-                            backgroundImage: profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
+                            backgroundImage: profileUrl.isNotEmpty
+                                ? NetworkImage(profileUrl)
+                                : null,
                             child: profileUrl.isEmpty
                                 ? Text(
-                                    (displayName.isNotEmpty ? displayName[0] : 'U').toUpperCase(),
+                                    (displayName.isNotEmpty
+                                            ? displayName[0]
+                                            : 'U')
+                                        .toUpperCase(),
                                     style: GoogleFonts.inter(
                                       fontSize: 40,
                                       fontWeight: FontWeight.w700,
-                                      color: isDark ? Colors.white : Colors.black,
+                                      color:
+                                          isDark ? Colors.white : Colors.black,
                                     ),
                                   )
                                 : null,
@@ -1775,9 +1867,13 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _buildStatColumn(_formatCount(_connectionsTotalCount), 'Connections'),
+                            _buildStatColumn(
+                                _formatCount(_connectionsTotalCount),
+                                'Connections'),
                             const SizedBox(width: 40),
-                            _buildStatColumn(_formatCount(_connectionsInboundCount), 'Connected'),
+                            _buildStatColumn(
+                                _formatCount(_connectionsInboundCount),
+                                'Connected'),
                           ],
                         ),
                       ),
@@ -1792,10 +1888,13 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                               children: [
                                 Text(
                                   displayName,
-                                  style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w700),
+                                  style: GoogleFonts.inter(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w700),
                                 ),
                                 const SizedBox(width: 8),
-                                const Icon(Icons.verified, color: Color(0xFFBFAE01), size: 20),
+                                const Icon(Icons.verified,
+                                    color: Color(0xFFBFAE01), size: 20),
                               ],
                             ),
                             if (atUsername.isNotEmpty)
@@ -1805,7 +1904,9 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                                   atUsername,
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
-                                    color: isDark ? Colors.white70 : Colors.grey[600],
+                                    color: isDark
+                                        ? Colors.white70
+                                        : Colors.grey[600],
                                   ),
                                 ),
                               ),
@@ -1815,7 +1916,9 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                               textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
                                 fontSize: 14,
-                                color: isDark ? Colors.grey[300] : Colors.grey[600],
+                                color: isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[600],
                                 height: 1.4,
                               ),
                             ),
@@ -1835,29 +1938,43 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                                   setState(() => _isConnected = next);
                                   try {
                                     if (next) {
-                                      await ConnectionsApi().connect(widget.user.id);
+                                      await ConnectionsApi()
+                                          .connect(widget.user.id);
                                     } else {
-                                      await ConnectionsApi().disconnect(widget.user.id);
+                                      await ConnectionsApi()
+                                          .disconnect(widget.user.id);
                                     }
                                   } catch (_) {
                                     if (!mounted) return;
                                     setState(() => _isConnected = !next);
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Failed to ${next ? 'connect' : 'disconnect'}')),
+                                      SnackBar(
+                                          content: Text(
+                                              'Failed to ${next ? 'connect' : 'disconnect'}')),
                                     );
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: _isConnected ? Colors.grey[300] : const Color(0xFFBFAE01),
-                                  foregroundColor: _isConnected ? Colors.black87 : Colors.black,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                                  backgroundColor: _isConnected
+                                      ? Colors.grey[300]
+                                      : const Color(0xFFBFAE01),
+                                  foregroundColor: _isConnected
+                                      ? Colors.black87
+                                      : Colors.black,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(25)),
                                 ),
                                 child: Text(
                                   _isConnected
                                       ? 'Disconnect'
-                                      : (widget.user.theyConnectToYou ? 'Connect Back' : 'Connect'),
-                                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+                                      : (widget.user.theyConnectToYou
+                                          ? 'Connect Back'
+                                          : 'Connect'),
+                                  style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500),
                                 ),
                               ),
                             ),
@@ -1866,16 +1983,23 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                               child: OutlinedButton(
                                 onPressed: _handleMessageUser,
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                                  side: BorderSide(color: isDark ? const Color(0xFF000000) : Colors.grey[300]!),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(25)),
+                                  side: BorderSide(
+                                      color: isDark
+                                          ? const Color(0xFF000000)
+                                          : Colors.grey[300]!),
                                 ),
                                 child: Text(
                                   'Message',
                                   style: GoogleFonts.inter(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
-                                    color: isDark ? Colors.grey[300] : Colors.black,
+                                    color: isDark
+                                        ? Colors.grey[300]
+                                        : Colors.black,
                                   ),
                                 ),
                               ),
@@ -1884,10 +2008,14 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                border: Border.all(color: isDark ? const Color(0xFF000000) : Colors.grey[300]!),
+                                border: Border.all(
+                                    color: isDark
+                                        ? const Color(0xFF000000)
+                                        : Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(40),
                               ),
-                              child: const Icon(Icons.person_add_outlined, size: 20),
+                              child: const Icon(Icons.person_add_outlined,
+                                  size: 20),
                             ),
                           ],
                         ),
@@ -1904,10 +2032,14 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.work, size: 20, color: isDark ? Colors.grey[300] : Colors.black87),
+                          Icon(Icons.work,
+                              size: 20,
+                              color:
+                                  isDark ? Colors.grey[300] : Colors.black87),
                           const SizedBox(width: 8),
                           Text('Professional Experiences',
-                              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
+                              style: GoogleFonts.inter(
+                                  fontSize: 16, fontWeight: FontWeight.w600)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -1923,20 +2055,30 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                       else if (_experiences.isEmpty)
                         Text('No professional experiences to display',
                             style: GoogleFonts.inter(
-                                fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]))
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600]))
                       else
                         ..._experiences.expand((exp) => [
                               Align(
                                 alignment: Alignment.centerLeft,
-                                child: Text((exp['title'] ?? 'Experience').toString(),
-                                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500)),
+                                child: Text(
+                                    (exp['title'] ?? 'Experience').toString(),
+                                    style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500)),
                               ),
-                              if (exp['subtitle'] != null && exp['subtitle'].toString().isNotEmpty)
+                              if (exp['subtitle'] != null &&
+                                  exp['subtitle'].toString().isNotEmpty)
                                 Align(
                                   alignment: Alignment.centerLeft,
                                   child: Text(exp['subtitle'].toString(),
                                       style: GoogleFonts.inter(
-                                          fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[600])),
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.grey[300]
+                                              : Colors.grey[600])),
                                 ),
                               const SizedBox(height: 8),
                             ]),
@@ -1953,10 +2095,14 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.school, size: 20, color: isDark ? Colors.grey[300] : Colors.black87),
+                          Icon(Icons.school,
+                              size: 20,
+                              color:
+                                  isDark ? Colors.grey[300] : Colors.black87),
                           const SizedBox(width: 8),
                           Text('Trainings',
-                              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
+                              style: GoogleFonts.inter(
+                                  fontSize: 16, fontWeight: FontWeight.w600)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -1972,21 +2118,30 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                       else if (_trainings.isEmpty)
                         Text('No trainings to display',
                             style: GoogleFonts.inter(
-                                fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]))
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600]))
                       else
                         ..._trainings.expand((t) => [
                               Align(
                                 alignment: Alignment.centerLeft,
-                                child:
-                                    Text((t['title'] ?? 'Training').toString(),
-                                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500)),
+                                child: Text(
+                                    (t['title'] ?? 'Training').toString(),
+                                    style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500)),
                               ),
-                              if (t['subtitle'] != null && t['subtitle'].toString().isNotEmpty)
+                              if (t['subtitle'] != null &&
+                                  t['subtitle'].toString().isNotEmpty)
                                 Align(
                                   alignment: Alignment.centerLeft,
                                   child: Text(t['subtitle'].toString(),
                                       style: GoogleFonts.inter(
-                                          fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[600])),
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.grey[300]
+                                              : Colors.grey[600])),
                                 ),
                               const SizedBox(height: 8),
                             ]),
@@ -2003,10 +2158,14 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.favorite, size: 20, color: isDark ? Colors.grey[300] : Colors.black87),
+                          Icon(Icons.favorite,
+                              size: 20,
+                              color:
+                                  isDark ? Colors.grey[300] : Colors.black87),
                           const SizedBox(width: 8),
                           Text('Interest',
-                              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
+                              style: GoogleFonts.inter(
+                                  fontSize: 16, fontWeight: FontWeight.w600)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -2022,19 +2181,29 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                       else if (_interests.isEmpty)
                         Text('No interests to display',
                             style: GoogleFonts.inter(
-                                fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]))
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600]))
                       else
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
                           children: _interests
                               .map((i) => Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: isDark ? const Color(0xFF2A2A2A) : Colors.grey[300]!),
+                                      border: Border.all(
+                                          color: isDark
+                                              ? const Color(0xFF2A2A2A)
+                                              : Colors.grey[300]!),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
-                                    child: Text(i, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500)),
+                                    child: Text(i,
+                                        style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500)),
                                   ))
                               .toList(),
                         ),
@@ -2056,8 +2225,11 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
   Widget _buildStatColumn(String value, String label) {
     return Column(
       children: [
-        Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
-        Text(label, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600])),
+        Text(value,
+            style:
+                GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+        Text(label,
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600])),
       ],
     );
   }
@@ -2083,8 +2255,10 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
               dividerColor: Colors.transparent,
               labelColor: isDark ? Colors.grey[300] : Colors.white,
               unselectedLabelColor: const Color(0xFF666666),
-              labelStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
-              unselectedLabelStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400),
+              labelStyle:
+                  GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+              unselectedLabelStyle:
+                  GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400),
               tabs: const [
                 Tab(text: 'Activity'),
                 Tab(text: 'Posts'),
@@ -2202,7 +2376,9 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF000000) : Theme.of(context).scaffoldBackgroundColor,
+        color: isDark
+            ? const Color(0xFF000000)
+            : Theme.of(context).scaffoldBackgroundColor,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -2210,7 +2386,8 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: imageUrl.isNotEmpty
-                ? Image.network(imageUrl, width: 60, height: 60, fit: BoxFit.cover)
+                ? Image.network(imageUrl,
+                    width: 60, height: 60, fit: BoxFit.cover)
                 : Container(
                     width: 60,
                     height: 60,
@@ -2223,16 +2400,24 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
+                Text(title,
+                    style: GoogleFonts.inter(
+                        fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Text(
                   description,
-                  style: GoogleFonts.inter(fontSize: 14, color: isDark ? Colors.grey[300] : const Color(0xFF666666)),
+                  style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color:
+                          isDark ? Colors.grey[300] : const Color(0xFF666666)),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   duration,
-                  style: GoogleFonts.inter(fontSize: 12, color: isDark ? Colors.grey[300] : const Color(0xFF999999)),
+                  style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color:
+                          isDark ? Colors.grey[300] : const Color(0xFF999999)),
                 ),
               ],
             ),
@@ -2280,7 +2465,8 @@ class _StatPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF3F3F3),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0)),
+        border: Border.all(
+            color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2292,7 +2478,8 @@ class _StatPill extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
+            style:
+                GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
           ),
         ],
       ),

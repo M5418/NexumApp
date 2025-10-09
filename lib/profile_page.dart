@@ -26,7 +26,7 @@ import 'widgets/badge_icon.dart';
 import 'notification_page.dart';
 import 'conversations_page.dart';
 import 'connections_page.dart';
-
+import 'responsive/responsive_breakpoints.dart';
 
 
 
@@ -553,9 +553,8 @@ class _ProfilePageState extends State<ProfilePage> {
       });
     }
   }
-  bool _isWideLayout(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    return kIsWeb && size.width >= 1280 && size.height >= 800;
+    bool _isWideLayout(BuildContext context) {
+    return kIsWeb && (context.isDesktop || context.isLargeDesktop);
   }
   
     void _openPremium(BuildContext context) {

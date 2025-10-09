@@ -9,6 +9,7 @@ import 'core/communities_api.dart';
 import 'chat_page.dart';
 import 'community_page.dart';
 import 'models/message.dart'; // for ChatUser
+import 'core/time_utils.dart';
 
 class ConversationSearchPage extends StatefulWidget {
   const ConversationSearchPage({super.key});
@@ -572,18 +573,8 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
     }
   }
 
-  String _formatTimeOrDate(DateTime? dt) {
-    if (dt == null) return '';
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final d = DateTime(dt.year, dt.month, dt.day);
-    if (d == today) {
-      final t = TimeOfDay.fromDateTime(dt);
-      return t.format(context);
-    }
-    if (d == today.subtract(const Duration(days: 1))) {
-      return 'Yesterday';
-    }
-    return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-  }
+String _formatTimeOrDate(DateTime? dt) {
+  if (dt == null) return '';
+  return TimeUtils.relativeLabel(dt, locale: 'en_short');
+}
 }

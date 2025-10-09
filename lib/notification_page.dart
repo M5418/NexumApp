@@ -10,6 +10,7 @@ import 'invitation_page.dart';
 import 'chat_page.dart';
 import 'models/message.dart' show ChatUser;
 import 'other_user_profile_page.dart';
+import 'responsive/responsive_breakpoints.dart';
 
 class NotificationPage extends StatefulWidget {
   const NotificationPage({super.key});
@@ -63,19 +64,22 @@ class _NotificationPageState extends State<NotificationPage> {
 
   // Map backend item to UI tile data
   _NotificationUIItem _toUIItem(AppNotification n) {
-    final primaryText = n.actorUsername.isNotEmpty ? n.actorUsername : n.actorName;
+    final primaryText =
+        n.actorUsername.isNotEmpty ? n.actorUsername : n.actorName;
     final actionText = n.actionText;
     final previewText = n.previewText;
     final timeLabel = n.timeLabel();
     final trailingImageUrl = n.previewImageUrl;
-    final trailingChipLabel = (n.type == 'connection_received') ? 'Connected' : null;
+    final trailingChipLabel =
+        (n.type == 'connection_received') ? 'Connected' : null;
 
     return _NotificationUIItem(
       section: _isToday(n.createdAt)
           ? 'Today'
           : (_isYesterday(n.createdAt) ? 'Yesterday' : 'Yesterday'),
       avatarUrls: [
-        if (n.actorAvatarUrl != null && n.actorAvatarUrl!.isNotEmpty) n.actorAvatarUrl!
+        if (n.actorAvatarUrl != null && n.actorAvatarUrl!.isNotEmpty)
+          n.actorAvatarUrl!
       ],
       primaryText: primaryText,
       actionText: actionText,
@@ -98,87 +102,92 @@ class _NotificationPageState extends State<NotificationPage> {
 
     // Navigate based on backend-provided navigateType and params
     switch (n.navigateType) {
-      case 'post': {
-        final postId = n.navigateParams['postId']?.toString();
-        if (postId != null && postId.isNotEmpty && mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => PostPage(postId: postId)),
-          );
+      case 'post':
+        {
+          final postId = n.navigateParams['postId']?.toString();
+          if (postId != null && postId.isNotEmpty && mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => PostPage(postId: postId)),
+            );
+          }
+          break;
         }
-        break;
-      }
-      case 'community_post': {
-        final communityId = n.navigateParams['communityId']?.toString();
-        final postId = n.navigateParams['postId']?.toString();
-        if (communityId != null &&
-            communityId.isNotEmpty &&
-            postId != null &&
-            postId.isNotEmpty &&
-            mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CommunityPostPage(
-                communityId: communityId,
-                postId: postId,
+      case 'community_post':
+        {
+          final communityId = n.navigateParams['communityId']?.toString();
+          final postId = n.navigateParams['postId']?.toString();
+          if (communityId != null &&
+              communityId.isNotEmpty &&
+              postId != null &&
+              postId.isNotEmpty &&
+              mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CommunityPostPage(
+                  communityId: communityId,
+                  postId: postId,
+                ),
               ),
-            ),
-          );
+            );
+          }
+          break;
         }
-        break;
-      }
-      case 'invitation': {
-        // Optional: could deep-link to a specific invitation later using n.navigateParams['invitationId']
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const InvitationPage()),
-          );
+      case 'invitation':
+        {
+          // Optional: could deep-link to a specific invitation later using n.navigateParams['invitationId']
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InvitationPage()),
+            );
+          }
+          break;
         }
-        break;
-      }
-      case 'conversation': {
-        final conversationId = n.navigateParams['conversationId']?.toString();
-        if (conversationId != null && conversationId.isNotEmpty && mounted) {
-          final other = ChatUser(
-            id: n.actorId,
-            name: n.actorName.isNotEmpty
-                ? n.actorName
-                : (n.actorUsername.isNotEmpty ? n.actorUsername : 'User'),
-            avatarUrl: n.actorAvatarUrl,
-          );
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatPage(
-                otherUser: other,
-                conversationId: conversationId,
+      case 'conversation':
+        {
+          final conversationId = n.navigateParams['conversationId']?.toString();
+          if (conversationId != null && conversationId.isNotEmpty && mounted) {
+            final other = ChatUser(
+              id: n.actorId,
+              name: n.actorName.isNotEmpty
+                  ? n.actorName
+                  : (n.actorUsername.isNotEmpty ? n.actorUsername : 'User'),
+              avatarUrl: n.actorAvatarUrl,
+            );
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatPage(
+                  otherUser: other,
+                  conversationId: conversationId,
+                ),
               ),
-            ),
-          );
+            );
+          }
+          break;
         }
-        break;
-      }
-      case 'user_profile': {
-        final userId = (n.navigateParams['userId'] ?? n.actorId).toString();
-        if (userId.isNotEmpty && mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => OtherUserProfilePage(
-                userId: userId,
-                userName: n.actorName.isNotEmpty
-                    ? n.actorName
-                    : (n.actorUsername.isNotEmpty ? n.actorUsername : 'User'),
-                userAvatarUrl: n.actorAvatarUrl ?? '',
-                userBio: '',
+      case 'user_profile':
+        {
+          final userId = (n.navigateParams['userId'] ?? n.actorId).toString();
+          if (userId.isNotEmpty && mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => OtherUserProfilePage(
+                  userId: userId,
+                  userName: n.actorName.isNotEmpty
+                      ? n.actorName
+                      : (n.actorUsername.isNotEmpty ? n.actorUsername : 'User'),
+                  userAvatarUrl: n.actorAvatarUrl ?? '',
+                  userBio: '',
+                ),
               ),
-            ),
-          );
+            );
+          }
+          break;
         }
-        break;
-      }
       default:
         // no-op
         break;
@@ -188,12 +197,17 @@ class _NotificationPageState extends State<NotificationPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+    final isDesktop = context.isDesktop || context.isLargeDesktop;
+    final backgroundColor =
+        isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final cardColor = isDark ? const Color(0xFF000000) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
 
-    final today = _items.where((n) => _isToday(n.createdAt)).map(_toUIItem).toList();
-    final yesterday = _items.where((n) => !_isToday(n.createdAt)).map(_toUIItem).toList();
+    final today =
+        _items.where((n) => _isToday(n.createdAt)).map(_toUIItem).toList();
+    final yesterday =
+        _items.where((n) => !_isToday(n.createdAt)).map(_toUIItem).toList();
+    final hasAny = today.isNotEmpty || yesterday.isNotEmpty;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -251,37 +265,121 @@ class _NotificationPageState extends State<NotificationPage> {
                       ),
                     ),
                   )
-                : SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(25),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0),
-                              blurRadius: 1,
-                              offset: const Offset(0, 6),
+                : (isDesktop
+                    ? Align(
+                        alignment: Alignment.topLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 720),
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  borderRadius: BorderRadius.circular(25),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0),
+                                      blurRadius: 1,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: hasAny
+                                      ? Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const SizedBox(height: 10),
+                                            _SectionHeader(
+                                                label: 'Today', isDark: isDark),
+                                            ...today.map((n) =>
+                                                _NotificationTile(
+                                                    item: n, isDark: isDark)),
+                                            const SizedBox(height: 6),
+                                            _SectionHeader(
+                                                label: 'Yesterday',
+                                                isDark: isDark),
+                                            ...yesterday.map((n) =>
+                                                _NotificationTile(
+                                                    item: n, isDark: isDark)),
+                                          ],
+                                        )
+                                      : Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Text(
+                                            'No notifications',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : const Color(0xFF666666),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                              ),
                             ),
-                          ],
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 10),
-                            _SectionHeader(label: 'Today', isDark: isDark),
-                            ...today.map((n) => _NotificationTile(item: n, isDark: isDark)),
-                            const SizedBox(height: 6),
-                            _SectionHeader(label: 'Yesterday', isDark: isDark),
-                            ...yesterday.map((n) => _NotificationTile(item: n, isDark: isDark)),
-                            const SizedBox(height: 8),
-                          ],
+                      )
+                    : SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(25),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0),
+                                  blurRadius: 1,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: hasAny
+                                  ? Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(height: 10),
+                                        _SectionHeader(
+                                            label: 'Today', isDark: isDark),
+                                        ...today.map((n) => _NotificationTile(
+                                            item: n, isDark: isDark)),
+                                        const SizedBox(height: 6),
+                                        _SectionHeader(
+                                            label: 'Yesterday', isDark: isDark),
+                                        ...yesterday.map((n) =>
+                                            _NotificationTile(
+                                                item: n, isDark: isDark)),
+                                      ],
+                                    )
+                                  : Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Text(
+                                        'No notifications',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.white70
+                                              : const Color(0xFF666666),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
+                      )),
       ),
     );
   }
@@ -315,7 +413,8 @@ class _NotificationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final secondary = isDark ? const Color(0xFF999999) : const Color(0xFF666666);
+    final secondary =
+        isDark ? const Color(0xFF999999) : const Color(0xFF666666);
 
     return InkWell(
       onTap: item.onTap,
@@ -371,7 +470,8 @@ class _NotificationText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = isDark ? Colors.white : Colors.black;
-    final secondary = isDark ? const Color(0xFF999999) : const Color(0xFF666666);
+    final secondary =
+        isDark ? const Color(0xFF999999) : const Color(0xFF666666);
 
     return RichText(
       text: TextSpan(

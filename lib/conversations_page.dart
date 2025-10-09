@@ -18,22 +18,27 @@ import 'profile_page.dart';
 import 'core/conversations_api.dart';
 import 'core/communities_api.dart';
 import 'core/notifications_api.dart';
+import 'responsive/responsive_breakpoints.dart';
+import 'core/time_utils.dart';
 
 class ConversationsPage extends StatefulWidget {
   final bool? isDarkMode;
   final VoidCallback? onThemeToggle;
   final int initialTabIndex;
+  final bool hideDesktopTopNav;
 
   const ConversationsPage({
     super.key,
     this.isDarkMode,
     this.onThemeToggle,
     this.initialTabIndex = 0,
+    this.hideDesktopTopNav = false,
   });
 
   @override
   State<ConversationsPage> createState() => _ConversationsPageState();
 }
+
 
 class _ConversationsPageState extends State<ConversationsPage>
     with SingleTickerProviderStateMixin {
@@ -88,9 +93,8 @@ class _ConversationsPageState extends State<ConversationsPage>
     super.dispose();
   }
 
-  bool _isWideLayout(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    return kIsWeb && size.width >= 1280 && size.height >= 800;
+    bool _isWideLayout(BuildContext context) {
+    return kIsWeb && (context.isDesktop || context.isLargeDesktop);
   }
 
   Future<void> _loadUnreadNotifications() async {
@@ -121,11 +125,10 @@ class _ConversationsPageState extends State<ConversationsPage>
     }
   }
 
-  String _formatTime(DateTime? dt) {
-    if (dt == null) return '';
-    final tod = TimeOfDay.fromDateTime(dt);
-    return tod.format(context);
-  }
+String _formatTime(DateTime? dt) {
+  if (dt == null) return '';
+  return TimeUtils.relativeLabel(dt, locale: 'en_short');
+}
 
   // -----------------------------
   // Data loading
@@ -434,6 +437,12 @@ class _ConversationsPageState extends State<ConversationsPage>
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
     if (_isWideLayout(context)) {
+      if (widget.hideDesktopTopNav) {
+        return Container(
+          color: bg,
+          child: _buildDesktopBody(isDark),
+        );
+      }
       return _buildDesktop(context, isDark, bg);
     }
 
@@ -468,34 +477,35 @@ class _ConversationsPageState extends State<ConversationsPage>
   }
 
   Widget _buildDesktop(BuildContext context, bool isDark, Color backgroundColor) {
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: Column(
-        children: [
-          _buildDesktopTopNav(isDark),
-          Expanded(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1280),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 1, child: _buildLeftPanel(isDark)),
-                      const SizedBox(width: 16),
-                      Expanded(flex: 2, child: _buildRightPanel(isDark)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  return Scaffold(
+    backgroundColor: backgroundColor,
+    body: Column(
+      children: [
+        _buildDesktopTopNav(isDark),
+        Expanded(child: _buildDesktopBody(isDark)),
+      ],
+    ),
+  );
+}
 
+Widget _buildDesktopBody(bool isDark) {
+  return Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1280),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 1, child: _buildLeftPanel(isDark)),
+            const SizedBox(width: 16),
+            Expanded(flex: 2, child: _buildRightPanel(isDark)),
+          ],
+        ),
+      ),
+    ),
+  );
+}
   Widget _buildDesktopTopNav(bool isDark) {
     final barColor = isDark ? Colors.black : Colors.white;
     return Material(
@@ -525,49 +535,49 @@ class _ConversationsPageState extends State<ConversationsPage>
                     icon: Icons.notifications_outlined,
                     badgeCount: _unreadNotifications,
                     iconColor: const Color(0xFF666666),
-                                        onTap: () async {
-                      // Desktop top-right popup
-                      final size = MediaQuery.of(context).size;
-                      final desktop = kIsWeb && size.width >= 1280 && size.height >= 800;
-                      if (desktop) {
-                        await showDialog(
-                          context: context,
-                          barrierDismissible: true,
-                          barrierColor: Colors.black26,
-                          builder: (_) {
-                            final isDark = Theme.of(context).brightness == Brightness.dark;
-                            final double width = 420;
-                            final double height = size.height * 0.8;
-                            return SafeArea(
-                              child: Align(
-                                alignment: Alignment.topRight,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 16, right: 16),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: SizedBox(
-                                      width: width,
-                                      height: height,
-                                      child: Material(
-                                        color: isDark ? const Color(0xFF000000) : Colors.white,
-                                        child: const NotificationPage(),
-                                      ),
+                         onTap: () async {
+                    // Desktop top-right popup
+                    final desktop = kIsWeb && (context.isDesktop || context.isLargeDesktop);
+                    if (desktop) {
+                      await showDialog(
+                        context: context,
+                        barrierDismissible: true,
+                        barrierColor: Colors.black26,
+                        builder: (_) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          final size = MediaQuery.of(context).size;
+                          final double width = 420;
+                          final double height = size.height * 0.8;
+                          return SafeArea(
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 16, right: 16),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: SizedBox(
+                                    width: width,
+                                    height: height,
+                                    child: Material(
+                                      color: isDark ? const Color(0xFF000000) : Colors.white,
+                                      child: const NotificationPage(),
                                     ),
                                   ),
                                 ),
                               ),
-                            );
-                          },
-                        );
-                      } else {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const NotificationPage()),
-                        );
-                      }
-                      if (!mounted) return;
-                      await _loadUnreadNotifications();
-                    },
+                            ),
+                          );
+                        },
+                      );
+                    } else {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationPage()),
+                      );
+                    }
+                    if (!mounted) return;
+                    await _loadUnreadNotifications();
+                  },
                   ),
                 ],
               ),
@@ -601,6 +611,7 @@ class _ConversationsPageState extends State<ConversationsPage>
       backgroundColor: barColor,
       elevation: isDark ? 0 : 2,
       centerTitle: false,
+      automaticallyImplyLeading: false,
       title: Text(
         'Conversations',
         style: GoogleFonts.inter(
@@ -694,7 +705,7 @@ class _ConversationsPageState extends State<ConversationsPage>
                   tooltip: 'Invitations',
                   onTap: () async {
                     final size = MediaQuery.of(context).size;
-                    final desktop = kIsWeb && size.width >= 1280 && size.height >= 800;
+                    final desktop = kIsWeb && (context.isDesktop || context.isLargeDesktop);
                     if (desktop) {
                       await showDialog(
                         context: context,

@@ -6,6 +6,7 @@ import '../models/post.dart';
 import '../other_user_profile_page.dart';
 import 'auto_play_video.dart';
 import 'reaction_picker.dart';
+import '../core/time_utils.dart';
 
 class HomePostCard extends StatefulWidget {
   final Post post;
@@ -40,20 +41,6 @@ class _HomePostCardState extends State<HomePostCard> {
     });
   }
 
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'now';
-    }
-  }
 
   IconData _getReactionIcon(ReactionType? reaction) {
     switch (reaction) {
@@ -206,7 +193,7 @@ class _HomePostCardState extends State<HomePostCard> {
                         ),
                       ),
                       Text(
-                        _getTimeAgo(widget.post.createdAt),
+                        TimeUtils.relativeLabel(widget.post.createdAt, locale: 'en_short'),
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: _getTextColor(),

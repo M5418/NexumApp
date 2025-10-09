@@ -54,7 +54,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   List<Map<String, dynamic>> _suggestedUsers = [];
   int _conversationsInitialTabIndex = 0; // 0: Chats, 1: Communities
   String? _currentUserId;
-
+  int _desktopSectionIndex = 0; // 0=Home, 1=Connections, 2=Conversations, 3=Profile
+  
   // Unread notifications badge
   int _unreadCount = 0;
 
@@ -934,17 +935,34 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           Column(
             children: [
               _buildDesktopTopNav(isDark),
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1280),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                      child: _buildDesktopColumns(isDark),
+             Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1280),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: IndexedStack(
+                      index: _desktopSectionIndex,
+                      children: [
+                        _buildDesktopColumns(isDark), // Home
+                        ConnectionsPage(
+                          isDarkMode: isDark,
+                          onThemeToggle: () {},
+                          hideDesktopTopNav: true,
+                        ),
+                        ConversationsPage(
+                          isDarkMode: isDark,
+                          onThemeToggle: () {},
+                          initialTabIndex: _conversationsInitialTabIndex,
+                          hideDesktopTopNav: true,
+                        ),
+                        const ProfilePage(), // Can be switched to embedded later if desired
+                      ],
                     ),
                   ),
                 ),
               ),
+            ),
             ],
           ),
           Positioned(
@@ -952,7 +970,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             bottom: 24,
             child: FloatingActionButton(
               heroTag: 'createPostFabWeb',
-              onPressed: () => CreatePostPage.showPopup(context),
+              onPressed: () async {
+                final created = await CreatePostPage.showPopup<bool>(context);
+                if (created == true) {
+                  await _loadData();
+                }
+              },
               backgroundColor: const Color(0xFFBFAE01),
               foregroundColor: Colors.black,
               child: const Icon(Icons.add),
@@ -972,132 +995,116 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     );
   }
 
-  Widget _buildDesktopTopNav(bool isDark) {
-    final barColor = isDark ? Colors.black : Colors.white;
-    return Material(
-      color: barColor,
-      elevation: isDark ? 0 : 2,
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Top row: burger | title | notifications
-              Row(
-                children: [
-                  Icon(Icons.menu, color: const Color(0xFF666666)),
-                  const Spacer(),
-                  Text(
-                    'NEXUM',
-                    style: GoogleFonts.inika(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
+Widget _buildDesktopTopNav(bool isDark) {
+  final barColor = isDark ? Colors.black : Colors.white;
+  return Material(
+    color: barColor,
+    elevation: isDark ? 0 : 2,
+    child: SafeArea(
+      bottom: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.menu, color: const Color(0xFF666666)),
+                const Spacer(),
+                Text(
+                  'NEXUM',
+                  style: GoogleFonts.inika(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black,
                   ),
-                  const Spacer(),
-                  BadgeIcon(
-                    icon: Icons.notifications_outlined,
-                    badgeCount: _unreadCount,
-                    iconColor: const Color(0xFF666666),
-                                        onTap: () async {
-                      if (_useDesktopPopup(context)) {
-                        await showDialog(
-                          context: context,
-                          barrierDismissible: true,
-                          barrierColor: Colors.black26,
-                          builder: (_) {
-                            final isDark = Theme.of(context).brightness == Brightness.dark;
-                            final size = MediaQuery.of(context).size;
-                            final double width = 420;
-                            final double height = size.height * 0.8;
-                            return SafeArea(
-                              child: Align(
-                                alignment: Alignment.topRight,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 16, right: 16),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: SizedBox(
-                                      width: width,
-                                      height: height,
-                                      child: Material(
-                                        color: isDark ? const Color(0xFF000000) : Colors.white,
-                                        child: const NotificationPage(),
-                                      ),
+                ),
+                const Spacer(),
+                BadgeIcon(
+                  icon: Icons.notifications_outlined,
+                  badgeCount: _unreadCount,
+                  iconColor: const Color(0xFF666666),
+                  onTap: () async {
+                    final size = MediaQuery.of(context).size;
+                    final desktop = kIsWeb && size.width >= 1280 && size.height >= 800;
+                    if (desktop) {
+                      await showDialog(
+                        context: context,
+                        barrierDismissible: true,
+                        barrierColor: Colors.black26,
+                        builder: (_) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          final double width = 420;
+                          final double height = size.height * 0.8;
+                          return SafeArea(
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 16, right: 16),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: SizedBox(
+                                    width: width,
+                                    height: height,
+                                    child: Material(
+                                      color: isDark ? const Color(0xFF000000) : Colors.white,
+                                      child: const NotificationPage(),
                                     ),
                                   ),
                                 ),
                               ),
-                            );
-                          },
-                        );
-                      } else {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const NotificationPage()),
-                        );
-                      }
-                      if (!mounted) return;
-                      await _loadUnreadCount();
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Nav row in the center (Home | Connections | Conversations | My Profil)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _TopNavItem(
-                    icon: Icons.home_outlined,
-                    label: 'Home',
-                    selected: true,
-                    onTap: () {},
-                  ),
-                  _TopNavItem(
-                    icon: Icons.people_outline,
-                    label: 'Connections',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => ConnectionsPage(isDarkMode: isDark, onThemeToggle: () {})),
+                            ),
+                          );
+                        },
                       );
-                    },
-                  ),
-                  _TopNavItem(
-                    icon: Icons.chat_bubble_outline,
-                    label: 'Conversations',
-                    onTap: () {
-                      Navigator.push(
+                    } else {
+                      await Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => ConversationsPage(
-                            isDarkMode: isDark,
-                            onThemeToggle: () {},
-                            initialTabIndex: 0,
-                          ),
-                        ),
+                        MaterialPageRoute(builder: (_) => const NotificationPage()),
                       );
-                    },
-                  ),
-                  _TopNavItem(
-                    icon: Icons.person_outline,
-                    label: 'My Profil',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
+                    }
+                    if (!mounted) return;
+                    await _loadUnreadCount();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _TopNavItem(
+                  icon: Icons.home_outlined,
+                  label: 'Home',
+                  selected: _desktopSectionIndex == 0,
+                  onTap: () => setState(() => _desktopSectionIndex = 0),
+                ),
+                _TopNavItem(
+                  icon: Icons.people_outline,
+                  label: 'Connections',
+                  selected: _desktopSectionIndex == 1,
+                  onTap: () => setState(() => _desktopSectionIndex = 1),
+                ),
+                _TopNavItem(
+                  icon: Icons.chat_bubble_outline,
+                  label: 'Conversations',
+                  selected: _desktopSectionIndex == 2,
+                  onTap: () => setState(() => _desktopSectionIndex = 2),
+                ),
+                _TopNavItem(
+                  icon: Icons.person_outline,
+                  label: 'My Profil',
+                  selected: _desktopSectionIndex == 3,
+                  onTap: () => setState(() => _desktopSectionIndex = 3),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildDesktopColumns(bool isDark) {
     return Row(

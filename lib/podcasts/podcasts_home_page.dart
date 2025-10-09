@@ -11,6 +11,7 @@ import 'my_library_page.dart';
 import '../data/interest_domains.dart';
 import 'podcast_search_page.dart';
 import 'podcasts_three_column_page.dart';
+import '../responsive/responsive_breakpoints.dart';
 
 // Podcast model used across pages (e.g., PodcastDetailsPage imports this).
 class Podcast {
@@ -229,15 +230,13 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const PodcastsCategoriesPage()));
   }
 
-    @override
+      @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final size = MediaQuery.of(context).size;
-    if (size.width >= 1000) {
+    if (context.isDesktop || context.isLargeDesktop) {
       return const PodcastsThreeColumnPage();
     }
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
-
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(

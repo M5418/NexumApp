@@ -4,6 +4,7 @@ import 'book_details_page.dart';
 import 'create_book_page.dart';
 import 'books_api.dart';
 import 'book_search_page.dart';
+import '../responsive/responsive_breakpoints.dart';
 
 class Book {
   final String id;
@@ -216,10 +217,10 @@ class _BooksHomePageState extends State<BooksHomePage> {
     );
   }
 
-  @override
+   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 1000;
-    return isWide ? _buildDesktop(context) : _buildMobile(context);
+    final isDesktop = context.isDesktop || context.isLargeDesktop;
+    return isDesktop ? _buildDesktop(context) : _buildMobile(context);
   }
 
   // Desktop header: back + "NEXUM"

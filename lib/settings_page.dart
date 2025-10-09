@@ -14,6 +14,7 @@ import 'core/auth_api.dart';
 import 'core/api_client.dart';
 import 'services/auth_service.dart';
 import 'app_wrapper.dart';
+import 'responsive/responsive_breakpoints.dart';
 
 class SettingsPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -78,14 +79,13 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   ];
 
-  @override
+   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = widget.isDarkMode ?? theme.brightness == Brightness.dark;
-    final width = MediaQuery.of(context).size.width;
-    final isWide = width >= 900;
 
-    return isWide
+    final isDesktop = context.isDesktop || context.isLargeDesktop;
+    return isDesktop
         ? _buildDesktop(context, isDark)
         : _buildMobile(context, isDark);
   }

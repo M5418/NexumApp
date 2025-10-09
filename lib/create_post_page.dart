@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +13,7 @@ import 'core/communities_api.dart';
 import 'core/community_posts_api.dart';
 import 'core/connections_api.dart';
 import 'core/users_api.dart';
+import '../responsive/responsive_breakpoints.dart';
 
 class CreatePostPage extends StatefulWidget {
   const CreatePostPage({super.key});
@@ -20,7 +22,7 @@ class CreatePostPage extends StatefulWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Create Post',
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (_, __, ___) {
         return Center(
@@ -37,7 +39,8 @@ class CreatePostPage extends StatefulWidget {
         );
       },
       transitionBuilder: (_, anim, __, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        final curved =
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
         return FadeTransition(
           opacity: curved,
           child: ScaleTransition(
@@ -48,7 +51,7 @@ class CreatePostPage extends StatefulWidget {
       },
     );
   }
-  
+
   @override
   State<CreatePostPage> createState() => _CreatePostPageState();
 }
@@ -79,24 +82,45 @@ class _CreatePostPageState extends State<CreatePostPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+      backgroundColor:
+          isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(isDark),
+        child: Builder(
+          builder: (context) {
+            final isDesktop =
+                kIsWeb && (context.isDesktop || context.isLargeDesktop);
+            final content = Column(
+              children: [
+                // Header
+                _buildHeader(isDark),
 
-            // Scrollable content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: _buildPostCard(isDark),
+                // Scrollable content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: _buildPostCard(isDark),
+                  ),
+                ),
+
+                // Bottom action bar
+                _buildBottomActionBar(isDark),
+              ],
+            );
+
+            if (!isDesktop) return content;
+
+            // Desktop: center and constrain width like popup
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: content,
+                ),
               ),
-            ),
-
-            // Bottom action bar
-            _buildBottomActionBar(isDark),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -389,7 +413,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
           });
         },
       );
-    } else if (_mediaItems.length == 1 && _mediaItems.first.type == MediaType.video) {
+    } else if (_mediaItems.length == 1 &&
+        _mediaItems.first.type == MediaType.video) {
       // Single video - wide layout
       return MediaThumb(
         type: MediaType.video,
@@ -509,10 +534,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-    void _showUserTagPicker() {
+  void _showUserTagPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? Colors.black
+          : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -602,12 +629,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                          color: isDark
+                              ? const Color(0xFF1A1A1A)
+                              : const Color(0xFFF5F5F5),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.search, color: Color(0xFF666666), size: 20),
+                            const Icon(Icons.search,
+                                color: Color(0xFF666666), size: 20),
                             const SizedBox(width: 12),
                             Expanded(
                               child: TextField(
@@ -638,29 +668,40 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             ? Center(
                                 child: Text(
                                   'No connections found',
-                                  style: GoogleFonts.inter(color: const Color(0xFF666666)),
+                                  style: GoogleFonts.inter(
+                                      color: const Color(0xFF666666)),
                                 ),
                               )
                             : ListView.separated(
                                 itemCount: filtered.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1),
                                 itemBuilder: (context, index) {
                                   final u = filtered[index];
-                                  final label = u.username.isNotEmpty ? u.username : u.name;
-                                  final selected = localSelected.contains(label);
+                                  final label = u.username.isNotEmpty
+                                      ? u.username
+                                      : u.name;
+                                  final selected =
+                                      localSelected.contains(label);
                                   return ListTile(
-                                    leading: _Avatar(avatarUrl: u.avatarUrl, letter: u.avatarLetter),
+                                    leading: _Avatar(
+                                        avatarUrl: u.avatarUrl,
+                                        letter: u.avatarLetter),
                                     title: Text(
                                       u.name,
                                       style: GoogleFonts.inter(),
                                     ),
                                     subtitle: Text(
                                       u.username,
-                                      style: GoogleFonts.inter(color: const Color(0xFF666666)),
+                                      style: GoogleFonts.inter(
+                                          color: const Color(0xFF666666)),
                                     ),
                                     trailing: selected
-                                        ? const Icon(Icons.check_circle, color: Color(0xFFBFAE01))
-                                        : const Icon(Icons.radio_button_unchecked, color: Color(0xFFCCCCCC)),
+                                        ? const Icon(Icons.check_circle,
+                                            color: Color(0xFFBFAE01))
+                                        : const Icon(
+                                            Icons.radio_button_unchecked,
+                                            color: Color(0xFFCCCCCC)),
                                     onTap: () {
                                       setSheetState(() {
                                         if (selected) {
@@ -725,25 +766,31 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (ids.isEmpty) return [];
 
       final all = await UsersApi().list(); // all users except current
-      final filtered = all.where((u) => ids.contains((u['id'] ?? '').toString()));
+      final filtered =
+          all.where((u) => ids.contains((u['id'] ?? '').toString()));
 
       final List<_TagUser> users = filtered.map((u) {
         final name = (u['name'] ?? '').toString();
         final username = (u['username'] ?? '').toString();
         final avatarUrl = u['avatarUrl']?.toString();
         final email = (u['email'] ?? '').toString();
-        final letterSource = name.isNotEmpty ? name : (username.isNotEmpty ? username : email);
-        final letter = letterSource.isNotEmpty ? letterSource[0].toUpperCase() : 'U';
+        final letterSource =
+            name.isNotEmpty ? name : (username.isNotEmpty ? username : email);
+        final letter =
+            letterSource.isNotEmpty ? letterSource[0].toUpperCase() : 'U';
         return _TagUser(
           id: (u['id'] ?? '').toString(),
-          name: name.isNotEmpty ? name : (email.isNotEmpty ? email.split('@')[0] : 'User'),
+          name: name.isNotEmpty
+              ? name
+              : (email.isNotEmpty ? email.split('@')[0] : 'User'),
           username: username.isNotEmpty ? username : '@user',
           avatarUrl: avatarUrl,
           avatarLetter: letter,
         );
       }).toList();
 
-      users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      users
+          .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       return users;
     } catch (_) {
       return [];
@@ -815,7 +862,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
           // Only one video allowed, replace any existing media
           _mediaItems
             ..clear()
-            ..add(MediaItem(type: MediaType.video, path: video.path, xfile: video));
+            ..add(MediaItem(
+                type: MediaType.video, path: video.path, xfile: video));
         });
       }
     } on PlatformException catch (e) {
@@ -845,7 +893,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
   void _showCommunitySelector() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0C0C0C) : Colors.white,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF0C0C0C)
+          : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -928,12 +978,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                          color: isDark
+                              ? const Color(0xFF1A1A1A)
+                              : const Color(0xFFF5F5F5),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.search, color: Color(0xFF666666), size: 20),
+                            const Icon(Icons.search,
+                                color: Color(0xFF666666), size: 20),
                             const SizedBox(width: 12),
                             Expanded(
                               child: TextField(
@@ -964,25 +1017,34 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             ? Center(
                                 child: Text(
                                   'No communities found',
-                                  style: GoogleFonts.inter(color: const Color(0xFF666666)),
+                                  style: GoogleFonts.inter(
+                                      color: const Color(0xFF666666)),
                                 ),
                               )
                             : ListView.separated(
                                 itemCount: filtered.length,
-                                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(height: 12),
                                 itemBuilder: (context, index) {
                                   final community = filtered[index];
-                                  final isSelected = _selectedCommunities.any((c) => c.id == community.id);
-                                  final canSelect = _selectedCommunities.length < _maxCommunities || isSelected;
+                                  final isSelected = _selectedCommunities
+                                      .any((c) => c.id == community.id);
+                                  final canSelect =
+                                      _selectedCommunities.length <
+                                              _maxCommunities ||
+                                          isSelected;
 
                                   return GestureDetector(
                                     onTap: canSelect
                                         ? () {
                                             setState(() {
                                               if (isSelected) {
-                                                _selectedCommunities.removeWhere((c) => c.id == community.id);
+                                                _selectedCommunities
+                                                    .removeWhere((c) =>
+                                                        c.id == community.id);
                                               } else {
-                                                _selectedCommunities.add(community);
+                                                _selectedCommunities
+                                                    .add(community);
                                               }
                                             });
                                             setSheetState(() {});
@@ -991,32 +1053,44 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                     child: Container(
                                       padding: const EdgeInsets.all(16),
                                       decoration: BoxDecoration(
-                                        color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF8F9FA),
+                                        color: isDark
+                                            ? const Color(0xFF1A1A1A)
+                                            : const Color(0xFFF8F9FA),
                                         borderRadius: BorderRadius.circular(16),
                                         border: isSelected
                                             ? Border.all(
                                                 color: const Color(0xFFBFAE01),
                                                 width: 2,
                                               )
-                                            : Border.all(color: Colors.transparent, width: 2),
+                                            : Border.all(
+                                                color: Colors.transparent,
+                                                width: 2),
                                       ),
                                       child: Row(
                                         children: [
                                           // Community avatar
-                                          _CommunityAvatar(url: community.avatarUrl, name: community.name),
+                                          _CommunityAvatar(
+                                              url: community.avatarUrl,
+                                              name: community.name),
                                           const SizedBox(width: 16),
 
                                           // Community info
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   community.name,
                                                   style: GoogleFonts.inter(
                                                     fontSize: 16,
                                                     fontWeight: FontWeight.w600,
-                                                    color: canSelect ? (isDark ? Colors.white : Colors.black) : const Color(0xFF999999),
+                                                    color: canSelect
+                                                        ? (isDark
+                                                            ? Colors.white
+                                                            : Colors.black)
+                                                        : const Color(
+                                                            0xFF999999),
                                                   ),
                                                 ),
                                                 const SizedBox(height: 4),
@@ -1024,10 +1098,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                                   community.bio,
                                                   style: GoogleFonts.inter(
                                                     fontSize: 14,
-                                                    color: canSelect ? const Color(0xFF666666) : const Color(0xFF999999),
+                                                    color: canSelect
+                                                        ? const Color(
+                                                            0xFF666666)
+                                                        : const Color(
+                                                            0xFF999999),
                                                   ),
                                                   maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ],
                                             ),
@@ -1035,7 +1114,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
                                           // Friends in common
                                           Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
                                             children: [
                                               const SizedBox(height: 4),
                                               Text(
@@ -1043,7 +1123,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                                 style: GoogleFonts.inter(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500,
-                                                  color: const Color(0xFF666666),
+                                                  color:
+                                                      const Color(0xFF666666),
                                                 ),
                                               ),
                                             ],
@@ -1142,7 +1223,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
           final isDark = Theme.of(ctx).brightness == Brightness.dark;
           return AlertDialog(
             backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-            title: Text('Post to Community?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            title: Text('Post to Community?',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
             content: Text(
               "This post will be published in the community \"${community.name}\" and will not appear in your home feed.",
               style: GoogleFonts.inter(),
@@ -1154,7 +1236,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text('Post', style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
+                child: Text('Post',
+                    style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
               ),
             ],
           );
@@ -1288,7 +1371,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
         return 'video/mp4';
       default:
         // Fallback based on hint
-        return hint == MediaType.video ? 'video/mp4' : 'application/octet-stream';
+        return hint == MediaType.video
+            ? 'video/mp4'
+            : 'application/octet-stream';
     }
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/mentorship_api.dart';
 import 'mentorship_chat_page.dart';
+import '../core/time_utils.dart';
 
 class MentorshipConversationsPage extends StatefulWidget {
   const MentorshipConversationsPage({super.key});
@@ -47,21 +48,10 @@ class _MentorshipConversationsPageState extends State<MentorshipConversationsPag
     }
   }
 
-  String _formatTimeOrDate(DateTime? dt) {
-    if (dt == null) return '';
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final d = DateTime(dt.year, dt.month, dt.day);
-    if (d == today) {
-      final t = TimeOfDay.fromDateTime(dt);
-      return t.format(context);
-    }
-    if (d == today.subtract(const Duration(days: 1))) {
-      return 'Yesterday';
-    }
-    return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-    // Or use intl if available
-  }
+String _formatTimeOrDate(DateTime? dt) {
+  if (dt == null) return '';
+return TimeUtils.relativeLabel(dt, locale: 'en_short');
+}
 
   @override
   Widget build(BuildContext context) {

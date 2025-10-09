@@ -43,6 +43,7 @@ dependencies:
 
   # Web-compatible PDF viewer
   syncfusion_flutter_pdfviewer: ^26.2.11
+  timeago: ^3.7.1
 
 dev_dependencies:
   flutter_test:

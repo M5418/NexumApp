@@ -17,6 +17,7 @@ import 'widgets/animated_navbar.dart';
 import 'widgets/post_options_menu.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/comment_bottom_sheet.dart';
+import 'core/time_utils.dart';
 
 class PostPage extends StatefulWidget {
   // Prefer passing the full post to avoid extra fetches
@@ -198,14 +199,7 @@ class _PostPageState extends State<PostPage> {
     });
   }
 
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-    if (difference.inDays > 0) return '${difference.inDays}d ago';
-    if (difference.inHours > 0) return '${difference.inHours}h ago';
-    if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
-    return 'now';
-  }
+
 
   void _showPostOptions() {
     if (_post == null) return;
@@ -982,13 +976,13 @@ class _PostPageState extends State<PostPage> {
                           color: isDark ? Colors.white : Colors.black,
                         ),
                       ),
-                      Text(
-                        _getTimeAgo(_post!.createdAt),
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: const Color(0xFF666666),
-                        ),
+                     Text(
+                      TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: const Color(0xFF666666),
                       ),
+                    ),
                     ],
                   ),
                 ),
@@ -1171,7 +1165,7 @@ class _PostPageState extends State<PostPage> {
 
             // Post date
             Text(
-              _getTimeAgo(_post!.createdAt),
+              TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
               style: GoogleFonts.inter(
                 fontSize: 12,
                 color: const Color(0xFF666666),
