@@ -682,7 +682,7 @@ Widget _buildDesktopBody(bool isDark) {
         boxShadow: [
           if (!isDark)
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues (alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -781,7 +781,7 @@ Widget _buildDesktopBody(bool isDark) {
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues (alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Center(
           child: Text('Select a chat or community',
@@ -896,7 +896,7 @@ Widget _buildDesktopBody(bool isDark) {
       separatorBuilder: (context, index) => Divider(
         height: 1,
         thickness: 0.5,
-        color: const Color(0xFF666666).withOpacity(0.10),
+        color: const Color(0xFF666666).withValues (alpha: 0.10),
         indent: 64,
       ),
       itemBuilder: (context, index) {
@@ -1110,7 +1110,7 @@ class ChatListTile extends StatelessWidget {
             height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xFF666666).withOpacity(0.20),
+              color: const Color(0xFF666666).withValues (alpha: 0.20),
               borderRadius: BorderRadius.circular(24),
             ),
             child: const Icon(Icons.person, color: Color(0xFF666666), size: 20),
@@ -1120,7 +1120,7 @@ class ChatListTile extends StatelessWidget {
             height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xFF666666).withOpacity(0.20),
+              color: const Color(0xFF666666).withValues (alpha: 0.20),
               borderRadius: BorderRadius.circular(24),
             ),
             child: const Icon(Icons.person, color: Color(0xFF666666), size: 20),
@@ -1185,7 +1185,7 @@ class CommunityListTile extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF666666).withOpacity(0.10),
+                      color: const Color(0xFF666666).withValues (alpha:0.10),
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: const Icon(Icons.group, color: Color(0xFF666666), size: 24),
@@ -1194,7 +1194,7 @@ class CommunityListTile extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF666666).withOpacity(0.20),
+                      color: const Color(0xFF666666).withValues(alpha: 0.20),
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: const Icon(Icons.group, color: Color(0xFF666666), size: 24),
@@ -1227,7 +1227,7 @@ class CommunityListTile extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF666666).withOpacity(0.10),
+                            color: const Color(0xFF666666).withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(

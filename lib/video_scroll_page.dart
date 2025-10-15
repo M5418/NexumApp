@@ -784,91 +784,89 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
   }
 
   Future<void> _showComments(BuildContext context, String postId) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    List<Comment> comments = [];
-    try {
-      comments = await PostsApi().listComments(postId);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+  final ctx = context;
+  final isDark = Theme.of(ctx).brightness == Brightness.dark;
 
-    if (!mounted) return;
-
-    CommentBottomSheet.show(
-      context,
-      postId: postId,
-      comments: comments,
-      currentUserId: _currentUserId ?? '',
-      isDarkMode: isDark,
-      onAddComment: (text) async {
-        try {
-          await PostsApi().addComment(postId, content: text);
-
-          // Optimistically increment comments count on the post
-          final idx = _findPostIndex(postId);
-          if (idx != -1) {
-            final p = _videoPosts[idx];
-            final updatedCounts = PostCounts(
-              likes: p.counts.likes,
-              comments: p.counts.comments + 1,
-              shares: p.counts.shares,
-              reposts: p.counts.reposts,
-              bookmarks: p.counts.bookmarks,
-            );
-            setState(() {
-              _videoPosts[idx] = p.copyWith(counts: updatedCounts);
-            });
-          }
-
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Comment posted!', style: GoogleFonts.inter()),
-              backgroundColor: const Color(0xFF4CAF50),
-            ),
-          );
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content:
-                  Text('Post comment failed: ${_toError(e)}', style: GoogleFonts.inter()),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
-      onReplyToComment: (commentId, replyText) async {
-        try {
-          await PostsApi()
-              .addComment(postId, content: replyText, parentCommentId: commentId);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Reply posted!', style: GoogleFonts.inter()),
-              backgroundColor: const Color(0xFF4CAF50),
-            ),
-          );
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content:
-                  Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
+  List<Comment> comments = [];
+  try {
+    comments = await PostsApi().listComments(postId);
+  } catch (e) {
+    if (!ctx.mounted) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        content: Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
+        backgroundColor: Colors.red,
+      ),
     );
   }
+
+  if (!ctx.mounted) return;
+
+  CommentBottomSheet.show(
+    ctx,
+    postId: postId,
+    comments: comments,
+    currentUserId: _currentUserId ?? '',
+    isDarkMode: isDark,
+    onAddComment: (text) async {
+      try {
+        await PostsApi().addComment(postId, content: text);
+
+        // Optimistically increment comments count on the post
+        final idx = _findPostIndex(postId);
+        if (idx != -1) {
+          final p = _videoPosts[idx];
+          final updatedCounts = PostCounts(
+            likes: p.counts.likes,
+            comments: p.counts.comments + 1,
+            shares: p.counts.shares,
+            reposts: p.counts.reposts,
+            bookmarks: p.counts.bookmarks,
+          );
+          setState(() {
+            _videoPosts[idx] = p.copyWith(counts: updatedCounts);
+          });
+        }
+
+        if (!ctx.mounted) return;
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text('Comment posted!', style: GoogleFonts.inter()),
+            backgroundColor: const Color(0xFF4CAF50),
+          ),
+        );
+      } catch (e) {
+        if (!ctx.mounted) return;
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text('Post comment failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    },
+    onReplyToComment: (commentId, replyText) async {
+      try {
+        await PostsApi().addComment(postId, content: replyText, parentCommentId: commentId);
+        if (!ctx.mounted) return;
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text('Reply posted!', style: GoogleFonts.inter()),
+            backgroundColor: const Color(0xFF4CAF50),
+          ),
+        );
+      } catch (e) {
+        if (!ctx.mounted) return;
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    },
+  );
+}
 
   String _formatTimeAgo(DateTime dateTime) {
     final now = DateTime.now();

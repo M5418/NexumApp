@@ -840,49 +840,49 @@ class _ProfilePageState extends State<ProfilePage> {
                                       offset: const Offset(0, -10),
                                       child: Row(
                                         children: [
-                                          Expanded(
+                                                                                   Expanded(
                                             child: ElevatedButton(
-                                            onPressed: () async {
-                                              // Map backend JSON to Edit page item types
-                                              final expItems = experiences
-                                                  .map(
-                                                    (e) => ExperienceItem(
-                                                      title: (e['title'] ?? '').toString(),
-                                                      subtitle: (e['subtitle'] as String?)?.toString(),
-                                                    ),
-                                                  )
-                                                  .toList();
-                                              final trainItems = trainings
-                                                  .map(
-                                                    (t) => TrainingItem(
-                                                      title: (t['title'] ?? '').toString(),
-                                                      subtitle: (t['subtitle'] as String?)?.toString(),
-                                                    ),
-                                                  )
-                                                  .toList();
+                                              onPressed: () async {
+                                                final expItems = experiences
+                                                    .map(
+                                                      (e) => ExperienceItem(
+                                                        title: (e['title'] ?? '').toString(),
+                                                        subtitle: (e['subtitle'] as String?)?.toString(),
+                                                      ),
+                                                    )
+                                                    .toList();
+                                                final trainItems = trainings
+                                                    .map(
+                                                      (t) => TrainingItem(
+                                                        title: (t['title'] ?? '').toString(),
+                                                        subtitle: (t['subtitle'] as String?)?.toString(),
+                                                      ),
+                                                    )
+                                                    .toList();
 
-                                              // KYC gating for Full Name
-                                              bool canEditFullName = true;
-                                              try {
-                                                final kycRes = await KycApi().getMine();
-                                                final kycData = Map<String, dynamic>.from(kycRes['data'] ?? {});
-                                                if (kycData.isEmpty) {
-                                                  canEditFullName = true;
-                                                } else {
-                                                  final status = (kycData['status'] ?? '').toString().toLowerCase();
-                                                  final isApproved = ((kycData['is_approved'] ?? 0) == 1) || status == 'approved';
-                                                  final isRejected = ((kycData['is_rejected'] ?? 0) == 1) || status == 'rejected';
-                                                  if (status == 'pending' || isApproved) {
-                                                    canEditFullName = false;
-                                                  } else if (isRejected) {
+                                                bool canEditFullName = true;
+                                                try {
+                                                  final kycRes = await KycApi().getMine();
+                                                  final kycData = Map<String, dynamic>.from(kycRes['data'] ?? {});
+                                                  if (kycData.isEmpty) {
                                                     canEditFullName = true;
                                                   } else {
-                                                    canEditFullName = false;
+                                                    final status = (kycData['status'] ?? '').toString().toLowerCase();
+                                                    final isApproved =
+                                                        ((kycData['is_approved'] ?? 0) == 1) || status == 'approved';
+                                                    final isRejected =
+                                                        ((kycData['is_rejected'] ?? 0) == 1) || status == 'rejected';
+                                                    if (status == 'pending' || isApproved) {
+                                                      canEditFullName = false;
+                                                    } else if (isRejected) {
+                                                      canEditFullName = true;
+                                                    } else {
+                                                      canEditFullName = false;
+                                                    }
                                                   }
+                                                } catch (_) {
+                                                  canEditFullName = true;
                                                 }
-                                              } catch (_) {
-                                                canEditFullName = true;
-                                              }
 
                                                 final page = EditProfilPage(
                                                   fullName: fullName,
@@ -896,6 +896,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   interests: interests,
                                                 );
 
+                                                                                                if (!mounted) return;
                                                 ProfileEditResult? result;
                                                 if (_isWideLayout(context)) {
                                                   result = await showDialog<ProfileEditResult>(
@@ -904,15 +905,17 @@ class _ProfilePageState extends State<ProfilePage> {
                                                     builder: (_) {
                                                       return Dialog(
                                                         backgroundColor: Colors.transparent,
-                                                        insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+                                                        insetPadding:
+                                                            const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
                                                         child: Center(
                                                           child: ConstrainedBox(
-                                                            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+                                                            constraints:
+                                                                const BoxConstraints(maxWidth: 980, maxHeight: 760),
                                                             child: ClipRRect(
                                                               borderRadius: BorderRadius.circular(20),
                                                               child: Material(
                                                                 color: isDark ? const Color(0xFF000000) : Colors.white,
-                                                                child: page, // keeps header + back button intact
+                                                                child: page,
                                                               ),
                                                             ),
                                                           ),
@@ -926,72 +929,74 @@ class _ProfilePageState extends State<ProfilePage> {
                                                     MaterialPageRoute(builder: (_) => page),
                                                   );
                                                 }
-                                              if (!mounted) return;
-                                              if (result != null) {
-                                                final api = ProfileApi();
 
-                                                // 1) Photos: upload new or clear removed
-                                                try {
-                                                  if (result.profileImagePath != null && result.profileImagePath!.isNotEmpty) {
-                                                    await api.uploadAndAttachProfilePhoto(File(result.profileImagePath!));
-                                                  } else if ((result.profileImageUrl == null || result.profileImageUrl!.isEmpty) && (p['profile_photo_url'] != null)) {
-                                                    await api.update({'profile_photo_url': null});
+                                                if (!mounted) return;
+                                                if (result != null) {
+                                                  final api = ProfileApi();
+
+                                                  try {
+                                                    if (result.profileImagePath != null &&
+                                                        result.profileImagePath!.isNotEmpty) {
+                                                      await api.uploadAndAttachProfilePhoto(File(result.profileImagePath!));
+                                                    } else if ((result.profileImageUrl == null ||
+                                                            result.profileImageUrl!.isEmpty) &&
+                                                        (p['profile_photo_url'] != null)) {
+                                                      await api.update({'profile_photo_url': null});
+                                                    }
+
+                                                    if (result.coverImagePath != null &&
+                                                        result.coverImagePath!.isNotEmpty) {
+                                                      await api.uploadAndAttachCoverPhoto(File(result.coverImagePath!));
+                                                    } else if ((result.coverImageUrl == null ||
+                                                            result.coverImageUrl!.isEmpty) &&
+                                                        (p['cover_photo_url'] != null)) {
+                                                      await api.update({'cover_photo_url': null});
+                                                    }
+                                                  } catch (_) {}
+
+                                                  final updates = <String, dynamic>{};
+
+                                                  final newFullName = result.fullName.trim();
+                                                  if (newFullName.isNotEmpty && newFullName != fullName.trim()) {
+                                                    final parts = newFullName.split(RegExp(r'\s+'));
+                                                    final firstName = parts.isNotEmpty ? parts.first : '';
+                                                    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+                                                    if (firstName.isNotEmpty) updates['first_name'] = firstName;
+                                                    updates['last_name'] = lastName;
                                                   }
 
-                                                  if (result.coverImagePath != null && result.coverImagePath!.isNotEmpty) {
-                                                    await api.uploadAndAttachCoverPhoto(File(result.coverImagePath!));
-                                                  } else if ((result.coverImageUrl == null || result.coverImageUrl!.isEmpty) && (p['cover_photo_url'] != null)) {
-                                                    await api.update({'cover_photo_url': null});
+                                                  final newUsername = result.username.trim();
+                                                  if (newUsername.isNotEmpty && newUsername != (p['username'] ?? '')) {
+                                                    updates['username'] = newUsername;
                                                   }
-                                                } catch (_) {}
+                                                  updates['bio'] = result.bio;
 
-                                                // 2) Profile fields
-                                                final updates = <String, dynamic>{};
+                                                  updates['professional_experiences'] = result.experiences
+                                                      .map((e) {
+                                                        final m = <String, dynamic>{'title': e.title};
+                                                        if ((e.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = e.subtitle;
+                                                        return m;
+                                                      })
+                                                      .toList();
 
-                                                // Full name -> first_name / last_name
-                                                final newFullName = result.fullName.trim();
-                                                if (newFullName.isNotEmpty && newFullName != fullName.trim()) {
-                                                  final parts = newFullName.split(RegExp(r'\s+'));
-                                                  final firstName = parts.isNotEmpty ? parts.first : '';
-                                                  final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
-                                                  if (firstName.isNotEmpty) updates['first_name'] = firstName;
-                                                  updates['last_name'] = lastName;
+                                                  updates['trainings'] = result.trainings
+                                                      .map((t) {
+                                                        final m = <String, dynamic>{'title': t.title};
+                                                        if ((t.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = t.subtitle;
+                                                        return m;
+                                                      })
+                                                      .toList();
+
+                                                  updates['interest_domains'] = result.interests;
+
+                                                  try {
+                                                    await api.update(updates);
+                                                  } catch (_) {}
                                                 }
 
-                                                final newUsername = result.username.trim();
-                                                if (newUsername.isNotEmpty && newUsername != (p['username'] ?? '')) {
-                                                  updates['username'] = newUsername;
-                                                }
-                                                updates['bio'] = result.bio;
-
-                                                // professional_experiences expects [{title, subtitle?}]
-                                                updates['professional_experiences'] = result.experiences
-                                                    .map((e) {
-                                                      final m = <String, dynamic>{'title': e.title};
-                                                      if ((e.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = e.subtitle;
-                                                      return m;
-                                                    })
-                                                    .toList();
-
-                                                // trainings expects [{title, subtitle?}]
-                                                updates['trainings'] = result.trainings
-                                                    .map((t) {
-                                                      final m = <String, dynamic>{'title': t.title};
-                                                      if ((t.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = t.subtitle;
-                                                      return m;
-                                                    })
-                                                    .toList();
-
-                                                updates['interest_domains'] = result.interests;
-
-                                                try {
-                                                  await api.update(updates);
-                                                } catch (_) {}
-                                              }
-
-                                              // Refresh profile data after possible updates
-                                              await _loadProfile();
-                                            },                                             style: ElevatedButton.styleFrom(
+                                                await _loadProfile();
+                                              },
+                                              style: ElevatedButton.styleFrom(
                                                 backgroundColor: const Color(0xFFBFAE01),
                                                 foregroundColor: isDark ? Colors.black : Colors.black,
                                                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1667,7 +1672,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 Expanded(
                                                   child: ElevatedButton(
                                                     onPressed: () async {
-                                                      // Map backend JSON to Edit page item types
                                                       final expItems = experiences
                                                           .map((e) => ExperienceItem(
                                                                 title: (e['title'] ?? '').toString(),
@@ -1681,7 +1685,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                                               ))
                                                           .toList();
 
-                                                      // KYC gating for Full Name
                                                       bool canEditFullName = true;
                                                       try {
                                                         final kycRes = await KycApi().getMine();
@@ -1689,12 +1692,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         if (kycData.isEmpty) {
                                                           canEditFullName = true;
                                                         } else {
-                                                          final status =
-                                                              (kycData['status'] ?? '').toString().toLowerCase();
-                                                          final isApproved = ((kycData['is_approved'] ?? 0) == 1) ||
-                                                              status == 'approved';
-                                                          final isRejected = ((kycData['is_rejected'] ?? 0) == 1) ||
-                                                              status == 'rejected';
+                                                          final status = (kycData['status'] ?? '').toString().toLowerCase();
+                                                          final isApproved =
+                                                              ((kycData['is_approved'] ?? 0) == 1) || status == 'approved';
+                                                          final isRejected =
+                                                              ((kycData['is_rejected'] ?? 0) == 1) || status == 'rejected';
                                                           if (status == 'pending' || isApproved) {
                                                             canEditFullName = false;
                                                           } else if (isRejected) {
@@ -1708,57 +1710,59 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       }
 
                                                       final page = EditProfilPage(
-                                                          fullName: fullName,
-                                                          canEditFullName: canEditFullName,
-                                                          username: (p['username'] ?? '').toString(),
-                                                          bio: bioText ?? '',
-                                                          profilePhotoUrl: profileUrl,
-                                                          coverPhotoUrl: coverUrl,
-                                                          experiences: expItems,
-                                                          trainings: trainItems,
-                                                          interests: interests,
-                                                        );
+                                                        fullName: fullName,
+                                                        canEditFullName: canEditFullName,
+                                                        username: (p['username'] ?? '').toString(),
+                                                        bio: bioText ?? '',
+                                                        profilePhotoUrl: profileUrl,
+                                                        coverPhotoUrl: coverUrl,
+                                                        experiences: expItems,
+                                                        trainings: trainItems,
+                                                        interests: interests,
+                                                      );
 
-                                                        ProfileEditResult? result;
-                                                        if (_isWideLayout(context)) {
-                                                          result = await showDialog<ProfileEditResult>(
-                                                            context: context,
-                                                            barrierDismissible: true,
-                                                            builder: (_) {
-                                                              return Dialog(
-                                                                backgroundColor: Colors.transparent,
-                                                                insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
-                                                                child: Center(
-                                                                  child: ConstrainedBox(
-                                                                    constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
-                                                                    child: ClipRRect(
-                                                                      borderRadius: BorderRadius.circular(20),
-                                                                      child: Material(
-                                                                        color: isDark ? const Color(0xFF000000) : Colors.white,
-                                                                        child: page, // keeps header + back button intact
-                                                                      ),
+                                                                                                            if (!mounted) return;
+                                                      ProfileEditResult? result;
+                                                      if (_isWideLayout(context)) {
+                                                        result = await showDialog<ProfileEditResult>(
+                                                          context: context,
+                                                          barrierDismissible: true,
+                                                          builder: (_) {
+                                                            return Dialog(
+                                                              backgroundColor: Colors.transparent,
+                                                              insetPadding:
+                                                                  const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+                                                              child: Center(
+                                                                child: ConstrainedBox(
+                                                                  constraints:
+                                                                      const BoxConstraints(maxWidth: 980, maxHeight: 760),
+                                                                  child: ClipRRect(
+                                                                    borderRadius: BorderRadius.circular(20),
+                                                                    child: Material(
+                                                                      color: isDark ? const Color(0xFF000000) : Colors.white,
+                                                                      child: page,
                                                                     ),
                                                                   ),
                                                                 ),
-                                                              );
-                                                            },
-                                                          );
-                                                        } else {
-                                                          result = await Navigator.push<ProfileEditResult>(
-                                                            context,
-                                                            MaterialPageRoute(builder: (_) => page),
-                                                          );
-                                                        }
+                                                              ),
+                                                            );
+                                                          },
+                                                        );
+                                                      } else {
+                                                        result = await Navigator.push<ProfileEditResult>(
+                                                          context,
+                                                          MaterialPageRoute(builder: (_) => page),
+                                                        );
+                                                      }
+
                                                       if (!mounted) return;
                                                       if (result != null) {
                                                         final api = ProfileApi();
 
-                                                        // 1) Photos
                                                         try {
                                                           if (result.profileImagePath != null &&
                                                               result.profileImagePath!.isNotEmpty) {
-                                                            await api.uploadAndAttachProfilePhoto(
-                                                                File(result.profileImagePath!));
+                                                            await api.uploadAndAttachProfilePhoto(File(result.profileImagePath!));
                                                           } else if ((result.profileImageUrl == null ||
                                                                   result.profileImageUrl!.isEmpty) &&
                                                               (p['profile_photo_url'] != null)) {
@@ -1767,8 +1771,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                                                           if (result.coverImagePath != null &&
                                                               result.coverImagePath!.isNotEmpty) {
-                                                            await api.uploadAndAttachCoverPhoto(
-                                                                File(result.coverImagePath!));
+                                                            await api.uploadAndAttachCoverPhoto(File(result.coverImagePath!));
                                                           } else if ((result.coverImageUrl == null ||
                                                                   result.coverImageUrl!.isEmpty) &&
                                                               (p['cover_photo_url'] != null)) {
@@ -1776,46 +1779,35 @@ class _ProfilePageState extends State<ProfilePage> {
                                                           }
                                                         } catch (_) {}
 
-                                                        // 2) Profile fields
                                                         final updates = <String, dynamic>{};
 
-                                                        // Full name -> first_name / last_name
                                                         final newFullName = result.fullName.trim();
-                                                        if (newFullName.isNotEmpty &&
-                                                            newFullName != fullName.trim()) {
+                                                        if (newFullName.isNotEmpty && newFullName != fullName.trim()) {
                                                           final parts = newFullName.split(RegExp(r'\s+'));
                                                           final firstName = parts.isNotEmpty ? parts.first : '';
-                                                          final lastName =
-                                                              parts.length > 1 ? parts.sublist(1).join(' ') : '';
+                                                          final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
                                                           if (firstName.isNotEmpty) updates['first_name'] = firstName;
                                                           updates['last_name'] = lastName;
                                                         }
 
                                                         final newUsername = result.username.trim();
-                                                        if (newUsername.isNotEmpty &&
-                                                            newUsername != (p['username'] ?? '')) {
+                                                        if (newUsername.isNotEmpty && newUsername != (p['username'] ?? '')) {
                                                           updates['username'] = newUsername;
                                                         }
                                                         updates['bio'] = result.bio;
 
-                                                        // professional_experiences expects [{title, subtitle?}]
                                                         updates['professional_experiences'] = result.experiences
                                                             .map((e) {
                                                               final m = <String, dynamic>{'title': e.title};
-                                                              if ((e.subtitle ?? '').trim().isNotEmpty) {
-                                                                m['subtitle'] = e.subtitle;
-                                                              }
+                                                              if ((e.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = e.subtitle;
                                                               return m;
                                                             })
                                                             .toList();
 
-                                                        // trainings expects [{title, subtitle?}]
                                                         updates['trainings'] = result.trainings
                                                             .map((t) {
                                                               final m = <String, dynamic>{'title': t.title};
-                                                              if ((t.subtitle ?? '').trim().isNotEmpty) {
-                                                                m['subtitle'] = t.subtitle;
-                                                              }
+                                                              if ((t.subtitle ?? '').trim().isNotEmpty) m['subtitle'] = t.subtitle;
                                                               return m;
                                                             })
                                                             .toList();
@@ -1827,7 +1819,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         } catch (_) {}
                                                       }
 
-                                                      // Refresh profile data after possible updates
                                                       await _loadProfile();
                                                     },
                                                     style: ElevatedButton.styleFrom(
@@ -1918,7 +1909,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                     color: isDark ? Colors.white70 : Colors.black,
                                                   ),
                                                 ),
-                                              ],
+                                            ], 
                                             ),
                                           ),
                                         ],
@@ -2353,18 +2344,17 @@ class _ProfilePageState extends State<ProfilePage> {
                                     onTap: () async {
                     Navigator.pop(context);
                     final ctx = context;
-                    await TokenStore.clear();
+                                        await TokenStore.clear();
                     // Remove Authorization header from Dio client
                     ApiClient().dio.options.headers.remove('Authorization');
                     try {
                       await AuthApi().logout();
                     } catch (_) {}
-                    if (ctx.mounted) {
-                      Navigator.of(ctx, rootNavigator: true).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const SignInPage()),
-                        (route) => false,
-                      );
-                    }
+                    if (!mounted) return;
+                    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const SignInPage()),
+                      (route) => false,
+                    );
                   },
                 ),
                 const SizedBox(height: 20),

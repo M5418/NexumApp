@@ -6,6 +6,9 @@ import '../models/post.dart';
 import 'auto_play_video.dart';
 import 'reaction_picker.dart';
 import '../core/time_utils.dart';
+import 'package:provider/provider.dart';
+import '../core/translate_api.dart';
+import '../core/i18n/language_provider.dart';
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -36,12 +39,36 @@ class PostCard extends StatefulWidget {
 }
 
 class _PostCardState extends State<PostCard> {
-  bool _showTranslation = false;
+    bool _showTranslation = false;
+  String? _translatedText;
+  bool _translating = false;
+  String? _translateError;
 
-  void _toggleTranslation() {
-    setState(() {
-      _showTranslation = !_showTranslation;
-    });
+  Future<void> _toggleTranslation() async {
+    final text = widget.post.text.trim();
+    if (!_showTranslation && _translatedText == null && text.isNotEmpty) {
+      final ctx = context;
+      setState(() => _translating = true);
+      try {
+        final target = ctx.read<LanguageProvider>().code;
+        final out = await TranslateApi().translateTexts([text], target);
+        if (!mounted) return;
+        setState(() {
+          _translatedText = out.isNotEmpty ? out.first : text;
+          _translateError = null;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _translateError = e.toString());
+      } finally {
+        if (mounted) setState(() => _translating = false);
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _showTranslation = !_showTranslation;
+      });
+    }
   }
 
   String _effectivePostId() {
@@ -211,8 +238,8 @@ class _PostCardState extends State<PostCard> {
             // Post text (from original post if repost)
             if (widget.post.text.isNotEmpty) ...[
               ReadMoreText(
-                _showTranslation
-                    ? 'Translated: ${widget.post.text}'
+                  _showTranslation
+                    ? (_translatedText ?? widget.post.text)
                     : widget.post.text,
                 trimMode: TrimMode.Length,
                 trimLength: 300,

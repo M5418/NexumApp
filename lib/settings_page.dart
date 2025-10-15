@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import 'feed_preferences_page.dart';
 import 'content_controls_page.dart';
@@ -15,6 +16,7 @@ import 'core/api_client.dart';
 import 'services/auth_service.dart';
 import 'app_wrapper.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'core/i18n/language_provider.dart';
 
 class SettingsPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -33,65 +35,66 @@ class _SettingsPageState extends State<SettingsPage> {
   late final List<_NavItem> _items = [
     _NavItem(
       icon: Icons.account_circle_outlined,
-      title: 'Account Center',
+      titleKey: 'settings.nav.account_center',
       builder: () => const AccountCenterPage(),
     ),
     _NavItem(
       icon: Icons.feed_outlined,
-      title: 'Feed Preferences',
+      titleKey: 'settings.nav.feed_preferences',
       builder: () => const FeedPreferencesPage(),
     ),
     _NavItem(
       icon: Icons.tune,
-      title: 'Content Controls',
+      titleKey: 'settings.nav.content_controls',
       builder: () => const ContentControlsPage(),
     ),
     _NavItem(
       icon: Icons.notifications_outlined,
-      title: 'Notification Preferences',
+      titleKey: 'settings.nav.notification_preferences',
       builder: () => const NotificationPreferencesPage(),
     ),
     _NavItem(
       icon: Icons.language,
-      title: 'Language & Region',
+      titleKey: 'settings.nav.language_region',
       builder: () => const LanguageRegionPage(),
     ),
     _NavItem(
       icon: Icons.privacy_tip_outlined,
-      title: 'Privacy & Visibility',
+      titleKey: 'settings.nav.privacy_visibility',
       builder: () => const PrivacyVisibilityPage(),
     ),
     _NavItem(
       icon: Icons.block_outlined,
-      title: 'Blocked & Muted Accounts',
+      titleKey: 'settings.nav.blocked_muted',
       builder: () => const BlockedMutedAccountsPage(),
     ),
     _NavItem(
       icon: Icons.security,
-      title: 'Security & Login',
+      titleKey: 'settings.nav.security_login',
       builder: () => const SecurityLoginPage(),
     ),
     _NavItem(
       icon: Icons.exit_to_app,
-      title: 'Logout',
+      titleKey: 'settings.nav.logout',
       builder: null,
       isLogout: true,
     ),
   ];
 
-   @override
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = widget.isDarkMode ?? theme.brightness == Brightness.dark;
+    final lang = context.watch<LanguageProvider>();
 
     final isDesktop = context.isDesktop || context.isLargeDesktop;
     return isDesktop
-        ? _buildDesktop(context, isDark)
-        : _buildMobile(context, isDark);
+        ? _buildDesktop(context, isDark, lang)
+        : _buildMobile(context, isDark, lang);
   }
 
   // Desktop header: back button + "NEXUM"
-  Widget _buildDesktopHeader(bool isDark) {
+  Widget _buildDesktopHeader(bool isDark, LanguageProvider lang) {
     final barColor = isDark ? Colors.black : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
     return Material(
@@ -104,7 +107,7 @@ class _SettingsPageState extends State<SettingsPage> {
             IconButton(
               icon: Icon(Icons.arrow_back, color: textColor),
               onPressed: () => Navigator.pop(context),
-              tooltip: 'Back',
+              tooltip: lang.t('common.back'),
             ),
             const SizedBox(width: 8),
             Text(
@@ -113,7 +116,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 fontSize: 22,
                 fontWeight: FontWeight.w600,
                 color: textColor,
-              
               ),
             ),
           ],
@@ -123,7 +125,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ============== Desktop/Web two-column layout ==============
-  Widget _buildDesktop(BuildContext context, bool isDark) {
+  Widget _buildDesktop(BuildContext context, bool isDark, LanguageProvider lang) {
     final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final textColor = isDark ? Colors.white : Colors.black;
 
@@ -138,7 +140,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildDesktopHeader(isDark),
+                  _buildDesktopHeader(isDark, lang),
                   const SizedBox(height: 12),
                   Expanded(
                     child: Row(
@@ -152,7 +154,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 10,
                                 offset: const Offset(0, 2),
                               ),
@@ -165,7 +167,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               Padding(
                                 padding: const EdgeInsets.all(16),
                                 child: Text(
-                                  'Settings',
+                                  lang.t('settings.title'),
                                   style: GoogleFonts.inter(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w700,
@@ -186,7 +188,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       isDark: isDark,
                                       selected: selected,
                                       icon: item.icon,
-                                      title: item.title,
+                                      title: lang.t(item.titleKey),
                                       onTap: () => _handleLeftTap(index),
                                       isLogout: item.isLogout,
                                     );
@@ -237,7 +239,7 @@ class _SettingsPageState extends State<SettingsPage> {
     bool isLogout = false,
   }) {
     final baseColor = isDark ? Colors.white : Colors.black87;
-    final selectedBg = const Color(0xFFBFAE01).withOpacity(0.12);
+    final selectedBg = const Color(0xFFBFAE01).withValues(alpha: 0.12);
     final selectedColor = const Color(0xFFBFAE01);
 
     return Material(
@@ -301,26 +303,27 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<bool?> _confirmLogout(BuildContext context) {
+    final lang = context.read<LanguageProvider>();
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          'Log out?',
+          lang.t('dialogs.logout.title'),
           style: GoogleFonts.inter(fontWeight: FontWeight.w600),
         ),
         content: Text(
-          'Are you sure you want to log out?',
+          lang.t('dialogs.logout.message'),
           style: GoogleFonts.inter(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: GoogleFonts.inter()),
+            child: Text(lang.t('common.cancel'), style: GoogleFonts.inter()),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              'Logout',
+              lang.t('common.logout'),
               style: GoogleFonts.inter(color: const Color(0xFFBFAE01)),
             ),
           ),
@@ -355,7 +358,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ============== Mobile (existing list layout, with logout confirm) ==============
-  Widget _buildMobile(BuildContext context, bool isDark) {
+  Widget _buildMobile(BuildContext context, bool isDark, LanguageProvider lang) {
     final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final cardColor = isDark ? const Color(0xFF000000) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
@@ -368,9 +371,10 @@ class _SettingsPageState extends State<SettingsPage> {
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => Navigator.pop(context),
+          tooltip: lang.t('common.back'),
         ),
         title: Text(
-          'Settings',
+          lang.t('settings.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -392,7 +396,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0),
+                    color: Colors.black.withValues(alpha: 0),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -404,7 +408,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Personalization & Preferences',
+                      lang.t('settings.section.personalization'),
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -414,7 +418,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.account_circle_outlined,
-                    title: 'Account Center',
+                    title: lang.t('settings.nav.account_center'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -425,7 +429,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.feed_outlined,
-                    title: 'Feed Preferences',
+                    title: lang.t('settings.nav.feed_preferences'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -436,7 +440,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.tune,
-                    title: 'Content Controls',
+                    title: lang.t('settings.nav.content_controls'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -447,7 +451,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.notifications_outlined,
-                    title: 'Notification Preferences',
+                    title: lang.t('settings.nav.notification_preferences'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -458,7 +462,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.language,
-                    title: 'Language & Region',
+                    title: lang.t('settings.nav.language_region'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -482,7 +486,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0),
+                    color: Colors.black.withValues(alpha: 0),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -494,7 +498,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Account & Security',
+                      lang.t('settings.section.account_security'),
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -504,7 +508,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.privacy_tip_outlined,
-                    title: 'Privacy & Visibility',
+                    title: lang.t('settings.nav.privacy_visibility'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -515,7 +519,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.block_outlined,
-                    title: 'Blocked & Muted Accounts',
+                    title: lang.t('settings.nav.blocked_muted'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -526,7 +530,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.security,
-                    title: 'Security & Login',
+                    title: lang.t('settings.nav.security_login'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -537,7 +541,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   _buildSettingsItem(
                     icon: Icons.exit_to_app,
-                    title: 'Logout',
+                    title: lang.t('settings.nav.logout'),
                     onTap: () async {
                       final confirmed = await _confirmLogout(context);
                       if (confirmed == true) {
@@ -568,7 +572,7 @@ class _SettingsPageState extends State<SettingsPage> {
     bool logoutDanger = false,
   }) {
     final textColor = isDark ?? false ? Colors.white : Colors.black87;
-    final dividerColor = Colors.grey.withOpacity(0.2);
+    final dividerColor = Colors.grey.withValues(alpha: 0.2);
 
     return Column(
       children: [
@@ -608,13 +612,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
 class _NavItem {
   final IconData icon;
-  final String title;
+  final String titleKey;
   final Widget Function()? builder;
   final bool isLogout;
 
   _NavItem({
     required this.icon,
-    required this.title,
+    required this.titleKey,
     required this.builder,
     this.isLogout = false,
   });

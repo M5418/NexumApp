@@ -191,7 +191,7 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
                                 boxShadow: [
                                   if (!isDark)
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.13),
+                                      color: Colors.black.withValues(alpha: 0.13),
                                       blurRadius: 10,
                                       offset: const Offset(0, 6),
                                     ),
@@ -266,7 +266,7 @@ class _ActionCard extends StatelessWidget {
           boxShadow: [
             if (!isDark)
               BoxShadow(
-                color: Colors.black.withOpacity(0.13),
+                color: Colors.black.withValues(alpha: 0.13),
                 blurRadius: 6,
                 offset: const Offset(0, 3),
               ),

@@ -197,30 +197,28 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                   title: 'Verify KYC',
                   subtitle: 'Verify your identity',
                   onTap: () async {
+                    final ctx = context;
                     final res = await KycApi().getMine();
                     if (res['ok'] == true) {
                       final data = res['data'];
                       final status = (data == null) ? null : (data['status'] ?? '').toString();
                       if (data == null || status == 'rejected') {
-                        // Not submitted yet or rejected -> go to verification form
-                        if (!mounted) return;
+                        if (!ctx.mounted) return;
                         Navigator.push(
-                          context,
+                          ctx,
                           MaterialPageRoute(builder: (_) => const KycVerificationPage()),
                         );
                       } else {
-                        // pending or approved -> go to status page
-                        if (!mounted) return;
+                        if (!ctx.mounted) return;
                         Navigator.push(
-                          context,
+                          ctx,
                           MaterialPageRoute(builder: (_) => const KycStatusPage()),
                         );
                       }
                     } else {
-                      // On error default to form
-                      if (!mounted) return;
+                      if (!ctx.mounted) return;
                       Navigator.push(
-                        context,
+                        ctx,
                         MaterialPageRoute(builder: (_) => const KycVerificationPage()),
                       );
                     }

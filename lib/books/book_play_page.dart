@@ -250,7 +250,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
                               activeTrackColor: const Color(0xFFBFAE01),
                               inactiveTrackColor: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
                               thumbColor: const Color(0xFFBFAE01),
-                              overlayColor: const Color(0xFFBFAE01).withOpacity(0.2),
+                              overlayColor: const Color(0xFFBFAE01).withValues(alpha: 0.2),
                               trackHeight: 4,
                               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                             ),
@@ -297,7 +297,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
                                 boxShadow: [
                                   if (!isDark)
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.13),
+                                      color: Colors.black.withValues(alpha: 0.13),
                                       blurRadius: 8,
                                       offset: const Offset(0, 4),
                                     ),

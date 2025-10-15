@@ -98,8 +98,6 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
   // Desktop: selected user detail
   String? _selectedUserId;
-  Map<String, dynamic>? _selectedProfile; // ProfileApi().getByUserId data
-  bool _loadingProfile = false;
 
   // Mobile overlay invite
   User? activeInviteUser;
@@ -217,32 +215,12 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   // Selection + profile details
   // -----------------------------
   void _selectUser(User user) {
-    setState(() {
-      _selectedUserId = user.id;
-      _selectedProfile = null;
-      _loadingProfile = true;
-    });
-    _loadProfileFor(user.id);
-  }
+  setState(() {
+    _selectedUserId = user.id;
+  });
+}
 
-  Future<void> _loadProfileFor(String userId) async {
-    try {
-      final res = await ProfileApi().getByUserId(userId);
-      final body = Map<String, dynamic>.from(res);
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      if (!mounted) return;
-      setState(() {
-        _selectedProfile = data;
-        _loadingProfile = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _selectedProfile = null;
-        _loadingProfile = false;
-      });
-    }
-  }
+
 
   User? get _selectedUser => (_selectedUserId == null)
       ? null
@@ -253,28 +231,6 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
     return u?.isConnected == true;
   }
 
-  Future<void> _toggleConnection(User user) async {
-    final next = !_isUserConnected(user.id);
-    setState(() {
-      users = users
-          .map((u) => u.id == user.id ? u.copyWith(isConnected: next) : u)
-          .toList();
-    });
-    try {
-      if (next) {
-        await ConnectionsApi().connect(user.id);
-      } else {
-        await ConnectionsApi().disconnect(user.id);
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        users = users
-            .map((u) => u.id == user.id ? u.copyWith(isConnected: !next) : u)
-            .toList();
-      });
-    }
-  }
 
   // -----------------------------
   // BUILD
@@ -322,7 +278,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
           child: FloatingActionButton(
             heroTag: 'createPostFabConnections',
             onPressed: () async {
-              final created = await CreatePostPage.showPopup<bool>(context);
+              await CreatePostPage.showPopup<bool>(context);
               // optional: refresh something if needed
             },
             backgroundColor: const Color(0xFFBFAE01),
@@ -790,40 +746,6 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  // -----------------------------
-  // Small web warning
-  // -----------------------------
-  Widget _buildTooSmallWeb(bool isDark, Color backgroundColor) {
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.black : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              if (!isDark)
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-            ],
-          ),
-          child: Text(
-            'Screen too small!',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : Colors.black,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1934,27 +1856,25 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                             Expanded(
                               child: ElevatedButton(
                                 onPressed: () async {
+                                  final ctx = context;
                                   final next = !_isConnected;
                                   setState(() => _isConnected = next);
                                   try {
                                     if (next) {
-                                      await ConnectionsApi()
-                                          .connect(widget.user.id);
+                                      await ConnectionsApi().connect(widget.user.id);
                                     } else {
-                                      await ConnectionsApi()
-                                          .disconnect(widget.user.id);
+                                      await ConnectionsApi().disconnect(widget.user.id);
                                     }
                                   } catch (_) {
                                     if (!mounted) return;
                                     setState(() => _isConnected = !next);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                          content: Text(
-                                              'Failed to ${next ? 'connect' : 'disconnect'}')),
+                                    if (!ctx.mounted) return;
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text('Failed to ${next ? 'connect' : 'disconnect'}')),
                                     );
                                   }
                                 },
-                                style: ElevatedButton.styleFrom(
+                                                                style: ElevatedButton.styleFrom(
                                   backgroundColor: _isConnected
                                       ? Colors.grey[300]
                                       : const Color(0xFFBFAE01),
@@ -2450,42 +2370,6 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
   }
 }
 
-// Small stat pill used on the right detail panel
-class _StatPill extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatPill({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF3F3F3),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-            color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style:
-                GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // Iterable helper
 extension IterableX<T> on Iterable<T> {

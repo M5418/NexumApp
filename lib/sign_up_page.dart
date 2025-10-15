@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+
 import 'sign_in_page.dart';
 import 'profile_flow_start.dart';
 import 'core/auth_api.dart';
 import 'core/token_store.dart';
+import 'core/i18n/language_provider.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -15,7 +18,6 @@ class SignUpPage extends StatefulWidget {
 class _SignUpPageState extends State<SignUpPage> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  String _selectedLanguage = 'English';
   bool _showLanguageDropdown = false;
   bool _isLoading = false;
 
@@ -31,14 +33,17 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
-  final List<Map<String, String>> _languages = [
-    {'name': 'English', 'flag': '🇺🇸'},
-    {'name': 'Français', 'flag': '🇫🇷'},
-  ];
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final lang = context.watch<LanguageProvider>();
+
+    final currentCode = lang.code;
+    final currentFlag = LanguageProvider.flags[currentCode] ?? '🌐';
+    final currentName =
+        LanguageProvider.displayNames[currentCode] ?? currentCode.toUpperCase();
+
+    final allCodes = LanguageProvider.supportedCodes;
 
     return Scaffold(
       body: Container(
@@ -58,7 +63,7 @@ class _SignUpPageState extends State<SignUpPage> {
               child: Column(
                 children: [
                   const SizedBox(height: 50),
-                  // NEXUM Title
+                  // NEXUM Title (brand)
                   Text(
                     'NEXUM',
                     style: GoogleFonts.inika(
@@ -91,7 +96,7 @@ class _SignUpPageState extends State<SignUpPage> {
                       children: [
                         // Welcome Headline
                         Text(
-                          'Welcome',
+                          lang.t('auth.welcome'),
                           style: GoogleFonts.inter(
                             fontSize: 34,
                             fontWeight: FontWeight.w600,
@@ -101,19 +106,20 @@ class _SignUpPageState extends State<SignUpPage> {
                         const SizedBox(height: 16),
                         // Subtext
                         Text(
-                          'Let\'s get started by filling out the form below',
+                          lang.t('auth.start_subtext'),
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w400,
                             color: const Color(0xFF666666),
                           ),
+                          textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 32),
                         // Email Field
                         TextField(
                           controller: _emailController,
                           decoration: InputDecoration(
-                            hintText: 'Email',
+                            hintText: lang.t('auth.email'),
                             hintStyle: GoogleFonts.inter(
                               color: const Color(0xFF666666),
                             ),
@@ -153,7 +159,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           controller: _passwordController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
-                            hintText: 'Password',
+                            hintText: lang.t('auth.password'),
                             hintStyle: GoogleFonts.inter(
                               color: const Color(0xFF666666),
                             ),
@@ -206,7 +212,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           controller: _confirmController,
                           obscureText: _obscureConfirmPassword,
                           decoration: InputDecoration(
-                            hintText: 'Confirm Password',
+                            hintText: lang.t('auth.confirm_password'),
                             hintStyle: GoogleFonts.inter(
                               color: const Color(0xFF666666),
                             ),
@@ -263,11 +269,11 @@ class _SignUpPageState extends State<SignUpPage> {
                               color: const Color(0xFF666666),
                             ),
                             children: [
-                              const TextSpan(
-                                text: 'By signing up you agree to our ',
+                              TextSpan(
+                                text: lang.t('auth.terms_prefix'),
                               ),
                               TextSpan(
-                                text: 'terms',
+                                text: lang.t('auth.terms'),
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   color: const Color(0xFF666666),
@@ -276,7 +282,7 @@ class _SignUpPageState extends State<SignUpPage> {
                               ),
                               const TextSpan(text: ', '),
                               TextSpan(
-                                text: 'conditions',
+                                text: lang.t('auth.conditions'),
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   color: const Color(0xFF666666),
@@ -285,7 +291,7 @@ class _SignUpPageState extends State<SignUpPage> {
                               ),
                               const TextSpan(text: ', and '),
                               TextSpan(
-                                text: 'privacy',
+                                text: lang.t('auth.privacy'),
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   color: const Color(0xFF666666),
@@ -316,13 +322,14 @@ class _SignUpPageState extends State<SignUpPage> {
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
                                         Colors.black,
                                       ),
                                     ),
                                   )
                                 : Text(
-                                    'Sign Up',
+                                    lang.t('auth.sign_up'),
                                     style: GoogleFonts.inter(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -341,8 +348,8 @@ class _SignUpPageState extends State<SignUpPage> {
                                 color: isDarkMode ? Colors.white : Colors.black,
                               ),
                               children: [
-                                const TextSpan(
-                                  text: 'Already have an account? ',
+                                TextSpan(
+                                  text: lang.t('auth.already_have_account'),
                                 ),
                                 WidgetSpan(
                                   child: GestureDetector(
@@ -356,7 +363,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                       );
                                     },
                                     child: Text(
-                                      'Sign In',
+                                      lang.t('auth.sign_in'),
                                       style: GoogleFonts.inter(
                                         fontSize: 16,
                                         color: const Color(0xFFBFAE01),
@@ -370,7 +377,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        // Language Selector
+                        // Language Selector (synced with provider)
                         GestureDetector(
                           onTap: () {
                             setState(() {
@@ -390,20 +397,18 @@ class _SignUpPageState extends State<SignUpPage> {
                               borderRadius: BorderRadius.circular(25),
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
                               children: [
                                 Row(
                                   children: [
                                     Text(
-                                      _languages.firstWhere(
-                                        (lang) =>
-                                            lang['name'] == _selectedLanguage,
-                                      )['flag']!,
+                                      currentFlag,
                                       style: const TextStyle(fontSize: 18),
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      _selectedLanguage,
+                                      currentName,
                                       style: GoogleFonts.inter(
                                         fontSize: 16,
                                         color: isDarkMode
@@ -439,11 +444,18 @@ class _SignUpPageState extends State<SignUpPage> {
                               ),
                             ),
                             child: Column(
-                              children: _languages.map((language) {
+                              children: allCodes.map((code) {
+                                final flag =
+                                    LanguageProvider.flags[code] ?? '🌐';
+                                final name =
+                                    LanguageProvider.displayNames[code] ??
+                                        code.toUpperCase();
+                                final isLast =
+                                    allCodes.last == code;
                                 return GestureDetector(
-                                  onTap: () {
+                                  onTap: () async {
+                                    await lang.setLocale(code);
                                     setState(() {
-                                      _selectedLanguage = language['name']!;
                                       _showLanguageDropdown = false;
                                     });
                                   },
@@ -455,7 +467,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                     decoration: BoxDecoration(
                                       border: Border(
                                         bottom: BorderSide(
-                                          color: _languages.last == language
+                                          color: isLast
                                               ? Colors.transparent
                                               : (isDarkMode
                                                     ? Colors.white
@@ -466,13 +478,12 @@ class _SignUpPageState extends State<SignUpPage> {
                                     ),
                                     child: Row(
                                       children: [
-                                        Text(
-                                          language['flag']!,
-                                          style: const TextStyle(fontSize: 18),
-                                        ),
+                                        Text(flag,
+                                            style: const TextStyle(
+                                                fontSize: 18)),
                                         const SizedBox(width: 8),
                                         Text(
-                                          language['name']!,
+                                          name,
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
                                             color: isDarkMode
@@ -502,20 +513,21 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   Future<void> _handleSignUp() async {
+    final lang = context.read<LanguageProvider>();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
 
     if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
-      _showSnack('Please fill all fields');
+      _showSnack(lang.t('errors.fill_all_fields'));
       return;
     }
     if (password.length < 8) {
-      _showSnack('Password must be at least 8 characters');
+      _showSnack(lang.t('errors.password_min'));
       return;
     }
     if (password != confirm) {
-      _showSnack('Passwords do not match');
+      _showSnack(lang.t('errors.password_mismatch'));
       return;
     }
 
@@ -534,13 +546,13 @@ class _SignUpPageState extends State<SignUpPage> {
             );
           }
         } else {
-          _showSnack('Unexpected response: missing token');
+          _showSnack(lang.t('errors.unexpected_response'));
         }
       } else {
-        _showSnack(res['error'] ?? 'Sign up failed');
+        _showSnack(res['error'] ?? lang.t('errors.sign_up_failed'));
       }
     } catch (e) {
-      _showSnack('Sign up failed. Please try again.');
+      _showSnack(lang.t('errors.sign_up_failed_try'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -552,56 +564,3 @@ class _SignUpPageState extends State<SignUpPage> {
     ).showSnackBar(SnackBar(content: Text(text, style: GoogleFonts.inter())));
   }
 }
-
-/* extension on _SignUpPageState {
-  Future<void> _handleSignUp() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    final confirm = _confirmController.text.trim();
-
-    if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
-      _showSnack('Please fill all fields');
-      return;
-    }
-    if (password.length < 8) {
-      _showSnack('Password must be at least 8 characters');
-      return;
-    }
-    if (password != confirm) {
-      _showSnack('Passwords do not match');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final api = AuthApi();
-      final res = await api.signup(email, password);
-      if (res['ok'] == true && res['data'] != null) {
-        final token = res['data']['token'] as String?;
-        if (token != null && token.isNotEmpty) {
-          await TokenStore.write(token);
-          if (mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileFlowStart()),
-            );
-          }
-        } else {
-          _showSnack('Unexpected response: missing token');
-        }
-      } else {
-        _showSnack(res['error'] ?? 'Sign up failed');
-      }
-    } catch (e) {
-      _showSnack('Sign up failed. Please try again.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showSnack(String text) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(text, style: GoogleFonts.inter())));
-  }
-} */

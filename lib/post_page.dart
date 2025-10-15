@@ -18,6 +18,9 @@ import 'widgets/post_options_menu.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/comment_bottom_sheet.dart';
 import 'core/time_utils.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
+import 'core/translate_api.dart';
 
 class PostPage extends StatefulWidget {
   // Prefer passing the full post to avoid extra fetches
@@ -34,7 +37,10 @@ class PostPage extends StatefulWidget {
 }
 
 class _PostPageState extends State<PostPage> {
-  bool _showTranslation = false;
+   bool _showTranslation = false;
+  String? _translatedText;
+  bool _translating = false;
+  String? _translateError;
 
   // Post data (mapped to PostDetail to preserve existing UI structure)
   PostDetail? _post;
@@ -193,10 +199,32 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
-  void _toggleTranslation() {
-    setState(() {
-      _showTranslation = !_showTranslation;
-    });
+    Future<void> _toggleTranslation() async {
+    if (_post == null) return;
+    final text = _post!.text.trim();
+    if (!_showTranslation && _translatedText == null && text.isNotEmpty) {
+      final ctx = context;
+      setState(() => _translating = true);
+      try {
+        final target = ctx.read<LanguageProvider>().code;
+        final out = await TranslateApi().translateTexts([text], target);
+        if (!mounted) return;
+        setState(() {
+          _translatedText = out.isNotEmpty ? out.first : text;
+          _translateError = null;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _translateError = e.toString());
+      } finally {
+        if (mounted) setState(() => _translating = false);
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _showTranslation = !_showTranslation;
+      });
+    }
   }
 
 
@@ -994,7 +1022,7 @@ class _PostPageState extends State<PostPage> {
             // Post text
             if (_post!.text.isNotEmpty) ...[
               Text(
-                _showTranslation ? 'Translated: ${_post!.text}' : _post!.text,
+                _showTranslation ? (_translatedText ?? _post!.text) : _post!.text,
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   color: isDark ? Colors.white : Colors.black,
@@ -1177,7 +1205,7 @@ class _PostPageState extends State<PostPage> {
             // Separator
             Container(
               height: 0.2,
-              color: const Color(0xFF666666).withOpacity(0.2),
+              color: const Color(0xFF666666).withValues(alpha: 0.2),
             ),
 
             const SizedBox(height: 20),

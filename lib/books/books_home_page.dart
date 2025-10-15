@@ -287,7 +287,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                             boxShadow: [
                               if (!isDark)
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 10,
                                   offset: const Offset(0, 2),
                                 ),
@@ -380,7 +380,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                                                   boxShadow: [
                                                     if (!isDark)
                                                       BoxShadow(
-                                                        color: Colors.black.withOpacity(0.06),
+                                                        color: Colors.black.withValues(alpha: 0.06),
                                                         blurRadius: 8,
                                                         offset: const Offset(0, 2),
                                                       ),
@@ -590,7 +590,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(25)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0),
+                color: Colors.black.withValues(alpha: 0),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -681,7 +681,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                         boxShadow: [
                           if (!isDark)
                             BoxShadow(
-                              color: Colors.black.withOpacity(0),
+                              color: Colors.black.withValues (alpha: 0),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),

@@ -165,7 +165,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
               decoration: BoxDecoration(
                 color: Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 12)],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 12)],
               ),
               child: Column(
                 children: [
@@ -237,7 +237,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
               boxShadow: [
                 if (!isDark)
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -275,7 +275,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                           Positioned.fill(
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.4),
+                                color: Colors.black.withValues(alpha: 0.4),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01))),

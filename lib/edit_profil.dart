@@ -603,7 +603,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
                         Positioned.fill(
                           child: IgnorePointer(
                             child: Container(
-                              color: Colors.black.withOpacity(0.25),
+                              color: Colors.black.withValues(alpha: 0.25),
                               child: const Center(
                                 child: SizedBox(
                                   width: 32,
@@ -688,7 +688,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
                               child: Container(
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Colors.black.withOpacity(0.25),
+                                  color: Colors.black.withValues(alpha: 0.25),
                                 ),
                                 child: const Center(
                                   child: SizedBox(

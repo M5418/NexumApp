@@ -135,7 +135,7 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
                         color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: const Color(0xFF666666).withOpacity(0.0),
+                          color: const Color(0xFF666666).withValues(alpha: 0.0),
                           width: 0.6,
                         ),
                       ),
@@ -215,7 +215,7 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
               boxShadow: [
                 if (!isDark)
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
