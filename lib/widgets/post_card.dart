@@ -41,28 +41,17 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
     bool _showTranslation = false;
   String? _translatedText;
-  bool _translating = false;
-  String? _translateError;
-
-  Future<void> _toggleTranslation() async {
+    Future<void> _toggleTranslation() async {
     final text = widget.post.text.trim();
     if (!_showTranslation && _translatedText == null && text.isNotEmpty) {
-      final ctx = context;
-      setState(() => _translating = true);
       try {
-        final target = ctx.read<LanguageProvider>().code;
+        final target = context.read<LanguageProvider>().ugcTargetCode;
         final out = await TranslateApi().translateTexts([text], target);
         if (!mounted) return;
         setState(() {
           _translatedText = out.isNotEmpty ? out.first : text;
-          _translateError = null;
         });
-      } catch (e) {
-        if (!mounted) return;
-        setState(() => _translateError = e.toString());
-      } finally {
-        if (mounted) setState(() => _translating = false);
-      }
+      } catch (_) {}
     }
     if (mounted) {
       setState(() {

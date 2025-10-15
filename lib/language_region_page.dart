@@ -100,6 +100,8 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
               children: [
                 _sectionTitle('Translation'),
                 const SizedBox(height: 8),
+                _ugcTargetDropdown(lang),
+                const SizedBox(height: 8),
                 _switchTile(
                   title: 'Auto-translate UI',
                   subtitle: 'Match the app interface to your device language',
@@ -177,6 +179,55 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
           },
         ),
       ),
+    );
+  }
+    // Target language for translating posts/comments (Provider-backed)
+  Widget _ugcTargetDropdown(LanguageProvider lang) {
+    final codes = LanguageProvider.supportedCodes;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Translate posts to'),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: lang.ugcTargetCode,
+              isExpanded: true,
+              items: codes
+                  .map(
+                    (code) => DropdownMenuItem<String>(
+                      value: code,
+                      child: Row(
+                        children: [
+                          Text(
+                            LanguageProvider.flags[code] ?? '🌐',
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            LanguageProvider.displayNames[code] ?? code.toUpperCase(),
+                            style: GoogleFonts.inter(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) lang.setUgcTarget(v);
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
