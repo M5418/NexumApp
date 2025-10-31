@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../core/token_store.dart';
 import '../core/auth_api.dart';
 import '../core/profile_api.dart';
+import '../core/api_client.dart';
 
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
@@ -26,11 +27,17 @@ class AuthService extends ChangeNotifier {
   Future<void> initialize() async {
     final token = await TokenStore.read();
     if (token != null && token.isNotEmpty) {
-      _isLoggedIn = true;
       _userToken = token;
-      await refreshUser(); // populate id/email/profile on app start
+      final ok = await validateSession();
+      _isLoggedIn = ok;
+      if (ok) {
+        await refreshUser();
+      } else {
+        await signOut();
+      }
     } else {
       _isLoggedIn = false;
+      _userToken = null;
     }
     notifyListeners();
   }
@@ -83,7 +90,11 @@ class AuthService extends ChangeNotifier {
       _userName = null;
       _userEmail = null;
       _avatarUrl = null;
+      try {
+        await AuthApi().logout();
+      } catch (_) {}
       await TokenStore.clear();
+      ApiClient().dio.options.headers.remove('Authorization');
       notifyListeners();
     } catch (e) {
       debugPrint('Sign out error: $e');
@@ -91,7 +102,8 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Mark user as logged in (called after successful login)
-  void setLoggedIn(String token, {String? userId, String? userName, String? userEmail}) {
+  void setLoggedIn(String token,
+      {String? userId, String? userName, String? userEmail}) {
     _isLoggedIn = true;
     _userToken = token;
     _userId = userId ?? _userId;
@@ -102,11 +114,19 @@ class AuthService extends ChangeNotifier {
 
   /// Optional: validate session
   Future<bool> validateSession() async {
-    if (!_isLoggedIn || _userToken == null) {
+    if (_userToken == null || _userToken!.isEmpty) {
       return false;
     }
     try {
-      return true;
+      final me = await AuthApi().me();
+      final data = Map<String, dynamic>.from(me['data'] ?? {});
+      _userId = data['id']?.toString();
+      _userEmail = data['email']?.toString();
+      final ok = me['ok'] == true && (_userId != null && _userId!.isNotEmpty);
+      if (!ok) {
+        await signOut();
+      }
+      return ok;
     } catch (e) {
       debugPrint('Session validation error: $e');
       await signOut();

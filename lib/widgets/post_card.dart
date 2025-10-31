@@ -39,19 +39,49 @@ class PostCard extends StatefulWidget {
 }
 
 class _PostCardState extends State<PostCard> {
-    bool _showTranslation = false;
+  bool _showTranslation = false;
   String? _translatedText;
-    Future<void> _toggleTranslation() async {
+  String? _lastUgcCode;
+
+  Future<void> _translateCurrentText(String target) async {
     final text = widget.post.text.trim();
-    if (!_showTranslation && _translatedText == null && text.isNotEmpty) {
-      try {
-        final target = context.read<LanguageProvider>().ugcTargetCode;
-        final out = await TranslateApi().translateTexts([text], target);
-        if (!mounted) return;
-        setState(() {
-          _translatedText = out.isNotEmpty ? out.first : text;
-        });
-      } catch (_) {}
+    if (text.isEmpty) return;
+    try {
+      final out = await TranslateApi().translateTexts([text], target);
+      if (!mounted) return;
+      setState(() {
+        _translatedText = out.isNotEmpty ? out.first : text;
+      });
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final code = Provider.of<LanguageProvider>(context).ugcTargetCode;
+    if (code != _lastUgcCode) {
+      _lastUgcCode = code;
+      if (_showTranslation) {
+        _translatedText = null;
+        _translateCurrentText(code);
+      }
+    }
+  }
+
+  Future<void> _toggleTranslation() async {
+    final text = widget.post.text.trim();
+    if (!_showTranslation && text.isNotEmpty) {
+      if (_translatedText == null) {
+        try {
+          final target = context.read<LanguageProvider>().ugcTargetCode;
+          final out = await TranslateApi().translateTexts([text], target);
+          if (!mounted) return;
+          setState(() {
+            _translatedText = out.isNotEmpty ? out.first : text;
+            _lastUgcCode = target;
+          });
+        } catch (_) {}
+      }
     }
     if (mounted) {
       setState(() {
@@ -104,7 +134,6 @@ class _PostCardState extends State<PostCard> {
     final reactionColor = const Color(0xFFBFAE01);
     final bookmarkColor = const Color(0xFFBFAE01);
 
-    // Build repost header text and avatar/icon
     String repostHeaderText() {
       final rb = widget.post.repostedBy;
       if (rb == null) return 'Reposted';
@@ -112,7 +141,7 @@ class _PostCardState extends State<PostCard> {
       final isSelf = ((rb.userId != null &&
               widget.currentUserId != null &&
               rb.userId == widget.currentUserId) ||
-          ((rb.actionType ?? '').isNotEmpty)); // fallback when backend flags self
+          ((rb.actionType ?? '').isNotEmpty));
 
       if (isSelf) return 'You reposted this!';
       if (rb.userName.trim().isNotEmpty) return '${rb.userName} reposted this!';
@@ -129,7 +158,6 @@ class _PostCardState extends State<PostCard> {
           isDark: isDarkMode,
         );
       }
-      // Fallback: show repeat icon inside a subtle circle
       return Container(
         width: 20,
         height: 20,
@@ -162,7 +190,6 @@ class _PostCardState extends State<PostCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Repost header (always show for reposts)
             if (widget.post.isRepost)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -181,7 +208,6 @@ class _PostCardState extends State<PostCard> {
                 ),
               ),
 
-            // Post header (original author)
             Row(
               children: [
                 _AvatarCircle(
@@ -195,7 +221,6 @@ class _PostCardState extends State<PostCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title (made bolder)
                       Text(
                         widget.post.userName,
                         style: GoogleFonts.inter(
@@ -221,13 +246,11 @@ class _PostCardState extends State<PostCard> {
               ],
             ),
 
-            // Reduced space between header (title) and body
             const SizedBox(height: 6),
 
-            // Post text (from original post if repost)
             if (widget.post.text.isNotEmpty) ...[
               ReadMoreText(
-                  _showTranslation
+                _showTranslation
                     ? (_translatedText ?? widget.post.text)
                     : widget.post.text,
                 trimMode: TrimMode.Length,
@@ -262,7 +285,6 @@ class _PostCardState extends State<PostCard> {
               const SizedBox(height: 16),
             ],
 
-            // Media content (from original post if repost)
             if (widget.post.mediaType != MediaType.none) ...[
               if (widget.post.mediaType == MediaType.image &&
                   widget.post.imageUrls.isNotEmpty)
@@ -358,17 +380,14 @@ class _PostCardState extends State<PostCard> {
 
             const SizedBox(height: 8),
 
-            // Separator line before engagement buttons
             Container(
               height: 1,
               margin: const EdgeInsets.symmetric(vertical: 8),
               color: secondaryTextColor.withAlpha(76),
             ),
 
-            // Engagement row
             Row(
               children: [
-                // Like button with long press
                 Builder(
                   builder: (likeButtonContext) => GestureDetector(
                     onTap: () {
@@ -423,7 +442,6 @@ class _PostCardState extends State<PostCard> {
 
                 const SizedBox(width: 20),
 
-                // Comment button
                 GestureDetector(
                   onTap: () => widget.onComment?.call(_effectivePostId()),
                   child: Row(
@@ -447,7 +465,6 @@ class _PostCardState extends State<PostCard> {
 
                 const SizedBox(width: 20),
 
-                // Share button
                 GestureDetector(
                   onTap: () => widget.onShare?.call(_effectivePostId()),
                   child: Row(
@@ -471,7 +488,6 @@ class _PostCardState extends State<PostCard> {
 
                 const SizedBox(width: 20),
 
-                // Repost button
                 GestureDetector(
                   onTap: () => widget.onRepost?.call(_effectivePostId()),
                   child: Row(
@@ -491,7 +507,6 @@ class _PostCardState extends State<PostCard> {
 
                 const Spacer(),
 
-                // Bookmark button
                 GestureDetector(
                   onTap: () => widget.onBookmarkToggle?.call(_effectivePostId()),
                   child: Row(
@@ -603,9 +618,7 @@ class ReactionPickerManager {
         behavior: HitTestBehavior.translucent,
         child: Stack(
           children: [
-            // Invisible full-screen tap area
             Positioned.fill(child: Container(color: Colors.transparent)),
-            // Reaction picker
             Positioned(
               left: position.dx,
               top: position.dy - 70,

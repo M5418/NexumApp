@@ -23,9 +23,7 @@ import 'core/i18n/language_provider.dart';
 import 'core/translate_api.dart';
 
 class PostPage extends StatefulWidget {
-  // Prefer passing the full post to avoid extra fetches
   final Post? post;
-  // Backward compatible: still accept postId (will fetch from feed as fallback)
   final String? postId;
 
   const PostPage({super.key, this.post, this.postId})
@@ -37,30 +35,43 @@ class PostPage extends StatefulWidget {
 }
 
 class _PostPageState extends State<PostPage> {
-   bool _showTranslation = false;
+  bool _showTranslation = false;
   String? _translatedText;
 
-  // Post data (mapped to PostDetail to preserve existing UI structure)
   PostDetail? _post;
 
-  // Local toggles derived from _post
   bool _isLiked = false;
   bool _isBookmarked = false;
 
-  // Comments
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _commentFocusNode = FocusNode();
   List<Comment> _comments = [];
   bool _loadingPost = false;
   bool _loadingComments = false;
 
-  // Current user for CommentBottomSheet
   String? _currentUserId;
+
+  String? _lastUgcCode;
 
   @override
   void initState() {
     super.initState();
     _init();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final code = Provider.of<LanguageProvider>(context).ugcTargetCode;
+    if (code != _lastUgcCode) {
+      _lastUgcCode = code;
+      if (_showTranslation && _post != null) {
+        final text = _post!.text.trim();
+        if (text.isNotEmpty) {
+          _retranslateCurrentPost(code);
+        }
+      }
+    }
   }
 
   @override
@@ -73,11 +84,9 @@ class _PostPageState extends State<PostPage> {
   Future<void> _init() async {
     await _loadCurrentUserId();
     if (widget.post != null) {
-      // Map provided Post into PostDetail and load comments
       _applyPost(widget.post!);
       await _loadComments();
     } else {
-      // Fallback: fetch from feed by id (heavier; prefer passing full Post)
       await _loadPostById();
       if (_post != null) {
         await _loadComments();
@@ -125,7 +134,7 @@ class _PostPageState extends State<PostPage> {
       counts: p.counts,
       userReaction: p.userReaction,
       isBookmarked: p.isBookmarked,
-      comments: const [], // comments are loaded separately
+      comments: const [],
     );
     setState(() {
       _post = detail;
@@ -140,7 +149,6 @@ class _PostPageState extends State<PostPage> {
       _loadingPost = true;
     });
     try {
-      // Fetch a larger page and pick the post; prefer passing Post to this page.
       final posts = await PostsApi().listFeed(limit: 50, offset: 0);
       final found = posts.firstWhere(
         (p) => p.id == widget.postId,
@@ -180,7 +188,6 @@ class _PostPageState extends State<PostPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      // Keep UI, just notify
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Load comments failed: ${_toError(e)}',
@@ -197,7 +204,20 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
-       Future<void> _toggleTranslation() async {
+  Future<void> _retranslateCurrentPost(String target) async {
+    if (_post == null) return;
+    final text = _post!.text.trim();
+    if (text.isEmpty) return;
+    try {
+      final out = await TranslateApi().translateTexts([text], target);
+      if (!mounted) return;
+      setState(() {
+        _translatedText = out.isNotEmpty ? out.first : text;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleTranslation() async {
     if (_post == null) return;
     final text = _post!.text.trim();
     if (!_showTranslation && _translatedText == null && text.isNotEmpty) {
@@ -207,6 +227,7 @@ class _PostPageState extends State<PostPage> {
         if (!mounted) return;
         setState(() {
           _translatedText = out.isNotEmpty ? out.first : text;
+          _lastUgcCode = target;
         });
       } catch (_) {}
     }
@@ -217,16 +238,13 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
-
   void _showPostOptions() {
     if (_post == null) return;
     PostOptionsMenu.show(
       context,
       authorName: _post!.authorName,
       postId: _post!.id,
-      onReport: () {
-        // Report handled elsewhere (UI only)
-      },
+      onReport: () {},
       onMute: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -252,8 +270,7 @@ class _PostPageState extends State<PostPage> {
     }
     return e.toString();
   }
-
-  // Actions
+    // Actions
 
   Future<void> _toggleLike() async {
     if (_post == null) return;
@@ -261,7 +278,6 @@ class _PostPageState extends State<PostPage> {
     final original = _post!;
     final wasLiked = _isLiked;
 
-    // Optimistic update
     final newLikes =
         (original.counts.likes + (wasLiked ? -1 : 1)).clamp(0, 1 << 30);
     final updatedCounts = PostCounts(
@@ -299,7 +315,6 @@ class _PostPageState extends State<PostPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      // Revert on error
       setState(() {
         _post = original;
         _isLiked = wasLiked;
@@ -321,7 +336,6 @@ class _PostPageState extends State<PostPage> {
     final original = _post!;
     final willBookmark = !_isBookmarked;
 
-    // Optimistic update
     final newBookmarks =
         (original.counts.bookmarks + (willBookmark ? 1 : -1)).clamp(0, 1 << 30);
     final updatedCounts = PostCounts(
@@ -359,7 +373,6 @@ class _PostPageState extends State<PostPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      // Revert on error
       setState(() {
         _post = original;
         _isBookmarked = !willBookmark;
@@ -461,7 +474,6 @@ class _PostPageState extends State<PostPage> {
       onAddComment: (text) async {
         try {
           await PostsApi().addComment(_post!.id, content: text);
-          // Optimistically increment comments count
           final original = _post!;
           final updatedCounts = PostCounts(
             likes: original.counts.likes,
@@ -530,8 +542,7 @@ class _PostPageState extends State<PostPage> {
       },
     );
   }
-
-  Future<void> _replyToCommentDesktop(String commentId) async {
+    Future<void> _replyToCommentDesktop(String commentId) async {
     if (_post == null) return;
     final controller = TextEditingController();
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -602,7 +613,6 @@ class _PostPageState extends State<PostPage> {
       _commentController.clear();
       _commentFocusNode.unfocus();
 
-      // Update UI: increment comments count and refresh
       final original = _post!;
       final updatedCounts = PostCounts(
         likes: original.counts.likes,
@@ -660,12 +670,10 @@ class _PostPageState extends State<PostPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  // Back
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
@@ -682,8 +690,6 @@ class _PostPageState extends State<PostPage> {
                       ),
                     ),
                   ),
-
-                  // Title
                   Expanded(
                     child: Center(
                       child: Text(
@@ -696,8 +702,6 @@ class _PostPageState extends State<PostPage> {
                       ),
                     ),
                   ),
-
-                  // More
                   GestureDetector(
                     onTap: _showPostOptions,
                     child: Container(
@@ -717,8 +721,6 @@ class _PostPageState extends State<PostPage> {
                 ],
               ),
             ),
-
-            // Body
             Expanded(
               child: _loadingPost && _post == null
                   ? const Center(child: CircularProgressIndicator())
@@ -740,15 +742,12 @@ class _PostPageState extends State<PostPage> {
     );
   }
 
-  // ====== Layouts ======
-
   Widget _buildMobileBody(bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 5),
       child: Column(
         children: [
           _buildPostCard(isDark, showPreviewComments: true),
-          // Comment input card
           Container(
             margin: const EdgeInsets.all(10),
             padding: const EdgeInsets.all(5),
@@ -809,7 +808,6 @@ class _PostPageState extends State<PostPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left: post
           Expanded(
             flex: 5,
             child: SingleChildScrollView(
@@ -818,7 +816,6 @@ class _PostPageState extends State<PostPage> {
             ),
           ),
           const SizedBox(width: 16),
-          // Right: comments
           Expanded(
             flex: 4,
             child: Container(
@@ -828,7 +825,6 @@ class _PostPageState extends State<PostPage> {
               ),
               child: Column(
                 children: [
-                  // Header
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: Row(
@@ -852,8 +848,6 @@ class _PostPageState extends State<PostPage> {
                     ),
                   ),
                   const Divider(height: 1),
-
-                  // List
                   Expanded(
                     child: _loadingComments
                         ? const Center(child: CircularProgressIndicator())
@@ -879,13 +873,11 @@ class _PostPageState extends State<PostPage> {
                                   return CommentThread(
                                     comment: c,
                                     onReply: (id) => _replyToCommentDesktop(id),
-                                    onLike: (_) {}, // UI-only like in thread
+                                    onLike: (_) {},
                                   );
                                 },
                               )),
                   ),
-
-                  // Composer
                   const Divider(height: 1),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
@@ -951,8 +943,6 @@ class _PostPageState extends State<PostPage> {
     );
   }
 
-  // ====== Post card (shared) ======
-
   Widget _buildPostCard(bool isDark, {required bool showPreviewComments}) {
     final surfaceColor = isDark ? Colors.black : Colors.white;
     return Container(
@@ -966,7 +956,6 @@ class _PostPageState extends State<PostPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Author info
             Row(
               children: [
                 Container(
@@ -993,22 +982,19 @@ class _PostPageState extends State<PostPage> {
                           color: isDark ? Colors.white : Colors.black,
                         ),
                       ),
-                     Text(
-                      TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: const Color(0xFF666666),
+                      Text(
+                        TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: const Color(0xFF666666),
+                        ),
                       ),
-                    ),
                     ],
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // Post text
             if (_post!.text.isNotEmpty) ...[
               Text(
                 _showTranslation ? (_translatedText ?? _post!.text) : _post!.text,
@@ -1031,8 +1017,6 @@ class _PostPageState extends State<PostPage> {
               ),
               const SizedBox(height: 20),
             ],
-
-            // Media content
             if (_post!.mediaType != MediaType.none) ...[
               if ((_post!.mediaType == MediaType.image ||
                       _post!.mediaType == MediaType.images) &&
@@ -1051,11 +1035,8 @@ class _PostPageState extends State<PostPage> {
                 ),
               const SizedBox(height: 16),
             ],
-
-            // Engagement bar
             Row(
               children: [
-                // Like button
                 GestureDetector(
                   onTap: _toggleLike,
                   child: Row(
@@ -1080,10 +1061,7 @@ class _PostPageState extends State<PostPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(width: 20),
-
-                // Comment count (mobile opens sheet)
                 GestureDetector(
                   onTap: _openCommentsSheet,
                   child: Row(
@@ -1104,10 +1082,7 @@ class _PostPageState extends State<PostPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(width: 20),
-
-                // Share button
                 GestureDetector(
                   onTap: _showShareOptions,
                   child: Row(
@@ -1128,10 +1103,7 @@ class _PostPageState extends State<PostPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(width: 20),
-
-                // Repost static (UI only)
                 Row(
                   children: [
                     const Icon(
@@ -1149,10 +1121,7 @@ class _PostPageState extends State<PostPage> {
                     ),
                   ],
                 ),
-
                 const Spacer(),
-
-                // Bookmark button
                 GestureDetector(
                   onTap: _toggleBookmark,
                   child: Row(
@@ -1177,10 +1146,7 @@ class _PostPageState extends State<PostPage> {
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
-
-            // Post date
             Text(
               TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
               style: GoogleFonts.inter(
@@ -1188,18 +1154,12 @@ class _PostPageState extends State<PostPage> {
                 color: const Color(0xFF666666),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Separator
             Container(
               height: 0.2,
               color: const Color(0xFF666666).withValues(alpha: 0.2),
             ),
-
             const SizedBox(height: 20),
-
-            // Comments preview (mobile only)
             if (showPreviewComments) ...[
               if (_loadingComments)
                 const Center(child: CircularProgressIndicator())
@@ -1211,7 +1171,7 @@ class _PostPageState extends State<PostPage> {
                       comment: comment,
                       isFirstReply: false,
                       onReply: (commentId) {
-                        _openCommentsSheet(); // full thread + reply UI
+                        _openCommentsSheet();
                       },
                       onLike: (_) {},
                     ),
