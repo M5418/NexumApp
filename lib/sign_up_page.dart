@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 
 import 'sign_in_page.dart';
 import 'profile_flow_start.dart';
-import 'core/auth_api.dart';
-import 'core/token_store.dart';
 import 'core/i18n/language_provider.dart';
+import 'repositories/interfaces/auth_repository.dart';
+import 'repositories/interfaces/user_repository.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -533,23 +533,23 @@ class _SignUpPageState extends State<SignUpPage> {
 
     setState(() => _isLoading = true);
     try {
-      final api = AuthApi();
-      final res = await api.signup(email, password);
-      if (res['ok'] == true && res['data'] != null) {
-        final token = res['data']['token'] as String?;
-        if (token != null && token.isNotEmpty) {
-          await TokenStore.write(token);
-          if (mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileFlowStart()),
-            );
-          }
-        } else {
-          _showSnack(lang.t('errors.unexpected_response'));
-        }
-      } else {
-        _showSnack(res['error'] ?? lang.t('errors.sign_up_failed'));
+      // Create Firebase account first and seed user profile
+      final authRepo = context.read<AuthRepository>();
+      final userRepo = context.read<UserRepository>();
+      final authRes = await authRepo.signUpWithEmail(email: email, password: password);
+      if (!authRes.success || authRes.user == null) {
+        _showSnack(authRes.error ?? lang.t('errors.sign_up_failed'));
+        return;
+      }
+      final uid = authRes.user!.uid;
+      await userRepo.updateUserProfile(UserProfile(uid: uid, email: email, createdAt: DateTime.now(), lastActive: DateTime.now()));
+
+      // Navigate to profile setup; user is already signed in with Firebase
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ProfileFlowStart()),
+        );
       }
     } catch (e) {
       _showSnack(lang.t('errors.sign_up_failed_try'));

@@ -1,14 +1,17 @@
 import 'package:dio/dio.dart';
 import 'env.dart';
 import 'token_store.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, kReleaseMode;
 
 class ApiClient {
   static final ApiClient _i = ApiClient._();
   ApiClient._() {
+    final base = kIsWeb
+        ? (kReleaseMode ? '/api' : kApiBaseUrl)
+        : kApiBaseUrl;
     dio = Dio(
       BaseOptions(
-        baseUrl: kApiBaseUrl,
+        baseUrl: base,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 60),
         headers: {'Content-Type': 'application/json'},

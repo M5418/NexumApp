@@ -6,13 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import 'widgets/circle_icon_button.dart';
 import 'widgets/media_thumb.dart';
 import 'widgets/tag_chip.dart';
-import 'package:dio/dio.dart';
-import 'core/api_client.dart';
 import 'core/posts_api.dart';
 import 'core/communities_api.dart';
-import 'core/community_posts_api.dart';
-import 'core/connections_api.dart';
-import 'core/users_api.dart';
+import 'core/files_api.dart';
+import 'repositories/firebase/firebase_follow_repository.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../responsive/responsive_breakpoints.dart';
 
 class CreatePostPage extends StatefulWidget {
@@ -761,36 +760,38 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Future<List<_TagUser>> _fetchConnectionUsers() async {
     try {
-      final status = await ConnectionsApi().status();
-      final ids = <String>{...status.inbound, ...status.outbound};
+      final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return [];
+      final follows = FirebaseFollowRepository();
+      final usersRepo = FirebaseUserRepository();
+      final followers = await follows.getFollowers(userId: uid, limit: 500);
+      final following = await follows.getFollowing(userId: uid, limit: 500);
+      final ids = <String>{
+        ...followers.map((f) => f.followerId),
+        ...following.map((f) => f.followedId),
+      }..remove(uid);
       if (ids.isEmpty) return [];
-
-      final all = await UsersApi().list(); // all users except current
-      final filtered =
-          all.where((u) => ids.contains((u['id'] ?? '').toString()));
-
-      final List<_TagUser> users = filtered.map((u) {
-        final name = (u['name'] ?? '').toString();
-        final username = (u['username'] ?? '').toString();
-        final avatarUrl = u['avatarUrl']?.toString();
-        final email = (u['email'] ?? '').toString();
-        final letterSource =
-            name.isNotEmpty ? name : (username.isNotEmpty ? username : email);
+      final profiles = await usersRepo.getUsers(ids.toList());
+      final users = profiles.map((p) {
+        final name = (p.displayName ?? '').trim();
+        final username = (p.username ?? '').trim();
+        final email = (p.email ?? '').trim();
+        final letterSource = name.isNotEmpty
+            ? name
+            : (username.isNotEmpty ? username : email);
         final letter =
             letterSource.isNotEmpty ? letterSource[0].toUpperCase() : 'U';
         return _TagUser(
-          id: (u['id'] ?? '').toString(),
+          id: p.uid,
           name: name.isNotEmpty
               ? name
-              : (email.isNotEmpty ? email.split('@')[0] : 'User'),
-          username: username.isNotEmpty ? username : '@user',
-          avatarUrl: avatarUrl,
+              : (email.isNotEmpty ? email.split('@').first : 'User'),
+          username: username.isNotEmpty ? '@$username' : '@user',
+          avatarUrl: p.avatarUrl,
           avatarLetter: letter,
         );
       }).toList();
-
-      users
-          .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       return users;
     } catch (_) {
       return [];
@@ -1274,21 +1275,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
         body,
       ].where((e) => e.isNotEmpty).join('\n\n');
 
-      if (_selectedCommunities.isNotEmpty) {
-        // Post to the first selected community (UI unchanged; supports up to 3 selections but we take the first for publishing)
-        final community = _selectedCommunities.first;
-        await CommunityPostsApi().create(
-          communityId: community.id,
-          content: content,
-          media: mediaPayload.isEmpty ? null : mediaPayload,
-        );
-      } else {
-        // Post to home feed (global posts)
-        await PostsApi().create(
-          content: content,
-          media: mediaPayload.isEmpty ? null : mediaPayload,
-        );
-      }
+      // For now, route all posts to global feed (Firebase Posts)
+      await PostsApi().create(
+        content: content,
+        media: mediaPayload.isEmpty ? null : mediaPayload,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1313,43 +1304,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   // Upload helper that works on web and mobile using XFile bytes
   Future<Map<String, String>> _uploadXFile(XFile file, MediaType type) async {
-    final dio = ApiClient().dio;
     final ext = _extensionOf(file.name);
-    final contentType = _contentTypeForExt(ext, type);
-
-    // 1) presign
-    final pres = await dio.post(
-      '/api/files/presign-upload',
-      data: {'ext': ext},
-    );
-    final body = Map<String, dynamic>.from(pres.data);
-    final data = Map<String, dynamic>.from(body['data'] ?? {});
-    final putUrl = (data['putUrl'] ?? '').toString();
-    final key = (data['key'] ?? '').toString();
-    final readUrl = (data['readUrl'] ?? '').toString();
-    final publicUrl = (data['publicUrl'] ?? '').toString();
-    final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
-
-    // 2) upload to S3 via presigned URL
     final bytes = await file.readAsBytes();
-    final s3 = Dio();
-    await s3.put(
-      putUrl,
-      data: bytes,
-      options: Options(
-        headers: {
-          'Content-Type': contentType,
-          // 'Content-Length' is not always allowed on web/XHR; omit for compatibility.
-        },
-      ),
-    );
-
-    // 3) confirm (non-blocking)
-    try {
-      await dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
-    } catch (_) {}
-
-    return {'key': key, 'url': bestUrl};
+    final res = await FilesApi().uploadBytes(bytes, ext: ext);
+    return {'url': res['url'] ?? ''};
   }
 
   String _extensionOf(String filename) {
@@ -1358,24 +1316,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     return filename.substring(idx + 1).toLowerCase();
   }
 
-  String _contentTypeForExt(String ext, MediaType hint) {
-    switch (ext.toLowerCase()) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      case 'mp4':
-        return 'video/mp4';
-      default:
-        // Fallback based on hint
-        return hint == MediaType.video
-            ? 'video/mp4'
-            : 'application/octet-stream';
-    }
-  }
 }
 
 class MediaItem {

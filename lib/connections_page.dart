@@ -12,10 +12,12 @@ import 'notification_page.dart';
 import 'conversations_page.dart';
 import 'profile_page.dart';
 
-import 'core/users_api.dart';
-import 'core/connections_api.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/firebase/firebase_follow_repository.dart';
+import 'repositories/firebase/firebase_notification_repository.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'repositories/firebase/firebase_post_repository.dart';
 import 'core/profile_api.dart';
-import 'core/notifications_api.dart';
 
 import 'theme_provider.dart';
 import 'dart:convert';
@@ -23,7 +25,6 @@ import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
 import 'models/post.dart';
 import 'core/conversations_api.dart';
-import 'core/api_client.dart';
 import 'podcasts/podcasts_api.dart';
 import 'models/message.dart' hide MediaType;
 import 'chat_page.dart';
@@ -117,28 +118,56 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   // -----------------------------
   Future<void> _loadUsers() async {
     try {
-      final usersData = await UsersApi().list();
-      final status = await ConnectionsApi().status();
+      final currentUid = fb.FirebaseAuth.instance.currentUser?.uid;
+      if (currentUid == null) {
+        if (!mounted) return;
+        setState(() {
+          users = [];
+          _loading = false;
+        });
+        return;
+      }
 
-      final mapped = usersData.map((m) {
-        final id = (m['id'] ?? '').toString().trim();
+      final followRepo = FirebaseFollowRepository();
+      final userRepo = FirebaseUserRepository();
 
-        final fullName = _pickFullName(m);
-        final uname = _pickUsername(m);
-        final bio = (m['bio'] ?? '').toString().trim();
+      final followers = await followRepo.getFollowers(userId: currentUid, limit: 500);
+      final following = await followRepo.getFollowing(userId: currentUid, limit: 500);
 
-        final avatar = _pickAvatar(m);
-        final cover = _pickCover(m);
+      final inboundIds = followers.map((f) => f.followerId).toSet();
+      final outboundIds = following.map((f) => f.followedId).toSet();
+      final allIds = <String>{...inboundIds, ...outboundIds}..remove(currentUid);
 
+      if (allIds.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          users = [];
+          _loading = false;
+        });
+        return;
+      }
+
+      final profiles = await userRepo.getUsers(allIds.toList());
+      final mapped = profiles.map((p) {
+        final id = p.uid;
+        final name = (p.displayName ?? '').trim();
+        final uname = (p.username ?? '').trim();
+        final bio = (p.bio ?? '').trim();
+        final avatar = (p.avatarUrl ?? '').trim();
+        final cover = (p.coverUrl ?? '').trim();
         return User(
           id: id,
-          fullName: fullName,
-          username: uname,
+          fullName: name.isNotEmpty
+              ? name
+              : ((p.firstName ?? '').trim().isNotEmpty || (p.lastName ?? '').trim().isNotEmpty)
+                  ? [p.firstName ?? '', p.lastName ?? ''].where((s) => (s as String).trim().isNotEmpty).join(' ').trim()
+                  : ((p.email ?? '').contains('@') ? (p.email ?? '').split('@').first : 'User'),
+          username: uname.isNotEmpty ? (uname.startsWith('@') ? uname : '@$uname') : ((p.email ?? '').contains('@') ? '@${(p.email ?? '').split('@').first}' : '@user'),
           bio: bio,
           avatarUrl: avatar,
-          coverUrl: cover,
-          isConnected: status.outbound.contains(id),
-          theyConnectToYou: status.inbound.contains(id),
+          coverUrl: cover.isNotEmpty ? cover : avatar,
+          isConnected: outboundIds.contains(id),
+          theyConnectToYou: inboundIds.contains(id),
         );
       }).toList();
 
@@ -147,7 +176,6 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         users = List<User>.from(mapped);
         _loading = false;
 
-        // Preselect first user for desktop if nothing selected yet
         if (_selectedUserId == null && kIsWeb && users.isNotEmpty) {
           _selectUser(users.first);
         }
@@ -164,7 +192,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
   Future<void> _loadUnreadCount() async {
     try {
-      final c = await NotificationsApi().unreadCount();
+      final c = await FirebaseNotificationRepository().getUnreadCount();
       if (!mounted) return;
       setState(() => _unreadCount = c);
     } catch (_) {
@@ -1357,54 +1385,38 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     final started = DateTime.now();
 
     try {
-      final dio = ApiClient().dio;
-      final res = await dio.get('/api/posts', queryParameters: {
-        'user_id': widget.user.id,
-        'limit': 50,
-        'offset': 0,
-      });
-
-      final body = Map<String, dynamic>.from(res.data ?? {});
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final list = (data['posts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-
-      final origIds = list
-          .map((p) => p['repost_of'])
-          .where((id) => id != null && id.toString().isNotEmpty)
-          .map((id) => id.toString())
-          .toSet();
-
-      final Map<String, Map<String, dynamic>> originals = {};
-      await Future.wait(origIds.map((id) async {
-        try {
-          final r = await dio.get('/api/posts/$id');
-          final rb = Map<String, dynamic>.from(r.data ?? {});
-          final rd = Map<String, dynamic>.from(rb['data'] ?? {});
-          if (rd['post'] is Map) {
-            originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
-          }
-        } catch (_) {}
-      }));
-
-      for (final p in list) {
-        final ro = p['repost_of'];
-        if (ro != null) {
-          final op = originals[ro.toString()];
-          if (op != null) p['original_post'] = op;
-        }
-      }
-
-      final posts = list.map(_mapRawPostToModel).toList();
+      // Fetch user's posts from Firestore
+      final repo = FirebasePostRepository();
+      final models = await repo.getUserPosts(uid: widget.user.id, limit: 50);
+      final posts = models.map((m) => Post(
+        id: m.id,
+        userName: widget.user.fullName,
+        userAvatarUrl: widget.user.avatarUrl,
+        createdAt: m.createdAt,
+        text: m.text,
+        mediaType: m.mediaUrls.isEmpty ? MediaType.none : (m.mediaUrls.length == 1 ? MediaType.image : MediaType.images),
+        imageUrls: m.mediaUrls,
+        videoUrl: null,
+        counts: PostCounts(
+          likes: m.summary.likes,
+          comments: m.summary.comments,
+          shares: m.summary.shares,
+          reposts: m.summary.reposts,
+          bookmarks: m.summary.bookmarks,
+        ),
+        userReaction: null,
+        isBookmarked: false,
+        isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
+        repostedBy: null,
+        originalPostId: m.repostOf,
+      )).toList();
 
       final urls = <String>{};
       for (final post in posts) {
         if (post.isRepost) continue;
         if (post.mediaType == MediaType.image && post.imageUrls.isNotEmpty) {
           urls.add(post.imageUrls.first);
-        } else if (post.mediaType == MediaType.images &&
-            post.imageUrls.isNotEmpty) {
+        } else if (post.mediaType == MediaType.images && post.imageUrls.isNotEmpty) {
           urls.addAll(post.imageUrls);
         }
       }
@@ -1445,112 +1457,31 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     final started = DateTime.now();
 
     try {
-      final dio = ApiClient().dio;
-      final res = await dio.get('/api/posts', queryParameters: {
-        'limit': 200,
-        'offset': 0,
-      });
-
-      final body = Map<String, dynamic>.from(res.data ?? {});
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final raw = (data['posts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-
-      // Build "their activity" using backend interactions arrays.
-      final included = <Map<String, dynamic>>[];
-
-      String? actionFor(Map<String, dynamic> p) {
-        final uid = (p['user_id'] ?? p['userId'] ?? '').toString();
-
-        // Priority: reposted > shared > bookmarked > liked
-        if (uid == widget.user.id &&
-            (p['repost_of'] != null && p['repost_of'].toString().isNotEmpty)) {
-          return 'reposted_this';
-        }
-
-        Map<String, dynamic> interactions = {};
-        final inter = p['interactions'];
-        if (inter is Map) {
-          interactions = Map<String, dynamic>.from(inter);
-        }
-
-        Set<String> setOf(dynamic v) {
-          if (v == null) return {};
-          if (v is List) return v.map((e) => e.toString()).toSet();
-          if (v is String && v.isNotEmpty) {
-            try {
-              final d = jsonDecode(v);
-              if (d is List) return d.map((e) => e.toString()).toSet();
-            } catch (_) {}
-          }
-          return {};
-        }
-
-        final likes = setOf(interactions['liked_by']);
-        final bookmarks = setOf(interactions['bookmarked_by']);
-        final shares = setOf(interactions['shared_by']);
-
-        if (shares.contains(widget.user.id)) return 'shared_this';
-        if (bookmarks.contains(widget.user.id)) return 'bookmarked_this';
-        if (likes.contains(widget.user.id)) return 'liked_this';
-        return null;
-      }
-
-      for (final p in raw) {
-        final action = actionFor(p);
-        if (action != null) {
-          final clone = Map<String, dynamic>.from(p);
-          clone['__activity_action'] = action;
-          included.add(clone);
-        }
-      }
-
-      // Hydrate original posts for repost rows
-      final origIds = included
-          .map((p) => p['repost_of'])
-          .where((id) => id != null && id.toString().isNotEmpty)
-          .map((id) => id.toString())
-          .toSet();
-
-      final Map<String, Map<String, dynamic>> originals = {};
-      await Future.wait(origIds.map((id) async {
-        try {
-          final r = await dio.get('/api/posts/$id');
-          final rb = Map<String, dynamic>.from(r.data ?? {});
-          final rd = Map<String, dynamic>.from(rb['data'] ?? {});
-          if (rd['post'] is Map) {
-            originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
-          }
-        } catch (_) {}
-      }));
-
-      for (final p in included) {
-        final ro = p['repost_of'];
-        if (ro != null) {
-          final op = originals[ro.toString()];
-          if (op != null) p['original_post'] = op;
-        }
-      }
-
-      // Convert to Post models and add activity headers
-      final results = <Post>[];
-      for (final p in included) {
-        final post = _mapRawPostToModel(p);
-        final action = p['__activity_action'] as String?;
-        if (action != null) {
-          final activityPost = post.copyWith(
-            repostedBy: RepostedBy(
-              userName: widget.user.fullName,
-              userAvatarUrl: widget.user.avatarUrl,
-              actionType: action,
-            ),
-          );
-          results.add(activityPost);
-        } else {
-          results.add(post);
-        }
-      }
+      // For now, surface recent posts as activity
+      final repo = FirebasePostRepository();
+      final models = await repo.getUserPosts(uid: widget.user.id, limit: 50);
+      final results = models.map((m) => Post(
+        id: m.id,
+        userName: widget.user.fullName,
+        userAvatarUrl: widget.user.avatarUrl,
+        createdAt: m.createdAt,
+        text: m.text,
+        mediaType: m.mediaUrls.isEmpty ? MediaType.none : (m.mediaUrls.length == 1 ? MediaType.image : MediaType.images),
+        imageUrls: m.mediaUrls,
+        videoUrl: null,
+        counts: PostCounts(
+          likes: m.summary.likes,
+          comments: m.summary.comments,
+          shares: m.summary.shares,
+          reposts: m.summary.reposts,
+          bookmarks: m.summary.bookmarks,
+        ),
+        userReaction: null,
+        isBookmarked: false,
+        isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
+        repostedBy: null,
+        originalPostId: m.repostOf,
+      )).toList();
 
       results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -1860,10 +1791,11 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                                   final next = !_isConnected;
                                   setState(() => _isConnected = next);
                                   try {
+                                    final repo = FirebaseFollowRepository();
                                     if (next) {
-                                      await ConnectionsApi().connect(widget.user.id);
+                                      await repo.followUser(widget.user.id);
                                     } else {
-                                      await ConnectionsApi().disconnect(widget.user.id);
+                                      await repo.unfollowUser(widget.user.id);
                                     }
                                   } catch (_) {
                                     if (!mounted) return;
@@ -1874,7 +1806,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                                     );
                                   }
                                 },
-                                                                style: ElevatedButton.styleFrom(
+                                style: ElevatedButton.styleFrom(
                                   backgroundColor: _isConnected
                                       ? Colors.grey[300]
                                       : const Color(0xFFBFAE01),

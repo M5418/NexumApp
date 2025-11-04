@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-import 'core/notifications_api.dart';
+import 'repositories/firebase/firebase_notification_repository.dart';
+import 'repositories/interfaces/notification_repository.dart';
 
 // Navigation targets
 import 'post_page.dart';
-import 'community_post_page.dart';
-import 'invitation_page.dart';
-import 'chat_page.dart';
-import 'models/message.dart' show ChatUser;
-import 'other_user_profile_page.dart';
 import 'responsive/responsive_breakpoints.dart';
 
 class NotificationPage extends StatefulWidget {
@@ -20,10 +15,10 @@ class NotificationPage extends StatefulWidget {
 }
 
 class _NotificationPageState extends State<NotificationPage> {
-  final _api = NotificationsApi();
+  final _repo = FirebaseNotificationRepository();
   bool _loading = true;
   String? _error;
-  List<AppNotification> _items = const [];
+  List<NotificationModel> _items = const [];
 
   @override
   void initState() {
@@ -37,7 +32,7 @@ class _NotificationPageState extends State<NotificationPage> {
       _error = null;
     });
     try {
-      final list = await _api.list(limit: 50, offset: 0);
+      final list = await _repo.getNotifications(limit: 50);
       setState(() {
         _items = list;
       });
@@ -62,25 +57,20 @@ class _NotificationPageState extends State<NotificationPage> {
     return d.year == y.year && d.month == y.month && d.day == y.day;
   }
 
-  // Map backend item to UI tile data
-  _NotificationUIItem _toUIItem(AppNotification n) {
-    final primaryText =
-        n.actorUsername.isNotEmpty ? n.actorUsername : n.actorName;
-    final actionText = n.actionText;
-    final previewText = n.previewText;
-    final timeLabel = n.timeLabel();
-    final trailingImageUrl = n.previewImageUrl;
-    final trailingChipLabel =
-        (n.type == 'connection_received') ? 'Connected' : null;
+  // Map Firebase notification to UI tile data
+  _NotificationUIItem _toUIItem(NotificationModel n) {
+    final primaryText = n.title;
+    final actionText = n.body;
+    final previewText = null as String?;
+    final timeLabel = _timeLabel(n.createdAt);
+    final trailingImageUrl = null as String?;
+    final trailingChipLabel = null as String?;
 
     return _NotificationUIItem(
       section: _isToday(n.createdAt)
           ? 'Today'
           : (_isYesterday(n.createdAt) ? 'Yesterday' : 'Yesterday'),
-      avatarUrls: [
-        if (n.actorAvatarUrl != null && n.actorAvatarUrl!.isNotEmpty)
-          n.actorAvatarUrl!
-      ],
+      avatarUrls: const [],
       primaryText: primaryText,
       actionText: actionText,
       previewText: previewText,
@@ -92,105 +82,40 @@ class _NotificationPageState extends State<NotificationPage> {
     );
   }
 
-  Future<void> _handleTap(AppNotification n) async {
+  String _timeLabel(DateTime dt) {
+    final n = DateTime.now();
+    final diff = n.difference(dt);
+    if (diff.inSeconds < 45) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}min ago';
+    if (diff.inHours < 24) return '${diff.inHours}hr ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.day} ${_monthLabel(dt.month)} ${dt.year}';
+  }
+
+  String _monthLabel(int m) {
+    const months = [
+      'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'
+    ];
+    return months[(m - 1).clamp(0, 11)];
+  }
+
+  Future<void> _handleTap(NotificationModel n) async {
     // Mark as read (non-blocking)
     try {
-      if (!n.isRead) await _api.markRead(n.id);
+      if (!n.isRead) await _repo.markAsRead(n.id);
     } catch (_) {
       // ignore
     }
 
-    // Navigate based on backend-provided navigateType and params
-    switch (n.navigateType) {
-      case 'post':
-        {
-          final postId = n.navigateParams['postId']?.toString();
-          if (postId != null && postId.isNotEmpty && mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => PostPage(postId: postId)),
-            );
-          }
-          break;
-        }
-      case 'community_post':
-        {
-          final communityId = n.navigateParams['communityId']?.toString();
-          final postId = n.navigateParams['postId']?.toString();
-          if (communityId != null &&
-              communityId.isNotEmpty &&
-              postId != null &&
-              postId.isNotEmpty &&
-              mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CommunityPostPage(
-                  communityId: communityId,
-                  postId: postId,
-                ),
-              ),
-            );
-          }
-          break;
-        }
-      case 'invitation':
-        {
-          // Optional: could deep-link to a specific invitation later using n.navigateParams['invitationId']
-          if (mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const InvitationPage()),
-            );
-          }
-          break;
-        }
-      case 'conversation':
-        {
-          final conversationId = n.navigateParams['conversationId']?.toString();
-          if (conversationId != null && conversationId.isNotEmpty && mounted) {
-            final other = ChatUser(
-              id: n.actorId,
-              name: n.actorName.isNotEmpty
-                  ? n.actorName
-                  : (n.actorUsername.isNotEmpty ? n.actorUsername : 'User'),
-              avatarUrl: n.actorAvatarUrl,
-            );
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ChatPage(
-                  otherUser: other,
-                  conversationId: conversationId,
-                ),
-              ),
-            );
-          }
-          break;
-        }
-      case 'user_profile':
-        {
-          final userId = (n.navigateParams['userId'] ?? n.actorId).toString();
-          if (userId.isNotEmpty && mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => OtherUserProfilePage(
-                  userId: userId,
-                  userName: n.actorName.isNotEmpty
-                      ? n.actorName
-                      : (n.actorUsername.isNotEmpty ? n.actorUsername : 'User'),
-                  userAvatarUrl: n.actorAvatarUrl ?? '',
-                  userBio: '',
-                ),
-              ),
-            );
-          }
-          break;
-        }
-      default:
-        // no-op
-        break;
+    // Minimal navigation for like/comment types when refId present
+    if (n.refId != null && n.refId!.isNotEmpty && mounted) {
+      if (n.type == NotificationType.like || n.type == NotificationType.comment) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => PostPage(postId: n.refId!)),
+        );
+      }
     }
   }
 

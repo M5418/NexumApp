@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../other_user_profile_page.dart';
-import '../core/connections_api.dart';
+import '../repositories/firebase/firebase_follow_repository.dart';
 
 class ConnectionCard extends StatefulWidget {
   final String userId;
@@ -201,16 +201,16 @@ class _ConnectionCardState extends State<ConnectionCard> {
                           child: ElevatedButton(
                             onPressed: () async {
                               final ctx = context;
-                              final api = ConnectionsApi();
+                              final repo = FirebaseFollowRepository();
                               final next = !isConnected;
                               setState(() {
                                 isConnected = next;
                               });
                               try {
                                 if (next) {
-                                  await api.connect(widget.userId);
+                                  await repo.followUser(widget.userId);
                                 } else {
-                                  await api.disconnect(widget.userId);
+                                  await repo.unfollowUser(widget.userId);
                                 }
                               } catch (e) {
                                 setState(() {

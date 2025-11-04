@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -34,7 +34,7 @@ import 'core/token_store.dart';
 import 'sign_in_page.dart';
 import 'core/auth_api.dart';
 import 'package:dio/dio.dart';
-import 'core/notifications_api.dart';
+import 'repositories/firebase/firebase_notification_repository.dart';
 import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
 import 'core/users_api.dart'; // Suggested users (right column)
@@ -192,7 +192,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   Future<void> _loadUnreadCount() async {
     try {
-      final c = await NotificationsApi().unreadCount();
+      final c = await FirebaseNotificationRepository().getUnreadCount();
       if (!mounted) return;
       setState(() {
         _unreadCount = c;

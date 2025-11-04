@@ -6,8 +6,9 @@ import 'models/post_detail.dart';
 import 'models/comment.dart';
 import 'models/post.dart';
 
-import 'core/community_posts_api.dart';
 import 'core/auth_api.dart';
+import 'repositories/firebase/firebase_post_repository.dart';
+import 'core/posts_api.dart';
 
 import 'widgets/media_carousel.dart';
 import 'widgets/auto_play_video.dart';
@@ -132,8 +133,36 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       _loadingPost = true;
     });
     try {
-      final p = await CommunityPostsApi()
-          .getPost(widget.communityId, widget.postId!);
+      final model = await FirebasePostRepository().getPost(widget.postId!);
+      final p = (model == null)
+          ? null
+          : Post(
+              id: model.id,
+              userName: '',
+              userAvatarUrl: '',
+              createdAt: model.createdAt,
+              text: model.text,
+              mediaType: model.mediaUrls.isEmpty
+                  ? MediaType.none
+                  : (model.mediaUrls.length == 1
+                      ? MediaType.image
+                      : MediaType.images),
+              imageUrls: model.mediaUrls,
+              videoUrl: null,
+              counts: PostCounts(
+                likes: model.summary.likes,
+                comments: model.summary.comments,
+                shares: model.summary.shares,
+                reposts: model.summary.reposts,
+                bookmarks: model.summary.bookmarks,
+              ),
+              userReaction: null,
+              isBookmarked: false,
+              isRepost:
+                  (model.repostOf != null && model.repostOf!.isNotEmpty),
+              repostedBy: null,
+              originalPostId: model.repostOf,
+            );
       if (p == null) {
         throw Exception('Post not found');
       }
@@ -163,8 +192,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       _loadingComments = true;
     });
     try {
-      final list = await CommunityPostsApi()
-          .listComments(widget.communityId, _post!.id);
+      final list = await PostsApi().listComments(_post!.id);
       if (!mounted) return;
       setState(() {
         _comments = list;
@@ -270,9 +298,9 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
 
     try {
       if (wasLiked) {
-        await CommunityPostsApi().unlike(widget.communityId, postId);
+        await PostsApi().unlike(postId);
       } else {
-        await CommunityPostsApi().like(widget.communityId, postId);
+        await PostsApi().like(postId);
       }
     } catch (e) {
       if (!mounted) return;
@@ -329,9 +357,9 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
 
     try {
       if (willBookmark) {
-        await CommunityPostsApi().bookmark(widget.communityId, postId);
+        await PostsApi().bookmark(postId);
       } else {
-        await CommunityPostsApi().unbookmark(widget.communityId, postId);
+        await PostsApi().unbookmark(postId);
       }
     } catch (e) {
       if (!mounted) return;
@@ -413,8 +441,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     List<Comment> comments = [];
     try {
-      comments = await CommunityPostsApi()
-          .listComments(widget.communityId, _post!.id);
+      comments = await PostsApi().listComments(_post!.id);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -436,8 +463,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       isDarkMode: isDark,
       onAddComment: (text) async {
         try {
-          await CommunityPostsApi()
-              .addComment(widget.communityId, _post!.id, content: text);
+          await PostsApi().addComment(_post!.id, content: text);
           // Optimistically increment comments count
           final original = _post!;
           final updatedCounts = PostCounts(
@@ -484,12 +510,8 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       },
       onReplyToComment: (commentId, replyText) async {
         try {
-          await CommunityPostsApi().addComment(
-            widget.communityId,
-            _post!.id,
-            content: replyText,
-            parentCommentId: commentId,
-          );
+          await PostsApi().addComment(_post!.id,
+              content: replyText, parentCommentId: commentId);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

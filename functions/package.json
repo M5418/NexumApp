@@ -1,0 +1,16 @@
+{
+  "name": "nexum-functions",
+  "private": true,
+  "engines": { "node": "22" },
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "lint": "echo 'No lint configured'"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.0"
+  }
+}

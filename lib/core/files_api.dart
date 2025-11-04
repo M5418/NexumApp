@@ -1,45 +1,29 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:dio/dio.dart';
-import 'api_client.dart';
+import 'dart:math';
+import 'package:firebase_storage/firebase_storage.dart' as fs;
 
 class FilesApi {
-  final Dio _dio = ApiClient().dio;
 
   Future<Map<String, String>> uploadFile(File file) async {
     final ext = _extensionOf(file.path);
 
     // 1) presign
-    final pres = await _dio.post(
-      '/api/files/presign-upload',
-      data: {'ext': ext},
-    );
-    final body = Map<String, dynamic>.from(pres.data);
-    final data = Map<String, dynamic>.from(body['data'] ?? {});
-    final putUrl = data['putUrl'] as String;
-    final key = data['key'] as String;
-    final readUrl = (data['readUrl'] ?? '').toString();
-    final publicUrl = (data['publicUrl'] ?? '').toString();
-    final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
+    final rand = Random();
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    final r = List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
+    final key = 'uploads/${DateTime.now().microsecondsSinceEpoch}-$r.$ext';
 
     // 2) upload to S3 via presigned URL
-    final bytes = await file.readAsBytes();
-    final s3 = Dio();
-    await s3.put(
-      putUrl,
-      data: Stream.fromIterable(bytes.map((b) => [b])),
-      options: Options(
-        headers: {
-          'Content-Type': _contentTypeForExt(ext),
-          'Content-Length': bytes.length,
-        },
-      ),
+    final ref = fs.FirebaseStorage.instance.ref(key);
+    await ref.putFile(
+      file,
+      fs.SettableMetadata(contentType: _contentTypeForExt(ext)),
     );
+    final bestUrl = await ref.getDownloadURL();
 
     // 3) confirm (non-blocking)
-    try {
-      await _dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
-    } catch (_) {}
+    try {} catch (_) {}
 
     return {'key': key, 'url': bestUrl};
   }
@@ -47,35 +31,21 @@ class FilesApi {
   // Web-friendly: upload raw bytes (e.g., from FilePicker on web)
   Future<Map<String, String>> uploadBytes(Uint8List bytes, {required String ext}) async {
     // 1) presign
-    final pres = await _dio.post(
-      '/api/files/presign-upload',
-      data: {'ext': ext},
-    );
-    final body = Map<String, dynamic>.from(pres.data);
-    final data = Map<String, dynamic>.from(body['data'] ?? {});
-    final putUrl = data['putUrl'] as String;
-    final key = data['key'] as String;
-    final readUrl = (data['readUrl'] ?? '').toString();
-    final publicUrl = (data['publicUrl'] ?? '').toString();
-    final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
+    final rand = Random();
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    final r = List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
+    final key = 'uploads/${DateTime.now().microsecondsSinceEpoch}-$r.$ext';
 
     // 2) upload bytes
-    final s3 = Dio();
-    await s3.put(
-      putUrl,
-      data: bytes,
-      options: Options(
-        headers: {
-          // Do not set Content-Length on web; browser will set it.
-          'Content-Type': _contentTypeForExt(ext),
-        },
-      ),
+    final ref = fs.FirebaseStorage.instance.ref(key);
+    await ref.putData(
+      bytes,
+      fs.SettableMetadata(contentType: _contentTypeForExt(ext)),
     );
+    final bestUrl = await ref.getDownloadURL();
 
     // 3) confirm (non-blocking)
-    try {
-      await _dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
-    } catch (_) {}
+    try {} catch (_) {}
 
     return {'key': key, 'url': bestUrl};
   }

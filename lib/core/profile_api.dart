@@ -1,34 +1,73 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:dio/dio.dart';
-import 'api_client.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:firebase_storage/firebase_storage.dart' as fs;
 
 class ProfileApi {
-  final _dio = ApiClient().dio;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
+  final fs.FirebaseStorage _storage = fs.FirebaseStorage.instance;
 
   Future<Map<String, dynamic>> me() async {
-    final res = await _dio.get('/api/profile/me');
-    return Map<String, dynamic>.from(res.data);
+    final u = _auth.currentUser;
+    if (u == null) return {'ok': false, 'error': 'unauthenticated'};
+    final doc = await _db.collection('users').doc(u.uid).get();
+    final data = _legacyFromFirestore(doc.data() ?? {});
+    return {'ok': true, 'data': {'id': u.uid, 'email': u.email, ...data}};
   }
+
   Future<Map<String, dynamic>> getByUserId(String userId) async {
-    final res = await _dio.get('/api/profile/$userId');
-    return Map<String, dynamic>.from(res.data);
+    final doc = await _db.collection('users').doc(userId).get();
+    final data = _legacyFromFirestore(doc.data() ?? {});
+    return {'ok': true, 'data': {'id': userId, ...data}};
   }
 
   Future<Map<String, dynamic>> update(Map<String, dynamic> data) async {
-    final res = await _dio.patch('/api/profile', data: data);
-    return Map<String, dynamic>.from(res.data);
+    final u = _auth.currentUser;
+    if (u == null) return {'ok': false, 'error': 'unauthenticated'};
+    final updates = <String, dynamic>{};
+    void setIf(String key, String newKey) {
+      if (data.containsKey(key)) updates[newKey] = data[key];
+    }
+    setIf('first_name', 'firstName');
+    setIf('last_name', 'lastName');
+    setIf('bio', 'bio');
+    setIf('profile_photo_url', 'avatarUrl');
+    setIf('cover_photo_url', 'coverUrl');
+    setIf('email', 'email');
+    if (data.containsKey('username')) {
+      final v = (data['username'] ?? '').toString();
+      updates['username'] = v;
+      updates['usernameLower'] = v.toLowerCase();
+    }
+    if (data.containsKey('interest_domains')) {
+      updates['interestDomains'] = List<String>.from(
+        (data['interest_domains'] as List?)?.map((e) => e.toString()) ?? const [],
+      );
+    }
+    for (final k in ['show_reposts', 'show_suggested_posts', 'prioritize_interests']) {
+      if (data.containsKey(k)) updates[k] = data[k];
+    }
+    updates['lastActive'] = FieldValue.serverTimestamp();
+    await _db.collection('users').doc(u.uid).set(updates, SetOptions(merge: true));
+    final fresh = await _db.collection('users').doc(u.uid).get();
+    final d = _legacyFromFirestore(fresh.data() ?? {});
+    return {'ok': true, 'data': {'id': u.uid, 'email': u.email, ...d}};
   }
 
   Future<String> uploadAndAttachProfilePhoto(File file) async {
-    final url = await uploadFile(file);
+    final ext = _extensionOf(file.path);
+    final bytes = await file.readAsBytes();
+    final url = await uploadBytes(bytes, ext: ext);
     await update({'profile_photo_url': url});
     return url;
   }
 
   Future<String> uploadAndAttachCoverPhoto(File file) async {
-    final url = await uploadFile(file);
+    final ext = _extensionOf(file.path);
+    final bytes = await file.readAsBytes();
+    final url = await uploadBytes(bytes, ext: ext);
     await update({'cover_photo_url': url});
     return url;
   }
@@ -40,61 +79,30 @@ class ProfileApi {
     return uploadBytes(bytes, ext: ext);
   }
 
-  // Web-friendly upload using raw bytes
+  // Web-friendly upload using raw bytes (Firebase Storage)
   Future<String> uploadBytes(Uint8List bytes, {required String ext}) async {
+    final u = _auth.currentUser;
+    if (u == null) throw Exception('unauthenticated');
     String resolvedExt = _normalizeExt(ext);
     const allowed = {
-      // images
       'jpg', 'jpeg', 'png', 'webp',
-      // docs
       'pdf', 'doc', 'docx', 'xls', 'xlsx',
-      // video
       'mp4',
-      // audio
       'm4a', 'mp3', 'wav', 'aac', 'webm',
     };
-
     if (!allowed.contains(resolvedExt)) {
       final sniffed = _detectExtFromBytes(bytes);
-      if (sniffed != null) {
-        resolvedExt = sniffed;
-      }
+      if (sniffed != null) resolvedExt = sniffed;
     }
     if (resolvedExt == 'jpeg') resolvedExt = 'jpg';
-    if (!allowed.contains(resolvedExt)) {
-      // safest default
-      resolvedExt = 'jpg';
-    }
+    if (!allowed.contains(resolvedExt)) resolvedExt = 'jpg';
 
-    // 1) Presign
-    final pres = await _dio.post('/api/files/presign-upload', data: {'ext': resolvedExt});
-    final body = Map<String, dynamic>.from(pres.data);
-    final data = Map<String, dynamic>.from(body['data'] ?? {});
-    final putUrl = data['putUrl'] as String;
-    final key = data['key'] as String;
-    final readUrl = (data['readUrl'] ?? '').toString();
-    final publicUrl = (data['publicUrl'] ?? '').toString();
-    final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
-
-    // 2) Upload to S3
     final contentType = _contentTypeForExt(resolvedExt);
-    final s3 = Dio();
-    await s3.put(
-      putUrl,
-      data: kIsWeb ? bytes : Stream.fromIterable(bytes.map((b) => [b])),
-      options: Options(
-        headers: kIsWeb
-            ? {'Content-Type': contentType}
-            : {'Content-Type': contentType, 'Content-Length': bytes.length},
-      ),
-    );
-
-    // 3) Confirm (best-effort)
-    try {
-      await _dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
-    } catch (_) {}
-
-    return bestUrl;
+    final path = 'uploads/${u.uid}/profile/${DateTime.now().microsecondsSinceEpoch}.$resolvedExt';
+    final ref = _storage.ref(path);
+    await ref.putData(bytes, fs.SettableMetadata(contentType: contentType));
+    final url = await ref.getDownloadURL();
+    return url;
   }
 
   String? _detectExtFromBytes(Uint8List b) {
@@ -173,5 +181,19 @@ class ProfileApi {
       default:
         return 'application/octet-stream';
     }
+  }
+
+  Map<String, dynamic> _legacyFromFirestore(Map<String, dynamic> d) {
+    final out = Map<String, dynamic>.from(d);
+    void mapKey(String from, String to) {
+      if (d.containsKey(from)) out[to] = d[from];
+    }
+    mapKey('firstName', 'first_name');
+    mapKey('lastName', 'last_name');
+    mapKey('avatarUrl', 'profile_photo_url');
+    mapKey('coverUrl', 'cover_photo_url');
+    mapKey('interestDomains', 'interest_domains');
+    mapKey('professionalExperiences', 'professional_experiences');
+    return out;
   }
 }

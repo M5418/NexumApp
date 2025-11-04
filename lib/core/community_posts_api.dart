@@ -8,8 +8,14 @@ class CommunityPostsApi {
   final Dio _dio = ApiClient().dio;
 
   // List posts for a community
-  Future<List<Post>> list(String communityId, {int limit = 20, int offset = 0}) async {
-    debugPrint('🧩 CommunityPostsApi.list: communityId=$communityId, limit=$limit, offset=$offset');
+  Future<List<Post>> list(
+    String communityId, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    debugPrint(
+      '🧩 CommunityPostsApi.list: communityId=$communityId, limit=$limit, offset=$offset',
+    );
 
     final res = await _dio.get(
       '/api/communities/$communityId/posts',
@@ -25,7 +31,7 @@ class CommunityPostsApi {
 
     debugPrint('🧩 CommunityPostsApi.list: parsed ${posts.length} posts');
     return posts;
-    }
+  }
 
   // Create a post in a community
   Future<Map<String, dynamic>> create({
@@ -39,8 +45,12 @@ class CommunityPostsApi {
     final payload = <String, dynamic>{'content': content};
 
     if (media != null && media.isNotEmpty) {
-      final images = media.where((m) => (m['type'] ?? '').toString() == 'image').toList();
-      final videos = media.where((m) => (m['type'] ?? '').toString() == 'video').toList();
+      final images = media
+          .where((m) => (m['type'] ?? '').toString() == 'image')
+          .toList();
+      final videos = media
+          .where((m) => (m['type'] ?? '').toString() == 'video')
+          .toList();
 
       if (videos.isNotEmpty) {
         payload['post_type'] = 'text_video';
@@ -60,7 +70,10 @@ class CommunityPostsApi {
 
     if (repostOf != null) payload['repost_of'] = repostOf;
 
-    final res = await _dio.post('/api/communities/$communityId/posts', data: payload);
+    final res = await _dio.post(
+      '/api/communities/$communityId/posts',
+      data: payload,
+    );
     return Map<String, dynamic>.from(res.data ?? {});
   }
 
@@ -80,7 +93,10 @@ class CommunityPostsApi {
           p = Map<String, dynamic>.from(raw['post']);
         }
       }
-      return p != null ? _toPost(p) : null;
+      if (p != null) {
+        return _toPost(p);
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -121,7 +137,9 @@ class CommunityPostsApi {
 
   // Comments
   Future<List<Comment>> listComments(String communityId, String postId) async {
-    final res = await _dio.get('/api/communities/$communityId/posts/$postId/comments');
+    final res = await _dio.get(
+      '/api/communities/$communityId/posts/$postId/comments',
+    );
     final body = Map<String, dynamic>.from(res.data ?? {});
     final data = Map<String, dynamic>.from(body['data'] ?? {});
     final list = (data['comments'] as List<dynamic>? ?? [])
@@ -215,29 +233,50 @@ class CommunityPostsApi {
     if (parentCommentId != null && parentCommentId.isNotEmpty) {
       payload['parent_comment_id'] = parentCommentId;
     }
-    await _dio.post('/api/communities/$communityId/posts/$postId/comments', data: payload);
+    await _dio.post(
+      '/api/communities/$communityId/posts/$postId/comments',
+      data: payload,
+    );
   }
 
-  Future<void> likeComment(String communityId, String postId, String commentId) async {
-    await _dio.post('/api/communities/$communityId/posts/$postId/comments/$commentId/like');
+  Future<void> likeComment(
+    String communityId,
+    String postId,
+    String commentId,
+  ) async {
+    await _dio.post(
+      '/api/communities/$communityId/posts/$postId/comments/$commentId/like',
+    );
   }
 
-  Future<void> unlikeComment(String communityId, String postId, String commentId) async {
-    await _dio.delete('/api/communities/$communityId/posts/$postId/comments/$commentId/like');
+  Future<void> unlikeComment(
+    String communityId,
+    String postId,
+    String commentId,
+  ) async {
+    await _dio.delete(
+      '/api/communities/$communityId/posts/$postId/comments/$commentId/like',
+    );
   }
 
-  Future<void> deleteComment(String communityId, String postId, String commentId) async {
-    await _dio.delete('/api/communities/$communityId/posts/$postId/comments/$commentId');
+  Future<void> deleteComment(
+    String communityId,
+    String postId,
+    String commentId,
+  ) async {
+    await _dio.delete(
+      '/api/communities/$communityId/posts/$postId/comments/$commentId',
+    );
   }
 
   // Copy of PostsApi._toPost to keep structure identical
   Post _toPost(Map<String, dynamic> p) {
     final original = Map<String, dynamic>.from(
       p['original_post'] ??
-      p['originalPost'] ??
-      p['original'] ??
-      p['repost_of_post'] ??
-      {},
+          p['originalPost'] ??
+          p['original'] ??
+          p['repost_of_post'] ??
+          {},
     );
 
     Map<String, dynamic> syntheticOriginal = {};
@@ -265,8 +304,9 @@ class CommunityPostsApi {
       }
     }
 
-    final contentSource =
-        original.isNotEmpty ? original : (syntheticOriginal.isNotEmpty ? syntheticOriginal : p);
+    final contentSource = original.isNotEmpty
+        ? original
+        : (syntheticOriginal.isNotEmpty ? syntheticOriginal : p);
 
     Map<String, dynamic> authorFrom(Map<String, dynamic> src) {
       final a = Map<String, dynamic>.from(src['author'] ?? {});
@@ -392,49 +432,56 @@ class CommunityPostsApi {
 
     final repostAuthorRaw = Map<String, dynamic>.from(
       p['repost_author'] ??
-      p['reposter'] ??
-      p['reposted_by_user'] ??
-      p['repostAuthor'] ??
-      p['repost_user'] ??
-      {},
+          p['reposter'] ??
+          p['reposted_by_user'] ??
+          p['repostAuthor'] ??
+          p['repost_user'] ??
+          {},
     );
 
     final isRepost =
-        p['repost_of'] != null || (p['is_repost'] == true || p['isRepost'] == true);
+        p['repost_of'] != null ||
+        (p['is_repost'] == true || p['isRepost'] == true);
 
-    final originalPostId = (p['repost_of'] ??
-        p['repostOf'] ??
-        original['id'] ??
-        original['post_id'] ??
-        original['postId'])
-        ?.toString();
+    final originalPostId =
+        (p['repost_of'] ??
+                p['repostOf'] ??
+                original['id'] ??
+                original['post_id'] ??
+                original['postId'])
+            ?.toString();
 
     final isSelfRepostRow = (me['is_repost_author'] == true);
 
     final repostedBy = repostAuthorRaw.isNotEmpty
         ? RepostedBy(
             userName:
-                (repostAuthorRaw['name'] ?? repostAuthorRaw['username'] ?? 'User')
+                (repostAuthorRaw['name'] ??
+                        repostAuthorRaw['username'] ??
+                        'User')
                     .toString(),
             userAvatarUrl:
-                (repostAuthorRaw['avatarUrl'] ?? repostAuthorRaw['avatar_url'] ?? '')
+                (repostAuthorRaw['avatarUrl'] ??
+                        repostAuthorRaw['avatar_url'] ??
+                        '')
                     .toString(),
             actionType: isSelfRepostRow ? 'reposted this' : null,
           )
         : null;
 
-    final authorName =
-        (author['name'] ?? author['username'] ?? 'User').toString();
-    final authorAvatar =
-        (author['avatarUrl'] ?? author['avatar_url'] ?? '').toString();
-
-    final text = (contentSource['content'] ??
-        contentSource['text'] ??
-        p['original_content'] ??
-        p['text'] ??
-        p['content'] ??
-        '')
+    final authorName = (author['name'] ?? author['username'] ?? 'User')
         .toString();
+    final authorAvatar = (author['avatarUrl'] ?? author['avatar_url'] ?? '')
+        .toString();
+
+    final text =
+        (contentSource['content'] ??
+                contentSource['text'] ??
+                p['original_content'] ??
+                p['text'] ??
+                p['content'] ??
+                '')
+            .toString();
 
     return Post(
       id: (p['id'] ?? '').toString(),

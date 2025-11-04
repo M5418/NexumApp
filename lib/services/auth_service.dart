@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../core/token_store.dart';
-import '../core/auth_api.dart';
-import '../core/profile_api.dart';
-import '../core/api_client.dart';
+import '../repositories/firebase/firebase_auth_repository.dart';
+import '../repositories/firebase/firebase_user_repository.dart';
+import '../repositories/firebase/firebase_notification_repository.dart';
+import 'package:firebase_messaging/firebase_messaging.dart' as fm;
 
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
@@ -16,6 +17,11 @@ class AuthService extends ChangeNotifier {
   String? _userEmail;
   String? _avatarUrl;
 
+  final FirebaseAuthRepository _fbAuth = FirebaseAuthRepository();
+  final FirebaseUserRepository _fbUsers = FirebaseUserRepository();
+  final FirebaseNotificationRepository _fbNotifs = FirebaseNotificationRepository();
+  StreamSubscription? _fbAuthSub;
+
   bool get isLoggedIn => _isLoggedIn;
   String? get userId => _userId;
   String? get userToken => _userToken;
@@ -25,47 +31,64 @@ class AuthService extends ChangeNotifier {
 
   /// Initialize auth service and check for existing login
   Future<void> initialize() async {
-    final token = await TokenStore.read();
-    if (token != null && token.isNotEmpty) {
-      _userToken = token;
-      final ok = await validateSession();
-      _isLoggedIn = ok;
-      if (ok) {
+    _fbAuthSub ??= _fbAuth.authStateChanges.listen((u) async {
+      _userId = u?.uid;
+      _userEmail = u?.email;
+      _isLoggedIn = u != null;
+      if (_isLoggedIn) {
         await refreshUser();
-      } else {
-        await signOut();
       }
-    } else {
-      _isLoggedIn = false;
-      _userToken = null;
+      notifyListeners();
+    });
+
+    final fbUser = _fbAuth.currentUser;
+    _isLoggedIn = fbUser != null;
+    if (_isLoggedIn) {
+      _userId = fbUser!.uid;
+      _userEmail = fbUser.email;
+      await refreshUser();
     }
     notifyListeners();
+  }
+
+  Future<void> _setupMessaging() async {
+    final fu = _fbAuth.currentUser;
+    if (fu == null) return;
+    final settings = await fm.FirebaseMessaging.instance.requestPermission();
+    if (settings.authorizationStatus == fm.AuthorizationStatus.denied) return;
+    final token = await fm.FirebaseMessaging.instance.getToken();
+    if (token != null && token.isNotEmpty) {
+      await _fbUsers.updateFCMToken(token);
+      await _fbNotifs.subscribeTopic('direct:user:${fu.uid}');
+      await _fbNotifs.subscribeTopic('feed:new-post');
+      await _fbNotifs.subscribeTopic('system:announcements');
+    }
   }
 
   /// Fetch current user id/email and profile; notify listeners
   Future<void> refreshUser() async {
     try {
-      final me = await AuthApi().me(); // { ok, data: { id, email } }
-      final data = Map<String, dynamic>.from(me['data'] ?? {});
-      _userId = data['id']?.toString();
-      _userEmail = data['email']?.toString();
-    } catch (e) {
-      debugPrint('AuthService.refreshUser auth error: $e');
-    }
-
-    try {
-      final prof = await ProfileApi().me(); // { ok, ... } or minimal
-      final pd = Map<String, dynamic>.from(prof['data'] ?? prof);
-      final first = (pd['first_name'] ?? '').toString().trim();
-      final last = (pd['last_name'] ?? '').toString().trim();
-      final username = (pd['username'] ?? '').toString().trim();
-      _userName = [first, last].where((s) => s.isNotEmpty).join(' ');
-      if (_userName == null || _userName!.isEmpty) {
-        _userName = username.isNotEmpty ? username : (_userEmail ?? 'User');
+      final fu = _fbAuth.currentUser;
+      if (fu != null) {
+        _userId = fu.uid;
+        _userEmail = fu.email;
+        final prof = await _fbUsers.getCurrentUserProfile();
+        if (prof != null) {
+          final first = (prof.firstName ?? '').trim();
+          final last = (prof.lastName ?? '').trim();
+          final dn = (prof.displayName ?? '').trim();
+          _userName = [first, last].where((s) => s.isNotEmpty).join(' ');
+          if (_userName == null || _userName!.isEmpty) {
+            _userName = dn.isNotEmpty ? dn : (_userEmail ?? 'User');
+          }
+          _avatarUrl = prof.avatarUrl ?? _avatarUrl;
+          await _setupMessaging();
+          notifyListeners();
+          return;
+        }
       }
-      _avatarUrl = (pd['profile_photo_url'] as String?) ?? _avatarUrl;
     } catch (e) {
-      debugPrint('AuthService.refreshUser profile error: $e');
+      debugPrint('AuthService.refreshUser firebase error: $e');
     }
 
     notifyListeners();
@@ -91,10 +114,20 @@ class AuthService extends ChangeNotifier {
       _userEmail = null;
       _avatarUrl = null;
       try {
-        await AuthApi().logout();
+        await _fbAuth.signOut();
       } catch (_) {}
-      await TokenStore.clear();
-      ApiClient().dio.options.headers.remove('Authorization');
+      try {
+        final t = await fm.FirebaseMessaging.instance.getToken();
+        if (t != null && t.isNotEmpty) {
+          await _fbUsers.removeFCMToken(t);
+        }
+        final uid = _userId;
+        if (uid != null && uid.isNotEmpty) {
+          await _fbNotifs.unsubscribeTopic('direct:user:$uid');
+        }
+        await _fbNotifs.unsubscribeTopic('feed:new-post');
+        await _fbNotifs.unsubscribeTopic('system:announcements');
+      } catch (_) {}
       notifyListeners();
     } catch (e) {
       debugPrint('Sign out error: $e');
@@ -114,23 +147,7 @@ class AuthService extends ChangeNotifier {
 
   /// Optional: validate session
   Future<bool> validateSession() async {
-    if (_userToken == null || _userToken!.isEmpty) {
-      return false;
-    }
-    try {
-      final me = await AuthApi().me();
-      final data = Map<String, dynamic>.from(me['data'] ?? {});
-      _userId = data['id']?.toString();
-      _userEmail = data['email']?.toString();
-      final ok = me['ok'] == true && (_userId != null && _userId!.isNotEmpty);
-      if (!ok) {
-        await signOut();
-      }
-      return ok;
-    } catch (e) {
-      debugPrint('Session validation error: $e');
-      await signOut();
-      return false;
-    }
+    final fu = _fbAuth.currentUser;
+    return fu != null;
   }
 }

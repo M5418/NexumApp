@@ -4,12 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'sign_up_page.dart';
 import 'forgot_password_page.dart';
-import 'core/auth_api.dart';
-import 'core/token_store.dart';
 import 'home_feed_page.dart';
 import 'theme_provider.dart';
-import 'core/api_client.dart';
-import 'services/auth_service.dart';
+import 'repositories/interfaces/auth_repository.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -63,48 +60,33 @@ class _SignInPageState extends State<SignInPage> {
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
-      final authApi = AuthApi();
+      final repo = context.read<AuthRepository>();
+      final res = await repo.signInWithEmail(email: email, password: password);
 
-      final response = await authApi.login(email, password);
-
-      if (response['ok'] == true && response['data'] != null) {
-        final token = response['data']['token'] as String?;
-        if (token != null) {
-          await TokenStore.write(token);
-          // Ensure Authorization header is set immediately for subsequent requests
-          ApiClient().dio.options.headers['Authorization'] = 'Bearer $token';
-          
-          // Notify AuthService that user is logged in
-          AuthService().setLoggedIn(token);
-          await AuthService().refreshUser();
-          
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const HomeFeedPage()),
-            );
-          }
-        } else {
-          throw Exception('No token received');
+      if (res.success) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeFeedPage()),
+          );
         }
       } else {
         if (mounted) {
-          final err = (response['error'] as String?) ?? 'invalid_credentials';
+          final err = res.error ?? 'invalid_credentials';
           String msg;
           switch (err) {
-            case 'invalid_credentials':
+            case 'invalid-credential':
+            case 'wrong-password':
+            case 'user-not-found':
               msg = 'Invalid email or password';
               break;
-            case 'validation_error':
+            case 'invalid-email':
               msg = 'Please enter a valid email and password';
               break;
-            case 'internal_error':
-              msg = 'Server error. Please try again later.';
-              break;
-            case 'network_error':
-              msg = 'Cannot reach server. Check API base URL and that the backend is running.';
+            case 'too-many-requests':
+              msg = 'Too many attempts. Try again later.';
               break;
             default:
-              msg = err;
+              msg = 'Sign in failed: $err';
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

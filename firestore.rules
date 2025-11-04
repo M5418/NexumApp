@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    // Helper functions
+    function signedIn() { 
+      return request.auth != null; 
+    }
+    
+    function isOwner(uid) { 
+      return signedIn() && request.auth.uid == uid; 
+    }
+    
+    function hasRole(role) {
+      return signedIn() && request.auth.token[role] == true;
+    }
+    
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    // User profiles
+    match /users/{uid} {
+      allow read: if true;                       // Public profiles
+      allow create: if isOwner(uid);             // User creates own profile
+      allow update: if isOwner(uid) || isAdmin(); // User or admin can update
+      allow delete: if isOwner(uid) || isAdmin(); // User or admin can delete
+    }
+    
+    // Posts
+    match /posts/{postId} {
+      allow read: if true;                       // Public posts
+      allow create: if signedIn();               // Authenticated users can post
+      allow update: if signedIn() && 
+        (request.auth.uid == resource.data.authorId || isAdmin());
+      allow delete: if signedIn() && 
+        (request.auth.uid == resource.data.authorId || isAdmin());
+    }
+    
+    // Post counter shards
+    match /posts/{postId}/counters/{shardId} {
+      allow read: if true;
+      allow write: if signedIn();                // Should be via Functions ideally
+    }
+    
+    // Comments
+    match /comments/{commentId} {
+      allow read: if true;                       // Public comments
+      allow create: if signedIn();
+      allow update: if signedIn() && 
+        (request.auth.uid == resource.data.authorId || isAdmin());
+      allow delete: if signedIn() && 
+        (request.auth.uid == resource.data.authorId || isAdmin());
+    }
+    
+    // Likes (composite key: postId_userId)
+    match /likes/{id} {
+      allow read: if true;
+      allow create: if signedIn() && 
+        request.auth.uid == request.resource.data.userId;
+      allow delete: if signedIn() && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // Bookmarks
+    match /bookmarks/{id} {
+      allow read: if signedIn() && 
+        request.auth.uid == resource.data.userId;
+      allow create: if signedIn() && 
+        request.auth.uid == request.resource.data.userId;
+      allow delete: if signedIn() && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // Follows
+    match /follows/{id} {
+      allow read: if true;                       // Public follow relationships
+      allow create: if signedIn() && 
+        request.auth.uid == request.resource.data.followerId;
+      allow delete: if signedIn() && 
+        request.auth.uid == resource.data.followerId;
+    }
+    
+    // Notifications
+    match /notifications/{id} {
+      allow read: if signedIn() && 
+        request.auth.uid == resource.data.userId;
+      allow create: if signedIn();               // Usually via Functions
+      allow update: if signedIn() && 
+        request.auth.uid == resource.data.userId && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow delete: if signedIn() && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // Chat messages
+    match /chats/{chatId} {
+      allow read: if signedIn();                 // TODO: Restrict to participants
+      allow write: if signedIn();                // TODO: Restrict to participants
+      
+      match /messages/{msgId} {
+        allow read: if signedIn();               // TODO: Restrict to participants
+        allow create: if signedIn() && 
+          request.auth.uid == request.resource.data.senderId;
+        allow update: if false;                  // Messages are immutable
+        allow delete: if signedIn() && 
+          request.auth.uid == resource.data.senderId;
+      }
+    }
+    
+    // Communities
+    match /communities/{communityId} {
+      allow read: if true;                       // Public communities
+      allow create: if signedIn();
+      allow update: if signedIn() && 
+        (request.auth.uid == resource.data.creatorId || isAdmin());
+      allow delete: if isAdmin();
+      
+      // Community posts
+      match /posts/{postId} {
+        allow read: if true;
+        allow create: if signedIn();             // TODO: Check membership
+        allow update: if signedIn() && 
+          request.auth.uid == resource.data.authorId;
+        allow delete: if signedIn() && 
+          (request.auth.uid == resource.data.authorId || isAdmin());
+      }
+    }
+  }
+}

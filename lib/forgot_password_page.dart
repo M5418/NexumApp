@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'password_reset_sent_page.dart';
+import 'package:provider/provider.dart';
+import 'repositories/interfaces/auth_repository.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -137,16 +139,38 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                           width: double.infinity,
                           height: 52,
                           child: ElevatedButton(
-                            onPressed: () {
-                              // Navigate to password reset sent page
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => PasswordResetSentPage(
-                                    email: _emailController.text.trim(),
+                            onPressed: () async {
+                              final email = _emailController.text.trim();
+                              if (email.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Enter your email', style: GoogleFonts.inter()),
+                                    backgroundColor: Colors.red,
                                   ),
-                                ),
-                              );
+                                );
+                                return;
+                              }
+                              try {
+                                final repo = context.read<AuthRepository>();
+                                await repo.sendPasswordResetEmail(email);
+                                if (mounted) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PasswordResetSentPage(email: email),
+                                    ),
+                                  );
+                                }
+                              } catch (_) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to send reset email', style: GoogleFonts.inter()),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFBFAE01),
