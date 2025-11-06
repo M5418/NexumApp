@@ -16,7 +16,7 @@ import 'conversations_page.dart';
 import 'profile_page.dart';
 import 'post_page.dart';
 import 'core/posts_api.dart';
-import 'core/stories_api.dart' as stories_api;
+import 'repositories/interfaces/story_repository.dart';
 import 'models/post.dart';
 import 'models/comment.dart';
 import 'theme_provider.dart';
@@ -30,10 +30,8 @@ import 'podcasts/podcasts_home_page.dart';
 import 'books/books_home_page.dart';
 import 'mentorship/mentorship_home_page.dart';
 import 'video_scroll_page.dart';
-import 'core/token_store.dart';
-import 'sign_in_page.dart';
-import 'core/auth_api.dart';
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'repositories/firebase/firebase_notification_repository.dart';
 import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
@@ -50,7 +48,7 @@ class HomeFeedPage extends StatefulWidget {
 class _HomeFeedPageState extends State<HomeFeedPage> {
   int _selectedNavIndex = 0;
   List<Post> _posts = [];
-  List<stories_api.StoryRing> _storyRings = [];
+  List<StoryRingModel> _storyRings = [];
   List<Map<String, dynamic>> _suggestedUsers = [];
   int _conversationsInitialTabIndex = 0; // 0: Chats, 1: Communities
   String? _currentUserId;
@@ -105,17 +103,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     super.dispose();
   }
 
-  Future<void> _ensureAuth() async {
-    final t = await TokenStore.read();
-    if (t == null || t.isEmpty) {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const SignInPage()),
-        );
-      }
-    }
-  }
-
   bool _useDesktopPopup(BuildContext context) {
     if (kIsWeb) {
       // On web, use width to decide "desktop" vs "mobile"
@@ -130,10 +117,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   Future<void> _loadCurrentUserId() async {
     try {
-      final res = await AuthApi().me();
-      final id = (res['ok'] == true && res['data'] != null)
-          ? res['data']['id'] as String?
-          : null;
+      final u = fb.FirebaseAuth.instance.currentUser;
+      final id = u?.uid;
       if (!mounted) return;
       setState(() {
         _currentUserId = id;
@@ -207,7 +192,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   Future<void> _loadData() async {
     List<Post> posts = [];
-    List<stories_api.StoryRing> rings = [];
+    // removed unused _myStoriesRing
+    final storyRepo = context.read<StoryRepository>();
+    List<StoryRingModel> rings = [];
     String? errMsg;
 
     // Refresh preferences before fetching/applying filters
@@ -223,7 +210,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
 
     try {
-      rings = await stories_api.StoriesApi().getRings();
+      rings = await storyRepo.getStoryRings();
     } catch (e) {
       final s = 'Stories failed: ${_toError(e)}';
       errMsg = errMsg == null ? s : '$errMsg | $s';
@@ -233,14 +220,15 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     if (_currentUserId != null &&
         !rings.any((r) => r.userId == _currentUserId)) {
       rings = [
-        stories_api.StoryRing(
+        StoryRingModel(
           userId: _currentUserId!,
-          name: '',
-          username: '',
+          userName: '',
+          userAvatar: null,
           hasUnseen: false,
           lastStoryAt: DateTime.now(),
           thumbnailUrl: null,
           storyCount: 0,
+          stories: const [],
         ),
         ...rings,
       ];
@@ -808,6 +796,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                   .contains('already')));
 
       if (isAlreadyReposted) {
+        if (!mounted) return;
         final remove = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -1214,14 +1203,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                   return Row(
                     children: [
                       story_widget.StoryRing(
-                        imageUrl: ring.thumbnailUrl ?? ring.avatarUrl,
+                        imageUrl: ring.thumbnailUrl ?? ring.userAvatar,
                         label: isMine
                             ? 'Your Story'
-                            : (ring.name.isNotEmpty
-                                ? ring.name
-                                : (ring.username.startsWith('@')
-                                    ? ring.username
-                                    : '@${ring.username}')),
+                            : (ring.userName.isNotEmpty
+                                ? ring.userName
+                                : '@user'),
                         isMine: isMine,
                         isSeen: !ring.hasUnseen,
                         onAddTap: isMine
@@ -1321,8 +1308,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     .map((r) => {
                                           'userId': r.userId,
                                           'imageUrl':
-                                              r.thumbnailUrl ?? r.avatarUrl,
-                                          'label': r.name,
+                                              r.thumbnailUrl ?? r.userAvatar,
+                                          'label': r.userName,
                                           'isMine': r.userId == _currentUserId,
                                           'isSeen': !r.hasUnseen,
                                         })
@@ -1338,8 +1325,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                         .map((r) => {
                                               'userId': r.userId,
                                               'imageUrl':
-                                                  r.thumbnailUrl ?? r.avatarUrl,
-                                              'label': r.name,
+                                                  r.thumbnailUrl ?? r.userAvatar,
+                                              'label': r.userName,
                                               'isMine':
                                                   r.userId == _currentUserId,
                                               'isSeen': !r.hasUnseen,
@@ -1652,14 +1639,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                 right: index < _storyRings.length - 1 ? 16 : 0,
                               ),
                               child: story_widget.StoryRing(
-                                imageUrl: ring.thumbnailUrl ?? ring.avatarUrl,
+                                imageUrl: ring.thumbnailUrl ?? ring.userAvatar,
                                 label: isMine
                                     ? 'Your Story'
-                                    : (ring.name.isNotEmpty
-                                        ? ring.name
-                                        : (ring.username.startsWith('@')
-                                            ? ring.username
-                                            : '@${ring.username}')),
+                                    : (ring.userName.isNotEmpty
+                                        ? ring.userName
+                                        : '@user'),
                                 isMine: isMine,
                                 isSeen: !ring.hasUnseen,
 
@@ -1768,8 +1753,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                             .map((r) => {
                                                   'userId': r.userId,
                                                   'imageUrl': r.thumbnailUrl ??
-                                                      r.avatarUrl,
-                                                  'label': r.name,
+                                                      r.userAvatar,
+                                                  'label': r.userName,
                                                   'isMine': r.userId ==
                                                       _currentUserId,
                                                   'isSeen': !r.hasUnseen,
@@ -1787,8 +1772,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                                       'userId': r.userId,
                                                       'imageUrl':
                                                           r.thumbnailUrl ??
-                                                              r.avatarUrl,
-                                                      'label': r.name,
+                                                              r.userAvatar,
+                                                      'label': r.userName,
                                                       'isMine': r.userId ==
                                                           _currentUserId,
                                                       'isSeen': !r.hasUnseen,

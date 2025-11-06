@@ -15,9 +15,10 @@ import 'conversation_search_page.dart';
 import 'notification_page.dart';
 import 'profile_page.dart';
 
-import 'core/conversations_api.dart';
-import 'core/communities_api.dart';
-import 'core/notifications_api.dart';
+import 'package:provider/provider.dart';
+import 'repositories/interfaces/conversation_repository.dart';
+import 'repositories/interfaces/community_repository.dart';
+import 'repositories/firebase/firebase_notification_repository.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'core/time_utils.dart';
 
@@ -47,8 +48,8 @@ class _ConversationsPageState extends State<ConversationsPage>
   int _selectedTabIndex = 0;
 
   // APIs
-  final ConversationsApi _conversationsApi = ConversationsApi();
-  final CommunitiesApi _communitiesApi = CommunitiesApi();
+  late ConversationRepository _convRepo;
+  late CommunityRepository _commRepo;
 
   // Notifications badge
   int _unreadNotifications = 0;
@@ -70,6 +71,8 @@ class _ConversationsPageState extends State<ConversationsPage>
   @override
   void initState() {
     super.initState();
+    _convRepo = context.read<ConversationRepository>();
+    _commRepo = context.read<CommunityRepository>();
     _tabController = TabController(
       length: 2,
       vsync: this,
@@ -99,7 +102,7 @@ class _ConversationsPageState extends State<ConversationsPage>
 
   Future<void> _loadUnreadNotifications() async {
     try {
-      final c = await NotificationsApi().unreadCount();
+      final c = await FirebaseNotificationRepository().getUnreadCount();
       if (!mounted) return;
       setState(() => _unreadNotifications = c);
     } catch (_) {
@@ -139,7 +142,7 @@ String _formatTime(DateTime? dt) {
         _loadingConversations = true;
         _errorConversations = null;
       });
-      final list = await _conversationsApi.list();
+      final list = await _convRepo.list();
       if (!mounted) return;
       final mapped = list
           .map(
@@ -182,7 +185,7 @@ String _formatTime(DateTime? dt) {
         _loadingCommunities = true;
         _errorCommunities = null;
       });
-      final list = await _communitiesApi.listMine();
+      final list = await _commRepo.listMine();
       if (!mounted) return;
       final mapped = list
           .map(
@@ -224,7 +227,7 @@ String _formatTime(DateTime? dt) {
         if (idx != -1) _chats[idx] = _chats[idx].copyWith(unreadCount: 0);
       });
       try {
-        await _conversationsApi.markRead(item.conversationId);
+        await _convRepo.markRead(item.conversationId);
       } catch (_) {}
     } else {
       await _navigateToChat(item);
@@ -349,9 +352,9 @@ String _formatTime(DateTime? dt) {
                   Navigator.pop(ctx);
                   try {
                     if (item.muted) {
-                      await _conversationsApi.unmute(item.conversationId);
+                      await _convRepo.unmute(item.conversationId);
                     } else {
-                      await _conversationsApi.mute(item.conversationId);
+                      await _convRepo.mute(item.conversationId);
                     }
                     if (!ctx.mounted) return;
                     setState(() {
@@ -377,7 +380,7 @@ String _formatTime(DateTime? dt) {
                   final ctx = context;
                   Navigator.pop(ctx);
                   try {
-                    await _conversationsApi.markRead(item.conversationId);
+                    await _convRepo.markRead(item.conversationId);
                     if (!ctx.mounted) return;
                     setState(() {
                       final idx = _chats.indexWhere(
@@ -402,7 +405,7 @@ String _formatTime(DateTime? dt) {
                   final ctx = context;
                   Navigator.pop(ctx);
                   try {
-                    await _conversationsApi.delete(item.conversationId);
+                    await _convRepo.delete(item.conversationId);
                     if (!ctx.mounted) return;
                     setState(() {
                       _chats.removeWhere(

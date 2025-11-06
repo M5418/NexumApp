@@ -1,8 +1,8 @@
 // c:\Users\dehou\nexum-app\lib\mentorship\mentorship_conversations_page.dart
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/mentorship_api.dart';
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/mentorship_repository.dart';
 import 'mentorship_chat_page.dart';
 import '../core/time_utils.dart';
 
@@ -13,14 +13,15 @@ class MentorshipConversationsPage extends StatefulWidget {
 }
 
 class _MentorshipConversationsPageState extends State<MentorshipConversationsPage> {
-  final _api = MentorshipApi();
+  late MentorshipRepository _repo;
   bool _loading = true;
   String? _error;
-  List<MentorshipConversationSummary> _items = [];
+  List<MentorshipConversationModel> _items = [];
 
   @override
   void initState() {
     super.initState();
+    _repo = context.read<MentorshipRepository>();
     _load();
   }
 
@@ -30,19 +31,12 @@ class _MentorshipConversationsPageState extends State<MentorshipConversationsPag
       _error = null;
     });
     try {
-      final list = await _api.listConversations();
+      final list = await _repo.listConversations();
       if (!mounted) return;
       setState(() => _items = list);
     } catch (e) {
       if (!mounted) return;
-      String msg = 'Failed to load conversations';
-      if (e is DioException) {
-        final code = e.response?.statusCode;
-        msg = code == null ? '$msg: network error' : '$msg (HTTP $code)';
-      } else {
-        msg = '$msg: $e';
-      }
-      setState(() => _error = msg);
+      setState(() => _error = 'Failed to load conversations: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -111,8 +105,10 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
                           itemCount: _items.length,
                           itemBuilder: (context, i) {
                             final c = _items[i];
-                            final m = c.mentor;
-                            final avatar = m.avatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(m.name)}';
+                            final mentor = c.mentor;
+                            final mentorName = mentor?.name ?? 'User';
+                            final avatar = mentor?.avatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(mentorName)}';
+                            final isOnline = mentor?.isOnline ?? false;
                             final subtitle = (c.lastMessageText == null || c.lastMessageText!.trim().isEmpty)
                                 ? _label(c.lastMessageType)
                                 : c.lastMessageText!;
@@ -132,10 +128,10 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) => MentorshipChatPage(
-                                          mentorUserId: m.id,
-                                          mentorName: m.name,
+                                          mentorUserId: mentor?.id ?? c.mentorId,
+                                          mentorName: mentorName,
                                           mentorAvatar: avatar,
-                                          isOnline: m.isOnline,
+                                          isOnline: isOnline,
                                           conversationId: c.id,
                                         ),
                                       ),
@@ -149,7 +145,7 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
                                         Stack(
                                           children: [
                                             CircleAvatar(radius: 28, backgroundImage: NetworkImage(avatar)),
-                                            if (m.isOnline)
+                                            if (isOnline)
                                               Positioned(
                                                 bottom: 0,
                                                 right: 0,
@@ -174,7 +170,7 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
                                                 children: [
                                                   Expanded(
                                                     child: Text(
-                                                      m.name,
+                                                      mentorName,
                                                       style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: text),
                                                       maxLines: 1,
                                                       overflow: TextOverflow.ellipsis,
@@ -187,7 +183,7 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
                                                 ],
                                               ),
                                               const SizedBox(height: 4),
-                                              Text(m.profession ?? '', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFFBFAE01))),
+                                              Text(mentor?.profession ?? '', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFFBFAE01))),
                                               const SizedBox(height: 6),
                                               Row(
                                                 children: [

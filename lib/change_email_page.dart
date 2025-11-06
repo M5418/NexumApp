@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'core/auth_api.dart';
-import 'verify_code_page.dart';
+import 'package:provider/provider.dart';
+import 'repositories/interfaces/auth_repository.dart';
+import 'core/profile_api.dart';
 
 class ChangeEmailPage extends StatefulWidget {
   final String currentEmail;
@@ -39,24 +40,17 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
 
     setState(() => _submitting = true);
     try {
-      final api = AuthApi();
-      final res = await api.changeEmail(pwd, newEmail);
-      if (res['ok'] == true) {
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => VerifyCodePage(
-              purpose: 'change_email',
-              sentToEmail: widget.currentEmail,
-            ),
-          ),
-        );
-      } else {
-        _showSnack((res['error'] ?? 'change_email_failed').toString());
-      }
-    } catch (_) {
-      _showSnack('Network error');
+      final repo = context.read<AuthRepository>();
+      await repo.updateEmail(currentPassword: pwd, newEmail: newEmail);
+      // Update profile document email for consistency
+      try {
+        await ProfileApi().update({'email': newEmail});
+      } catch (_) {}
+      if (!mounted) return;
+      _showSnack('Email updated successfully');
+      Navigator.pop(context);
+    } catch (e) {
+      _showSnack('Failed to update email');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

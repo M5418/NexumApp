@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
-import 'podcasts_api.dart';
+import '../repositories/interfaces/podcast_repository.dart';
 import 'podcast_details_page.dart';
 import 'create_podcast_page.dart';
 import 'player_page.dart';
@@ -52,36 +53,24 @@ class Podcast {
     this.meFavorite = false,
   });
 
-   factory Podcast.fromApi(Map<String, dynamic> m) {
-    final counts = Map<String, dynamic>.from(m['counts'] ?? {});
-    final me = Map<String, dynamic>.from(m['me'] ?? {});
+  factory Podcast.fromModel(PodcastModel m) {
     return Podcast(
-      id: (m['id'] ?? '').toString(),
-      title: (m['title'] ?? '').toString(),
-      author: m['author']?.toString(),
-      coverUrl: ((m['coverUrl'] ?? m['cover_url'])?.toString() ?? '').isNotEmpty
-          ? (m['coverUrl'] ?? m['cover_url']).toString()
-          : null,
-      audioUrl: ((m['audioUrl'] ?? m['audio_url'])?.toString() ?? '').isNotEmpty
-          ? (m['audioUrl'] ?? m['audio_url']).toString()
-          : null,
-      durationSec: (m['durationSec'] ?? m['duration_sec']) == null
-          ? null
-          : int.tryParse((m['durationSec'] ?? m['duration_sec']).toString()),
-      language: m['language']?.toString(),
-      category: m['category']?.toString(),
-      description: m['description']?.toString(),
-      tags: List<String>.from((m['tags'] ?? const []) as List),
-      createdAt: m['createdAt'] != null
-          ? DateTime.tryParse(m['createdAt'].toString())
-          : (m['created_at'] != null
-              ? DateTime.tryParse(m['created_at'].toString())
-              : null),
-      likes: int.tryParse((counts['likes'] ?? 0).toString()) ?? 0,
-      favorites: int.tryParse((counts['favorites'] ?? 0).toString()) ?? 0,
-      plays: int.tryParse((counts['plays'] ?? 0).toString()) ?? 0,
-      meLiked: (me['liked'] ?? false) == true,
-      meFavorite: (me['favorite'] ?? false) == true,
+      id: m.id,
+      title: m.title,
+      author: m.author,
+      coverUrl: m.coverUrl,
+      audioUrl: m.audioUrl,
+      durationSec: m.durationSec,
+      language: m.language,
+      category: m.category,
+      description: m.description,
+      tags: m.tags,
+      createdAt: m.createdAt,
+      likes: m.likeCount,
+      favorites: m.isBookmarked ? 1 : 0,
+      plays: m.playCount,
+      meLiked: m.isLiked,
+      meFavorite: m.isBookmarked,
     );
   }
 }
@@ -128,12 +117,9 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
       _errorTop = null;
     });
     try {
-      final api = PodcastsApi.create();
-      final res = await api.list(page: 1, limit: 20, isPublished: true);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
-      _top = list.map(Podcast.fromApi).toList();
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.listPodcasts(page: 1, limit: 20, isPublished: true);
+      _top = models.map(Podcast.fromModel).toList();
     } catch (e) {
       _errorTop = 'Failed to load top podcasts: $e';
     } finally {
@@ -150,12 +136,9 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
       if (_domainCategoryParam == null) {
         _domainItems = [];
       } else {
-        final api = PodcastsApi.create();
-        final res = await api.list(page: 1, limit: 20, isPublished: true, category: _domainCategoryParam);
-        final data = Map<String, dynamic>.from(res);
-        final d = Map<String, dynamic>.from(data['data'] ?? {});
-        final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
-        _domainItems = list.map(Podcast.fromApi).toList();
+        final repo = context.read<PodcastRepository>();
+        final models = await repo.listPodcasts(page: 1, limit: 20, isPublished: true, category: _domainCategoryParam);
+        _domainItems = models.map(Podcast.fromModel).toList();
       }
     } catch (e) {
       _errorDomain = 'Failed to load $_domainTitle: $e';
@@ -164,50 +147,6 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
     }
   }
 
-  String _timeAgo(DateTime? d) {
-    if (d == null) return '';
-    final diff = DateTime.now().difference(d);
-    if (diff.inDays >= 2) return '${diff.inDays} days ago';
-    if (diff.inDays >= 1) return 'Yesterday';
-    if (diff.inHours >= 1) return '${diff.inHours} hr';
-    if (diff.inMinutes >= 1) return '${diff.inMinutes} min';
-    return 'Just now';
-  }
-
-  Future<void> _openSearch() async {
-    final queryCtrl = TextEditingController();
-    final q = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final isDark = Theme.of(ctx).brightness == Brightness.dark;
-        return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-          title: Text('Search', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-          content: TextField(
-            controller: queryCtrl,
-            autofocus: true,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (val) => Navigator.pop(ctx, val.trim()),
-            decoration: const InputDecoration(
-              hintText: 'Search podcasts',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.search),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, queryCtrl.text.trim()),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01), foregroundColor: Colors.black),
-              child: const Text('Search'),
-            ),
-          ],
-        );
-      },
-    );
-    if (!mounted || q == null || q.isEmpty) return;
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => AllPodcastsPage(q: q)));
-  }
 
   void _openCreate() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePodcastPage())).then((changed) {
@@ -411,7 +350,7 @@ class _QuickActionCard extends StatelessWidget {
             boxShadow: [
               if (!isDark)
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -603,17 +542,14 @@ class _AllPodcastsPageState extends State<AllPodcastsPage> {
       }
     });
     try {
-      final api = PodcastsApi.create();
-      final res = await api.list(
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.listPodcasts(
         page: _page,
         limit: _limit,
         isPublished: true,
-        q: (widget.q != null && widget.q!.trim().isNotEmpty) ? widget.q!.trim() : null,
+        query: (widget.q != null && widget.q!.trim().isNotEmpty) ? widget.q!.trim() : null,
       );
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
-      final newItems = list.map(Podcast.fromApi).toList();
+      final newItems = models.map(Podcast.fromModel).toList();
       setState(() {
         _items.addAll(newItems);
         _hasMore = newItems.length >= _limit;

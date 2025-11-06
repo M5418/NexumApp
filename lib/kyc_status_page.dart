@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'core/kyc_api.dart';
 import 'core/profile_api.dart';
-import 'core/auth_api.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 class KycStatusPage extends StatefulWidget {
   const KycStatusPage({super.key});
@@ -49,9 +49,9 @@ class _KycStatusPageState extends State<KycStatusPage> {
       }
     } catch (_) {}
     try {
-      final authRes = await AuthApi().me();
-      if (authRes['ok'] == true && authRes['data'] != null) {
-        _accountDisplay = (authRes['data']['email'] ?? '-').toString();
+      final u = fb.FirebaseAuth.instance.currentUser;
+      if (u != null) {
+        _accountDisplay = (u.email ?? '-').toString();
       }
     } catch (_) {}
   }

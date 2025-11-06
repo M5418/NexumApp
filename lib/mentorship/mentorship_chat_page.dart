@@ -1,13 +1,15 @@
 // c:\Users\dehou\nexum-app\lib\mentorship\mentorship_chat_page.dart
 import 'dart:io';
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import '../models/message.dart';
 import '../widgets/message_bubble.dart';
@@ -15,12 +17,10 @@ import '../widgets/chat_input.dart';
 import '../widgets/attachment_dropdown_menu.dart';
 import '../widgets/message_actions_sheet.dart';
 import '../widgets/media_preview_page.dart';
-import '../core/messages_api.dart' show MessageRecord; // reuse DTO
-import '../core/mentorship_messages_api.dart';
+import '../repositories/interfaces/mentorship_repository.dart';
 import '../core/profile_api.dart';
 import '../core/audio_recorder.dart';
-import '../core/mentorship_api.dart';
-import '../core/api_client.dart';
+// removed ApiClient usage
 
 class MentorshipChatPage extends StatefulWidget {
   final String mentorUserId;
@@ -46,9 +46,9 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   Message? _replyTo;
   final _reactions = <String, String>{};
   final _audio = AudioRecorder();
-  final _msgApi = MentorshipMessagesApi();
-  final _mentorApi = MentorshipApi();
-  final Dio _dio = ApiClient().dio;
+  late MentorshipRepository _mentorRepo;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
 
   String? _convId;
   bool _loading = false;
@@ -63,6 +63,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   @override
   void initState() {
     super.initState();
+    _mentorRepo = context.read<MentorshipRepository>();
     _init();
     _startPolling();
   }
@@ -80,12 +81,11 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         _loading = true;
         _err = null;
       });
-      _convId = (widget.conversationId != null &&
-              widget.conversationId!.isNotEmpty)
+      _convId = (widget.conversationId != null && widget.conversationId!.isNotEmpty)
           ? widget.conversationId
-          : await _mentorApi.ensureConversationWithMentor(widget.mentorUserId);
+          : await _mentorRepo.createConversationWithMentor(widget.mentorUserId);
       await _load();
-      await _mentorApi.markConversationRead(_convId!);
+      await _mentorRepo.markConversationRead(_convId!);
       await _refreshMutedState();
     } catch (e) {
       if (!mounted) return;
@@ -103,7 +103,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
 
   Future<void> _refreshMutedState() async {
     try {
-      final convs = await _mentorApi.listConversations();
+      final convs = await _mentorRepo.listConversations();
       for (final c in convs) {
         if (c.id == _convId) {
           if (!mounted) return;
@@ -135,19 +135,25 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
       final bool wasAtBottom = _scroll.hasClients &&
           (_scroll.position.maxScrollExtent - _scroll.position.pixels) < 120;
 
-      final recs = await _msgApi.list(_convId!, limit: 50);
+      final snap = await _messagesCol(_convId!)
+          .orderBy('createdAt')
+          .limit(50)
+          .get();
       if (!mounted) return;
 
       setState(() {
         _messages
           ..clear()
-          ..addAll(recs.map(_toUi));
+          ..addAll(snap.docs.map((d) => _toUiDoc(d.data(), d.id)));
         _reactions.clear();
-        for (final r in recs) {
-          if ((r.reaction ?? '').isNotEmpty) {
-            _reactions[r.id] = r.reaction!;
-          } else if ((r.myReaction ?? '').isNotEmpty) {
-            _reactions[r.id] = r.myReaction!;
+        for (final d in snap.docs) {
+          final data = d.data();
+          final my = _auth.currentUser?.uid;
+          final reactions = Map<String, dynamic>.from(data['reactions'] ?? {});
+          if (my != null && reactions[my] != null) {
+            _reactions[d.id] = reactions[my].toString();
+          } else if ((data['reaction'] ?? '').toString().isNotEmpty) {
+            _reactions[d.id] = data['reaction'].toString();
           }
         }
       });
@@ -156,7 +162,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         _toBottom();
       }
 
-      await _mentorApi.markConversationRead(_convId!);
+      await _mentorRepo.markConversationRead(_convId!);
     } catch (_) {
       // silent refresh failure
     } finally {
@@ -166,67 +172,74 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   // -----------------------------------
 
   Future<void> _load() async {
-    final recs = await _msgApi.list(_convId!);
+    final snap = await _messagesCol(_convId!).orderBy('createdAt').limit(50).get();
     setState(() {
       _messages
         ..clear()
-        ..addAll(recs.map(_toUi));
-      for (final r in recs) {
-        if ((r.reaction ?? '').isNotEmpty) {
-          _reactions[r.id] = r.reaction!;
-        } else if ((r.myReaction ?? '').isNotEmpty) {
-          _reactions[r.id] = r.myReaction!;
+        ..addAll(snap.docs.map((d) => _toUiDoc(d.data(), d.id)));
+      _reactions.clear();
+      for (final d in snap.docs) {
+        final data = d.data();
+        final my = _auth.currentUser?.uid;
+        final reactions = Map<String, dynamic>.from(data['reactions'] ?? {});
+        if (my != null && reactions[my] != null) {
+          _reactions[d.id] = reactions[my].toString();
+        } else if ((data['reaction'] ?? '').toString().isNotEmpty) {
+          _reactions[d.id] = data['reaction'].toString();
         }
       }
     });
     _toBottom();
   }
 
-  Message _toUi(MessageRecord r) {
-    final mine = r.senderId != widget.mentorUserId;
+  Message _toUiDoc(Map<String, dynamic> d, String id) {
+    final senderId = (d['senderId'] ?? '').toString();
+    final mine = senderId != widget.mentorUserId;
     return Message(
-      id: r.id,
-      senderId: r.senderId,
+      id: id,
+      senderId: senderId,
       senderName: mine ? 'You' : widget.mentorName,
       senderAvatar: mine ? null : widget.mentorAvatar,
-      content: r.text ?? '',
-      type: r.type == 'image'
+      content: (d['text'] ?? '').toString(),
+      type: (d['type'] ?? 'text') == 'image'
           ? MessageType.image
-          : r.type == 'video'
+          : (d['type'] ?? 'text') == 'video'
               ? MessageType.video
-              : r.type == 'voice'
+              : (d['type'] ?? 'text') == 'voice'
                   ? MessageType.voice
-                  : r.type == 'file'
+                  : (d['type'] ?? 'text') == 'file'
                       ? MessageType.file
                       : MessageType.text,
-      attachments: r.attachments
+      attachments: List.from(d['attachments'] ?? const [])
           .map((a) => MediaAttachment(
-                id: a.id,
-                url: a.url,
-                type: a.type == 'image'
+                id: (a['id'] ?? '').toString(),
+                url: (a['url'] ?? '').toString(),
+                type: (a['type'] ?? 'document') == 'image'
                     ? MediaType.image
-                    : a.type == 'video'
+                    : (a['type'] ?? 'document') == 'video'
                         ? MediaType.video
-                        : a.type == 'voice'
+                        : (a['type'] ?? 'document') == 'voice'
                             ? MediaType.voice
                             : MediaType.document,
-                thumbnailUrl: a.thumbnail,
-                duration: a.durationSec != null
-                    ? Duration(seconds: a.durationSec!)
+                thumbnailUrl: a['thumbnailUrl']?.toString(),
+                duration: a['durationSec'] != null
+                    ? Duration(seconds: int.tryParse(a['durationSec'].toString()) ?? 0)
                     : null,
-                fileSize: a.fileSize,
-                fileName: a.fileName,
+                fileSize: a['fileSize'] as int?,
+                fileName: a['fileName']?.toString(),
               ))
           .toList(),
-      timestamp: r.createdAt,
-      status: r.readAt != null ? MessageStatus.read : MessageStatus.sent,
-      replyTo: r.replyTo == null
+      timestamp: (d['createdAt'] is Timestamp)
+          ? (d['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
+      status: MessageStatus.sent,
+      replyTo: d['replyTo'] == null
           ? null
           : ReplyTo(
-              messageId: (r.replyTo!['message_id'] ?? '').toString(),
-              senderName: (r.replyTo!['sender_name'] ?? 'User').toString(),
-              content: (r.replyTo!['content'] ?? '').toString(),
-              type: _mt(r.replyTo!['type']?.toString() ?? 'text'),
+              messageId: (d['replyTo']['message_id'] ?? '').toString(),
+              senderName: (d['replyTo']['sender_name'] ?? 'User').toString(),
+              content: (d['replyTo']['content'] ?? '').toString(),
+              type: _mt(d['replyTo']['type']?.toString() ?? 'text'),
             ),
       isFromCurrentUser: mine,
     );
@@ -250,11 +263,24 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   Future<void> _sendText(String text) async {
     try {
       final id = _convId ??
-          await _mentorApi.ensureConversationWithMentor(widget.mentorUserId);
+          await _mentorRepo.createConversationWithMentor(widget.mentorUserId);
       _convId = id;
-      final rec = await _msgApi.sendText(
-          conversationId: id, text: text, replyToMessageId: _replyTo?.id);
-      final msg = _toUi(rec).copyWith(
+      final data = {
+        'senderId': _auth.currentUser?.uid,
+        'text': text,
+        'type': 'text',
+        'attachments': [],
+        'createdAt': FieldValue.serverTimestamp(),
+        if (_replyTo != null)
+          'replyTo': {
+            'message_id': _replyTo!.id,
+            'sender_name': _replyTo!.senderName,
+            'content': _replyTo!.content,
+            'type': _replyTo!.type.name,
+          },
+      };
+      final ref = await _messagesCol(id).add(data);
+      final msg = _toUiDoc(data, ref.id).copyWith(
         replyTo: _replyTo == null
             ? null
             : ReplyTo(
@@ -293,15 +319,30 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         final url = await _audio.uploadVoiceFile(r.filePath);
         if (url == null) throw 'Failed to upload voice';
         final id = await _requireConv();
-        final rec = await _msgApi.sendVoice(
-          conversationId: id,
-          audioUrl: url,
-          durationSec: r.duration.inSeconds,
-          fileSize: r.fileSize,
-          replyToMessageId: _replyTo?.id,
-        );
+        final data = {
+          'senderId': _auth.currentUser?.uid,
+          'text': '',
+          'type': 'voice',
+          'attachments': [
+            {
+              'type': 'voice',
+              'url': url,
+              'durationSec': r.duration.inSeconds,
+              'fileSize': r.fileSize,
+            }
+          ],
+          'createdAt': FieldValue.serverTimestamp(),
+          if (_replyTo != null)
+            'replyTo': {
+              'message_id': _replyTo!.id,
+              'sender_name': _replyTo!.senderName,
+              'content': _replyTo!.content,
+              'type': _replyTo!.type.name,
+            },
+        };
+        final ref = await _messagesCol(id).add(data);
         setState(() {
-          _messages.add(_toUi(rec));
+          _messages.add(_toUiDoc(data, ref.id));
           _replyTo = null;
         });
         _toBottom();
@@ -350,14 +391,23 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         return;
       }
       final id = await _requireConv();
-      final rec = await _msgApi.sendTextWithMedia(
-        conversationId: id,
-        text: '',
-        attachments: atts,
-        replyToMessageId: _replyTo?.id,
-      );
+      final data = {
+        'senderId': _auth.currentUser?.uid,
+        'text': '',
+        'type': 'file',
+        'attachments': atts,
+        'createdAt': FieldValue.serverTimestamp(),
+        if (_replyTo != null)
+          'replyTo': {
+            'message_id': _replyTo!.id,
+            'sender_name': _replyTo!.senderName,
+            'content': _replyTo!.content,
+            'type': _replyTo!.type.name,
+          },
+      };
+      final ref = await _messagesCol(id).add(data);
       setState(() {
-        _messages.add(_toUi(rec));
+        _messages.add(_toUiDoc(data, ref.id));
         _replyTo = null;
       });
       _toBottom();
@@ -434,14 +484,23 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         });
       }
       final id = await _requireConv();
-      final rec = await _msgApi.sendTextWithMedia(
-        conversationId: id,
-        text: caption,
-        attachments: atts,
-        replyToMessageId: _replyTo?.id,
-      );
+      final data = {
+        'senderId': _auth.currentUser?.uid,
+        'text': caption,
+        'type': 'media',
+        'attachments': atts,
+        'createdAt': FieldValue.serverTimestamp(),
+        if (_replyTo != null)
+          'replyTo': {
+            'message_id': _replyTo!.id,
+            'sender_name': _replyTo!.senderName,
+            'content': _replyTo!.content,
+            'type': _replyTo!.type.name,
+          },
+      };
+      final ref = await _messagesCol(id).add(data);
       setState(() {
-        _messages.add(_toUi(rec));
+        _messages.add(_toUiDoc(data, ref.id));
         _replyTo = null;
       });
       _toBottom();
@@ -453,15 +512,15 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   }
 
   Future<String> _requireConv() async => _convId ??=
-      await _mentorApi.ensureConversationWithMentor(widget.mentorUserId);
+      await _mentorRepo.createConversationWithMentor(widget.mentorUserId);
 
   Future<void> _toggleMute() async {
     try {
       final id = await _requireConv();
       if (_muted) {
-        await _dio.post('/api/mentorship/conversations/$id/unmute');
+        await _mentorRepo.unmuteConversation(id);
       } else {
-        await _dio.post('/api/mentorship/conversations/$id/mute');
+        await _mentorRepo.muteConversation(id);
       }
       if (!mounted) return;
       setState(() {
@@ -476,6 +535,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   Future<void> _deleteConversation() async {
     try {
       final id = await _requireConv();
+      if (!mounted) return;
       final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -493,9 +553,48 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         ),
       );
       if (confirm != true) return;
-      await _dio.delete('/api/mentorship/conversations/$id');
+      await _mentorRepo.deleteConversation(id);
       if (!mounted) return;
       Navigator.pop(context, true);
+    } catch (e) {
+      _snack('Failed to delete: $e');
+    }
+  }
+
+  CollectionReference<Map<String, dynamic>> _messagesCol(String conversationId) => _db
+      .collection('mentorship_conversations')
+      .doc(conversationId)
+      .collection('messages');
+
+  Future<void> _onReact(Message m, String emoji) async {
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid != null && _convId != null) {
+        await _messagesCol(_convId!)
+            .doc(m.id)
+            .set({'reactions': {uid: emoji}}, SetOptions(merge: true));
+      }
+      setState(() {
+        _reactions[m.id] = emoji;
+      });
+    } catch (e) {
+      _snack('Failed to react: $e');
+    }
+  }
+
+  Future<void> _deleteForMe(Message m) async {
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid != null && _convId != null) {
+        await _messagesCol(_convId!)
+            .doc(m.id)
+            .set({'deletedFor': {uid: true}}, SetOptions(merge: true));
+      }
+      setState(() {
+        _reactions.remove(m.id);
+        _messages.removeWhere((x) => x.id == m.id);
+      });
+      _snack('Deleted for me');
     } catch (e) {
       _snack('Failed to delete: $e');
     }
@@ -531,29 +630,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
     setState(() => _replyTo = null);
   }
 
-  Future<void> _onReact(Message m, String emoji) async {
-    try {
-      await _msgApi.react(m.id, emoji);
-      setState(() {
-        _reactions[m.id] = emoji;
-      });
-    } catch (e) {
-      _snack('Failed to react: $e');
-    }
-  }
-
-  Future<void> _deleteForMe(Message m) async {
-    try {
-      await _msgApi.deleteForMe(m.id);
-      setState(() {
-        _reactions.remove(m.id);
-        _messages.removeWhere((x) => x.id == m.id);
-      });
-      _snack('Deleted for me');
-    } catch (e) {
-      _snack('Failed to delete: $e');
-    }
-  }
+  // legacy _onReact and _deleteForMe removed; see Firestore-backed versions below
 
   @override
   Widget build(BuildContext context) {

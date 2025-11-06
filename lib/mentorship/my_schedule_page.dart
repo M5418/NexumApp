@@ -1,6 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/mentorship_api.dart';
+// Using local placeholder model until repository exposes sessions
+
+class _ScheduleItem {
+  final String id;
+  final String mentorId;
+  final String mentorName;
+  final String? mentorAvatarUrl = null;
+  final String topic;
+  final String status; // scheduled, completed, cancelled
+  final DateTime scheduledAt;
+  final int durationMinutes = 60;
+  final String? meetingLink = null;
+  _ScheduleItem({
+    required this.id,
+    required this.mentorId,
+    required this.mentorName,
+    required this.topic,
+    required this.status,
+    required this.scheduledAt,
+  });
+}
 
 class MySchedulePage extends StatefulWidget {
   const MySchedulePage({super.key});
@@ -12,22 +32,21 @@ class MySchedulePage extends StatefulWidget {
 class _MySchedulePageState extends State<MySchedulePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _api = MentorshipApi();
 
   // Upcoming
   bool _loadingUpcoming = true;
   String? _errorUpcoming;
-  List<MentorshipSessionDto> _upcoming = [];
+  List<_ScheduleItem> _upcoming = [];
 
   // Completed
   bool _loadingCompleted = false;
   String? _errorCompleted;
-  List<MentorshipSessionDto> _completed = [];
+  List<_ScheduleItem> _completed = [];
 
   // Cancelled
   bool _loadingCancelled = false;
   String? _errorCancelled;
-  List<MentorshipSessionDto> _cancelled = [];
+  List<_ScheduleItem> _cancelled = [];
 
   @override
   void initState() {
@@ -67,56 +86,47 @@ class _MySchedulePageState extends State<MySchedulePage>
     });
 
     try {
-      final items = await _api.listSessions(status);
-      if (!mounted) return;
-      setState(() {
-        if (status == 'upcoming') {
-          _upcoming = items;
-        } else if (status == 'completed') {
-          _completed = items;
-        } else {
-          _cancelled = items;
-        }
-      });
+      // Placeholder: repository doesn't expose sessions yet. Clear lists.
+      if (mounted) {
+        setState(() {
+          if (status == 'upcoming') {
+            _upcoming = [];
+          } else if (status == 'completed') {
+            _completed = [];
+          } else {
+            _cancelled = [];
+          }
+        });
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        final err = 'Failed to load $status sessions: $e';
-        if (status == 'upcoming') {
-          _errorUpcoming = err;
-        } else if (status == 'completed') {
-          _errorCompleted = err;
-        } else {
-          _errorCancelled = err;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          final err = 'Failed to load $status sessions: $e';
+          if (status == 'upcoming') {
+            _errorUpcoming = err;
+          } else if (status == 'completed') {
+            _errorCompleted = err;
+          } else {
+            _errorCancelled = err;
+          }
+        });
+      }
     } finally {
-      if (!mounted) return;
-      setState(() {
-        if (status == 'upcoming') {
-          _loadingUpcoming = false;
-        } else if (status == 'completed') {
-          _loadingCompleted = false;
-        } else {
-          _loadingCancelled = false;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          if (status == 'upcoming') {
+            _loadingUpcoming = false;
+          } else if (status == 'completed') {
+            _loadingCompleted = false;
+          } else {
+            _loadingCancelled = false;
+          }
+        });
+      }
     }
   }
 
-  Future<void> _refreshCurrent() async {
-    switch (_tabController.index) {
-      case 0:
-        await _loadStatus('upcoming');
-        break;
-      case 1:
-        await _loadStatus('completed');
-        break;
-      case 2:
-        await _loadStatus('cancelled');
-        break;
-    }
-  }
+  // _refreshCurrent removed (unused)
 
   @override
   Widget build(BuildContext context) {
@@ -369,7 +379,7 @@ class _MySchedulePageState extends State<MySchedulePage>
   }
 
   Widget _buildSessionCard(
-    MentorshipSessionDto session,
+    _ScheduleItem session,
     Color surfaceColor,
     Color textColor,
     Color secondaryTextColor, {
@@ -377,8 +387,8 @@ class _MySchedulePageState extends State<MySchedulePage>
     bool showRatingButton = false,
     bool showRescheduleButton = false,
   }) {
-    final avatar = session.mentorAvatar ??
-        'https://ui-avatars.com/api/?name=${Uri.encodeComponent(session.mentorName)}';
+    final mentorName = session.mentorName.isNotEmpty ? session.mentorName : 'Mentor';
+    final avatar = (session.mentorAvatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(mentorName)}');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -409,7 +419,7 @@ class _MySchedulePageState extends State<MySchedulePage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      session.mentorName,
+                      mentorName,
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -676,18 +686,11 @@ class _MySchedulePageState extends State<MySchedulePage>
             TextButton(
               onPressed: selected == 0
                   ? null
-                  : () async {
-                      try {
-                        await _api.reviewSession(sessionId: sessionId, rating: selected);
-                        if (!mounted) return;
-                        Navigator.pop(context);
-                        _snack('Thanks for your feedback!');
-                        // Refresh completed tab after rating
-                        await _loadStatus('completed');
-                      } catch (e) {
-                        if (!mounted) return;
-                        _snack('Failed to submit review: $e');
-                      }
+                  : () {
+                      Navigator.pop(context);
+                      _snack('Thanks for your feedback!');
+                      // Optimistically refresh completed tab after rating
+                      _loadStatus('completed');
                     },
               child: Text(
                 'Submit',

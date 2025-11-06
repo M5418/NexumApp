@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/book_repository.dart';
 import 'book_details_page.dart';
 import 'create_book_page.dart';
-import 'books_api.dart';
 import 'book_search_page.dart';
 import '../responsive/responsive_breakpoints.dart';
 
@@ -52,30 +53,28 @@ class Book {
     this.meFavorite = false,
   });
 
-  factory Book.fromApi(Map<String, dynamic> m) {
-    final counts = Map<String, dynamic>.from(m['counts'] ?? {});
-    final me = Map<String, dynamic>.from(m['me'] ?? {});
+  factory Book.fromModel(BookModel m) {
     return Book(
-      id: (m['id'] ?? '').toString(),
-      title: (m['title'] ?? '').toString(),
-      author: m['author']?.toString(),
-      coverUrl: (m['coverUrl'] ?? '').toString().isEmpty ? null : (m['coverUrl'] as String),
-      pdfUrl: (m['pdfUrl'] ?? '').toString().isEmpty ? null : (m['pdfUrl'] as String),
-      audioUrl: (m['audioUrl'] ?? '').toString().isEmpty ? null : (m['audioUrl'] as String),
-      language: m['language']?.toString(),
-      category: m['category']?.toString(),
-      tags: List<String>.from((m['tags'] ?? const []) as List),
-      price: m['price'] == null ? null : double.tryParse(m['price'].toString()),
-      isPublished: (m['isPublished'] ?? false) == true,
-      readingMinutes: m['readingMinutes'] == null ? null : int.tryParse(m['readingMinutes'].toString()),
-      audioDurationSec: m['audioDurationSec'] == null ? null : int.tryParse(m['audioDurationSec'].toString()),
-      createdAt: m['createdAt'] != null ? DateTime.tryParse(m['createdAt'].toString()) : null,
-      likes: int.tryParse((counts['likes'] ?? 0).toString()) ?? 0,
-      favorites: int.tryParse((counts['favorites'] ?? 0).toString()) ?? 0,
-      reads: int.tryParse((counts['reads'] ?? 0).toString()) ?? 0,
-      plays: int.tryParse((counts['plays'] ?? 0).toString()) ?? 0,
-      meLiked: (me['liked'] ?? false) == true,
-      meFavorite: (me['favorite'] ?? false) == true,
+      id: m.id,
+      title: m.title,
+      author: m.author,
+      coverUrl: m.coverUrl,
+      pdfUrl: m.pdfUrl,
+      audioUrl: m.audioUrl,
+      language: m.language,
+      category: m.category,
+      tags: m.tags,
+      price: m.price,
+      isPublished: m.isPublished,
+      readingMinutes: m.readingMinutes,
+      audioDurationSec: m.audioDurationSec,
+      createdAt: m.createdAt,
+      likes: m.likeCount,
+      favorites: m.isBookmarked ? 1 : 0,
+      reads: m.viewCount,
+      plays: 0,
+      meLiked: m.isLiked,
+      meFavorite: m.isBookmarked,
     );
   }
 }
@@ -89,6 +88,7 @@ class BooksHomePage extends StatefulWidget {
 
 class _BooksHomePageState extends State<BooksHomePage> {
   final GlobalKey<NavigatorState> _rightNavKey = GlobalKey<NavigatorState>();
+  late BookRepository _bookRepo;
 
   String _selectedLanguage = 'All';
   List<Book> _books = [];
@@ -107,6 +107,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
   @override
   void initState() {
     super.initState();
+    _bookRepo = context.read<BookRepository>();
     _fetchBooks(reset: true);
     _controller.addListener(_onScroll);
   }
@@ -158,12 +159,12 @@ class _BooksHomePageState extends State<BooksHomePage> {
       }
     });
     try {
-      final api = BooksApi.create();
-      final res = await api.listBooks(page: _page, limit: _limit, isPublished: true);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['books'] ?? const []);
-      final newBooks = list.map(Book.fromApi).toList();
+      final bookModels = await _bookRepo.listBooks(
+        page: _page,
+        limit: _limit,
+        isPublished: true,
+      );
+      final newBooks = bookModels.map(Book.fromModel).toList();
 
       setState(() {
         _books.addAll(newBooks);

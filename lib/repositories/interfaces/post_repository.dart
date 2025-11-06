@@ -84,4 +84,20 @@ abstract class PostRepository {
     required String uid,
     int limit = 20,
   });
+
+  // Activity helpers
+  Future<List<PostModel>> getPostsLikedByUser({
+    required String uid,
+    int limit = 50,
+  });
+
+  Future<List<PostModel>> getPostsBookmarkedByUser({
+    required String uid,
+    int limit = 50,
+  });
+
+  Future<List<PostModel>> getUserReposts({
+    required String uid,
+    int limit = 50,
+  });
 }

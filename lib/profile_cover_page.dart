@@ -136,13 +136,15 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
       );
       if (!mounted) return;
       if (picked != null) {
+        final navContext = context;
         final bytes = await picked.readAsBytes();
+        if (!navContext.mounted) return;
         setState(() {
           _coverBytes = bytes;
           _coverExt = _guessExt(picked);
           _hasSelectedCover = true;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(navContext).showSnackBar(
           SnackBar(
             content: Text(
               'Cover photo selected successfully!',

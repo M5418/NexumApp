@@ -6,7 +6,7 @@ import 'package:dio/dio.dart';
 import 'models/post.dart';
 import 'models/comment.dart';
 import 'core/posts_api.dart';
-import 'core/auth_api.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'widgets/custom_video_player.dart';
 import 'widgets/reaction_picker.dart';
 import 'widgets/comment_bottom_sheet.dart';
@@ -49,10 +49,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
   Future<void> _loadCurrentUserId() async {
     try {
-      final res = await AuthApi().me();
-      final id = (res['ok'] == true && res['data'] != null)
-          ? res['data']['id'] as String?
-          : null;
+      final id = fb.FirebaseAuth.instance.currentUser?.uid;
       if (!mounted) return;
       setState(() {
         _currentUserId = id;

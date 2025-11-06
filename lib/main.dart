@@ -13,6 +13,13 @@ import 'repositories/interfaces/post_repository.dart';
 import 'repositories/interfaces/comment_repository.dart';
 import 'repositories/interfaces/follow_repository.dart';
 import 'repositories/interfaces/notification_repository.dart';
+import 'repositories/interfaces/conversation_repository.dart';
+import 'repositories/interfaces/message_repository.dart';
+import 'repositories/interfaces/community_repository.dart';
+import 'repositories/interfaces/mentorship_repository.dart';
+import 'repositories/interfaces/book_repository.dart';
+import 'repositories/interfaces/podcast_repository.dart';
+import 'repositories/interfaces/story_repository.dart';
 import 'repositories/firebase/firebase_auth_repository.dart';
 import 'repositories/firebase/firebase_storage_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
@@ -20,6 +27,13 @@ import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_comment_repository.dart';
 import 'repositories/firebase/firebase_follow_repository.dart';
 import 'repositories/firebase/firebase_notification_repository.dart';
+import 'repositories/firebase/firebase_conversation_repository.dart';
+import 'repositories/firebase/firebase_message_repository.dart';
+import 'repositories/firebase/firebase_community_repository.dart';
+import 'repositories/firebase/firebase_mentorship_repository.dart';
+import 'repositories/firebase/firebase_book_repository.dart';
+import 'repositories/firebase/firebase_podcast_repository.dart';
+import 'repositories/firebase/firebase_story_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,6 +82,13 @@ class MyApp extends StatelessWidget {
           Provider<CommentRepository>(create: (_) => FirebaseCommentRepository()),
           Provider<FollowRepository>(create: (_) => FirebaseFollowRepository()),
           Provider<NotificationRepository>(create: (_) => FirebaseNotificationRepository()),
+          Provider<ConversationRepository>(create: (_) => FirebaseConversationRepository()),
+          Provider<MessageRepository>(create: (_) => FirebaseMessageRepository()),
+          Provider<CommunityRepository>(create: (_) => FirebaseCommunityRepository()),
+          Provider<MentorshipRepository>(create: (_) => FirebaseMentorshipRepository()),
+          Provider<BookRepository>(create: (_) => FirebaseBookRepository()),
+          Provider<PodcastRepository>(create: (_) => FirebasePodcastRepository()),
+          Provider<StoryRepository>(create: (_) => FirebaseStoryRepository()),
         ],
         child: const AppWrapper(),
       ),

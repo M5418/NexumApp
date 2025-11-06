@@ -87,7 +87,7 @@ class FirebaseAuthRepository implements AuthRepository {
     final u = _auth.currentUser;
     if (u == null) return;
     await _reauthenticate(currentPassword);
-    await u.updateEmail(newEmail);
+    await u.verifyBeforeUpdateEmail(newEmail);
   }
 
   @override

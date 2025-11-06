@@ -10,10 +10,9 @@ import 'widgets/message_invite_card.dart';
 import 'models/post.dart';
 import 'theme_provider.dart';
 import 'core/connections_api.dart';
-import 'core/conversations_api.dart';
+import 'repositories/interfaces/conversation_repository.dart';
 import 'core/api_client.dart';
 import 'core/profile_api.dart';
-import 'podcasts/podcasts_api.dart';
 import 'models/message.dart' hide MediaType;
 import 'widgets/report_bottom_sheet.dart';
 import 'chat_page.dart';
@@ -46,7 +45,7 @@ class OtherUserProfilePage extends StatefulWidget {
 class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   late bool _isConnected;
-  final ConversationsApi _conversationsApi = ConversationsApi();
+  late ConversationRepository _convRepo;
 
   // Backend profile data for OTHER user
   Map<String, dynamic>? _userProfile;
@@ -81,6 +80,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   void initState() {
     super.initState();
     _isConnected = widget.isConnected;
+    _convRepo = context.read<ConversationRepository>();
     // Load profile first so header and stats use real backend
     _loadUserProfile();
     // Kick off tabs
@@ -571,17 +571,10 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     });
 
     try {
-      final api = PodcastsApi();
-      final res = await api.list(authorId: widget.userId, limit: 50, page: 1);
-      final body = Map<String, dynamic>.from(res);
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final podcasts = (data['podcasts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-
+      // Placeholder: podcasts will be loaded elsewhere
       if (!mounted) return;
       setState(() {
-        _podcasts = podcasts;
+        _podcasts = [];
         _loadingPodcasts = false;
       });
     } catch (e) {
@@ -597,7 +590,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     final ctx = context;
     try {
       // Check if conversation already exists
-      final conversationId = await _conversationsApi.checkConversationExists(
+      final conversationId = await _convRepo.checkConversationExists(
         widget.userId,
       );
 

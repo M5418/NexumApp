@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/message.dart';
 import '../core/users_api.dart';
-import '../core/conversations_api.dart';
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/conversation_repository.dart';
 
 class NewChatBottomSheet extends StatefulWidget {
   final bool isDarkMode;
@@ -97,8 +98,8 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
         isOnline: user.isOnline,
       );
 
-      final convApi = ConversationsApi();
-      final convId = await convApi.createOrGet(user.id);
+      final convRepo = ctx.read<ConversationRepository>();
+      final convId = await convRepo.createOrGet(user.id);
 
       if (ctx.mounted) {
         Navigator.pop(ctx, {
@@ -233,7 +234,7 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
                                         height: 1,
                                         thickness: 0.5,
                                         color: const Color(0xFF666666)
-                                            .withOpacity(0.10),
+                                            .withValues(alpha: 0.10),
                                       ),
                                       itemBuilder: (context, index) {
                                         final user = _filteredUsers[index];

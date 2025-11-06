@@ -11,8 +11,6 @@ import 'blocked_muted_accounts_page.dart';
 import 'security_login_page.dart';
 import 'notification_preferences_page.dart';
 
-import 'core/auth_api.dart';
-import 'core/api_client.dart';
 import 'services/auth_service.dart';
 import 'app_wrapper.dart';
 import 'responsive/responsive_breakpoints.dart';
@@ -334,16 +332,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _performLogout() async {
     try {
-      // Try to invalidate server session (ignore errors)
-      try {
-        await AuthApi().logout();
-      } catch (_) {}
-
-      // Clear local state and token
+      // Clear local state
       await AuthService().signOut();
-
-      // Remove Authorization header from shared Dio client
-      ApiClient().dio.options.headers.remove('Authorization');
 
       // Reset navigation to AppWrapper
       if (mounted) {

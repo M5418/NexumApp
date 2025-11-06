@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
-import 'podcasts_api.dart';
 import 'player_page.dart';
 import 'add_to_playlist_sheet.dart';
 
@@ -27,62 +26,30 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
 
   Future<void> _toggleLike() async {
     if (_togglingLike) return;
-    setState(() => _togglingLike = true);
-    try {
-      final api = PodcastsApi.create();
+    setState(() {
+      _togglingLike = false;
       if (podcast.meLiked) {
-        await api.unlike(podcast.id);
-        if (!mounted) return;
-        setState(() {
-          podcast.meLiked = false;
-          podcast.likes = (podcast.likes - 1).clamp(0, 1 << 30);
-        });
+        podcast.meLiked = false;
+        podcast.likes = (podcast.likes - 1).clamp(0, 1 << 30);
       } else {
-        await api.like(podcast.id);
-        if (!mounted) return;
-        setState(() {
-          podcast.meLiked = true;
-          podcast.likes = podcast.likes + 1;
-        });
+        podcast.meLiked = true;
+        podcast.likes = podcast.likes + 1;
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update like: $e', style: GoogleFonts.inter())),
-      );
-    } finally {
-      if (mounted) setState(() => _togglingLike = false);
-    }
+    });
   }
 
   Future<void> _toggleFavorite() async {
     if (_togglingFav) return;
-    setState(() => _togglingFav = true);
-    try {
-      final api = PodcastsApi.create();
+    setState(() {
+      _togglingFav = false;
       if (podcast.meFavorite) {
-        await api.unfavorite(podcast.id);
-        if (!mounted) return;
-        setState(() {
-          podcast.meFavorite = false;
-          podcast.favorites = (podcast.favorites - 1).clamp(0, 1 << 30);
-        });
+        podcast.meFavorite = false;
+        podcast.favorites = (podcast.favorites - 1).clamp(0, 1 << 30);
       } else {
-        await api.favorite(podcast.id);
-        if (!mounted) return;
-        setState(() {
-          podcast.meFavorite = true;
-          podcast.favorites = podcast.favorites + 1;
-        });
+        podcast.meFavorite = true;
+        podcast.favorites = podcast.favorites + 1;
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update favorite: $e', style: GoogleFonts.inter())),
-      );
-    } finally {
-      if (mounted) setState(() => _togglingFav = false);
-    }
+    });
   }
 
   @override

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import 'podcasts_api.dart';
 import 'podcasts_home_page.dart' show Podcast;
 import 'player_page.dart';
 
@@ -26,22 +25,10 @@ class _MyEpisodesPageState extends State<MyEpisodesPage> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      _loading = false;
       _error = null;
+      _items = [];
     });
-    try {
-      // Use published list as "episodes" source; backend stays unchanged.
-      final api = PodcastsApi.create();
-      final res = await api.list(page: 1, limit: 100, isPublished: true);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
-      _items = list.map(Podcast.fromApi).toList();
-    } catch (e) {
-      _error = 'Failed to load episodes: $e';
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
   String _shortDate(DateTime? d) {

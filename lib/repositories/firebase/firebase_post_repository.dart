@@ -81,6 +81,64 @@ class FirebasePostRepository implements PostRepository {
     return snap.docs.map(_fromDoc).toList();
   }
 
+  Future<List<PostModel>> _getPostsByIds(List<String> ids) async {
+    if (ids.isEmpty) return [];
+    final results = <PostModel>[];
+    for (var i = 0; i < ids.length; i += 10) {
+      final end = (i + 10 > ids.length) ? ids.length : (i + 10);
+      final chunk = ids.sublist(i, end);
+      final snap = await _posts.where(FieldPath.documentId, whereIn: chunk).get();
+      results.addAll(snap.docs.map(_fromDoc));
+    }
+    // Sort by createdAt desc
+    results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return results;
+  }
+
+  @override
+  Future<List<PostModel>> getPostsLikedByUser({required String uid, int limit = 50}) async {
+    // Query all likes docs by this uid across posts
+    final likeDocs = await _db
+        .collectionGroup('likes')
+        .where(FieldPath.documentId, isEqualTo: uid)
+        .limit(limit)
+        .get();
+    final postIds = <String>{};
+    for (final d in likeDocs.docs) {
+      final postRef = d.reference.parent.parent; // posts/{postId}
+      if (postRef != null) postIds.add(postRef.id);
+    }
+    return _getPostsByIds(postIds.toList());
+  }
+
+  @override
+  Future<List<PostModel>> getPostsBookmarkedByUser({required String uid, int limit = 50}) async {
+    final bmDocs = await _db
+        .collectionGroup('bookmarks')
+        .where(FieldPath.documentId, isEqualTo: uid)
+        .limit(limit)
+        .get();
+    final postIds = <String>{};
+    for (final d in bmDocs.docs) {
+      final postRef = d.reference.parent.parent;
+      if (postRef != null) postIds.add(postRef.id);
+    }
+    return _getPostsByIds(postIds.toList());
+  }
+
+  @override
+  Future<List<PostModel>> getUserReposts({required String uid, int limit = 50}) async {
+    // Fetch recent posts by author and filter for reposts in memory to avoid inequality + orderBy constraint
+    final snap = await _posts
+        .where('authorId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(limit * 3)
+        .get();
+    final all = snap.docs.map(_fromDoc).toList();
+    final reposts = all.where((m) => (m.repostOf != null && m.repostOf!.isNotEmpty)).take(limit).toList();
+    return reposts;
+  }
+
   @override
   Future<void> likePost(String postId) async {
     final u = _auth.currentUser;

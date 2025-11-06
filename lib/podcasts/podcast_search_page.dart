@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
-import 'podcasts_api.dart';
-import 'podcasts_home_page.dart' show Podcast; // reuse Podcast model + fromApi
+import '../repositories/interfaces/podcast_repository.dart';
+import 'podcasts_home_page.dart' show Podcast; // reuse Podcast model
 import 'podcast_details_page.dart';
 import 'player_page.dart';
 
@@ -16,7 +17,6 @@ class PodcastSearchPage extends StatefulWidget {
 
 class _PodcastSearchPageState extends State<PodcastSearchPage> {
   final TextEditingController _controller = TextEditingController();
-  final PodcastsApi _api = PodcastsApi.create();
 
   bool _loading = false;
   String? _error;
@@ -53,11 +53,9 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
     });
 
     try {
-      final res = await _api.list(page: 1, limit: 20, q: q, isPublished: true);
-      final map = Map<String, dynamic>.from(res);
-      final data = Map<String, dynamic>.from(map['data'] ?? {});
-      final raw = List<Map<String, dynamic>>.from(data['podcasts'] ?? const []);
-      final items = raw.map(Podcast.fromApi).toList();
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.listPodcasts(page: 1, limit: 20, query: q, isPublished: true);
+      final items = models.map(Podcast.fromModel).toList();
 
       if (!mounted) return;
       setState(() {

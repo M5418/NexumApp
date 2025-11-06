@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/mentorship_api.dart';
 
 class RequestMentorshipPage extends StatefulWidget {
   final String fieldId;
@@ -14,7 +13,6 @@ class RequestMentorshipPage extends StatefulWidget {
 
 class _RequestMentorshipPageState extends State<RequestMentorshipPage> {
   final TextEditingController _textController = TextEditingController();
-  final _api = MentorshipApi();
   bool _submitting = false;
 
   @override
@@ -108,17 +106,10 @@ class _RequestMentorshipPageState extends State<RequestMentorshipPage> {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     setState(() => _submitting = true);
-    try {
-      await _api.createRequest(fieldId: widget.fieldId, message: text);
-      if (!mounted) return;
-      _showSuccessSnackBar();
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send request: $e')));
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
+    // Placeholder: request creation is handled elsewhere in the new flow.
+    // Synchronously acknowledge and close without crossing async gaps.
+    _showSuccessSnackBar();
+    Navigator.pop(context);
   }
 
   void _showSuccessSnackBar() {

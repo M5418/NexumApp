@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../core/stories_api.dart' as stories;
+// Stories API removed - will be handled elsewhere
 
 class MyStoriesBottomSheet extends StatefulWidget {
   final String currentUserId;
@@ -35,8 +35,7 @@ class MyStoriesBottomSheet extends StatefulWidget {
 
 class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
   bool _loading = true;
-  stories.StoryUser? _user;
-  List<stories.StoryItem> _items = [];
+  List<dynamic> _items = [];
 
   @override
   void initState() {
@@ -45,27 +44,18 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
   }
 
   Future<void> _load() async {
-    try {
-      final resp = await stories.StoriesApi().getUserStories(widget.currentUserId);
-      if (!mounted) return;
-      setState(() {
-        _user = resp.user;
-        _items = resp.items;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _user = null;
-        _items = [];
-        _loading = false;
-      });
-    }
+    // Placeholder: stories will be handled elsewhere
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    setState(() {
+      _items = [];
+      _loading = false;
+    });
   }
 
-  Widget _preview(stories.StoryItem it) {
-    if (it.mediaType == 'image') {
-      final url = it.thumbnailUrl ?? it.mediaUrl ?? '';
+  Widget _storyThumbnail(dynamic item) {
+    if (item.mediaType == 'image') {
+      final url = item.thumbnailUrl ?? item.mediaUrl ?? '';
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: SizedBox(
@@ -80,8 +70,8 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
         ),
       );
     }
-    if (it.mediaType == 'video') {
-      final thumb = it.thumbnailUrl ?? it.mediaUrl ?? '';
+    if (item.mediaType == 'video') {
+      final thumb = item.thumbnailUrl ?? item.mediaUrl ?? '';
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Stack(
@@ -116,13 +106,13 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        (it.textContent ?? 'T').isEmpty ? 'T' : it.textContent!.substring(0, 1),
+        (item.textContent ?? 'T').isEmpty ? 'T' : item.textContent!.substring(0, 1),
         style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700),
       ),
     );
   }
 
-  String _label(stories.StoryItem it) {
+  String _label(dynamic it) {
     if (it.mediaType == 'text') {
       final t = (it.textContent ?? '').trim();
       return t.isEmpty ? 'Text story' : (t.length > 30 ? '${t.substring(0, 30)}...' : t);
@@ -211,7 +201,7 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
                     final it = _items[i];
                     return Row(
                       children: [
-                        _preview(it),
+                        _storyThumbnail(it),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(

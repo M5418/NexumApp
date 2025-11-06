@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
-import 'podcasts_api.dart';
 
 class PlayerPage extends StatefulWidget {
   final Podcast podcast;
@@ -54,10 +53,8 @@ class _PlayerPageState extends State<PlayerPage> {
     try {
       // Try restoring progress
       try {
-        final api = PodcastsApi.create();
-        final res = await api.getProgress(widget.podcast.id);
-        final data = Map<String, dynamic>.from(res);
-        final d = Map<String, dynamic>.from(data['data'] ?? {});
+        // Placeholder: progress will be handled elsewhere
+        final d = <String, dynamic>{};
         final p = d['progress'];
         if (p != null) {
           final lastPos = int.tryParse((p['last_position_sec'] ?? 0).toString()) ?? 0;
@@ -134,15 +131,9 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  Future<void> _sendProgress() async {
-    try {
-      final api = PodcastsApi.create();
-      await api.updateAudioProgress(
-        id: widget.podcast.id,
-        positionSec: _position.inSeconds,
-        durationSec: _duration.inSeconds > 0 ? _duration.inSeconds : null,
-      );
-    } catch (_) {}
+  void _sendProgress() {
+    if (_position.inSeconds <= 0) return;
+    // Placeholder: progress tracking will be handled elsewhere
   }
 
   @override

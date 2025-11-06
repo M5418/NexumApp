@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/mentorship_api.dart';
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/mentorship_repository.dart';
 import 'mentorship_conversations_page.dart';
 import 'professional_fields_page.dart';
 import 'my_mentors_page.dart';
@@ -23,15 +24,16 @@ class MentorshipHomePage extends StatefulWidget {
 }
 
 class _MentorshipHomePageState extends State<MentorshipHomePage> {
-  final _api = MentorshipApi();
+  late MentorshipRepository _mentorshipRepo;
   bool _loading = true;
   String? _error;
-  List<MentorshipFieldDto> _fields = [];
-  List<MentorshipSessionDto> _upcoming = [];
+  List<MentorshipFieldModel> _fields = [];
+  List<MentorshipRequestModel> _requests = [];
 
   @override
   void initState() {
     super.initState();
+    _mentorshipRepo = context.read<MentorshipRepository>();
     _load();
   }
 
@@ -41,12 +43,12 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
       _error = null;
     });
     try {
-      final fields = await _api.listFields();
-      final sessions = await _api.listSessions('upcoming');
+      final fields = await _mentorshipRepo.listFields();
+      final requests = await _mentorshipRepo.listMyRequests();
       if (!mounted) return;
       setState(() {
         _fields = fields;
-        _upcoming = sessions;
+        _requests = requests.where((r) => r.status == 'accepted').toList();
       });
     } catch (e) {
       if (!mounted) return;
@@ -466,7 +468,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
     Color textColor,
     Color secondaryTextColor,
   ) {
-    if (_loading && _upcoming.isEmpty) {
+    if (_loading && _requests.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -484,7 +486,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
       );
     }
 
-    final sessions = _upcoming;
+    final sessions = _requests;
     if (sessions.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(24),
@@ -528,8 +530,9 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
         children: sessions.take(2).map((session) {
           final idx = sessions.indexOf(session);
           final isLast = idx == sessions.length - 1 || idx == 1;
-          final avatar = session.mentorAvatar ??
-              'https://ui-avatars.com/api/?name=${Uri.encodeComponent(session.mentorName)}';
+          final mentorName = 'Mentor';
+          final avatar =
+              'https://ui-avatars.com/api/?name=${Uri.encodeComponent(mentorName)}';
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -551,7 +554,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        session.mentorName,
+                        mentorName,
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -560,7 +563,9 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        session.topic,
+                        (session.message.isNotEmpty)
+                            ? session.message
+                            : 'Mentorship session',
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
@@ -569,7 +574,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _formatDateTime(session.scheduledAt),
+                        _formatDateTime(session.createdAt),
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,

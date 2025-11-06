@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'books_home_page.dart' show Book;
 import 'book_read_page.dart';
 import 'book_play_page.dart';
-import 'books_api.dart';
+import '../repositories/interfaces/book_repository.dart';
 
 class BookDetailsPage extends StatefulWidget {
   final Book book;
@@ -25,23 +26,22 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
   }
 
   Future<void> _toggleLike() async {
-    if (_togglingLike) return;
-    setState(() => _togglingLike = true);
+    final newLiked = !widget.book.meLiked;
     try {
-      final api = BooksApi.create();
-      if (book.meLiked) {
-        await api.unlike(book.id);
-        if (!mounted) return;
-        setState(() {
-          book.meLiked = false;
-          book.likes = (book.likes - 1).clamp(0, 1 << 30);
-        });
-      } else {
-        await api.like(book.id);
+      final bookRepo = context.read<BookRepository>();
+      if (newLiked) {
+        await bookRepo.likeBook(widget.book.id);
         if (!mounted) return;
         setState(() {
           book.meLiked = true;
           book.likes = book.likes + 1;
+        });
+      } else {
+        await bookRepo.unlikeBook(widget.book.id);
+        if (!mounted) return;
+        setState(() {
+          book.meLiked = false;
+          book.likes = (book.likes - 1).clamp(0, 1 << 30);
         });
       }
     } catch (e) {
@@ -55,23 +55,22 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
   }
 
   Future<void> _toggleFavorite() async {
-    if (_togglingFav) return;
-    setState(() => _togglingFav = true);
+    final newFavorite = !widget.book.meFavorite;
     try {
-      final api = BooksApi.create();
-      if (book.meFavorite) {
-        await api.unfavorite(book.id);
-        if (!mounted) return;
-        setState(() {
-          book.meFavorite = false;
-          book.favorites = (book.favorites - 1).clamp(0, 1 << 30);
-        });
-      } else {
-        await api.favorite(book.id);
+      final bookRepo = context.read<BookRepository>();
+      if (newFavorite) {
+        await bookRepo.bookmarkBook(widget.book.id);
         if (!mounted) return;
         setState(() {
           book.meFavorite = true;
           book.favorites = book.favorites + 1;
+        });
+      } else {
+        await bookRepo.unbookmarkBook(widget.book.id);
+        if (!mounted) return;
+        setState(() {
+          book.meFavorite = false;
+          book.favorites = (book.favorites - 1).clamp(0, 1 << 30);
         });
       }
     } catch (e) {

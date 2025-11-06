@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import 'podcasts_api.dart';
 import 'podcasts_home_page.dart' show Podcast;
 import 'player_page.dart';
 
@@ -19,7 +18,6 @@ class _FavoritePlaylistPageState extends State<FavoritePlaylistPage> {
   String? _error;
 
   late String _name;
-  bool _isPrivate = false;
   List<Podcast> _items = [];
 
   @override
@@ -30,25 +28,11 @@ class _FavoritePlaylistPageState extends State<FavoritePlaylistPage> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      _loading = false;
       _error = null;
+      _name = 'My Playlist';
+      _items = [];
     });
-    try {
-      final api = PodcastsApi.create();
-      final res = await api.getPlaylist(widget.playlistId);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final pl = Map<String, dynamic>.from(d['playlist'] ?? {});
-      final items = List<Map<String, dynamic>>.from(d['items'] ?? const []);
-
-      _name = (pl['name'] ?? '').toString();
-      _isPrivate = (pl['isPrivate'] ?? false) == true;
-      _items = items.map(Podcast.fromApi).toList();
-    } catch (e) {
-      _error = 'Failed to load playlist: $e';
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
   String _mmss(int? sec) {

@@ -8,7 +8,7 @@ import 'models/comment.dart';
 import 'models/post.dart';
 
 import 'core/posts_api.dart';
-import 'core/auth_api.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'widgets/media_carousel.dart';
 import 'widgets/auto_play_video.dart';
@@ -106,9 +106,7 @@ class _PostPageState extends State<PostPage> {
 
   Future<void> _loadCurrentUserId() async {
     try {
-      final res = await AuthApi().me();
-      final id =
-          (res['ok'] == true && res['data'] != null) ? res['data']['id'] : null;
+      final id = fb.FirebaseAuth.instance.currentUser?.uid;
       if (!mounted) return;
       setState(() {
         _currentUserId = id?.toString();

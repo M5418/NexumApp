@@ -13,7 +13,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
 
   NotificationModel _fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data() ?? {};
-    NotificationType _toType(String? s) {
+    NotificationType toType(String? s) {
       switch (s) {
         case 'like':
           return NotificationType.like;
@@ -33,7 +33,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
     return NotificationModel(
       id: doc.id,
       userId: d['userId'] ?? '',
-      type: _toType(d['type']),
+      type: toType(d['type']),
       title: d['title'] ?? '',
       body: d['body'] ?? '',
       refId: d['refId'],

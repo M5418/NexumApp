@@ -1,0 +1,234 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import '../interfaces/message_repository.dart';
+import 'firebase_conversation_repository.dart';
+
+class FirebaseMessageRepository implements MessageRepository {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
+
+  CollectionReference<Map<String, dynamic>> _conv(String id) => _db.collection('conversations').doc(id).collection('messages');
+
+  AttachmentModel _attFrom(Map<String, dynamic> m) => AttachmentModel(
+        id: (m['id'] ?? '').toString(),
+        type: (m['type'] ?? 'text').toString(),
+        url: (m['url'] ?? '').toString(),
+        thumbnail: (m['thumbnail'] ?? m['thumbnailUrl'])?.toString(),
+        durationSec: _toIntNullable(m['durationSec'] ?? m['duration_sec']),
+        fileSize: _toIntNullable(m['fileSize'] ?? m['file_size']),
+        fileName: (m['fileName'] ?? m['file_name'])?.toString(),
+      );
+
+  int? _toIntNullable(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    return int.tryParse(v.toString());
+  }
+
+  MessageRecordModel _fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
+    final m = d.data() ?? {};
+    final atts = (m['attachments'] as List?)?.map((e) => _attFrom(Map<String, dynamic>.from(e as Map))).toList() ?? const [];
+    return MessageRecordModel(
+      id: d.id,
+      conversationId: (m['conversationId'] ?? '').toString(),
+      senderId: (m['senderId'] ?? '').toString(),
+      receiverId: (m['receiverId'] ?? '').toString(),
+      type: (m['type'] ?? 'text').toString(),
+      text: (m['text'] ?? '').toString(),
+      createdAt: (m['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      readAt: null,
+      attachments: atts,
+      myReaction: null,
+      reaction: (m['latestReaction'] ?? '').toString().isEmpty ? null : (m['latestReaction'] ?? '').toString(),
+      replyTo: (m['replyTo'] is Map) ? Map<String, dynamic>.from(m['replyTo']) : null,
+    );
+  }
+
+  Future<String> _ensureConversation(String? conversationId, String? otherUserId) async {
+    if (conversationId != null && conversationId.isNotEmpty) return conversationId;
+    if (otherUserId != null && otherUserId.isNotEmpty) {
+      return FirebaseConversationRepository().createOrGet(otherUserId);
+    }
+    throw Exception('missing_target');
+  }
+
+  Future<String?> _otherParticipant(String conversationId) async {
+    final doc = await _db.collection('conversations').doc(conversationId).get();
+    final d = doc.data() ?? {};
+    final parts = List<String>.from((d['participants'] as List?)?.map((e) => e.toString()) ?? const []);
+    final me = _auth.currentUser?.uid;
+    if (me == null) return null;
+    for (final p in parts) {
+      if (p != me) return p;
+    }
+    return null;
+  }
+
+  Future<void> _updateConversationSummary({
+    required String conversationId,
+    required String type,
+    required String text,
+  }) async {
+    final me = _auth.currentUser?.uid;
+    if (me == null) return;
+    final other = await _otherParticipant(conversationId);
+    final convRef = _db.collection('conversations').doc(conversationId);
+    final updates = {
+      'lastMessageType': type,
+      'lastMessageText': text,
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'lastFromUserId': me,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (other != null && other.isNotEmpty) {
+      updates['unread.$other'] = FieldValue.increment(1);
+    }
+    await convRef.set(updates, SetOptions(merge: true));
+  }
+
+  @override
+  Future<List<MessageRecordModel>> list(String conversationId, {int limit = 50}) async {
+    final snap = await _conv(conversationId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .get();
+    final list = snap.docs.map(_fromDoc).toList();
+    return list.reversed.toList();
+  }
+
+  @override
+  Stream<List<MessageRecordModel>> messagesStream(String conversationId, {int limit = 50}) {
+    return _conv(conversationId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((s) => s.docs.map(_fromDoc).toList().reversed.toList());
+  }
+
+  @override
+  Future<MessageRecordModel> sendText({String? conversationId, String? otherUserId, required String text, String? replyToMessageId}) async {
+    final convId = await _ensureConversation(conversationId, otherUserId);
+    final me = _auth.currentUser?.uid;
+    if (me == null) throw Exception('not_authenticated');
+    final other = await _otherParticipant(convId);
+    final data = {
+      'conversationId': convId,
+      'senderId': me,
+      'receiverId': other ?? '',
+      'type': 'text',
+      'text': text,
+      'attachments': [],
+      'replyTo': null,
+      'readBy': [me],
+      'createdAt': FieldValue.serverTimestamp(),
+      'deletedFor': {},
+    };
+    final ref = await _conv(convId).add(data);
+    await _updateConversationSummary(conversationId: convId, type: 'text', text: text);
+    final fresh = await ref.get();
+    return _fromDoc(fresh);
+  }
+
+  @override
+  Future<MessageRecordModel> sendTextWithAttachments({String? conversationId, String? otherUserId, required String text, required List<Map<String, dynamic>> attachments, String? replyToMessageId}) async {
+    final convId = await _ensureConversation(conversationId, otherUserId);
+    final me = _auth.currentUser?.uid;
+    if (me == null) throw Exception('not_authenticated');
+    final other = await _otherParticipant(convId);
+    final atts = attachments.where((a) => a.isNotEmpty).toList();
+    String type = 'text';
+    final types = atts.map((a) => (a['type'] ?? '').toString()).toList();
+    if (types.contains('video')) {
+      type = 'video';
+    } else if (types.contains('image')) {
+      type = 'image';
+    } else if (types.contains('voice')) {
+      type = 'voice';
+    } else if (atts.isNotEmpty) {
+      type = 'file';
+    }
+
+    final data = {
+      'conversationId': convId,
+      'senderId': me,
+      'receiverId': other ?? '',
+      'type': type,
+      'text': text,
+      'attachments': atts,
+      'replyTo': null,
+      'readBy': [me],
+      'createdAt': FieldValue.serverTimestamp(),
+      'deletedFor': {},
+    };
+    final ref = await _conv(convId).add(data);
+    await _updateConversationSummary(conversationId: convId, type: type, text: text);
+    final fresh = await ref.get();
+    return _fromDoc(fresh);
+  }
+
+  @override
+  Future<MessageRecordModel> sendVoice({String? conversationId, String? otherUserId, required String audioUrl, required int durationSec, required int fileSize, String? replyToMessageId}) async {
+    final convId = await _ensureConversation(conversationId, otherUserId);
+    final me = _auth.currentUser?.uid;
+    if (me == null) throw Exception('not_authenticated');
+    final other = await _otherParticipant(convId);
+    final att = {
+      'type': 'voice',
+      'url': audioUrl,
+      'durationSec': durationSec,
+      'fileSize': fileSize,
+      'fileName': 'voice_message.m4a',
+    };
+    final data = {
+      'conversationId': convId,
+      'senderId': me,
+      'receiverId': other ?? '',
+      'type': 'voice',
+      'text': '',
+      'attachments': [att],
+      'replyTo': null,
+      'readBy': [me],
+      'createdAt': FieldValue.serverTimestamp(),
+      'deletedFor': {},
+    };
+    final ref = await _conv(convId).add(data);
+    await _updateConversationSummary(conversationId: convId, type: 'voice', text: '');
+    final fresh = await ref.get();
+    return _fromDoc(fresh);
+  }
+
+  @override
+  Future<void> react(String messageId, String? emoji) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    // Reaction requires conversation; find message by collectionGroup
+    final snap = await _db.collectionGroup('messages').where(FieldPath.documentId, isEqualTo: messageId).limit(1).get();
+    if (snap.docs.isEmpty) return;
+    final ref = snap.docs.first.reference;
+    await ref.set({'reactions': {uid: emoji}, 'latestReaction': emoji ?? ''}, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> deleteForMe(String messageId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final snap = await _db.collectionGroup('messages').where(FieldPath.documentId, isEqualTo: messageId).limit(1).get();
+    if (snap.docs.isEmpty) return;
+    final ref = snap.docs.first.reference;
+    await ref.set({'deletedFor': {uid: true}}, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> deleteForEveryone(String messageId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final snap = await _db.collectionGroup('messages').where(FieldPath.documentId, isEqualTo: messageId).limit(1).get();
+    if (snap.docs.isEmpty) return;
+    final ref = snap.docs.first.reference;
+    final d = await ref.get();
+    final data = d.data() ?? {};
+    if (data['senderId'] != uid) return;
+    await ref.set({'deletedForEveryone': true, 'text': '', 'attachments': []}, SetOptions(merge: true));
+  }
+}

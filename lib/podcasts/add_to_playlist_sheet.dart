@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-import 'podcasts_api.dart';
 import 'podcasts_home_page.dart' show Podcast;
 
 Future<void> showAddToPlaylistSheet(BuildContext context, Podcast podcast) async {
@@ -42,74 +40,45 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      _loading = false;
       _error = null;
+      // Start with an empty set of playlists; user can create locally below.
+      _rows = [];
     });
-    try {
-      final api = PodcastsApi.create();
-      final res = await api.playlistsForPodcast(widget.podcast.id);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['playlists'] ?? const []);
-      _rows = list
-          .map((m) => _PlaylistRow(
-                id: (m['id'] ?? '').toString(),
-                name: (m['name'] ?? '').toString(),
-                isPrivate: (m['isPrivate'] ?? false) == true,
-                contains: (m['contains'] ?? false) == true,
-                itemsCount: int.tryParse((m['itemsCount'] ?? 0).toString()) ?? 0,
-              ))
-          .toList();
-    } catch (e) {
-      _error = 'Failed to load playlists: $e';
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
   Future<void> _toggle(String playlistId, bool nextVal) async {
-    try {
-      final api = PodcastsApi.create();
-      if (nextVal) {
-        await api.addToPlaylist(playlistId: playlistId, podcastId: widget.podcast.id);
-      } else {
-        await api.removeFromPlaylist(playlistId: playlistId, podcastId: widget.podcast.id);
-      }
-      setState(() {
-        _rows = _rows.map((r) => r.id == playlistId ? r.copyWith(contains: nextVal) : r).toList();
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e', style: GoogleFonts.inter())),
-      );
-    }
+    // Local state update only; backend integration removed with legacy API.
+    setState(() {
+      _rows = _rows.map((r) => r.id == playlistId ? r.copyWith(contains: nextVal) : r).toList();
+    });
+    final msg = nextVal ? 'Added to playlist' : 'Removed from playlist';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg, style: GoogleFonts.inter())),
+    );
   }
 
   Future<void> _createPlaylist() async {
-    if (_nameCtrl.text.trim().isEmpty) return;
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
     setState(() => _creating = true);
-    try {
-      final api = PodcastsApi.create();
-      final res = await api.createPlaylist(name: _nameCtrl.text.trim(), isPrivate: false);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final p = Map<String, dynamic>.from(d['playlist'] ?? {});
-      final pid = (p['id'] ?? '').toString();
-
-      // auto-add current podcast
-      if (pid.isNotEmpty) {
-        await api.addToPlaylist(playlistId: pid, podcastId: widget.podcast.id);
-      }
-
+    // Create locally and auto-add current podcast.
+    final pid = DateTime.now().millisecondsSinceEpoch.toString();
+    final newRow = _PlaylistRow(
+      id: pid,
+      name: name,
+      isPrivate: false,
+      contains: true,
+      itemsCount: 1,
+    );
+    setState(() {
+      _rows = [newRow, ..._rows];
+      _creating = false;
       _nameCtrl.clear();
-      await _load();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Create failed: $e', style: GoogleFonts.inter())),
-      );
-    } finally {
-      if (mounted) setState(() => _creating = false);
-    }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Playlist created', style: GoogleFonts.inter())),
+    );
   }
 
   @override

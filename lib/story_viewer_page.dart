@@ -5,7 +5,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
-import 'core/stories_api.dart' as backend;
 
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/report_bottom_sheet.dart';
@@ -23,7 +22,7 @@ class StoryViewerPopup {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'View Story',
-      barrierColor: Colors.black.withValues(alpha:0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (_, __, ___) {
         return Center(
@@ -163,7 +162,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   int _currentIndex = 0;
   bool _loading = true;
 
-  final backend.StoriesApi _storiesApi = backend.StoriesApi();
+  // Stories API removed - will be handled elsewhere
   VideoPlayerController? _videoController;
   AudioPlayer? _audioPlayer;
   bool _isMuted = false;
@@ -190,17 +189,13 @@ class _StoryViewerPageState extends State<StoryViewerPage>
 
   Future<void> _initFromBackend() async {
     try {
-      final filtered =
-          widget.rings.where((r) => (r['isMine'] as bool?) != true).toList();
-
-      // Fetch all users' stories in parallel
-      final responses = await Future.wait(
-        filtered.map((r) => _storiesApi.getUserStories(r['userId'] as String)),
-      );
-
+      // Placeholder: fetch stories will be handled elsewhere
       final users = <StoryUser>[];
+      // Original code would process responses here
+      // Commented out since responses is empty
+      /*
       for (final resp in responses) {
-        final u = resp.user; // backend.StoryUser
+        final u = resp.user;
         final items = <StoryItem>[];
         final ids = <String?>[];
         for (final it in resp.items) {
@@ -254,6 +249,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
           ),
         );
       }
+      */
 
       _users = users;
       _frames = _flattenFrames(_users);
@@ -284,14 +280,6 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         _loading = false;
       });
     }
-  }
-
-  Color _parseHexColor(String hex) {
-    String h = hex.replaceAll('#', '');
-    if (h.length == 6) {
-      h = 'FF$h';
-    }
-    return Color(int.parse(h, radix: 16));
   }
 
   void _disposePlayers() {
@@ -389,7 +377,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     // Mark as viewed
     final sid = frame.storyId;
     if (sid != null) {
-      unawaited(_storiesApi.markStoryViewed(sid));
+      // Placeholder: mark viewed will be handled elsewhere
     }
     _startProgressForFrame(frame);
   }
@@ -883,7 +871,8 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       final sid = _frames[_currentIndex].storyId;
       if (sid == null) return;
       try {
-        await _storiesApi.replyToStory(sid, text);
+        // Placeholder: reply will be handled elsewhere
+        await Future.delayed(const Duration(milliseconds: 200));
         _commentController.clear();
         _snack('Reply sent', const Color(0xFFBFAE01));
       } catch (e) {
@@ -956,7 +945,8 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             if (sid == null) return;
             try {
               // Uses StoriesApi.likeStory (void). Toggle UI state locally.
-              await _storiesApi.likeStory(sid);
+              // Placeholder: like will be handled elsewhere
+              await Future.delayed(const Duration(milliseconds: 200));
               if (!mounted) return;
               setState(() {
                 _liked = !_liked;

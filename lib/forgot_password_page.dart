@@ -140,9 +140,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                           height: 52,
                           child: ElevatedButton(
                             onPressed: () async {
+                              final navContext = context;
                               final email = _emailController.text.trim();
                               if (email.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                ScaffoldMessenger.of(navContext).showSnackBar(
                                   SnackBar(
                                     content: Text('Enter your email', style: GoogleFonts.inter()),
                                     backgroundColor: Colors.red,
@@ -151,25 +152,23 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                 return;
                               }
                               try {
-                                final repo = context.read<AuthRepository>();
+                                final repo = navContext.read<AuthRepository>();
                                 await repo.sendPasswordResetEmail(email);
-                                if (mounted) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PasswordResetSentPage(email: email),
-                                    ),
-                                  );
-                                }
+                                if (!navContext.mounted) return;
+                                Navigator.push(
+                                  navContext,
+                                  MaterialPageRoute(
+                                    builder: (_) => PasswordResetSentPage(email: email),
+                                  ),
+                                );
                               } catch (_) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Failed to send reset email', style: GoogleFonts.inter()),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
+                                if (!navContext.mounted) return;
+                                ScaffoldMessenger.of(navContext).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to send reset email', style: GoogleFonts.inter()),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
                               }
                             },
                             style: ElevatedButton.styleFrom(

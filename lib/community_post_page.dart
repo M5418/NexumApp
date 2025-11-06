@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
+import 'package:provider/provider.dart';
 
 import 'models/post_detail.dart';
 import 'models/comment.dart';
 import 'models/post.dart';
 
-import 'core/auth_api.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'repositories/firebase/firebase_post_repository.dart';
+import 'repositories/interfaces/comment_repository.dart';
 import 'core/posts_api.dart';
 
 import 'widgets/media_carousel.dart';
@@ -53,7 +55,6 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
   // Comments
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _commentFocusNode = FocusNode();
-  List<Comment> _comments = [];
   bool _loadingPost = false;
   bool _loadingComments = false;
 
@@ -90,9 +91,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
 
   Future<void> _loadCurrentUserId() async {
     try {
-      final res = await AuthApi().me();
-      final id =
-          (res['ok'] == true && res['data'] != null) ? res['data']['id'] : null;
+      final id = fb.FirebaseAuth.instance.currentUser?.uid;
       if (!mounted) return;
       setState(() {
         _currentUserId = id?.toString();
@@ -192,11 +191,8 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       _loadingComments = true;
     });
     try {
-      final list = await PostsApi().listComments(_post!.id);
+      await PostsApi().listComments(_post!.id);
       if (!mounted) return;
-      setState(() {
-        _comments = list;
-      });
     } catch (e) {
       if (!mounted) return;
       // Keep UI, just notify
@@ -540,8 +536,11 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     if (text.isEmpty) return;
 
     try {
-      await CommunityPostsApi()
-          .addComment(widget.communityId, _post!.id, content: text);
+      final commentRepo = context.read<CommentRepository>();
+      await commentRepo.createComment(
+        postId: _post!.id,
+        text: text,
+      );
       _commentController.clear();
       _commentFocusNode.unfocus();
 

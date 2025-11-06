@@ -152,13 +152,21 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
 
       if (result is Uint8List) {
         editedBytes = result;
-      } else if (result is XFile) editedXFile = result;
-      else if (result is String) editedPath = result;
-      else if (result is Map) {
+      } else if (result is XFile) {
+        editedXFile = result;
+      } else if (result is String) {
+        editedPath = result;
+      } else if (result is Map) {
         final dynamic v = result['bytes'] ?? result['image'] ?? result['data'] ?? result['result'];
-        if (v is Uint8List) editedBytes = v;
-        if (v is XFile) editedXFile = v;
-        if (v is String) editedPath = v;
+        if (v is Uint8List) {
+          editedBytes = v;
+        }
+        if (v is XFile) {
+          editedXFile = v;
+        }
+        if (v is String) {
+          editedPath = v;
+        }
       }
 
       final mime = _mimeFromPath(current.path);
@@ -476,7 +484,9 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
       } else {
         if (oldIndex < _index && newIndex >= _index) {
           _index -= 1;
-        } else if (oldIndex > _index && newIndex <= _index) _index += 1;
+        } else if (oldIndex > _index && newIndex <= _index) {
+          _index += 1;
+        }
       }
     });
   }

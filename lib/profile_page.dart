@@ -11,17 +11,15 @@ import 'my_connections_page.dart';
 import 'edit_profil.dart';
 import 'monetization_page.dart';
 import 'premium_subscription_page.dart';
-import 'core/auth_api.dart';
-import 'core/token_store.dart';
 import 'sign_in_page.dart';
 import 'core/profile_api.dart';
 import 'core/api_client.dart';
-import 'podcasts/podcasts_api.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'core/kyc_api.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'core/notifications_api.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'repositories/interfaces/podcast_repository.dart';
 import 'widgets/badge_icon.dart';
 import 'notification_page.dart';
 import 'conversations_page.dart';
@@ -101,14 +99,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadUnreadNotifications() async {
-    try {
-      final c = await NotificationsApi().unreadCount();
-      if (!mounted) return;
-      setState(() => _unreadNotifications = c);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _unreadNotifications = 0);
-    }
+    // Placeholder: notifications count will be handled elsewhere
+    setState(() => _unreadNotifications = 0);
   }
 
   List<Map<String, dynamic>> _parseListOfMap(dynamic value) {
@@ -565,17 +557,17 @@ class _ProfilePageState extends State<ProfilePage> {
     });
 
     try {
-      final api = PodcastsApi();
-      final res = await api.list(mine: true, limit: 50, page: 1);
-      final body = Map<String, dynamic>.from(res);
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final podcasts = (data['podcasts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.listPodcasts(limit: 50);
+      
       if (!mounted) return;
       setState(() {
-        _myPodcasts = podcasts;
+        _myPodcasts = models.map((p) => {
+          'id': p.id,
+          'title': p.title,
+          'description': p.description,
+          'coverUrl': p.coverUrl,
+        }).toList();
         _loadingPodcasts = false;
       });
     } catch (e) {
@@ -1000,11 +992,13 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   interests: interests,
                                                 );
 
-                                                if (!mounted) return;
+                                                final dialogContext = context;
+                                                if (!dialogContext.mounted) return;
+                                                final isWide = _isWideLayout(dialogContext);
                                                 ProfileEditResult? result;
-                                                if (_isWideLayout(context)) {
+                                                if (isWide) {
                                                   result = await showDialog<ProfileEditResult>(
-                                                    context: context,
+                                                    context: dialogContext,
                                                     barrierDismissible: true,
                                                     builder: (_) {
                                                       return Dialog(
@@ -1048,7 +1042,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       await Navigator.push<
                                                         ProfileEditResult
                                                       >(
-                                                        context,
+                                                        dialogContext,
                                                         MaterialPageRoute(
                                                           builder: (_) => page,
                                                         ),
@@ -2122,13 +2116,13 @@ class _ProfilePageState extends State<ProfilePage> {
                                                                 interests,
                                                           );
 
-                                                      if (!mounted) return;
+                                                      final dialogContext = context;
+                                                      if (!dialogContext.mounted) return;
+                                                      final isWide = _isWideLayout(dialogContext);
                                                       ProfileEditResult? result;
-                                                      if (_isWideLayout(
-                                                        context,
-                                                      )) {
+                                                      if (isWide) {
                                                         result = await showDialog<ProfileEditResult>(
-                                                          context: context,
+                                                          context: dialogContext,
                                                           barrierDismissible:
                                                               true,
                                                           builder: (_) {
@@ -2178,7 +2172,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                             await Navigator.push<
                                                               ProfileEditResult
                                                             >(
-                                                              context,
+                                                              dialogContext,
                                                               MaterialPageRoute(
                                                                 builder: (_) =>
                                                                     page,
@@ -2961,17 +2955,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   onTap: () async {
-                    Navigator.pop(context);
-                    final ctx = context;
-                    await TokenStore.clear();
-                    // Remove Authorization header from Dio client
-                    ApiClient().dio.options.headers.remove('Authorization');
-                    try {
-                      await AuthApi().logout();
-                    } catch (_) {}
-                    if (!mounted) return;
+                    final navContext = context;
+                    Navigator.pop(navContext);
+                    // Sign out with Firebase Auth
+                    await fb.FirebaseAuth.instance.signOut();
+                    if (!navContext.mounted) return;
                     Navigator.of(
-                      context,
+                      navContext,
                       rootNavigator: true,
                     ).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (_) => const SignInPage()),
@@ -3093,8 +3083,9 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildActivityTab() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_loadingActivity)
+    if (_loadingActivity) {
       return const Center(child: CircularProgressIndicator());
+    }
 
     if (_errorActivity != null) {
       return Center(
@@ -3147,8 +3138,9 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildPostsTab() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_loadingMyPosts)
+    if (_loadingMyPosts) {
       return const Center(child: CircularProgressIndicator());
+    }
 
     if (_errorMyPosts != null) {
       return Center(
@@ -3199,9 +3191,12 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildPodcastsTab() {
-    if (_loadingPodcasts)
+    if (_loadingPodcasts) {
       return const Center(child: CircularProgressIndicator());
-    if (_errorPodcasts != null) return Center(child: Text(_errorPodcasts!));
+    }
+    if (_errorPodcasts != null) {
+      return Center(child: Text(_errorPodcasts!));
+    }
     if (_myPodcasts.isEmpty) {
       return ListView(
         primary: false,
@@ -3305,7 +3300,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildMediaTab() {
-    if (_loadingMedia) return const Center(child: CircularProgressIndicator());
+    if (_loadingMedia) {
+      return const Center(child: CircularProgressIndicator());
+    }
     if (_mediaImageUrls.isEmpty) {
       return GridView.count(
         primary: false,

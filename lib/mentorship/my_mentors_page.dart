@@ -1,8 +1,8 @@
 // c:\Users\dehou\nexum-app\lib\mentorship\my_mentors_page.dart
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/mentorship_api.dart';
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/mentorship_repository.dart';
 import 'mentorship_chat_page.dart';
 
 class MyMentorsPage extends StatefulWidget {
@@ -13,14 +13,15 @@ class MyMentorsPage extends StatefulWidget {
 }
 
 class _MyMentorsPageState extends State<MyMentorsPage> {
-  final _api = MentorshipApi();
+  late MentorshipRepository _repo;
   bool _loading = true;
   String? _error;
-  List<MentorProfileDto> _mentors = [];
+  List<MentorModel> _mentors = [];
 
   @override
   void initState() {
     super.initState();
+    _repo = context.read<MentorshipRepository>();
     _load();
   }
 
@@ -30,19 +31,12 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
       _error = null;
     });
     try {
-      final items = await _api.listMyMentors();
+      final items = await _repo.getMyMentors();
       if (!mounted) return;
       setState(() => _mentors = items);
     } catch (e) {
       if (!mounted) return;
-      String msg = 'Failed to load mentors';
-      if (e is DioException) {
-        final code = e.response?.statusCode;
-        msg = code == null ? '$msg: network error' : '$msg (HTTP $code)';
-      } else {
-        msg = '$msg: $e';
-      }
-      setState(() => _error = msg);
+      setState(() => _error = 'Failed to load mentors: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -116,7 +110,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                           itemCount: _mentors.length,
                           itemBuilder: (context, index) {
                             final mentor = _mentors[index];
-                            final avatar = mentor.avatar ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(mentor.name)}';
+                            final avatar = mentor.avatarUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(mentor.name)}';
                             return Container(
                               margin: const EdgeInsets.only(bottom: 16),
                               padding: const EdgeInsets.all(20),
@@ -177,7 +171,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              mentor.profession,
+                                              mentor.profession ?? '',
                                               style: GoogleFonts.inter(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w500,
@@ -188,7 +182,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              mentor.company,
+                                              mentor.company ?? '',
                                               style: GoogleFonts.inter(
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w400,

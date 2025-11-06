@@ -135,6 +135,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
       if (!mounted) return;
       if (picked != null) {
         final bytes = await picked.readAsBytes();
+        if (!mounted) return;
         setState(() {
           _photoBytes = bytes;
           _photoExt = _guessExt(picked);

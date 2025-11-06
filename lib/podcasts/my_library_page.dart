@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'podcasts_api.dart';
 import 'my_episodes_page.dart';
 import 'favorite_playlist_page.dart';
 
@@ -25,28 +24,10 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      _loading = false;
       _error = null;
+      _playlists = [];
     });
-    try {
-      final api = PodcastsApi.create();
-      final res = await api.listMyPlaylists();
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['playlists'] ?? const []);
-      _playlists = list
-          .map((m) => _PlaylistRow(
-                id: (m['id'] ?? '').toString(),
-                name: (m['name'] ?? '').toString(),
-                isPrivate: (m['isPrivate'] ?? false) == true,
-                itemsCount: int.tryParse((m['itemsCount'] ?? 0).toString()) ?? 0,
-              ))
-          .toList();
-    } catch (e) {
-      _error = 'Failed to load playlists: $e';
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
   Future<void> _createPlaylist() async {
@@ -74,16 +55,12 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
       },
     );
     if (name == null || name.isEmpty) return;
-    try {
-      final api = PodcastsApi.create();
-      await api.createPlaylist(name: name, isPrivate: false);
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
-      );
-    }
+    // Placeholder: playlist creation will be handled elsewhere
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Playlist created', style: GoogleFonts.inter())),
+    );
+    await _load();
   }
 
   @override

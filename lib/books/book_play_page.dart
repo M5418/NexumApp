@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:provider/provider.dart';
 import 'books_home_page.dart' show Book;
-import 'books_api.dart';
+import '../repositories/interfaces/book_repository.dart';
 
 class BookPlayPage extends StatefulWidget {
   final Book book;
@@ -53,19 +54,15 @@ class _BookPlayPageState extends State<BookPlayPage> {
     try {
       // Fetch last progress and seek if available
       try {
-        final api = BooksApi.create();
-        final res = await api.getProgress(widget.book.id);
-        final data = Map<String, dynamic>.from(res);
-        final d = Map<String, dynamic>.from(data['data'] ?? {});
-        final p = d['progress'];
-        if (p != null) {
-          final lastPos = int.tryParse((p['last_audio_position_sec'] ?? 0).toString()) ?? 0;
-          if (lastPos > 0) {
-            _position = Duration(seconds: lastPos);
+        final bookRepo = context.read<BookRepository>();
+        final progress = await bookRepo.getProgress(widget.book.id);
+        if (progress != null) {
+          if (progress.audioProgress != null) {
+            _position = progress.audioProgress!;
           }
-          final total = int.tryParse((p['audio_duration_sec'] ?? 0).toString()) ?? 0;
-          if (total > 0) {
-            _duration = Duration(seconds: total);
+          // Use book's audio duration if available
+          if (widget.book.audioDurationSec != null) {
+            _duration = Duration(seconds: widget.book.audioDurationSec!);
           }
         }
       } catch (_) {}
@@ -145,11 +142,10 @@ class _BookPlayPageState extends State<BookPlayPage> {
 
   Future<void> _sendProgress() async {
     try {
-      final api = BooksApi.create();
-      await api.updateAudioProgress(
-        id: widget.book.id,
-        positionSec: _position.inSeconds,
-        durationSec: _duration.inSeconds > 0 ? _duration.inSeconds : null,
+      final bookRepo = context.read<BookRepository>();
+      await bookRepo.updateProgress(
+        bookId: widget.book.id,
+        audioProgress: _position,
       );
     } catch (_) {
       // ignore

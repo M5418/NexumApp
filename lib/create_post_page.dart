@@ -7,7 +7,8 @@ import 'widgets/circle_icon_button.dart';
 import 'widgets/media_thumb.dart';
 import 'widgets/tag_chip.dart';
 import 'core/posts_api.dart';
-import 'core/communities_api.dart';
+import 'package:provider/provider.dart';
+import 'repositories/interfaces/community_repository.dart';
 import 'core/files_api.dart';
 import 'repositories/firebase/firebase_follow_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
@@ -58,7 +59,7 @@ class CreatePostPage extends StatefulWidget {
 class _CreatePostPageState extends State<CreatePostPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
-  final List<ApiCommunity> _selectedCommunities = [];
+  final List<CommunityModel> _selectedCommunities = [];
   final List<MediaItem> _mediaItems = [];
   final List<String> _taggedUsers = [];
   final int _maxCommunities = 3;
@@ -904,8 +905,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        return FutureBuilder<List<ApiCommunity>>(
-          future: CommunitiesApi().listMine(),
+        return FutureBuilder<List<CommunityModel>>(
+          future: context.read<CommunityRepository>().listMine(),
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
               return SizedBox(
@@ -929,7 +930,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               builder: (context, setSheetState) {
                 String query = '';
 
-                List<ApiCommunity> filtered = communities;
+                List<CommunityModel> filtered = communities;
                 void applyQuery(String q) {
                   setSheetState(() {
                     query = q.trim().toLowerCase();

@@ -5,8 +5,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 
 import 'models/post.dart';
-import 'core/community_posts_api.dart';
-import 'core/communities_api.dart';
+import 'repositories/interfaces/community_repository.dart';
+import 'repositories/interfaces/post_repository.dart';
+import 'core/posts_api.dart';
 import 'community_post_page.dart';
 import 'theme_provider.dart';
 import 'widgets/post_card.dart';
@@ -36,14 +37,21 @@ class _CommunityPageState extends State<CommunityPage> {
   bool _loadingDetails = false;
 
   // Community details
-  ApiCommunity? _community;
+  CommunityModel? _community;
 
   // Media items aggregated from posts
   final List<_CommunityMediaItem> _mediaItems = [];
 
+  late CommunityRepository _commRepo;
+  late PostRepository _postRepo;
+  late PostsApi _postsApi;
+
   @override
   void initState() {
     super.initState();
+    _commRepo = context.read<CommunityRepository>();
+    _postRepo = context.read<PostRepository>();
+    _postsApi = PostsApi();
     _loadAll();
   }
 
@@ -59,7 +67,7 @@ class _CommunityPageState extends State<CommunityPage> {
       _loadingDetails = true;
     });
     try {
-      final c = await CommunitiesApi().details(widget.communityId);
+      final c = await _commRepo.details(widget.communityId);
       if (!mounted) return;
       setState(() {
         _community = c;
@@ -91,8 +99,8 @@ class _CommunityPageState extends State<CommunityPage> {
     });
 
     try {
-      final list = await CommunityPostsApi()
-          .list(widget.communityId, limit: 100, offset: 0);
+      final list = await _postsApi.listCommunityPosts(
+          communityId: widget.communityId, limit: 100, offset: 0);
       if (!mounted) return;
       setState(() {
         _posts = list;
@@ -137,10 +145,11 @@ class _CommunityPageState extends State<CommunityPage> {
         ),
       );
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _loadingPosts = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingPosts = false;
+        });
+      }
     }
   }
 
@@ -186,9 +195,9 @@ class _CommunityPageState extends State<CommunityPage> {
 
     try {
       if (willBookmark) {
-        await CommunityPostsApi().bookmark(widget.communityId, postId);
+        await _postRepo.bookmarkPost(postId);
       } else {
-        await CommunityPostsApi().unbookmark(widget.communityId, postId);
+        await _postRepo.unbookmarkPost(postId);
       }
     } catch (e) {
       if (!mounted) return;
@@ -235,7 +244,7 @@ class _CommunityPageState extends State<CommunityPage> {
       });
 
       try {
-        await CommunityPostsApi().like(widget.communityId, postId);
+        await _postRepo.likePost(postId);
       } catch (e) {
         if (!mounted) return;
         // Revert UI on failure
@@ -289,7 +298,7 @@ class _CommunityPageState extends State<CommunityPage> {
       });
 
       try {
-        await CommunityPostsApi().unlike(widget.communityId, postId);
+        await _postRepo.unlikePost(postId);
       } catch (e) {
         if (!mounted) return;
         // Revert UI on failure
@@ -402,7 +411,7 @@ class _CommunityPageState extends State<CommunityPage> {
     if (confirm != true) return;
 
     try {
-      await CommunityPostsApi().repost(widget.communityId, postId);
+      await _postRepo.repostPost(postId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -425,6 +434,7 @@ class _CommunityPageState extends State<CommunityPage> {
                   .contains('already')));
 
       if (isAlreadyReposted) {
+        if (!mounted) return;
         final remove = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -445,10 +455,11 @@ class _CommunityPageState extends State<CommunityPage> {
             ],
           ),
         );
+        if (!mounted) return;
 
         if (remove == true) {
           try {
-            await CommunityPostsApi().unrepost(widget.communityId, postId);
+            await _postRepo.unrepostPost(postId);
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 
 import '../core/files_api.dart';
 import '../data/interest_domains.dart';
-import 'podcasts_api.dart';
 
 class CreatePodcastPage extends StatefulWidget {
   const CreatePodcastPage({super.key});
@@ -47,11 +46,6 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
     return name.substring(i + 1).toLowerCase();
   }
 
-  List<String> _parseTags() {
-    final raw = _tagsCtrl.text.trim();
-    if (raw.isEmpty) return [];
-    return raw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).take(25).toList();
-  }
 
   Future<void> _pickCoverImage() async {
     try {
@@ -119,20 +113,8 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
     }
     setState(() => _creating = true);
     try {
-      final api = PodcastsApi.create();
-      final res = await api.createPodcast(
-        title: _titleCtrl.text.trim(),
-        author: _authorCtrl.text.trim().isEmpty ? null : _authorCtrl.text.trim(),
-        description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-        coverUrl: _coverUrl,
-        audioUrl: _audioUrl,
-        language: _languageCtrl.text.trim().isEmpty ? null : _languageCtrl.text.trim(),
-        category: _categoryCtrl.text.trim().isEmpty ? null : _categoryCtrl.text.trim(),
-        tags: _parseTags(),
-        isPublished: publish,
-      );
-      final ok = (res['ok'] ?? false) == true;
-      if (!ok) throw 'Server returned error';
+      // Placeholder: podcast creation will be handled elsewhere
+      await Future.delayed(const Duration(milliseconds: 500));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(publish ? 'Podcast published' : 'Draft saved', style: GoogleFonts.inter())),

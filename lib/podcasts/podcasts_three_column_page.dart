@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
-import 'podcasts_api.dart';
+import '../repositories/interfaces/podcast_repository.dart';
 import 'podcasts_home_page.dart' show Podcast;
 import 'podcast_details_page.dart';
 import 'my_library_page.dart';
@@ -45,12 +46,9 @@ class _PodcastsThreeColumnPageState extends State<PodcastsThreeColumnPage> {
       _errorLeft = null;
     });
     try {
-      final api = PodcastsApi.create();
-      final res = await api.list(page: 1, limit: 40, isPublished: true);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
-      _leftItems = list.map(Podcast.fromApi).toList();
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.listPodcasts(page: 1, limit: 40, isPublished: true);
+      _leftItems = models.map(Podcast.fromModel).toList();
     } catch (e) {
       _errorLeft = 'Failed to load podcasts: $e';
     } finally {
@@ -64,12 +62,9 @@ class _PodcastsThreeColumnPageState extends State<PodcastsThreeColumnPage> {
       _errorTop = null;
     });
     try {
-      final api = PodcastsApi.create();
-      final res = await api.list(page: 1, limit: 30, isPublished: true);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
-      _topItems = list.map(Podcast.fromApi).toList();
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.listPodcasts(page: 1, limit: 30, isPublished: true);
+      _topItems = models.map(Podcast.fromModel).toList();
     } catch (e) {
       _errorTop = 'Failed to load top podcasts: $e';
     } finally {

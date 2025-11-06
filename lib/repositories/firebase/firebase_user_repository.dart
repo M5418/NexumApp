@@ -15,7 +15,7 @@ class FirebaseUserRepository implements UserRepository {
   UserProfile? _fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     if (!doc.exists) return null;
     final d = doc.data()!;
-    DateTime? _ts(v) {
+    DateTime? ts(v) {
       if (v == null) return null;
       if (v is Timestamp) return v.toDate();
       if (v is String) return DateTime.tryParse(v);
@@ -37,14 +37,14 @@ class FirebaseUserRepository implements UserRepository {
       followersCount: d['followersCount'],
       followingCount: d['followingCount'],
       postsCount: d['postsCount'],
-      createdAt: _ts(d['createdAt']),
-      lastActive: _ts(d['lastActive']),
+      createdAt: ts(d['createdAt']),
+      lastActive: ts(d['lastActive']),
       fcmTokens: (d['fcmTokens'] as List?)?.cast<String>(),
     );
   }
 
   Map<String, dynamic> _toFirestore(UserProfile p) {
-    dynamic _toTs(DateTime? v) => v == null ? null : Timestamp.fromDate(v);
+    dynamic toTs(DateTime? v) => v == null ? null : Timestamp.fromDate(v);
     return {
       'displayName': p.displayName,
       'username': p.username,
@@ -60,8 +60,8 @@ class FirebaseUserRepository implements UserRepository {
       'followersCount': p.followersCount,
       'followingCount': p.followingCount,
       'postsCount': p.postsCount,
-      'createdAt': _toTs(p.createdAt),
-      'lastActive': _toTs(p.lastActive),
+      'createdAt': toTs(p.createdAt),
+      'lastActive': toTs(p.lastActive),
       'fcmTokens': p.fcmTokens,
     };
   }
@@ -105,7 +105,7 @@ class FirebaseUserRepository implements UserRepository {
     final q = query.toLowerCase();
     final snap = await _users
         .where('usernameLower', isGreaterThanOrEqualTo: q)
-        .where('usernameLower', isLessThan: q + '\uf8ff')
+        .where('usernameLower', isLessThan: '$q\uf8ff')
         .limit(limit)
         .get();
     return snap.docs.map(_fromDoc).whereType<UserProfile>().toList();

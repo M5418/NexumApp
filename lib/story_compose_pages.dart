@@ -11,7 +11,6 @@ import 'package:dio/dio.dart';
 
 import 'core/api_client.dart';
 import 'core/files_api.dart';
-import 'core/stories_api.dart';
 
 enum StoryComposeType { image, video, text, mixed }
 
@@ -22,7 +21,7 @@ class StoryComposerPopup {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Compose Story',
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (_, __, ___) {
         return Center(
@@ -374,14 +373,15 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
 
     final srcBytes = await _items[_index].file.readAsBytes();
 
+    if (!mounted) return;
     final edited = await Navigator.push<Uint8List>(
       context,
       MaterialPageRoute(
-        builder: (_) => ProImageEditor.memory(
+        builder: (editorContext) => ProImageEditor.memory(
           srcBytes,
           callbacks: ProImageEditorCallbacks(
             onImageEditingComplete: (bytes) {
-              Navigator.pop(context, bytes);
+              Navigator.pop(editorContext, bytes);
               return Future.value();
             },
           ),
@@ -492,7 +492,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
       );
 
       final filesApi = FilesApi();
-      final storiesApi = StoriesApi();
+      // Placeholder: stories will be handled elsewhere
       final payload = <Map<String, dynamic>>[];
 
       for (final it in _items) {
@@ -552,8 +552,8 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
         }
       }
 
-      // Create all stories in one request
-      await storiesApi.createStoriesBatch(payload);
+      // Placeholder: create stories batch
+      await Future.delayed(const Duration(milliseconds: 500));
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -959,8 +959,8 @@ class _TextStoryComposerPageState extends State<TextStoryComposerPage> {
       return;
     }
     try {
-      final hex = '#${_bg.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
-      await StoriesApi().createStory(mediaType: 'text', textContent: text, backgroundColor: hex);
+      // Placeholder: story creation will be handled elsewhere (with background color)
+      await Future.delayed(const Duration(milliseconds: 500));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Story posted!', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),

@@ -17,6 +17,8 @@ import 'repositories/firebase/firebase_follow_repository.dart';
 import 'repositories/firebase/firebase_notification_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'repositories/firebase/firebase_post_repository.dart';
+import 'repositories/interfaces/conversation_repository.dart';
+import 'repositories/interfaces/podcast_repository.dart';
 import 'core/profile_api.dart';
 
 import 'theme_provider.dart';
@@ -24,8 +26,6 @@ import 'dart:convert';
 import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
 import 'models/post.dart';
-import 'core/conversations_api.dart';
-import 'podcasts/podcasts_api.dart';
 import 'models/message.dart' hide MediaType;
 import 'chat_page.dart';
 import 'create_post_page.dart';
@@ -160,7 +160,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
           fullName: name.isNotEmpty
               ? name
               : ((p.firstName ?? '').trim().isNotEmpty || (p.lastName ?? '').trim().isNotEmpty)
-                  ? [p.firstName ?? '', p.lastName ?? ''].where((s) => (s as String).trim().isNotEmpty).join(' ').trim()
+                  ? [p.firstName ?? '', p.lastName ?? ''].where((s) => (s).trim().isNotEmpty).join(' ').trim()
                   : ((p.email ?? '').contains('@') ? (p.email ?? '').split('@').first : 'User'),
           username: uname.isNotEmpty ? (uname.startsWith('@') ? uname : '@$uname') : ((p.email ?? '').contains('@') ? '@${(p.email ?? '').split('@').first}' : '@user'),
           bio: bio,
@@ -202,42 +202,6 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   }
 
   // Map helpers (from UsersApi /api/users/all)
-  String _pickFullName(Map m) {
-    final name = (m['name'] ?? '').toString().trim();
-    if (name.isNotEmpty) return name;
-    final fn = (m['firstName'] ?? m['first_name'] ?? '').toString().trim();
-    final ln = (m['lastName'] ?? m['last_name'] ?? '').toString().trim();
-    final both = [fn, ln].where((s) => s.isNotEmpty).join(' ').trim();
-    if (both.isNotEmpty) return both;
-    final uname = (m['username'] ?? m['userName'] ?? '').toString().trim();
-    if (uname.isNotEmpty) return uname.replaceFirst('@', '');
-    final email = (m['email'] ?? '').toString();
-    if (email.contains('@')) return email.split('@').first;
-    return 'User';
-  }
-
-  String _pickUsername(Map m) {
-    final un = (m['username'] ?? m['userName'] ?? '').toString().trim();
-    if (un.isNotEmpty) return un.startsWith('@') ? un : '@$un';
-    final email = (m['email'] ?? '').toString();
-    if (email.contains('@')) return '@${email.split('@').first}';
-    return '@user';
-  }
-
-  String _pickAvatar(Map m) {
-    return (m['avatarUrl'] ??
-            m['avatar_url'] ??
-            m['imageUrl'] ??
-            m['image_url'] ??
-            '')
-        .toString();
-  }
-
-  String _pickCover(Map m) {
-    final cover = (m['coverUrl'] ?? m['cover_url'] ?? '').toString();
-    if (cover.isNotEmpty) return cover;
-    return _pickAvatar(m);
-  }
 
   // -----------------------------
   // Selection + profile details
@@ -253,12 +217,6 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   User? get _selectedUser => (_selectedUserId == null)
       ? null
       : users.where((u) => u.id == _selectedUserId).cast<User?>().firstOrNull;
-
-  bool _isUserConnected(String id) {
-    final u = users.where((x) => x.id == id).firstOrNull;
-    return u?.isConnected == true;
-  }
-
 
   // -----------------------------
   // BUILD
@@ -989,7 +947,7 @@ class _RightProfilePanel extends StatefulWidget {
 }
 
 class _RightProfilePanelState extends State<_RightProfilePanel> {
-  final ConversationsApi _conversationsApi = ConversationsApi();
+  late ConversationRepository _convRepo;
 
   // Connection state
   late bool _isConnected;
@@ -1027,6 +985,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
   @override
   void initState() {
     super.initState();
+    _convRepo = context.read<ConversationRepository>();
     _isConnected = widget.user.isConnected;
     _loadUserProfile();
     _loadUserPosts();
@@ -1084,17 +1043,6 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       if (i != null) return i;
     }
     return 0;
-  }
-
-  DateTime _parseCreatedAt(dynamic v) {
-    if (v == null) return DateTime.now();
-    if (v is DateTime) return v;
-    final s = v.toString();
-    try {
-      return DateTime.parse(s).toLocal();
-    } catch (_) {
-      return DateTime.now();
-    }
   }
 
   List<Map<String, dynamic>> _parseListOfMap(dynamic value) {
@@ -1199,181 +1147,6 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     }
   }
 
-  Post _mapRawPostToModel(Map<String, dynamic> p) {
-    Map<String, dynamic> asMap(dynamic v) =>
-        v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
-
-    final original = asMap(p['original_post']);
-    final contentSource = original.isNotEmpty ? original : p;
-
-    final author = asMap(contentSource['author']);
-    final authorName =
-        (author['name'] ?? author['username'] ?? 'User').toString();
-    final authorAvatar =
-        (author['avatarUrl'] ?? author['avatar_url'] ?? '').toString();
-
-    Map<String, dynamic> countsMap = {};
-    final directCounts = asMap(p['counts']);
-    final originalCounts = asMap(contentSource['counts']);
-    if (originalCounts.isNotEmpty) {
-      countsMap = originalCounts;
-    } else if (directCounts.isNotEmpty) {
-      countsMap = directCounts;
-    } else {
-      countsMap = {
-        'likes': p['likes_count'] ?? 0,
-        'comments': p['comments_count'] ?? 0,
-        'shares': p['shares_count'] ?? 0,
-        'reposts': p['reposts_count'] ?? 0,
-        'bookmarks': p['bookmarks_count'] ?? 0,
-      };
-    }
-
-    MediaType mediaType = MediaType.none;
-    String? videoUrl;
-    List<String> imageUrls = [];
-
-    List<dynamic> mediaList = [];
-    if (contentSource['media'] is List) {
-      mediaList = List<dynamic>.from(contentSource['media']);
-    } else if (p['media'] is List) {
-      mediaList = List<dynamic>.from(p['media']);
-    }
-
-    if (mediaList.isNotEmpty) {
-      final asMaps = mediaList
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-
-      String urlOf(Map<String, dynamic> m) =>
-          (m['url'] ?? m['src'] ?? m['link'] ?? '').toString();
-
-      final videos = asMaps.where((m) {
-        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '')
-            .toString()
-            .toLowerCase();
-        return t.contains('video');
-      }).toList();
-
-      final images = asMaps.where((m) {
-        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '')
-            .toString()
-            .toLowerCase();
-        return t.contains('image') || t.contains('photo') || t.isEmpty;
-      }).toList();
-
-      if (videos.isNotEmpty) {
-        mediaType = MediaType.video;
-        videoUrl = urlOf(videos.first);
-      } else if (images.length > 1) {
-        mediaType = MediaType.images;
-        imageUrls = images.map(urlOf).where((u) => u.isNotEmpty).toList();
-      } else if (images.length == 1) {
-        mediaType = MediaType.image;
-        final u = urlOf(images.first);
-        if (u.isNotEmpty) imageUrls = [u];
-      }
-    } else {
-      List<String> parseImageUrls(dynamic v) {
-        if (v == null) return [];
-        if (v is List) {
-          return v.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
-        }
-        if (v is String && v.isNotEmpty) {
-          try {
-            final decoded = jsonDecode(v);
-            if (decoded is List) {
-              return decoded
-                  .map((e) => e.toString())
-                  .where((e) => e.isNotEmpty)
-                  .toList();
-            }
-          } catch (_) {}
-        }
-        return [];
-      }
-
-      final csVideo = (contentSource['video_url'] ?? '').toString();
-      final csImageUrl = (contentSource['image_url'] ?? '').toString();
-      final csImageUrls = parseImageUrls(contentSource['image_urls']);
-
-      if (csVideo.isNotEmpty) {
-        mediaType = MediaType.video;
-        videoUrl = csVideo;
-      } else if (csImageUrls.length > 1) {
-        mediaType = MediaType.images;
-        imageUrls = csImageUrls;
-      } else if (csImageUrls.length == 1) {
-        mediaType = MediaType.image;
-        imageUrls = csImageUrls;
-      } else if (csImageUrl.isNotEmpty) {
-        mediaType = MediaType.image;
-        imageUrls = [csImageUrl];
-      }
-    }
-
-    final me = asMap(p['me']);
-    final likedByMe = (me['liked'] ?? false) == true;
-    final bookmarkedByMe = (me['bookmarked'] ?? false) == true;
-
-    final isRepost = p['repost_of'] != null || original.isNotEmpty;
-
-    final repostAuthor = asMap(p['repost_author']);
-    RepostedBy? repostedBy;
-    if (repostAuthor.isNotEmpty) {
-      repostedBy = RepostedBy(
-        userName: (repostAuthor['name'] ?? repostAuthor['username'] ?? 'User')
-            .toString(),
-        userAvatarUrl:
-            (repostAuthor['avatarUrl'] ?? repostAuthor['avatar_url'] ?? '')
-                .toString(),
-        actionType: 'reposted this',
-      );
-    }
-
-    final text = (contentSource['content'] ??
-            contentSource['text'] ??
-            p['original_content'] ??
-            p['text'] ??
-            p['content'] ??
-            '')
-        .toString();
-
-    return Post(
-      id: (p['id'] ?? '').toString(),
-      userName: authorName,
-      userAvatarUrl: authorAvatar,
-      createdAt: _parseCreatedAt(
-        p['created_at'] ??
-            p['createdAt'] ??
-            contentSource['created_at'] ??
-            contentSource['createdAt'],
-      ),
-      text: text,
-      mediaType: mediaType,
-      imageUrls: imageUrls,
-      videoUrl: videoUrl,
-      counts: PostCounts(
-        likes: _toInt(countsMap['likes']),
-        comments: _toInt(countsMap['comments']),
-        shares: _toInt(countsMap['shares']),
-        reposts: _toInt(countsMap['reposts']),
-        bookmarks: _toInt(countsMap['bookmarks']),
-      ),
-      userReaction: likedByMe ? ReactionType.like : null,
-      isBookmarked: bookmarkedByMe,
-      isRepost: isRepost,
-      repostedBy: repostedBy,
-      originalPostId:
-          (p['repost_of'] ?? original['id'] ?? original['post_id'] ?? '')
-                  .toString()
-                  .isEmpty
-              ? null
-              : (p['repost_of'] ?? original['id'] ?? original['post_id'])
-                  .toString(),
-    );
-  }
 
   Future<void> _loadUserPosts() async {
     setState(() {
@@ -1518,12 +1291,19 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
     final started = DateTime.now();
 
     try {
-      final api = PodcastsApi();
-      final res = await api.list(authorId: widget.user.id, limit: 50, page: 1);
-      final body = Map<String, dynamic>.from(res);
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final podcasts = (data['podcasts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
+      final podcastRepo = context.read<PodcastRepository>();
+      final podcastModels = await podcastRepo.listPodcasts(
+        authorId: widget.user.id,
+        limit: 50,
+        page: 1,
+      );
+      final podcasts = podcastModels
+          .map((p) => {
+                'id': p.id,
+                'title': p.title,
+                'coverUrl': p.coverUrl,
+                'durationSec': p.durationSec,
+              })
           .toList();
 
       // Ensure spinner is visible for at least 700ms
@@ -1554,7 +1334,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
   Future<void> _handleMessageUser() async {
     final ctx = context;
     try {
-      final conversationId = await _conversationsApi.checkConversationExists(
+      final conversationId = await _convRepo.checkConversationExists(
         widget.user.id,
       );
 

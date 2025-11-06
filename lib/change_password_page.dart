@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'core/auth_api.dart';
-import 'verify_code_page.dart';
+import 'package:provider/provider.dart';
+import 'repositories/interfaces/auth_repository.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   final String currentEmail;
@@ -51,24 +51,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
     setState(() => _submitting = true);
     try {
-      final api = AuthApi();
-      final res = await api.changePassword(current, next);
-      if (res['ok'] == true) {
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => VerifyCodePage(
-              purpose: 'change_password',
-              sentToEmail: widget.currentEmail,
-            ),
-          ),
-        );
-      } else {
-        _showSnack((res['error'] ?? 'change_password_failed').toString());
-      }
-    } catch (_) {
-      _showSnack('Network error');
+      final repo = context.read<AuthRepository>();
+      await repo.updatePassword(currentPassword: current, newPassword: next);
+      if (!mounted) return;
+      _showSnack('Password changed successfully');
+      Navigator.pop(context);
+    } catch (e) {
+      _showSnack('Failed to change password');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
-import 'podcasts_api.dart';
+import '../repositories/interfaces/podcast_repository.dart';
 import 'podcasts_home_page.dart';
 import 'podcast_details_page.dart';
 import 'player_page.dart';
@@ -26,20 +27,10 @@ class _PodcastsCategoriesPageState extends State<PodcastsCategoriesPage> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      _loading = false;
       _error = null;
+      _cats = [];
     });
-    try {
-      final api = PodcastsApi.create();
-      final res = await api.categories();
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      _cats = List<Map<String, dynamic>>.from(d['categories'] ?? const []);
-    } catch (e) {
-      _error = 'Failed to load categories: $e';
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
   @override
@@ -137,12 +128,14 @@ class _CategoryPodcastsPageState extends State<CategoryPodcastsPage> {
       }
     });
     try {
-      final api = PodcastsApi.create();
-      final res = await api.list(page: _page, limit: _limit, isPublished: true, category: widget.category);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final list = List<Map<String, dynamic>>.from(d['podcasts'] ?? const []);
-      final newItems = list.map(Podcast.fromApi).toList();
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.listPodcasts(
+        page: _page,
+        limit: _limit,
+        isPublished: true,
+        category: widget.category,
+      );
+      final newItems = models.map(Podcast.fromModel).toList();
 
       setState(() {
         _podcasts.addAll(newItems);

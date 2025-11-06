@@ -7,8 +7,9 @@ import 'package:file_picker/file_picker.dart';
 import 'widgets/chat_input.dart';
 import 'widgets/message_actions_sheet.dart';
 import 'package:flutter/services.dart';
-import 'core/messages_api.dart';
-import 'core/conversations_api.dart';
+import 'package:provider/provider.dart';
+import 'repositories/interfaces/message_repository.dart';
+import 'repositories/interfaces/conversation_repository.dart';
 import 'core/audio_recorder.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -40,8 +41,8 @@ class _ChatPageState extends State<ChatPage> {
   final Set<String> _starredIds = <String>{};
   final Map<String, String> _messageReactions = <String, String>{};
 
-  final MessagesApi _messagesApi = MessagesApi();
-  final ConversationsApi _conversationsApi = ConversationsApi();
+  late MessageRepository _msgRepo;
+  late ConversationRepository _convRepo;
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _resolvedConversationId;
   bool _isRecording = false;
@@ -65,6 +66,8 @@ class _ChatPageState extends State<ChatPage> {
   @override
 void initState() {
   super.initState();
+  _msgRepo = context.read<MessageRepository>();
+  _convRepo = context.read<ConversationRepository>();
   _initLoad();
   _startPolling();
 }
@@ -85,7 +88,7 @@ void initState() {
         _isLoading = true;
         _loadError = null;
       });
-      final id = await _conversationsApi.createOrGet(widget.otherUser.id);
+      final id = await _convRepo.createOrGet(widget.otherUser.id);
       if (!mounted) return;
       setState(() {
         _resolvedConversationId = id;
@@ -105,7 +108,7 @@ void initState() {
     if (_resolvedConversationId != null && _resolvedConversationId!.isNotEmpty) {
       return _resolvedConversationId!;
     }
-    final id = await _conversationsApi.createOrGet(widget.otherUser.id);
+    final id = await _convRepo.createOrGet(widget.otherUser.id);
     if (mounted) {
       setState(() => _resolvedConversationId = id);
     } else {
@@ -123,14 +126,14 @@ void initState() {
         _messageReactions.clear();
       });
       if (_resolvedConversationId == null) return;
-      final records = await _messagesApi.list(_resolvedConversationId!);
+      final records = await _msgRepo.list(_resolvedConversationId!);
       final mapped = records.map(_toUiMessage).toList();
       setState(() {
         _messages.addAll(mapped);
         for (final r in records) {
-          if (r.reaction != null && r.reaction!.isNotEmpty) {
+          if ((r.reaction ?? '').isNotEmpty) {
             _messageReactions[r.id] = r.reaction!;
-          } else if (r.myReaction != null && r.myReaction!.isNotEmpty) {
+          } else if ((r.myReaction ?? '').isNotEmpty) {
             _messageReactions[r.id] = r.myReaction!;
           }
         }
@@ -149,7 +152,7 @@ void initState() {
   Future<void> _markRead() async {
     try {
       if (_resolvedConversationId != null) {
-        await _conversationsApi.markRead(_resolvedConversationId!);
+        await _convRepo.markRead(_resolvedConversationId!);
       }
     } catch (_) {}
   }
@@ -173,7 +176,7 @@ Future<void> _refreshMessages() async {
     final bool wasAtBottom = _scrollController.hasClients &&
         (_scrollController.position.maxScrollExtent - _scrollController.position.pixels) < 120;
 
-    final records = await _messagesApi.list(_resolvedConversationId!, limit: 50);
+    final records = await _msgRepo.list(_resolvedConversationId!, limit: 50);
     final mapped = records.map(_toUiMessage).toList();
 
     if (!mounted) return;
@@ -183,9 +186,9 @@ Future<void> _refreshMessages() async {
         ..addAll(mapped);
       _messageReactions.clear();
       for (final r in records) {
-        if (r.reaction != null && r.reaction!.isNotEmpty) {
+        if ((r.reaction ?? '').isNotEmpty) {
           _messageReactions[r.id] = r.reaction!;
-        } else if (r.myReaction != null && r.myReaction!.isNotEmpty) {
+        } else if ((r.myReaction ?? '').isNotEmpty) {
           _messageReactions[r.id] = r.myReaction!;
         }
       }
@@ -211,7 +214,7 @@ void dispose() {
   super.dispose();
 }
 
-  Message _toUiMessage(MessageRecord r) {
+  Message _toUiMessage(MessageRecordModel r) {
     final isFromCurrentUser = r.senderId != widget.otherUser.id;
     String? senderAvatar = isFromCurrentUser ? null : widget.otherUser.avatarUrl;
 
@@ -290,7 +293,7 @@ void dispose() {
   Future<void> _sendMessage(String content) async {
     try {
       final convId = await _requireConversationId();
-      final record = await _messagesApi.sendText(
+      final record = await _msgRepo.sendText(
         conversationId: convId,
         otherUserId: null,
         text: content,
@@ -358,7 +361,7 @@ void dispose() {
       }
 
       final convId = await _requireConversationId();
-      final record = await _messagesApi.sendVoice(
+      final record = await _msgRepo.sendVoice(
         conversationId: convId,
         otherUserId: null,
         audioUrl: audioUrl,
@@ -568,7 +571,7 @@ void dispose() {
       }
 
       final convId = await _requireConversationId();
-      final record = await _messagesApi.sendTextWithMedia(
+      final record = await _msgRepo.sendTextWithAttachments(
         conversationId: convId,
         otherUserId: null,
         text: '',
@@ -662,7 +665,7 @@ void dispose() {
       }
 
       final convId = await _requireConversationId();
-      final record = await _messagesApi.sendTextWithMedia(
+      final record = await _msgRepo.sendTextWithAttachments(
         conversationId: convId,
         otherUserId: null,
         text: caption,
@@ -734,7 +737,7 @@ void dispose() {
 
   Future<void> _addReaction(Message message, String emoji) async {
     try {
-      await _messagesApi.react(message.id, emoji);
+      await _msgRepo.react(message.id, emoji);
       setState(() {
         _messageReactions[message.id] = emoji;
       });
@@ -785,7 +788,7 @@ void dispose() {
 
   Future<void> _deleteForMe(Message message) async {
     try {
-      await _messagesApi.deleteForMe(message.id);
+      await _msgRepo.deleteForMe(message.id);
       setState(() {
         _messageReactions.remove(message.id);
         _messages.removeWhere((m) => m.id == message.id);
@@ -799,7 +802,7 @@ void dispose() {
 
   Future<void> _deleteForEveryone(Message message) async {
     try {
-      await _messagesApi.deleteForEveryone(message.id);
+      await _msgRepo.deleteForEveryone(message.id);
       setState(() {
         _messageReactions.remove(message.id);
         _messages.removeWhere((m) => m.id == message.id);

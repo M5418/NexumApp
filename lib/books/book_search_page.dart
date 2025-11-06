@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
-import 'books_api.dart';
 import 'books_home_page.dart' show Book; // reuse Book.fromApi + Book model
 import 'book_details_page.dart';
+import '../repositories/interfaces/book_repository.dart'; // reuse Book.fromApi + Book model
 
 class BookSearchPage extends StatefulWidget {
   const BookSearchPage({super.key});
@@ -15,13 +16,19 @@ class BookSearchPage extends StatefulWidget {
 
 class _BookSearchPageState extends State<BookSearchPage> {
   final TextEditingController _controller = TextEditingController();
-  final BooksApi _api = BooksApi.create();
+  late BookRepository _bookRepo;
 
   bool _loading = false;
   String? _error;
   List<Book> _results = [];
 
   Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _bookRepo = context.read<BookRepository>();
+  }
 
   @override
   void dispose() {
@@ -52,15 +59,12 @@ class _BookSearchPageState extends State<BookSearchPage> {
     });
 
     try {
-      final res = await _api.listBooks(page: 1, limit: 20, q: q, isPublished: true);
-      final map = Map<String, dynamic>.from(res);
-      final data = Map<String, dynamic>.from(map['data'] ?? {});
-      final raw = List<Map<String, dynamic>>.from(data['books'] ?? const []);
-      final items = raw.map(Book.fromApi).toList();
+      final bookModels = await _bookRepo.searchBooks(q);
+      final newBooks = bookModels.map(Book.fromModel).toList();
 
       if (!mounted) return;
       setState(() {
-        _results = items;
+        _results = newBooks;
         _loading = false;
       });
     } catch (e) {

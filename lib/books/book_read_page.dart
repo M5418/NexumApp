@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:provider/provider.dart';
 import 'books_home_page.dart' show Book;
-import 'books_api.dart';
+import '../repositories/interfaces/book_repository.dart';
 
 class BookReadPage extends StatefulWidget {
   final Book book;
@@ -30,16 +31,13 @@ class _BookReadPageState extends State<BookReadPage> {
 
   Future<void> _loadProgress() async {
     try {
-      final api = BooksApi.create();
-      final res = await api.getProgress(widget.book.id);
-      final data = Map<String, dynamic>.from(res);
-      final d = Map<String, dynamic>.from(data['data'] ?? {});
-      final p = d['progress'];
-      if (p != null) {
-        final lastPage = int.tryParse((p['last_page'] ?? 0).toString()) ?? 0; // server is 1-based
-        if (lastPage > 0) {
-          defaultPage = (lastPage - 1).clamp(0, 1000000);
-          currentPage = defaultPage;
+      final bookRepo = context.read<BookRepository>();
+      final progress = await bookRepo.getProgress(widget.book.id);
+      if (progress != null && progress.currentPage > 0) {
+        defaultPage = (progress.currentPage - 1).clamp(0, 1000000);
+        currentPage = defaultPage;
+        if (progress.totalPages > 0) {
+          totalPages = progress.totalPages;
         }
       }
     } catch (_) {
@@ -50,13 +48,12 @@ class _BookReadPageState extends State<BookReadPage> {
   }
 
   Future<void> _updateProgress() async {
+    if (currentPage == 0 || totalPages == 0) return;
     try {
-      final api = BooksApi.create();
-      final page = (currentPage + 1).clamp(1, totalPages == 0 ? 1 : totalPages);
-      await api.updateReadProgress(
-        id: widget.book.id,
-        page: page,
-        totalPages: totalPages > 0 ? totalPages : null,
+      final bookRepo = context.read<BookRepository>();
+      await bookRepo.updateProgress(
+        bookId: widget.book.id,
+        currentPage: currentPage,
       );
     } catch (_) {
       // ignore

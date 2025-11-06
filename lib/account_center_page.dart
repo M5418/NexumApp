@@ -2,8 +2,7 @@
 // Lines: 1-420
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'core/auth_api.dart';
-import 'core/token_store.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'core/profile_api.dart';
 import 'sign_in_page.dart';
 import 'change_password_page.dart';
@@ -11,6 +10,8 @@ import 'change_email_page.dart';
 import 'kyc_verification_page.dart';
 import 'kyc_status_page.dart';
 import 'core/kyc_api.dart';
+import 'package:provider/provider.dart';
+import 'repositories/interfaces/auth_repository.dart';
 
 class AccountCenterPage extends StatefulWidget {
   const AccountCenterPage({super.key});
@@ -32,53 +33,68 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
     _loadMe();
   }
 
+  Future<String?> _promptPassword(BuildContext context) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Confirm Password', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(hintText: 'Enter your current password'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.inter()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text('Confirm', style: GoogleFonts.inter(color: Color(0xFFBFAE01))),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _loadMe() async {
-    try {
-      // Email from auth
-      final authApi = AuthApi();
-      final response = await authApi.me();
-
-      if (response['ok'] == true && response['data'] != null) {
-        final email = (response['data']['email'] ?? '').toString();
-        if (mounted) {
-          setState(() {
-            _email = email;
-          });
-        }
-      } else {
-        throw Exception('Failed to load auth user');
+    final u = fb.FirebaseAuth.instance.currentUser;
+    if (u == null) {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const SignInPage()),
+        );
       }
+      return;
+    }
 
-      // Profile details (avatar, full name, username)
-      try {
-        final profApi = ProfileApi();
-        final profRes = await profApi.me();
-        final body = Map<String, dynamic>.from(profRes);
-        final data = Map<String, dynamic>.from(body['data'] ?? {});
-        final fullName = (data['full_name'] ?? '').toString();
-        final username = (data['username'] ?? '').toString();
-        final avatarUrl = (data['profile_photo_url'] ?? '').toString();
+    // Set email from FirebaseAuth
+    if (mounted) {
+      setState(() {
+        _email = (u.email ?? '').toString();
+      });
+    }
 
-        if (mounted) {
-          setState(() {
-            _fullName = fullName;
-            _username = username;
-            _avatarUrl = avatarUrl;
-          });
-        }
-      } catch (_) {
-        // profile optional; keep defaults
+    // Load profile details (avatar, full name, username) from Firestore
+    try {
+      final profApi = ProfileApi();
+      final profRes = await profApi.me();
+      final body = Map<String, dynamic>.from(profRes);
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final fullName = (data['full_name'] ?? '').toString();
+      final username = (data['username'] ?? '').toString();
+      final avatarUrl = (data['profile_photo_url'] ?? '').toString();
+
+      if (mounted) {
+        setState(() {
+          _fullName = fullName;
+          _username = username;
+          _avatarUrl = avatarUrl;
+        });
       }
     } catch (_) {
-      // Not authenticated: redirect to sign in if no token
-      final t = await TokenStore.read();
-      if (t == null || t.isEmpty) {
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const SignInPage()),
-          );
-        }
-      }
+      // optional
     }
   }
 
@@ -364,8 +380,9 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
   }
 
   Future<void> _handleDeleteAccount() async {
+    final navContext = context;
     final confirmed = await _confirm(
-      context,
+      navContext,
       'Delete account permanently?',
       'This action will permanently delete your account and all associated data. This cannot be undone.',
       confirmText: 'Delete',
@@ -373,24 +390,23 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
     if (confirmed != true) return;
 
     try {
-      final api = AuthApi();
-      final res = await api.deleteAccount();
-      final ok = (res['ok'] == true);
-      if (!ok) {
-        final err = (res['error'] ?? 'delete_failed').toString();
-        _showSnack('Failed to delete account: $err');
-        return;
-      }
-
-      // Clear local token and navigate to sign-in
-      await TokenStore.clear();
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
+      if (!navContext.mounted) return;
+      // Prompt for password to re-authenticate
+      final pwd = await _promptPassword(navContext);
+      if (!navContext.mounted) return;
+      if (pwd == null || pwd.isEmpty) return;
+      final repo = navContext.read<AuthRepository>();
+      await repo.deleteAccount(password: pwd);
+      if (!navContext.mounted) return;
+      Navigator.of(navContext).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const SignInPage()),
         (_) => false,
       );
     } catch (_) {
-      _showSnack('Failed to delete account');
+      if (!navContext.mounted) return;
+      ScaffoldMessenger.of(navContext).showSnackBar(
+        SnackBar(content: Text('Failed to delete account', style: GoogleFonts.inter())),
+      );
     }
   }
 

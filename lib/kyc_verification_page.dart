@@ -7,7 +7,6 @@ import 'kyc_status_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'core/files_api.dart';
 import 'core/profile_api.dart';
-import 'account_center_page.dart';
 
 enum DocumentType { passport, nationalId, drivingLicense }
 
@@ -755,49 +754,5 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
-  }
-
-  void _showSubmissionDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(
-            'Verification Submitted',
-            style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600),
-          ),
-          content: Text(
-            'Your documents have been submitted for verification. You will receive an email notification once the review is complete.',
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              color: const Color(0xFF666666),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AccountCenterPage()),
-                  (route) => false,
-                );
-              },
-              child: Text(
-                'OK',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFBFAE01),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 }

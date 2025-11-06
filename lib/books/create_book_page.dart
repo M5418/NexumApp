@@ -6,9 +6,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../core/files_api.dart';
-import 'books_api.dart';
+import '../repositories/interfaces/book_repository.dart';
 
 class CreateBookPage extends StatefulWidget {
   const CreateBookPage({super.key});
@@ -241,6 +242,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
 
     setState(() => _saving = true);
     try {
+      final navContext = context;
       final filesApi = FilesApi();
 
       // Cover upload
@@ -270,8 +272,9 @@ class _CreateBookPageState extends State<CreateBookPage> {
         _audioUrl = up['url'];
       }
 
-      final api = BooksApi.create();
-      await api.createBook(
+      if (!navContext.mounted) return;
+      final bookRepo = navContext.read<BookRepository>();
+      await bookRepo.createBook(
         title: _titleCtrl.text.trim(),
         author: _authorCtrl.text.trim().isEmpty ? null : _authorCtrl.text.trim(),
         description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
@@ -286,15 +289,14 @@ class _CreateBookPageState extends State<CreateBookPage> {
         readingMinutes: _readingMinutes,
         audioDurationSec: _audioDurationSec,
       );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!navContext.mounted) return;
+      ScaffoldMessenger.of(navContext).showSnackBar(
         SnackBar(
           content: Text('Book created', style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFFBFAE01),
         ),
       );
-      Navigator.of(context).pop(true);
+      Navigator.of(navContext).pop(true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -323,14 +323,15 @@ class _EditProfilPageState extends State<EditProfilPage> {
         ),
       );
     } finally {
-      if (!mounted) return;
-      setState(() {
-        if (isCover) {
-          _uploadingCover = false;
-        } else {
-          _uploadingProfile = false;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          if (isCover) {
+            _uploadingCover = false;
+          } else {
+            _uploadingProfile = false;
+          }
+        });
+      }
     }
   }
 

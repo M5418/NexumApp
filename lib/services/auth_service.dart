@@ -107,27 +107,27 @@ class AuthService extends ChangeNotifier {
   /// Sign out user and clear token
   Future<void> signOut() async {
     try {
-      _isLoggedIn = false;
-      _userId = null;
-      _userToken = null;
-      _userName = null;
-      _userEmail = null;
-      _avatarUrl = null;
-      try {
-        await _fbAuth.signOut();
-      } catch (_) {}
+      final uid = _userId; // capture before clearing
       try {
         final t = await fm.FirebaseMessaging.instance.getToken();
         if (t != null && t.isNotEmpty) {
           await _fbUsers.removeFCMToken(t);
         }
-        final uid = _userId;
         if (uid != null && uid.isNotEmpty) {
           await _fbNotifs.unsubscribeTopic('direct:user:$uid');
         }
         await _fbNotifs.unsubscribeTopic('feed:new-post');
         await _fbNotifs.unsubscribeTopic('system:announcements');
       } catch (_) {}
+      try {
+        await _fbAuth.signOut();
+      } catch (_) {}
+      _isLoggedIn = false;
+      _userId = null;
+      _userToken = null;
+      _userName = null;
+      _userEmail = null;
+      _avatarUrl = null;
       notifyListeners();
     } catch (e) {
       debugPrint('Sign out error: $e');

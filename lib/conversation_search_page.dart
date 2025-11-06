@@ -4,8 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import 'widgets/segmented_tabs.dart';
-import 'core/conversations_api.dart';
-import 'core/communities_api.dart';
+import 'package:provider/provider.dart';
+import 'repositories/interfaces/conversation_repository.dart';
+import 'repositories/interfaces/community_repository.dart';
 import 'chat_page.dart';
 import 'community_page.dart';
 import 'models/message.dart'; // for ChatUser
@@ -20,8 +21,8 @@ class ConversationSearchPage extends StatefulWidget {
 
 class _ConversationSearchPageState extends State<ConversationSearchPage> {
   final TextEditingController _controller = TextEditingController();
-  final ConversationsApi _conversationsApi = ConversationsApi();
-  final CommunitiesApi _communitiesApi = CommunitiesApi();
+  late ConversationRepository _convRepo;
+  late CommunityRepository _commRepo;
 
   int _selectedTabIndex = 0;
 
@@ -31,18 +32,20 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
   String? _errorCommunities;
 
   // Full datasets
-  List<ConversationSummary> _allConversations = [];
-  List<ApiCommunity> _allCommunities = [];
+  List<ConversationSummaryModel> _allConversations = [];
+  List<CommunityModel> _allCommunities = [];
 
   // Filtered results for the current query
-  List<ConversationSummary> _convResults = [];
-  List<ApiCommunity> _commResults = [];
+  List<ConversationSummaryModel> _convResults = [];
+  List<CommunityModel> _commResults = [];
 
   Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
+    _convRepo = context.read<ConversationRepository>();
+    _commRepo = context.read<CommunityRepository>();
     _loadInitial();
   }
 
@@ -63,7 +66,7 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
       _errorConversations = null;
     });
     try {
-      final list = await _conversationsApi.list();
+      final list = await _convRepo.list();
       if (!mounted) return;
       setState(() {
         _allConversations = list;
@@ -87,7 +90,7 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
       _errorCommunities = null;
     });
     try {
-      final list = await _communitiesApi.listMine();
+      final list = await _commRepo.listMine();
       if (!mounted) return;
       setState(() {
         _allCommunities = list;

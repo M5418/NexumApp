@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'env.dart';
-import 'token_store.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, kReleaseMode;
 
 class ApiClient {
@@ -34,21 +33,11 @@ class ApiClient {
             options.extra['withCredentials'] = true;
           }
 
-          final t = await TokenStore.read();
           debugPrint(
-              '🔑 [${DateTime.now().toIso8601String()}] Token check for ${options.method} ${options.path}');
-          debugPrint(
-              '   Token: ${t != null ? "EXISTS (${t.substring(0, 20)}...)" : "NULL"}');
+              '🔑 [${DateTime.now().toIso8601String()}] Request ${options.method} ${options.path}');
           debugPrint('   Platform: ${kIsWeb ? "WEB" : "MOBILE"}');
           debugPrint(
               '   WithCredentials: ${options.extra['withCredentials'] ?? false}');
-
-          if (t != null && t.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $t';
-            debugPrint('   ✅ Authorization header added');
-          } else {
-            debugPrint('   ⚠️  NO TOKEN - Request will be unauthorized');
-          }
           handler.next(options);
         },
         onResponse: (response, handler) {

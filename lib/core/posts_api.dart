@@ -17,6 +17,37 @@ class PostsApi {
     return _mapModelsToPosts(models);
   }
 
+  // User posts
+  Future<List<Post>> listUserPosts({required String uid, int limit = 20, int offset = 0}) async {
+    final models = await _posts.getUserPosts(uid: uid, limit: limit);
+    return _mapModelsToPosts(models);
+  }
+
+  // Community posts
+  Future<List<Post>> listCommunityPosts({required String communityId, int limit = 50, int offset = 0}) async {
+    final models = await _posts.getCommunityPosts(communityId: communityId, limit: limit);
+    return _mapModelsToPosts(models);
+  }
+
+  // Activity: posts liked by user, bookmarked by user, or reposts authored by user
+  Future<List<Post>> listActivityForUser({required String uid, int limit = 100}) async {
+    final liked = await _posts.getPostsLikedByUser(uid: uid, limit: limit);
+    final bookmarked = await _posts.getPostsBookmarkedByUser(uid: uid, limit: limit);
+    final reposts = await _posts.getUserReposts(uid: uid, limit: limit);
+
+    // Merge unique by post id
+    final byId = <String, PostModel>{};
+    for (final m in [...liked, ...bookmarked, ...reposts]) {
+      // Exclude my own original posts (allow repost rows)
+      final isMyOriginal = m.authorId == uid && (m.repostOf == null || m.repostOf!.isEmpty);
+      if (isMyOriginal) continue;
+      byId[m.id] = m;
+    }
+    final merged = byId.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return _mapModelsToPosts(merged);
+  }
+
   Future<Map<String, dynamic>> create({
     required String content,
     List<Map<String, dynamic>>? media,
@@ -64,7 +95,7 @@ class PostsApi {
       results.add(Comment(
         id: m.id,
         userId: m.authorId,
-        userName: (u?.displayName ?? u?.username ?? u?.email ?? 'User') ?? 'User',
+        userName: u?.displayName ?? u?.username ?? u?.email ?? 'User',
         userAvatarUrl: u?.avatarUrl ?? '',
         text: m.text,
         createdAt: m.createdAt,
@@ -114,7 +145,7 @@ class PostsApi {
     }
     return Post(
       id: m.id,
-      userName: (author?.displayName ?? author?.username ?? author?.email ?? 'User') ?? 'User',
+      userName: author?.displayName ?? author?.username ?? author?.email ?? 'User',
       userAvatarUrl: author?.avatarUrl ?? '',
       createdAt: m.createdAt,
       text: m.text,

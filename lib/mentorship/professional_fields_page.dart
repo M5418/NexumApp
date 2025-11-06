@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/mentorship_api.dart';
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/mentorship_repository.dart';
 import 'request_mentorship_page.dart';
 
 class ProfessionalFieldsPage extends StatefulWidget {
@@ -11,14 +12,15 @@ class ProfessionalFieldsPage extends StatefulWidget {
 }
 
 class _ProfessionalFieldsPageState extends State<ProfessionalFieldsPage> {
-  final _api = MentorshipApi();
+  late MentorshipRepository _repo;
   bool _loading = true;
   String? _error;
-  List<MentorshipFieldDto> _fields = [];
+  List<MentorshipFieldModel> _fields = [];
 
   @override
   void initState() {
     super.initState();
+    _repo = context.read<MentorshipRepository>();
     _load();
   }
 
@@ -28,7 +30,7 @@ class _ProfessionalFieldsPageState extends State<ProfessionalFieldsPage> {
       _error = null;
     });
     try {
-      final items = await _api.listFields();
+      final items = await _repo.listFields();
       if (!mounted) return;
       setState(() => _fields = items);
     } catch (e) {
