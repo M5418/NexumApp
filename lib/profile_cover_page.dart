@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'profile_completion_welcome.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -35,6 +37,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
   }
 
   void _showCoverSourceSheet() {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
@@ -49,7 +52,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: Text('Take Photo', style: GoogleFonts.inter()),
+                title: Text(lang.t('profile_cover.take_photo'), style: GoogleFonts.inter()),
                 onTap: () async {
                   Navigator.pop(context);
                   await _pickCover(ImageSource.camera);
@@ -57,7 +60,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: Text('Choose from Gallery', style: GoogleFonts.inter()),
+                title: Text(lang.t('profile_cover.choose_gallery'), style: GoogleFonts.inter()),
                 onTap: () async {
                   Navigator.pop(context);
                   await _pickCover(ImageSource.gallery);
@@ -67,7 +70,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                 ListTile(
                   leading: const Icon(Icons.delete_outline, color: Colors.red),
                   title: Text(
-                    'Remove Cover',
+                    lang.t('profile_cover.remove_cover'),
                     style: GoogleFonts.inter(color: Colors.red),
                   ),
                   onTap: () {
@@ -106,18 +109,18 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
         if (!permissionStatus.isGranted) {
           if (permissionStatus.isDenied) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Permission denied. Please allow access to continue.'),
+              SnackBar(
+                content: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.permission_denied')),
                 backgroundColor: Colors.red,
               ),
             );
           } else if (permissionStatus.isPermanentlyDenied) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text('Access permanently denied. Please enable in settings.'),
+                content: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.permission_denied_settings')),
                 backgroundColor: Colors.red,
                 action: SnackBarAction(
-                  label: 'Settings',
+                  label: Provider.of<LanguageProvider>(context, listen: false).t('common.settings'),
                   textColor: Colors.white,
                   onPressed: () => openAppSettings(),
                 ),
@@ -165,8 +168,8 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unexpected error occurred.'),
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.unexpected_error')),
           backgroundColor: Colors.red,
         ),
       );
@@ -194,8 +197,8 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
     } catch (_) {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to upload cover photo. You can try again later.'),
+          SnackBar(
+            content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.upload_cover_failed')),
             backgroundColor: Colors.red,
           ),
         );
@@ -246,7 +249,8 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (context.isMobile) {
       // MOBILE: original gradient card layout unchanged
@@ -258,7 +262,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: isDarkMode
+              colors: isDark
                   ? [const Color(0xFF0C0C0C), const Color(0xFF0C0C0C)]
                   : [const Color(0xFFFFFFFF), const Color(0xFFFFFFFF)],
             ),
@@ -275,7 +279,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                       style: GoogleFonts.inika(
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
-                        color: isDarkMode ? Colors.white : Colors.black,
+                        color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
                     const SizedBox(height: 60),
@@ -283,7 +287,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                       width: double.infinity,
                       constraints: const BoxConstraints(maxWidth: 400),
                       decoration: BoxDecoration(
-                        color: isDarkMode
+                        color: isDark
                             ? const Color(0xFF000000)
                             : const Color(0xFFFFFFFF),
                         borderRadius: BorderRadius.circular(24),
@@ -300,21 +304,21 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text(
-                            'Add Cover Photo',
+                            lang.t('profile_cover.title'),
                             style: GoogleFonts.inter(
                               fontSize: 34,
                               fontWeight: FontWeight.w600,
-                              color: isDarkMode ? Colors.white : Colors.black,
+                              color: isDark ? Colors.white : Colors.black,
                             ),
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Choose a cover that represents your personality',
+                            lang.t('profile_cover.description'),
                             textAlign: TextAlign.center,
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
-                              color: isDarkMode
+                              color: isDark
                                   ? const Color(0xFFAAAAAA)
                                   : const Color(0xFF666666),
                             ),
@@ -331,7 +335,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                   color: const Color(0xFFBFAE01),
                                   width: 2,
                                 ),
-                                color: isDarkMode
+                                color: isDark
                                     ? const Color(0xFF1A1A1A)
                                     : const Color(0xFFF5F5F5),
                               ),
@@ -351,7 +355,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                         Icon(
                                           Icons.add_photo_alternate,
                                           size: 48,
-                                          color: isDarkMode
+                                          color: isDark
                                               ? Colors.white54
                                               : Colors.black54,
                                         ),
@@ -360,7 +364,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                           'Add Cover Photo',
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
-                                            color: isDarkMode
+                                            color: isDark
                                                 ? Colors.white54
                                                 : Colors.black54,
                                           ),
@@ -407,7 +411,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
 
     // DESKTOP: centered popup card
     return Scaffold(
-      backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+      backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -415,7 +419,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Material(
-                color: isDarkMode ? const Color(0xFF000000) : Colors.white,
+                color: isDark ? const Color(0xFF000000) : Colors.white,
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
@@ -424,7 +428,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                       Row(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.close, color: isDarkMode ? Colors.white : Colors.black),
+                            icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.black),
                             onPressed: () => Navigator.pop(context),
                           ),
                           const SizedBox(width: 8),
@@ -433,7 +437,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: isDarkMode ? Colors.white : Colors.black,
+                              color: isDark ? Colors.white : Colors.black,
                             ),
                           ),
                         ],
@@ -453,7 +457,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                 style: GoogleFonts.inter(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
-                                  color: isDarkMode ? Colors.white : Colors.black,
+                                  color: isDark ? Colors.white : Colors.black,
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -477,7 +481,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                       color: const Color(0xFFBFAE01),
                                       width: 2,
                                     ),
-                                    color: isDarkMode
+                                    color: isDark
                                         ? const Color(0xFF1A1A1A)
                                         : const Color(0xFFF5F5F5),
                                   ),
@@ -497,14 +501,14 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                             Icon(
                                               Icons.add_photo_alternate,
                                               size: 48,
-                                              color: isDarkMode ? Colors.white54 : Colors.black54,
+                                              color: isDark ? Colors.white54 : Colors.black54,
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
                                               'Add Cover Photo',
                                               style: GoogleFonts.inter(
                                                 fontSize: 16,
-                                                color: isDarkMode ? Colors.white54 : Colors.black54,
+                                                color: isDark ? Colors.white54 : Colors.black54,
                                               ),
                                             ),
                                           ],

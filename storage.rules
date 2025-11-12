@@ -46,7 +46,15 @@ service firebase.storage {
       return request.resource.size < 25 * 1024 * 1024; // 25MB
     }
     
-    // User uploads directory
+    // LEGACY: Old uploads without user ID (backward compatibility for existing files)
+    // These were uploaded before the path fix - allow read only
+    match /uploads/{fileName} {
+      allow read: if true;
+      allow write: if false;  // Block new uploads to old path
+      allow delete: if false;
+    }
+    
+    // User uploads directory (NEW format with user ID)
     match /uploads/{uid}/{allPaths=**} {
       allow read: if true;                       // Public media
       allow write: if isOwner(uid) && (
@@ -56,6 +64,13 @@ service firebase.storage {
         (isDocument() && isValidDocumentSize())
       );
       allow delete: if isOwner(uid) || isAdmin();
+    }
+    
+    // LEGACY: Old user profile/cover paths (backward compatibility)
+    match /users/{uid}/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;  // Block new uploads to old path
+      allow delete: if false;
     }
     
     // Profile photos (special directory for faster CDN)

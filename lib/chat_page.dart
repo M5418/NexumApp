@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'repositories/interfaces/message_repository.dart';
 import 'repositories/interfaces/conversation_repository.dart';
+import 'repositories/interfaces/block_repository.dart';
 import 'core/audio_recorder.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -17,6 +18,7 @@ import 'dart:io';
 import 'dart:async';
 import 'core/profile_api.dart';
 import 'widgets/media_preview_page.dart';
+import 'core/i18n/language_provider.dart';
 
 class ChatPage extends StatefulWidget {
   final ChatUser otherUser;
@@ -43,6 +45,7 @@ class _ChatPageState extends State<ChatPage> {
 
   late MessageRepository _msgRepo;
   late ConversationRepository _convRepo;
+  late BlockRepository _blockRepo;
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _resolvedConversationId;
   bool _isRecording = false;
@@ -50,6 +53,8 @@ class _ChatPageState extends State<ChatPage> {
   String? _loadError;
   Timer? _pollTimer;
   bool _isRefreshing = false;
+  bool _isBlocked = false;
+  bool _isBlockedBy = false;
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -68,8 +73,39 @@ void initState() {
   super.initState();
   _msgRepo = context.read<MessageRepository>();
   _convRepo = context.read<ConversationRepository>();
+  _blockRepo = context.read<BlockRepository>();
+  _checkBlockStatus();
   _initLoad();
   _startPolling();
+}
+
+Future<void> _checkBlockStatus() async {
+  try {
+    final hasBlocked = await _blockRepo.hasBlocked(widget.otherUser.id);
+    final blockedBy = await _blockRepo.isBlockedBy(widget.otherUser.id);
+    if (mounted) {
+      setState(() {
+        _isBlocked = hasBlocked;
+        _isBlockedBy = blockedBy;
+      });
+    }
+  } catch (e) {
+    // Ignore error, defaults to not blocked
+  }
+}
+
+Future<void> _handleUnblock() async {
+  try {
+    await _blockRepo.unblockUser(widget.otherUser.id);
+    if (mounted) {
+      setState(() => _isBlocked = false);
+      _showSnack('${widget.otherUser.name} unblocked');
+    }
+  } catch (e) {
+    if (mounted) {
+      _showSnack('Failed to unblock user');
+    }
+  }
 }
 
   void _initLoad() {
@@ -317,6 +353,8 @@ void dispose() {
         _replyToMessage = null;
       });
       _scrollToBottom();
+      // Force instant refresh
+      await _refreshMessages();
     } catch (e) {
       if (mounted) _showSnack('Failed to send: $e');
     }
@@ -325,15 +363,10 @@ void dispose() {
   Future<void> _handleVoiceRecord() async {
     try {
       if (!_isRecording) {
-        final path = await _audioRecorder.startRecording();
-        if (path != null) {
-          setState(() {
-            _isRecording = true;
-          });
-        } else {
-          if (!mounted) return;
-          _showSnack('Failed to start recording');
-        }
+        await _audioRecorder.startRecording();
+        setState(() {
+          _isRecording = true;
+        });
       } else {
         final result = await _audioRecorder.stopRecording();
         setState(() {
@@ -349,7 +382,7 @@ void dispose() {
         _isRecording = false;
       });
       if (!mounted) return;
-      _showSnack('Recording error: $e');
+      _showSnack('$e');
     }
   }
 
@@ -376,6 +409,8 @@ void dispose() {
         _replyToMessage = null;
       });
       _scrollToBottom();
+      // Force instant refresh
+      await _refreshMessages();
     } catch (e) {
       if (!mounted) return;
       _showSnack('Failed to send voice message: $e');
@@ -429,28 +464,28 @@ void dispose() {
             children: [
               _buildAttachmentOption(
                 icon: Icons.camera_alt,
-                label: 'Camera',
+                label: Provider.of<LanguageProvider>(context, listen: false).t('common.camera'),
                 color: const Color(0xFF34C759),
                 onTap: () => _pickMedia(ImageSource.camera),
                 isDark: isDark,
               ),
               _buildAttachmentOption(
                 icon: Icons.photo_library,
-                label: 'Gallery',
+                label: Provider.of<LanguageProvider>(context, listen: false).t('common.gallery'),
                 color: const Color(0xFF007AFF),
                 onTap: () => _pickMedia(ImageSource.gallery),
                 isDark: isDark,
               ),
               _buildAttachmentOption(
                 icon: Icons.videocam,
-                label: 'Video',
+                label: Provider.of<LanguageProvider>(context, listen: false).t('common.video'),
                 color: const Color(0xFFFF9500),
                 onTap: () => _pickVideo(),
                 isDark: isDark,
               ),
               _buildAttachmentOption(
                 icon: Icons.description,
-                label: 'File',
+                label: Provider.of<LanguageProvider>(context, listen: false).t('common.file'),
                 color: const Color(0xFFFF3B30),
                 onTap: () => _pickFile(),
                 isDark: isDark,
@@ -586,6 +621,8 @@ void dispose() {
       });
       _scrollToBottom();
       _hideSnack();
+      // Force instant refresh
+      await _refreshMessages();
     } catch (e) {
       if (mounted) Navigator.pop(context);
       if (!mounted) return;
@@ -682,6 +719,8 @@ void dispose() {
 
       if (!mounted) return;
       _hideSnack();
+      // Force instant refresh
+      await _refreshMessages();
     } catch (e) {
       if (!mounted) return;
       _showSnack('Failed to send media: $e');
@@ -754,25 +793,25 @@ void dispose() {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Delete message?'),
+          title: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('chat.delete_message_title')),
           content: Text(
             isMine
-                ? 'Do you want to delete this message for you or for everyone?'
-                : 'Do you want to delete this message from your chat? It will remain visible to ${widget.otherUser.name}.',
+                ? Provider.of<LanguageProvider>(ctx, listen: false).t('chat.delete_for_me_or_everyone')
+                : Provider.of<LanguageProvider>(ctx, listen: false).t('chat.delete_this_message'),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('me'),
-              child: const Text('Delete for me'),
+              child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('chat.delete_for_me')),
             ),
             if (isMine)
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop('everyone'),
-                child: const Text('Delete for everyone'),
+                child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('chat.delete_for_everyone')),
               ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('Cancel'),
+              child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.cancel')),
             ),
           ],
         );
@@ -863,7 +902,7 @@ void dispose() {
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: _loadMessages,
-                            child: const Text('Retry'),
+                            child: Text(Provider.of<LanguageProvider>(context).t('chat.retry')),
                           ),
                         ],
                       ),
@@ -882,12 +921,96 @@ void dispose() {
               },
             ),
           ),
-          ChatInput(
-            onSendMessage: _sendMessage,
-            onVoiceRecord: _handleVoiceRecord,
-            onAttachment: _showAttachmentOptions,
-            replyToMessage: _replyToMessage?.content,
-            onCancelReply: _cancelReply,
+          // Show blocked message or chat input
+          if (_isBlocked)
+            _buildBlockedBanner(isDark)
+          else if (_isBlockedBy)
+            _buildBlockedByBanner(isDark)
+          else
+            ChatInput(
+              onSendMessage: _sendMessage,
+              onVoiceRecord: _handleVoiceRecord,
+              onAttachment: _showAttachmentOptions,
+              replyToMessage: _replyToMessage?.content,
+              onCancelReply: _cancelReply,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockedBanner(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.grey[200],
+        border: Border(
+          top: BorderSide(
+            color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.block,
+            color: Colors.red,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'You blocked ${widget.otherUser.name}',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _handleUnblock,
+            child: Text(
+              'Unblock',
+              style: GoogleFonts.inter(
+                color: const Color(0xFFBFAE01),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockedByBanner(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.grey[200],
+        border: Border(
+          top: BorderSide(
+            color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: Colors.orange,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'You can\'t send messages to this user',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
           ),
         ],
       ),
@@ -958,7 +1081,7 @@ void dispose() {
                   ),
                 ),
                 Text(
-                  widget.otherUser.isOnline ? 'Online' : 'Last seen recently',
+                  widget.otherUser.isOnline ? Provider.of<LanguageProvider>(context).t('chat.online') : Provider.of<LanguageProvider>(context).t('chat.last_seen'),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: const Color(0xFF666666),
@@ -1039,9 +1162,9 @@ void dispose() {
 
     String dateText;
     if (messageDate == today) {
-      dateText = 'Today';
+      dateText = Provider.of<LanguageProvider>(context, listen: false).t('common.today');
     } else if (messageDate == today.subtract(const Duration(days: 1))) {
-      dateText = 'Yesterday';
+      dateText = Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday');
     } else {
       const months = [
         'January','February','March','April','May','June',

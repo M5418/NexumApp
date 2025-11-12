@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class PrivacyVisibilityPage extends StatefulWidget {
   const PrivacyVisibilityPage({super.key});
@@ -19,6 +21,7 @@ class _PrivacyVisibilityPageState extends State<PrivacyVisibilityPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final background = isDark
         ? const Color(0xFF0C0C0C)
@@ -36,7 +39,7 @@ class _PrivacyVisibilityPageState extends State<PrivacyVisibilityPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Privacy & Visibility',
+          lang.t('privacy.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -53,18 +56,17 @@ class _PrivacyVisibilityPageState extends State<PrivacyVisibilityPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Profile Visibility'),
+                _sectionTitle(lang.t('privacy.profile_visibility')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Private Profile',
-                  subtitle:
-                      'Only approved connections can see your full profile',
+                  title: lang.t('privacy.private_profile'),
+                  subtitle: lang.t('privacy.private_profile_subtitle'),
                   value: _privateProfile,
                   onChanged: (v) => setState(() => _privateProfile = v),
                 ),
                 _switchTile(
-                  title: 'Show Activity Status',
-                  subtitle: 'Allow others to see when you are active',
+                  title: lang.t('privacy.show_activity'),
+                  subtitle: lang.t('privacy.show_activity_subtitle'),
                   value: _showActivityStatus,
                   onChanged: (v) => setState(() => _showActivityStatus = v),
                 ),
@@ -77,12 +79,11 @@ class _PrivacyVisibilityPageState extends State<PrivacyVisibilityPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Connections'),
+                _sectionTitle(lang.t('privacy.connections')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Approve New Connection Requests',
-                  subtitle:
-                      'New connection requests will require your approval',
+                  title: lang.t('privacy.approve_connections'),
+                  subtitle: lang.t('privacy.approve_connections_subtitle'),
                   value: _approveConnections,
                   onChanged: (v) => setState(() => _approveConnections = v),
                 ),
@@ -95,17 +96,17 @@ class _PrivacyVisibilityPageState extends State<PrivacyVisibilityPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Mentions & Tags'),
+                _sectionTitle(lang.t('privacy.mentions_tags')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Allow Mentions',
-                  subtitle: 'Other users can mention your username',
+                  title: lang.t('privacy.allow_mentions'),
+                  subtitle: lang.t('privacy.allow_mentions_subtitle'),
                   value: _allowMentions,
                   onChanged: (v) => setState(() => _allowMentions = v),
                 ),
                 _switchTile(
-                  title: 'Allow Tags',
-                  subtitle: 'Other users can tag you in posts',
+                  title: lang.t('privacy.allow_tags'),
+                  subtitle: lang.t('privacy.allow_tags_subtitle'),
                   value: _allowTags,
                   onChanged: (v) => setState(() => _allowTags = v),
                 ),
@@ -118,17 +119,17 @@ class _PrivacyVisibilityPageState extends State<PrivacyVisibilityPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Status Visibility'),
+                _sectionTitle(lang.t('privacy.status_visibility')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Show Online Status',
-                  subtitle: 'Display when you are online',
+                  title: lang.t('privacy.show_online'),
+                  subtitle: lang.t('privacy.show_online_subtitle'),
                   value: _showOnline,
                   onChanged: (v) => setState(() => _showOnline = v),
                 ),
                 _switchTile(
-                  title: 'Show Last Seen',
-                  subtitle: 'Display your last active time',
+                  title: lang.t('privacy.show_last_seen'),
+                  subtitle: lang.t('privacy.show_last_seen_subtitle'),
                   value: _showLastSeen,
                   onChanged: (v) => setState(() => _showLastSeen = v),
                 ),

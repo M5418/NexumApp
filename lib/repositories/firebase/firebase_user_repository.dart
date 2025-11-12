@@ -28,6 +28,7 @@ class FirebaseUserRepository implements UserRepository {
       firstName: d['firstName'],
       lastName: d['lastName'],
       email: d['email'],
+      status: d['status'],
       bio: d['bio'],
       avatarUrl: d['avatarUrl'],
       coverUrl: d['coverUrl'],
@@ -38,32 +39,8 @@ class FirebaseUserRepository implements UserRepository {
       followingCount: d['followingCount'],
       postsCount: d['postsCount'],
       createdAt: ts(d['createdAt']),
-      lastActive: ts(d['lastActive']),
       fcmTokens: (d['fcmTokens'] as List?)?.cast<String>(),
     );
-  }
-
-  Map<String, dynamic> _toFirestore(UserProfile p) {
-    dynamic toTs(DateTime? v) => v == null ? null : Timestamp.fromDate(v);
-    return {
-      'displayName': p.displayName,
-      'username': p.username,
-      'firstName': p.firstName,
-      'lastName': p.lastName,
-      'email': p.email,
-      'bio': p.bio,
-      'avatarUrl': p.avatarUrl,
-      'coverUrl': p.coverUrl,
-      'professionalExperiences': p.professionalExperiences,
-      'trainings': p.trainings,
-      'interestDomains': p.interestDomains,
-      'followersCount': p.followersCount,
-      'followingCount': p.followingCount,
-      'postsCount': p.postsCount,
-      'createdAt': toTs(p.createdAt),
-      'lastActive': toTs(p.lastActive),
-      'fcmTokens': p.fcmTokens,
-    };
   }
 
   @override
@@ -80,23 +57,42 @@ class FirebaseUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> updateUserProfile(UserProfile profile) async {
-    await _users.doc(profile.uid).set(_toFirestore(profile), SetOptions(merge: true));
+  Future<void> updateUserProfile(String uid, Map<String, dynamic> data) async {
+    await _users.doc(uid).set(data, SetOptions(merge: true));
+  }
+  
+  @override
+  Future<List<UserProfile>> getSuggestedUsers({int limit = 12}) async {
+    // Get recent active users as suggestions
+    final snap = await _users
+        .orderBy('lastActive', descending: true)
+        .limit(limit * 2) // Get more to filter out current user
+        .get();
+    
+    final currentUid = _auth.currentUser?.uid;
+    final users = snap.docs
+        .map(_fromDoc)
+        .whereType<UserProfile>()
+        .where((u) => u.uid != currentUid) // Exclude current user
+        .take(limit)
+        .toList();
+    
+    return users;
   }
 
   @override
   Future<String> uploadProfilePhoto({required String uid, required Uint8List imageBytes, required String extension}) async {
-    final path = 'users/$uid/profile-${DateTime.now().millisecondsSinceEpoch}.$extension';
+    final path = 'profiles/$uid/avatar/profile-${DateTime.now().millisecondsSinceEpoch}.$extension';
     final ref = _storage.ref(path);
-    await ref.putData(imageBytes);
+    await ref.putData(imageBytes, fs.SettableMetadata(contentType: 'image/$extension'));
     return await ref.getDownloadURL();
   }
 
   @override
   Future<String> uploadCoverPhoto({required String uid, required Uint8List imageBytes, required String extension}) async {
-    final path = 'users/$uid/cover-${DateTime.now().millisecondsSinceEpoch}.$extension';
+    final path = 'profiles/$uid/cover/cover-${DateTime.now().millisecondsSinceEpoch}.$extension';
     final ref = _storage.ref(path);
-    await ref.putData(imageBytes);
+    await ref.putData(imageBytes, fs.SettableMetadata(contentType: 'image/$extension'));
     return await ref.getDownloadURL();
   }
 

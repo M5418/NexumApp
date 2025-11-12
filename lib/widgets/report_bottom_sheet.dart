@@ -1,7 +1,8 @@
 // File: lib/widgets/report_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/reports_api.dart';
+import '../repositories/firebase/firebase_report_repository.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 enum ReportReason {
   poorEngagement,
@@ -70,7 +71,7 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
   ReportReason? _selectedReason;
   bool _isSubmitting = false;
   final TextEditingController _commentController = TextEditingController();
-  final ReportsApi _api = ReportsApi();
+  final FirebaseReportRepository _repo = FirebaseReportRepository();
 
   final List<ReportOption> _reportOptions = [
     ReportOption(
@@ -142,11 +143,17 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
 
     try {
       final cause = _causeCode(_selectedReason!);
-      await _api.create(
+      final user = fb.FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Must be signed in to report');
+      }
+      
+      await _repo.createReport(
         targetType: widget.targetType,
         targetId: widget.targetId,
         cause: cause,
         comment: _commentController.text,
+        reporterId: user.uid,
       );
 
       if (!mounted) return;

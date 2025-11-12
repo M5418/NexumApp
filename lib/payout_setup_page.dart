@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'payout_setup_success_page.dart';
 
 class PayoutSetupPage extends StatefulWidget {
@@ -50,7 +52,7 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
           onPressed: () => Navigator.pop(context, false),
         ),
         title: Text(
-          'Set up payout',
+          Provider.of<LanguageProvider>(context, listen: false).t('payout.title'),
           style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
@@ -74,7 +76,7 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
         },
         steps: [
           Step(
-            title: const Text('Country'),
+            title: Text(Provider.of<LanguageProvider>(context, listen: false).t('payout.step_country')),
             isActive: _currentStep >= 0,
             content: DropdownButtonFormField<String>(
               initialValue: _country,
@@ -83,18 +85,18 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
               ),
-              items: const [
-                'Canada',
-                'United States',
-                'France',
-                'Germany',
-                'United Kingdom',
+              items: [
+                Provider.of<LanguageProvider>(context, listen: false).t('payout.country_canada'),
+                Provider.of<LanguageProvider>(context, listen: false).t('payout.country_us'),
+                Provider.of<LanguageProvider>(context, listen: false).t('payout.country_france'),
+                Provider.of<LanguageProvider>(context, listen: false).t('payout.country_germany'),
+                Provider.of<LanguageProvider>(context, listen: false).t('payout.country_uk'),
               ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
               onChanged: (v) => setState(() => _country = v),
             ),
           ),
           Step(
-            title: const Text('Account Type'),
+            title: Text(Provider.of<LanguageProvider>(context, listen: false).t('payout.step_account_type')),
             isActive: _currentStep >= 1,
             content: DropdownButtonFormField<String>(
               initialValue: _accountType,
@@ -103,22 +105,22 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
               ),
-              items: const [
-                'Individual',
-                'Business',
+              items: [
+                Provider.of<LanguageProvider>(context, listen: false).t('payout.individual'),
+                Provider.of<LanguageProvider>(context, listen: false).t('payout.business'),
               ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
               onChanged: (v) => setState(() => _accountType = v),
             ),
           ),
           Step(
-            title: const Text('Personal Details'),
+            title: Text(Provider.of<LanguageProvider>(context, listen: false).t('payout.step_personal')),
             isActive: _currentStep >= 2,
             content: Column(
               children: [
                 TextField(
                   controller: _nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Full name',
+                  decoration: InputDecoration(
+                    labelText: Provider.of<LanguageProvider>(context, listen: false).t('payout.full_name'),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
@@ -127,8 +129,8 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: _dobCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Date of birth (YYYY-MM-DD)',
+                  decoration: InputDecoration(
+                    labelText: Provider.of<LanguageProvider>(context, listen: false).t('payout.date_birth'),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
@@ -137,8 +139,8 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: _addressCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Address',
+                  decoration: InputDecoration(
+                    labelText: Provider.of<LanguageProvider>(context, listen: false).t('payout.address'),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
@@ -148,7 +150,7 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
             ),
           ),
           Step(
-            title: const Text('Payout Method'),
+            title: Text(Provider.of<LanguageProvider>(context, listen: false).t('payout.step_method')),
             isActive: _currentStep >= 3,
             content: Column(
               children: [
@@ -159,16 +161,17 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                   ),
-                  items: const ['Stripe', 'Bank transfer']
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
+                  items: [
+                    Provider.of<LanguageProvider>(context, listen: false).t('payout.stripe'),
+                    Provider.of<LanguageProvider>(context, listen: false).t('payout.bank_transfer'),
+                  ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                   onChanged: (v) => setState(() => _payoutProvider = v),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   onChanged: (v) => _iban = v,
-                  decoration: const InputDecoration(
-                    labelText: 'IBAN / Account number',
+                  decoration: InputDecoration(
+                    labelText: Provider.of<LanguageProvider>(context, listen: false).t('payout.iban'),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
@@ -178,7 +181,7 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
             ),
           ),
           Step(
-            title: const Text('Tax & Verification'),
+            title: Text(Provider.of<LanguageProvider>(context, listen: false).t('payout.step_tax')),
             isActive: _currentStep >= 4,
             content: Column(
               children: [
@@ -186,7 +189,7 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
                   value: _taxConfirmed,
                   onChanged: (v) => setState(() => _taxConfirmed = v ?? false),
                   title: Text(
-                    'I confirm tax information will be submitted',
+                    Provider.of<LanguageProvider>(context, listen: false).t('payout.confirm_tax'),
                     style: GoogleFonts.inter(),
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
@@ -195,7 +198,7 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
                   value: _kycConfirmed,
                   onChanged: (v) => setState(() => _kycConfirmed = v ?? false),
                   title: Text(
-                    'I will complete KYC verification if required',
+                    Provider.of<LanguageProvider>(context, listen: false).t('payout.confirm_kyc'),
                     style: GoogleFonts.inter(),
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
@@ -204,19 +207,19 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
             ),
           ),
           Step(
-            title: const Text('Review & Submit'),
+            title: Text(Provider.of<LanguageProvider>(context, listen: false).t('payout.step_review')),
             isActive: _currentStep >= 5,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _row('Country', _country ?? ''),
-                _row('Account type', _accountType ?? ''),
-                _row('Full name', _nameCtrl.text),
-                _row('Payout provider', _payoutProvider ?? ''),
-                _row('Account', _iban ?? ''),
+                _row(Provider.of<LanguageProvider>(context, listen: false).t('payout.review_country'), _country ?? ''),
+                _row(Provider.of<LanguageProvider>(context, listen: false).t('payout.review_account_type'), _accountType ?? ''),
+                _row(Provider.of<LanguageProvider>(context, listen: false).t('payout.review_full_name'), _nameCtrl.text),
+                _row(Provider.of<LanguageProvider>(context, listen: false).t('payout.payout_provider'), _payoutProvider ?? ''),
+                _row(Provider.of<LanguageProvider>(context, listen: false).t('payout.account'), _iban ?? ''),
                 const SizedBox(height: 12),
                 Text(
-                  'By submitting you agree to the payout terms.',
+                  Provider.of<LanguageProvider>(context, listen: false).t('payout.agree_terms'),
                   style: GoogleFonts.inter(
                     color: const Color(0xFF666666),
                     fontSize: 12,

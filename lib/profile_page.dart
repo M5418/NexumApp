@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'services/community_interest_sync_service.dart';
 import 'widgets/post_card.dart';
 import 'widgets/home_post_card.dart';
 import 'models/post.dart';
 import 'settings_page.dart';
 import 'insights_page.dart';
+import 'drafts_page.dart';
+import 'bookmarks_page.dart';
 import 'theme_provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'my_connections_page.dart';
 import 'edit_profil.dart';
 import 'monetization_page.dart';
 import 'premium_subscription_page.dart';
 import 'sign_in_page.dart';
 import 'core/profile_api.dart';
-import 'core/api_client.dart';
+import 'repositories/firebase/firebase_post_repository.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'core/kyc_api.dart';
+import 'repositories/firebase/firebase_kyc_repository.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'repositories/interfaces/podcast_repository.dart';
@@ -52,8 +57,8 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _loadingMyPosts = true;
   String? _errorMyPosts;
 
-  // Media grid: image URLs from my posts
-  List<String> _mediaImageUrls = [];
+  // Media grid: image URLs from my posts with post IDs
+  List<Map<String, String>> _mediaItems = []; // {imageUrl, postId}
   bool _loadingMedia = true;
 
   // Podcasts: created by me
@@ -194,6 +199,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     // Author (from content source)
     final author = asMap(contentSource['author']);
+    final authorId = (author['id'] ?? author['uid'] ?? author['user_id'] ?? contentSource['author_id'] ?? p['author_id'] ?? p['user_id'] ?? '').toString();
     final authorName = (author['name'] ?? author['username'] ?? 'User')
         .toString();
     final authorAvatar = (author['avatarUrl'] ?? author['avatar_url'] ?? '')
@@ -343,6 +349,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     return Post(
       id: (p['id'] ?? '').toString(),
+      authorId: authorId,
       userName: authorName,
       userAvatarUrl: authorAvatar,
       createdAt: _parseCreatedAt(
@@ -383,72 +390,90 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadMyPosts() async {
-    if (_myUserId == null) return;
-    setState(() {
-      _loadingMyPosts = true;
-      _errorMyPosts = null;
-      _loadingMedia = true;
-    });
+    if (_myUserId == null || _myUserId!.isEmpty) return;
 
     try {
-      final dio = ApiClient().dio;
-      final res = await dio.get(
-        '/api/posts',
-        queryParameters: {'user_id': _myUserId, 'limit': 50, 'offset': 0},
-      );
+      final postRepo = FirebasePostRepository();
+      final userRepo = FirebaseUserRepository();
+      final postModels = await postRepo.getUserPosts(uid: _myUserId!, limit: 50);
 
-      final body = Map<String, dynamic>.from(res.data ?? {});
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final list = (data['posts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+      final newItems = <Map<String, dynamic>>[];
+      final originals = <String, Map<String, dynamic>>{};
 
-      // Hydrate original posts for repost rows
-      final origIds = list
-          .map((p) => p['repost_of'])
-          .where((id) => id != null && id.toString().isNotEmpty)
-          .map((id) => id.toString())
-          .toSet();
-
-      final Map<String, Map<String, dynamic>> originals = {};
-      await Future.wait(
-        origIds.map((id) async {
-          try {
-            final r = await dio.get('/api/posts/$id');
-            final rb = Map<String, dynamic>.from(r.data ?? {});
-            final rd = Map<String, dynamic>.from(rb['data'] ?? {});
-            if (rd['post'] is Map) {
-              originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
-            }
-          } catch (_) {}
-        }),
-      );
-
-      for (final p in list) {
-        final ro = p['repost_of'];
-        if (ro != null) {
-          final op = originals[ro.toString()];
-          if (op != null) p['original_post'] = op;
+      for (final model in postModels) {
+        // Convert PostModel to Map format expected by UI
+        final author = await userRepo.getUserProfile(model.authorId);
+        final isRepost = model.repostOf != null && model.repostOf!.isNotEmpty;
+        
+        final mp = {
+          'id': model.id,
+          'user_id': model.authorId,
+          'user': {
+            'name': author?.displayName ?? author?.username ?? 'User',
+            'profile_photo_url': author?.avatarUrl ?? '',
+          },
+          'text': model.text,
+          'media': model.mediaUrls,
+          'created_at': model.createdAt.toIso8601String(),
+          'is_repost': isRepost,
+          'original_post_id': model.repostOf,
+          'counts': {
+            'likes': model.summary.likes,
+            'comments': model.summary.comments,
+            'shares': model.summary.shares,
+            'reposts': model.summary.reposts,
+            'bookmarks': model.summary.bookmarks,
+          },
+        };
+        newItems.add(mp);
+        
+        // Fetch original post if it's a repost
+        if (isRepost && model.repostOf != null) {
+          final original = await postRepo.getPost(model.repostOf!);
+          if (original != null) {
+            final origAuthor = await userRepo.getUserProfile(original.authorId);
+            originals[model.repostOf!] = {
+              'id': original.id,
+              'user_id': original.authorId,
+              'user': {
+                'name': origAuthor?.displayName ?? origAuthor?.username ?? 'User',
+                'profile_photo_url': origAuthor?.avatarUrl ?? '',
+              },
+              'text': original.text,
+              'media': original.mediaUrls,
+              'created_at': original.createdAt.toIso8601String(),
+            };
+          }
         }
       }
 
-      final posts = list.map(_mapRawPostToModel).toList();
+      // Map originals to posts
+      for (final p in newItems) {
+        final opid = p['original_post_id']?.toString();
+        if (opid != null && originals.containsKey(opid)) {
+          p['original_post'] = originals[opid];
+        }
+      }
+
+      final posts = newItems.map(_mapRawPostToModel).toList();
 
       // Build media grid only from my posts containing images
-      final mediaImages = <String>[];
+      final mediaItems = <Map<String, String>>[];
       for (final post in posts) {
         if (post.mediaType == MediaType.image && post.imageUrls.isNotEmpty) {
-          mediaImages.add(post.imageUrls.first);
+          mediaItems.add({'imageUrl': post.imageUrls.first, 'postId': post.id});
         } else if (post.mediaType == MediaType.images &&
             post.imageUrls.length > 1) {
-          mediaImages.addAll(post.imageUrls);
+          for (final url in post.imageUrls) {
+            mediaItems.add({'imageUrl': url, 'postId': post.id});
+          }
         }
       }
 
       if (!mounted) return;
       setState(() {
         _myPosts = posts;
-        _mediaImageUrls = mediaImages;
+        _mediaItems = mediaItems;
         _loadingMyPosts = false;
         _loadingMedia = false;
       });
@@ -470,60 +495,85 @@ class _ProfilePageState extends State<ProfilePage> {
     });
 
     try {
-      final dio = ApiClient().dio;
-      final res = await dio.get(
-        '/api/posts',
-        queryParameters: {'limit': 100, 'offset': 0},
-      );
-
-      final body = Map<String, dynamic>.from(res.data ?? {});
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final raw = (data['posts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-
-      // Activity filter: include reposts done by me, or posts I liked/shared/bookmarked; exclude my own originals
+      final postRepo = FirebasePostRepository();
+      final userRepo = FirebaseUserRepository();
+      
+      // Get liked posts, bookmarked posts, and reposts for activity
+      final likedPosts = await postRepo.getPostsLikedByUser(uid: _myUserId!, limit: 50);
+      final bookmarkedPosts = await postRepo.getPostsBookmarkedByUser(uid: _myUserId!, limit: 50);
+      final reposts = await postRepo.getUserReposts(uid: _myUserId!, limit: 50);
+      
+      // Combine all activity posts
+      final allActivityModels = [...likedPosts, ...bookmarkedPosts, ...reposts];
+      
+      // Remove duplicates by ID
+      final seen = <String>{};
+      final uniqueModels = allActivityModels.where((m) => seen.add(m.id)).toList();
+      
+      // Sort by date
+      uniqueModels.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      // Convert to UI format
       final filtered = <Map<String, dynamic>>[];
-      for (final p in raw) {
-        final userId = (p['user_id'] ?? '').toString();
-        final me = p['me'] is Map
-            ? Map<String, dynamic>.from(p['me'])
-            : <String, dynamic>{};
-        final isMineOriginalRow =
-            userId == _myUserId && (p['repost_of'] == null);
-        final isRepostRowByMe = userId == _myUserId && (p['repost_of'] != null);
-        final likedByMe = (me['liked'] ?? false) == true;
-        final sharedByMe = (me['shared'] ?? false) == true;
-        final bookmarkedByMe = (me['bookmarked'] ?? false) == true;
-
-        final include =
-            isRepostRowByMe || likedByMe || sharedByMe || bookmarkedByMe;
-        if (!include) continue;
-        if (isMineOriginalRow && !isRepostRowByMe) continue;
-
-        filtered.add(p);
+      final originals = <String, Map<String, dynamic>>{};
+      
+      for (final model in uniqueModels.take(100)) {
+        final author = await userRepo.getUserProfile(model.authorId);
+        final repostId = model.repostOf;
+        final isRepost = repostId != null && repostId.isNotEmpty;
+        
+        final mp = {
+          'id': model.id,
+          'user_id': model.authorId,
+          'user': {
+            'name': author?.displayName ?? author?.username ?? 'User',
+            'profile_photo_url': author?.avatarUrl ?? '',
+          },
+          'text': model.text,
+          'media': model.mediaUrls,
+          'created_at': model.createdAt.toIso8601String(),
+          'is_repost': isRepost,
+          'repost_of': repostId,
+          'counts': {
+            'likes': model.summary.likes,
+            'comments': model.summary.comments,
+            'shares': model.summary.shares,
+            'reposts': model.summary.reposts,
+            'bookmarks': model.summary.bookmarks,
+          },
+        };
+        
+        // Add repost_author for reposts to show "You reposted this"
+        if (isRepost) {
+          mp['repost_author'] = {
+            'name': author?.displayName ?? author?.username ?? 'User',
+            'username': author?.username ?? '',
+            'avatarUrl': author?.avatarUrl ?? '',
+            'avatar_url': author?.avatarUrl ?? '',
+          };
+        }
+        
+        filtered.add(mp);
+        
+        // Fetch original post if it's a repost
+        if (repostId != null && repostId.isNotEmpty) {
+          final original = await postRepo.getPost(repostId);
+          if (original != null) {
+            final origAuthor = await userRepo.getUserProfile(original.authorId);
+            originals[repostId] = {
+              'id': original.id,
+              'user_id': original.authorId,
+              'user': {
+                'name': origAuthor?.displayName ?? origAuthor?.username ?? 'User',
+                'profile_photo_url': origAuthor?.avatarUrl ?? '',
+              },
+              'text': original.text,
+              'media': original.mediaUrls,
+              'created_at': original.createdAt.toIso8601String(),
+            };
+          }
+        }
       }
-
-      // Hydrate original posts for repost rows (so we can display original content/media/author)
-      final origIds = filtered
-          .map((p) => p['repost_of'])
-          .where((id) => id != null && id.toString().isNotEmpty)
-          .map((id) => id.toString())
-          .toSet();
-
-      final Map<String, Map<String, dynamic>> originals = {};
-      await Future.wait(
-        origIds.map((id) async {
-          try {
-            final r = await dio.get('/api/posts/$id');
-            final rb = Map<String, dynamic>.from(r.data ?? {});
-            final rd = Map<String, dynamic>.from(rb['data'] ?? {});
-            if (rd['post'] is Map) {
-              originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
-            }
-          } catch (_) {}
-        }),
-      );
 
       for (final p in filtered) {
         final ro = p['repost_of'];
@@ -551,6 +601,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadMyPodcasts() async {
+    if (_myUserId == null || _myUserId!.isEmpty) return;
+    
     setState(() {
       _loadingPodcasts = true;
       _errorPodcasts = null;
@@ -558,7 +610,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       final repo = context.read<PodcastRepository>();
-      final models = await repo.listPodcasts(limit: 50);
+      final models = await repo.listPodcasts(limit: 50, authorId: _myUserId);
       
       if (!mounted) return;
       setState(() {
@@ -631,7 +683,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                           const Spacer(),
                           IconButton(
-                            tooltip: 'Close',
+                            tooltip: Provider.of<LanguageProvider>(context, listen: false).t('common.close'),
                             icon: Icon(
                               Icons.close,
                               color: isDark ? Colors.white70 : Colors.black87,
@@ -741,7 +793,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               if (coverUrl == null || coverUrl.isEmpty)
                                 Center(
                                   child: Text(
-                                    'Add cover image',
+                                    Provider.of<LanguageProvider>(context, listen: false).t('profile.add_cover_image'),
                                     style: GoogleFonts.inter(
                                       fontSize: 14,
                                       color: isDark
@@ -940,32 +992,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
                                                 bool canEditFullName = true;
                                                 try {
-                                                  final kycRes = await KycApi()
-                                                      .getMine();
-                                                  final kycData =
-                                                      Map<String, dynamic>.from(
-                                                        kycRes['data'] ?? {},
-                                                      );
-                                                  if (kycData.isEmpty) {
+                                                  final kyc = await FirebaseKycRepository().getMyKyc();
+                                                  if (kyc == null) {
                                                     canEditFullName = true;
                                                   } else {
-                                                    final status =
-                                                        (kycData['status'] ??
-                                                                '')
-                                                            .toString()
-                                                            .toLowerCase();
-                                                    final isApproved =
-                                                        ((kycData['is_approved'] ??
-                                                                0) ==
-                                                            1) ||
-                                                        status == 'approved';
-                                                    final isRejected =
-                                                        ((kycData['is_rejected'] ??
-                                                                0) ==
-                                                            1) ||
-                                                        status == 'rejected';
-                                                    if (status == 'pending' ||
-                                                        isApproved) {
+                                                    final status = (kyc.status).toLowerCase();
+                                                    final isApproved = kyc.isApproved;
+                                                    final isRejected = kyc.isRejected;
+                                                    if (status == 'pending' || isApproved) {
                                                       canEditFullName = false;
                                                     } else if (isRejected) {
                                                       canEditFullName = true;
@@ -1050,125 +1084,126 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 }
 
                                                 if (!mounted) return;
-                                                if (result != null) {
-                                                  final r = result;
-                                                  final api = ProfileApi();
+                                                final r = result;
+                                                if (r == null) return;
+                                                final api = ProfileApi();
 
-                                                  try {
-                                                    if (r.profileImagePath !=
-                                                            null &&
-                                                        r.profileImagePath!
-                                                            .isNotEmpty) {
-                                                      await api
-                                                          .uploadAndAttachProfilePhoto(
-                                                        File(r.profileImagePath!),
-                                                      );
-                                                    } else if ((r.profileImageUrl ==
-                                                            null ||
-                                                        r.profileImageUrl!
-                                                            .isEmpty) &&
-                                                        (p['profile_photo_url'] !=
-                                                            null)) {
-                                                      await api.update({
-                                                        'profile_photo_url': null,
-                                                      });
-                                                    }
-
-                                                    if (r.coverImagePath !=
-                                                            null &&
-                                                        r.coverImagePath!
-                                                            .isNotEmpty) {
-                                                      await api
-                                                          .uploadAndAttachCoverPhoto(
-                                                        File(r.coverImagePath!),
-                                                      );
-                                                    } else if ((r.coverImageUrl ==
-                                                            null ||
-                                                        r.coverImageUrl!
-                                                            .isEmpty) &&
-                                                        (p['cover_photo_url'] !=
-                                                            null)) {
-                                                      await api.update({
-                                                        'cover_photo_url': null,
-                                                      });
-                                                    }
-                                                  } catch (_) {}
-
-                                                  final updates =
-                                                      <String, dynamic>{};
-
-                                                  final newFullName = r.fullName
-                                                      .trim();
-                                                  if (newFullName.isNotEmpty &&
-                                                      newFullName !=
-                                                          fullName.trim()) {
-                                                    final parts = newFullName
-                                                        .split(RegExp(r'\s+'));
-                                                    final firstName =
-                                                        parts.isNotEmpty
-                                                        ? parts.first
-                                                        : '';
-                                                    final lastName =
-                                                        parts.length > 1
-                                                        ? parts
-                                                                .sublist(1)
-                                                                .join(' ')
-                                                        : '';
-                                                    if (firstName.isNotEmpty) {
-                                                      updates['first_name'] =
-                                                          firstName;
-                                                    }
-                                                    updates['last_name'] =
-                                                        lastName;
+                                                try {
+                                                  if (r.profileImagePath !=
+                                                          null &&
+                                                      r.profileImagePath!
+                                                          .isNotEmpty) {
+                                                    await api
+                                                        .uploadAndAttachProfilePhoto(
+                                                      File(r.profileImagePath!),
+                                                    );
+                                                  } else if ((r.profileImageUrl ==
+                                                          null ||
+                                                      r.profileImageUrl!
+                                                          .isEmpty) &&
+                                                      (p['profile_photo_url'] !=
+                                                          null)) {
+                                                    await api.update({
+                                                      'profile_photo_url': null,
+                                                    });
                                                   }
 
-                                                  final newUsername = r.username
-                                                      .trim();
-                                                  if (newUsername.isNotEmpty &&
-                                                      newUsername !=
-                                                          (p['username'] ?? '')) {
-                                                    updates['username'] =
-                                                        newUsername;
+                                                  if (r.coverImagePath !=
+                                                          null &&
+                                                      r.coverImagePath!
+                                                          .isNotEmpty) {
+                                                    await api
+                                                        .uploadAndAttachCoverPhoto(
+                                                      File(r.coverImagePath!),
+                                                    );
+                                                  } else if ((r.coverImageUrl ==
+                                                          null ||
+                                                      r.coverImageUrl!
+                                                          .isEmpty) &&
+                                                      (p['cover_photo_url'] !=
+                                                          null)) {
+                                                    await api.update({
+                                                      'cover_photo_url': null,
+                                                    });
                                                   }
-                                                  updates['bio'] = r.bio;
+                                                } catch (_) {}
 
-                                                  updates['professional_experiences'] =
-                                                      r.experiences.map((e) {
-                                                    final m = <String, dynamic>{
-                                                      'title': e.title,
-                                                    };
-                                                    if ((e.subtitle ?? '')
-                                                        .trim()
-                                                        .isNotEmpty) {
-                                                      m['subtitle'] = e.subtitle;
-                                                    }
-                                                    return m;
-                                                  }).toList();
+                                                final updates =
+                                                    <String, dynamic>{};
 
-                                                  updates['trainings'] = r
-                                                      .trainings
-                                                      .map((t) {
-                                                    final m = <String, dynamic>{
-                                                      'title': t.title,
-                                                    };
-                                                    if ((t.subtitle ?? '')
-                                                        .trim()
-                                                        .isNotEmpty) {
-                                                      m['subtitle'] = t.subtitle;
-                                                    }
-                                                    return m;
-                                                  }).toList();
-
-                                                  updates['interest_domains'] =
-                                                      r.interests;
-
-                                                  try {
-                                                    await api.update(updates);
-                                                  } catch (_) {}
-
-                                                  await _loadProfile();
+                                                final newFullName = r.fullName
+                                                    .trim();
+                                                if (newFullName.isNotEmpty &&
+                                                    newFullName !=
+                                                        fullName.trim()) {
+                                                  final parts = newFullName
+                                                      .split(RegExp(r'\s+'));
+                                                  final firstName =
+                                                      parts.isNotEmpty
+                                                      ? parts.first
+                                                      : '';
+                                                  final lastName =
+                                                      parts.length > 1
+                                                      ? parts
+                                                              .sublist(1)
+                                                              .join(' ')
+                                                      : '';
+                                                  if (firstName.isNotEmpty) {
+                                                    updates['first_name'] =
+                                                        firstName;
+                                                  }
+                                                  updates['last_name'] =
+                                                      lastName;
                                                 }
-                                              },
+
+                                                final newUsername = r.username
+                                                    .trim();
+                                                if (newUsername.isNotEmpty &&
+                                                    newUsername !=
+                                                        (p['username'] ?? '')) {
+                                                  updates['username'] =
+                                                      newUsername;
+                                                }
+                                                updates['bio'] = r.bio;
+
+                                                updates['professional_experiences'] =
+                                                    r.experiences.map((e) {
+                                                  final m = <String, dynamic>{
+                                                    'title': e.title,
+                                                  };
+                                                  if ((e.subtitle ?? '')
+                                                      .trim()
+                                                      .isNotEmpty) {
+                                                    m['subtitle'] = e.subtitle;
+                                                  }
+                                                  return m;
+                                                }).toList();
+
+                                                updates['trainings'] = r
+                                                    .trainings
+                                                    .map((t) {
+                                                  final m = <String, dynamic>{
+                                                    'title': t.title,
+                                                  };
+                                                  if ((t.subtitle ?? '')
+                                                      .trim()
+                                                      .isNotEmpty) {
+                                                    m['subtitle'] = t.subtitle;
+                                                  }
+                                                  return m;
+                                                }).toList();
+
+                                                updates['interest_domains'] =
+                                                    r.interests;
+
+                                                try {
+                                                  await api.update(updates);
+                                                  // Sync interests with community memberships
+                                                  await CommunityInterestSyncService().syncUserInterests(r.interests);
+                                                } catch (_) {}
+
+                                                await _loadProfile();
+                                                                                            },
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: const Color(
                                                   0xFFBFAE01,
@@ -1186,7 +1221,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 ),
                                               ),
                                               child: Text(
-                                                'Edit Profile',
+                                                Provider.of<LanguageProvider>(context, listen: false).t('profile.edit_profile'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w500,
@@ -1269,7 +1304,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 ),
                                               ),
                                               child: Text(
-                                                'My Connections',
+                                                Provider.of<LanguageProvider>(context, listen: false).t('profile.my_connections'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w500,
@@ -1325,7 +1360,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          'Professional Experiences',
+                                          Provider.of<LanguageProvider>(context, listen: false).t('profile.professional_experiences'),
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
@@ -1341,7 +1376,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       Align(
                                         alignment: Alignment.centerLeft,
                                         child: Text(
-                                          'No experiences added yet.',
+                                          Provider.of<LanguageProvider>(context).t('profile.no_experiences'),
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
                                             color: isDark
@@ -1414,7 +1449,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          'Trainings',
+                                          Provider.of<LanguageProvider>(context, listen: false).t('profile.trainings'),
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
@@ -1430,7 +1465,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       Align(
                                         alignment: Alignment.centerLeft,
                                         child: Text(
-                                          'No trainings added yet.',
+                                          Provider.of<LanguageProvider>(context).t('profile.no_trainings'),
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
                                             color: isDark
@@ -1505,7 +1540,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          'Interest',
+                                          Provider.of<LanguageProvider>(context, listen: false).t('profile.interest'),
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
@@ -1528,7 +1563,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 .toList()
                                           : [
                                               Text(
-                                                'No interests selected yet.',
+                                                Provider.of<LanguageProvider>(context).t('profile.no_interests'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   color: isDark
@@ -1647,7 +1682,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   _navButton(
                     isDark,
                     icon: Icons.home_outlined,
-                    label: 'Home',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.home'),
                     onTap: () {
                       if (Navigator.of(context).canPop()) {
                         Navigator.of(context).pop();
@@ -1657,7 +1692,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   _navButton(
                     isDark,
                     icon: Icons.people_outline,
-                    label: 'Connections',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.connections'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -1670,7 +1705,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   _navButton(
                     isDark,
                     icon: Icons.chat_bubble_outline,
-                    label: 'Conversations',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.conversations'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -1687,7 +1722,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   _navButton(
                     isDark,
                     icon: Icons.person_outline,
-                    label: 'My Profil',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.profile'),
                     selected: true,
                     onTap: () {},
                   ),
@@ -1829,7 +1864,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     if (coverUrl == null || coverUrl.isEmpty)
                                       Center(
                                         child: Text(
-                                          'Add cover image',
+                                          Provider.of<LanguageProvider>(context, listen: false).t('profile.add_cover_image'),
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
                                             color: isDark
@@ -2042,52 +2077,21 @@ class _ProfilePageState extends State<ProfilePage> {
                                                           )
                                                           .toList();
 
-                                                      bool canEditFullName =
-                                                          true;
+                                                      bool canEditFullName = true;
                                                       try {
-                                                        final kycRes =
-                                                            await KycApi()
-                                                                .getMine();
-                                                        final kycData =
-                                                            Map<
-                                                              String,
-                                                              dynamic
-                                                            >.from(
-                                                              kycRes['data'] ??
-                                                                  {},
-                                                            );
-                                                        if (kycData.isEmpty) {
-                                                          canEditFullName =
-                                                              true;
+                                                        final kyc = await FirebaseKycRepository().getMyKyc();
+                                                        if (kyc == null) {
+                                                          canEditFullName = true;
                                                         } else {
-                                                          final status =
-                                                              (kycData['status'] ??
-                                                                      '')
-                                                                  .toString()
-                                                                  .toLowerCase();
-                                                          final isApproved =
-                                                              ((kycData['is_approved'] ??
-                                                                      0) ==
-                                                                  1) ||
-                                                              status ==
-                                                                  'approved';
-                                                          final isRejected =
-                                                              ((kycData['is_rejected'] ??
-                                                                      0) ==
-                                                                  1) ||
-                                                              status ==
-                                                                  'rejected';
-                                                          if (status ==
-                                                                  'pending' ||
-                                                              isApproved) {
-                                                            canEditFullName =
-                                                                false;
+                                                          final status = (kyc.status).toLowerCase();
+                                                          final isApproved = kyc.isApproved;
+                                                          final isRejected = kyc.isRejected;
+                                                          if (status == 'pending' || isApproved) {
+                                                            canEditFullName = false;
                                                           } else if (isRejected) {
-                                                            canEditFullName =
-                                                                true;
+                                                            canEditFullName = true;
                                                           } else {
-                                                            canEditFullName =
-                                                                false;
+                                                            canEditFullName = false;
                                                           }
                                                         }
                                                       } catch (_) {
@@ -2181,121 +2185,122 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       }
 
                                                       if (!mounted) return;
-                                                      if (result != null) {
-                                                        final r = result;
-                                                        final api = ProfileApi();
+                                                      final r = result;
+                                                      if (r == null) return;
+                                                      final api = ProfileApi();
 
-                                                        try {
-                                                          if (r.profileImagePath !=
-                                                                  null &&
-                                                              r.profileImagePath!
-                                                                  .isNotEmpty) {
-                                                            await api
-                                                                .uploadAndAttachProfilePhoto(
-                                                              File(r.profileImagePath!),
-                                                            );
-                                                          } else if ((r.profileImageUrl ==
-                                                                  null ||
-                                                              r.profileImageUrl!
-                                                                  .isEmpty) &&
-                                                              (p['profile_photo_url'] !=
-                                                                  null)) {
-                                                            await api.update({
-                                                              'profile_photo_url':
-                                                                  null,
-                                                            });
-                                                          }
-
-                                                          if (r.coverImagePath !=
-                                                                  null &&
-                                                              r.coverImagePath!
-                                                                  .isNotEmpty) {
-                                                            await api
-                                                                .uploadAndAttachCoverPhoto(
-                                                              File(r.coverImagePath!),
-                                                            );
-                                                          } else if ((r.coverImageUrl ==
-                                                                  null ||
-                                                              r.coverImageUrl!
-                                                                  .isEmpty) &&
-                                                              (p['cover_photo_url'] !=
-                                                                  null)) {
-                                                            await api.update({
-                                                              'cover_photo_url':
-                                                                  null,
-                                                            });
-                                                          }
-                                                        } catch (_) {}
-
-                                                        final updates =
-                                                            <String, dynamic>{};
-
-                                                        final newFullName = r.fullName
-                                                            .trim();
-                                                        if (newFullName.isNotEmpty &&
-                                                            newFullName !=
-                                                                fullName.trim()) {
-                                                          final parts = newFullName
-                                                              .split(RegExp(r'\s+'));
-                                                          final firstName =
-                                                              parts.isNotEmpty
-                                                              ? parts.first
-                                                              : '';
-                                                          final lastName =
-                                                              parts.length > 1
-                                                              ? parts
-                                                                      .sublist(1)
-                                                                      .join(' ')
-                                                              : '';
-                                                          if (firstName.isNotEmpty) {
-                                                            updates['first_name'] =
-                                                                firstName;
-                                                          }
-                                                          updates['last_name'] =
-                                                              lastName;
+                                                      try {
+                                                        if (r.profileImagePath !=
+                                                                null &&
+                                                            r.profileImagePath!
+                                                                .isNotEmpty) {
+                                                          await api
+                                                              .uploadAndAttachProfilePhoto(
+                                                            File(r.profileImagePath!),
+                                                          );
+                                                        } else if ((r.profileImageUrl ==
+                                                                null ||
+                                                            r.profileImageUrl!
+                                                                .isEmpty) &&
+                                                            (p['profile_photo_url'] !=
+                                                                null)) {
+                                                          await api.update({
+                                                            'profile_photo_url':
+                                                                null,
+                                                          });
                                                         }
 
-                                                        final newUsername = r.username
-                                                            .trim();
-                                                        if (newUsername.isNotEmpty &&
-                                                            newUsername !=
-                                                                (p['username'] ??
-                                                                    '')) {
-                                                          updates['username'] =
-                                                              newUsername;
+                                                        if (r.coverImagePath !=
+                                                                null &&
+                                                            r.coverImagePath!
+                                                                .isNotEmpty) {
+                                                          await api
+                                                              .uploadAndAttachCoverPhoto(
+                                                            File(r.coverImagePath!),
+                                                          );
+                                                        } else if ((r.coverImageUrl ==
+                                                                null ||
+                                                            r.coverImageUrl!
+                                                                .isEmpty) &&
+                                                            (p['cover_photo_url'] !=
+                                                                null)) {
+                                                          await api.update({
+                                                            'cover_photo_url':
+                                                                null,
+                                                          });
                                                         }
-                                                        updates['bio'] = r.bio;
+                                                      } catch (_) {}
 
-                                                        updates['professional_experiences'] =
-                                                            r.experiences.map((e) {
-                                                          final m = <String, dynamic>{
-                                                            'title': e.title,
-                                                          };
-                                                          if ((e.subtitle ?? '')
-                                                              .trim()
-                                                              .isNotEmpty) {
-                                                            m['subtitle'] = e.subtitle;
-                                                          }
-                                                          return m;
-                                                        }).toList();
+                                                      final updates =
+                                                          <String, dynamic>{};
 
-                                                        updates['trainings'] = r.trainings.map((t) {
-                                                          final m = <String, dynamic>{'title': t.title};
-                                                          if ((t.subtitle ?? '').trim().isNotEmpty) {
-                                                            m['subtitle'] = t.subtitle;
-                                                          }
-                                                          return m;
-                                                        }).toList();
-
-                                                        updates['interest_domains'] = r.interests;
-
-                                                        try {
-                                                          await api.update(updates);
-                                                        } catch (_) {}
-
-                                                        await _loadProfile();
+                                                      final newFullName = r.fullName
+                                                          .trim();
+                                                      if (newFullName.isNotEmpty &&
+                                                          newFullName !=
+                                                              fullName.trim()) {
+                                                        final parts = newFullName
+                                                            .split(RegExp(r'\s+'));
+                                                        final firstName =
+                                                            parts.isNotEmpty
+                                                            ? parts.first
+                                                            : '';
+                                                        final lastName =
+                                                            parts.length > 1
+                                                            ? parts
+                                                                    .sublist(1)
+                                                                    .join(' ')
+                                                            : '';
+                                                        if (firstName.isNotEmpty) {
+                                                          updates['first_name'] =
+                                                              firstName;
+                                                        }
+                                                        updates['last_name'] =
+                                                            lastName;
                                                       }
-                                                    },
+
+                                                      final newUsername = r.username
+                                                          .trim();
+                                                      if (newUsername.isNotEmpty &&
+                                                          newUsername !=
+                                                              (p['username'] ??
+                                                                  '')) {
+                                                        updates['username'] =
+                                                            newUsername;
+                                                      }
+                                                      updates['bio'] = r.bio;
+
+                                                      updates['professional_experiences'] =
+                                                          r.experiences.map((e) {
+                                                        final m = <String, dynamic>{
+                                                          'title': e.title,
+                                                        };
+                                                        if ((e.subtitle ?? '')
+                                                            .trim()
+                                                            .isNotEmpty) {
+                                                          m['subtitle'] = e.subtitle;
+                                                        }
+                                                        return m;
+                                                      }).toList();
+
+                                                      updates['trainings'] = r.trainings.map((t) {
+                                                        final m = <String, dynamic>{'title': t.title};
+                                                        if ((t.subtitle ?? '').trim().isNotEmpty) {
+                                                          m['subtitle'] = t.subtitle;
+                                                        }
+                                                        return m;
+                                                      }).toList();
+
+                                                      updates['interest_domains'] = r.interests;
+
+                                                      try {
+                                                        await api.update(updates);
+                                                        // Sync interests with community memberships
+                                                        await CommunityInterestSyncService().syncUserInterests(r.interests);
+                                                      } catch (_) {}
+
+                                                      await _loadProfile();
+                                                                                                        },
                                                     style: ElevatedButton.styleFrom(
                                                       backgroundColor:
                                                           const Color(
@@ -2316,7 +2321,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       ),
                                                     ),
                                                     child: Text(
-                                                      'Edit Profile',
+                                                      Provider.of<LanguageProvider>(context, listen: false).t('profile.edit_profile'),
                                                       style: GoogleFonts.inter(
                                                         fontSize: 14,
                                                         fontWeight:
@@ -2409,7 +2414,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       ),
                                                     ),
                                                     child: Text(
-                                                      'My Connections',
+                                                      Provider.of<LanguageProvider>(context, listen: false).t('profile.my_connections'),
                                                       style: GoogleFonts.inter(
                                                         fontSize: 14,
                                                         fontWeight:
@@ -2472,7 +2477,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                               ),
                                               const SizedBox(width: 8),
                                               Text(
-                                                'Professional Experiences',
+                                                Provider.of<LanguageProvider>(context, listen: false).t('profile.professional_experiences'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w600,
@@ -2488,7 +2493,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                             Align(
                                               alignment: Alignment.centerLeft,
                                               child: Text(
-                                                'No experiences added yet.',
+                                                Provider.of<LanguageProvider>(context).t('profile.no_experiences'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   color: isDark
@@ -2567,7 +2572,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                               ),
                                               const SizedBox(width: 8),
                                               Text(
-                                                'Trainings',
+                                                Provider.of<LanguageProvider>(context, listen: false).t('profile.trainings'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w600,
@@ -2583,7 +2588,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                             Align(
                                               alignment: Alignment.centerLeft,
                                               child: Text(
-                                                'No trainings added yet.',
+                                                Provider.of<LanguageProvider>(context).t('profile.no_trainings'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   color: isDark
@@ -2665,7 +2670,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                               ),
                                               const SizedBox(width: 8),
                                               Text(
-                                                'Interest',
+                                                Provider.of<LanguageProvider>(context, listen: false).t('profile.interest'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w600,
@@ -2691,7 +2696,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       .toList()
                                                 : [
                                                     Text(
-                                                      'No interests selected yet.',
+                                                      Provider.of<LanguageProvider>(context).t('profile.no_interests'),
                                                       style: GoogleFonts.inter(
                                                         fontSize: 14,
                                                         color: isDark
@@ -2744,12 +2749,60 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 20),
                 ListTile(
                   leading: Icon(
+                    Icons.drafts_outlined,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                    size: 22,
+                  ),
+                  title: Text(
+                    Provider.of<LanguageProvider>(context).t('profile.menu.drafts'),
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DraftsPage(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.bookmark_outline,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                    size: 22,
+                  ),
+                  title: Text(
+                    Provider.of<LanguageProvider>(context).t('profile.menu.bookmarks'),
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const BookmarksPage(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
                     Icons.settings,
                     color: isDark ? Colors.white70 : Colors.black87,
                     size: 22,
                   ),
                   title: Text(
-                    'Settings',
+                    Provider.of<LanguageProvider>(context).t('profile.menu.settings'),
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -2882,14 +2935,14 @@ class _ProfilePageState extends State<ProfilePage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Help Center',
+                                Provider.of<LanguageProvider>(context, listen: false).t('profile.menu.help_center'),
                                 style: GoogleFonts.inter(),
                               ),
                             ),
                           );
                         },
                         child: Text(
-                          'Help Center',
+                          Provider.of<LanguageProvider>(context).t('profile.menu.help_center'),
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: isDark ? Colors.white70 : Colors.black54,
@@ -2902,14 +2955,14 @@ class _ProfilePageState extends State<ProfilePage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Support',
+                                Provider.of<LanguageProvider>(context, listen: false).t('profile.menu.support'),
                                 style: GoogleFonts.inter(),
                               ),
                             ),
                           );
                         },
                         child: Text(
-                          'Support',
+                          Provider.of<LanguageProvider>(context).t('profile.menu.support'),
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: isDark ? Colors.white70 : Colors.black54,
@@ -2922,14 +2975,14 @@ class _ProfilePageState extends State<ProfilePage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Terms & Conditions',
+                                Provider.of<LanguageProvider>(context, listen: false).t('profile.menu.terms'),
                                 style: GoogleFonts.inter(),
                               ),
                             ),
                           );
                         },
                         child: Text(
-                          'Terms & Conditions',
+                          Provider.of<LanguageProvider>(context).t('profile.menu.terms'),
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: isDark ? Colors.white70 : Colors.black54,
@@ -3053,11 +3106,11 @@ class _ProfilePageState extends State<ProfilePage> {
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
-                  tabs: const [
-                    Tab(text: 'Activity'),
-                    Tab(text: 'Posts'),
-                    Tab(text: 'Podcasts'),
-                    Tab(text: 'Media'),
+                  tabs: [
+                    Tab(text: Provider.of<LanguageProvider>(context).t('profile.tabs.activity')),
+                    Tab(text: Provider.of<LanguageProvider>(context).t('profile.tabs.posts')),
+                    Tab(text: Provider.of<LanguageProvider>(context).t('profile.tabs.podcasts')),
+                    Tab(text: Provider.of<LanguageProvider>(context).t('profile.tabs.media')),
                   ],
                 ),
               ),
@@ -3106,7 +3159,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Center(
             child: Text(
-              'No recent activity yet.',
+              Provider.of<LanguageProvider>(context).t('profile.no_activity'),
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: isDark ? Colors.white70 : const Color(0xFF666666),
@@ -3122,14 +3175,24 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.only(top: 10, bottom: 20),
       itemCount: _activityPosts.length,
       itemBuilder: (context, index) {
-        return PostCard(
-          post: _activityPosts[index],
-          isDarkMode: isDark,
-          onReactionChanged: (postId, reaction) {},
-          onBookmarkToggle: (postId) {},
-          onShare: (postId) {},
-          onComment: (postId) {},
-          onRepost: (postId) {},
+        final post = _activityPosts[index];
+        return GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/post',
+              arguments: {'postId': post.id},
+            );
+          },
+          child: PostCard(
+            post: post,
+            isDarkMode: isDark,
+            onReactionChanged: (postId, reaction) {},
+            onBookmarkToggle: (postId) {},
+            onShare: (postId) {},
+            onComment: (postId) {},
+            onRepost: (postId) {},
+          ),
         );
       },
     );
@@ -3161,7 +3224,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Center(
             child: Text(
-              'No posts yet.',
+              Provider.of<LanguageProvider>(context).t('profile.no_posts'),
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: isDark ? Colors.white70 : const Color(0xFF666666),
@@ -3177,14 +3240,24 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.only(top: 10, bottom: 20),
       itemCount: _myPosts.length,
       itemBuilder: (context, index) {
-        return HomePostCard(
-          post: _myPosts[index],
-          isDarkMode: isDark,
-          onReactionChanged: (postId, reaction) {},
-          onBookmarkToggle: (postId) {},
-          onShare: (postId) {},
-          onComment: (postId) {},
-          onRepost: (postId) {},
+        final post = _myPosts[index];
+        return GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/post',
+              arguments: {'postId': post.id},
+            );
+          },
+          child: HomePostCard(
+            post: post,
+            isDarkMode: isDark,
+            onReactionChanged: (postId, reaction) {},
+            onBookmarkToggle: (postId) {},
+            onShare: (postId) {},
+            onComment: (postId) {},
+            onRepost: (postId) {},
+          ),
         );
       },
     );
@@ -3201,7 +3274,7 @@ class _ProfilePageState extends State<ProfilePage> {
       return ListView(
         primary: false,
         padding: const EdgeInsets.all(16),
-        children: [Center(child: Text('No podcasts yet.'))],
+        children: [Center(child: Text(Provider.of<LanguageProvider>(context).t('profile.no_podcasts')))],
       );
     }
     return ListView.builder(
@@ -3210,6 +3283,7 @@ class _ProfilePageState extends State<ProfilePage> {
       itemCount: _myPodcasts.length,
       itemBuilder: (context, i) {
         final p = _myPodcasts[i];
+        final podcastId = (p['id'] ?? '').toString();
         final title = (p['title'] ?? '').toString();
         final episode = (p['description'] ?? '').toString();
         final durationSec = (p['durationSec'] is num)
@@ -3219,7 +3293,16 @@ class _ProfilePageState extends State<ProfilePage> {
         final imageUrl = ((p['coverUrl'] ?? '') as String).isNotEmpty
             ? (p['coverUrl'] as String)
             : 'https://via.placeholder.com/300x300.png?text=Podcast';
-        return _buildPodcastItem(title, episode, duration, imageUrl);
+        return GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/podcast',
+              arguments: {'podcastId': podcastId},
+            );
+          },
+          child: _buildPodcastItem(title, episode, duration, imageUrl),
+        );
       },
     );
   }
@@ -3303,7 +3386,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_loadingMedia) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_mediaImageUrls.isEmpty) {
+    if (_mediaItems.isEmpty) {
       return GridView.count(
         primary: false,
         crossAxisCount: 3,
@@ -3317,10 +3400,19 @@ class _ProfilePageState extends State<ProfilePage> {
       crossAxisCount: 3,
       mainAxisSpacing: 2,
       crossAxisSpacing: 2,
-      children: _mediaImageUrls.map((imageUrl) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(imageUrl, fit: BoxFit.cover),
+      children: _mediaItems.map((item) {
+        return GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/post',
+              arguments: {'postId': item['postId']},
+            );
+          },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(item['imageUrl']!, fit: BoxFit.cover),
+          ),
         );
       }).toList(),
     );

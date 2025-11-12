@@ -10,7 +10,8 @@ import 'models/post.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/interfaces/comment_repository.dart';
-import 'core/posts_api.dart';
+import 'repositories/firebase/firebase_comment_repository.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
 
 import 'widgets/media_carousel.dart';
 import 'widgets/auto_play_video.dart';
@@ -18,6 +19,8 @@ import 'widgets/post_options_menu.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/comment_bottom_sheet.dart';
 import 'core/time_utils.dart';
+import 'repositories/firebase/firebase_translate_repository.dart';
+import 'core/i18n/language_provider.dart';
 
 class CommunityPostPage extends StatefulWidget {
   // Community context is required
@@ -44,6 +47,8 @@ class CommunityPostPage extends StatefulWidget {
 
 class _CommunityPostPageState extends State<CommunityPostPage> {
   bool _showTranslation = false;
+  String? _translatedText;
+  String? _lastUgcCode;
 
   // Post data (mapped to PostDetail to preserve existing UI structure)
   PostDetail? _post;
@@ -61,10 +66,29 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
   // Current user for CommentBottomSheet
   String? _currentUserId;
 
+  final FirebasePostRepository _postRepo = FirebasePostRepository();
+  final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
+  final FirebaseUserRepository _userRepo = FirebaseUserRepository();
+
   @override
   void initState() {
     super.initState();
     _init();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final code = Provider.of<LanguageProvider>(context).ugcTargetCode;
+    if (code != _lastUgcCode) {
+      _lastUgcCode = code;
+      if (_showTranslation && _post != null) {
+        final text = _post!.text.trim();
+        if (text.isNotEmpty) {
+          _retranslateCurrentPost(code);
+        }
+      }
+    }
   }
 
   @override
@@ -107,6 +131,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
   void _applyPost(Post p) {
     final detail = PostDetail(
       id: p.id,
+      authorId: '',
       authorName: p.userName,
       authorAvatarUrl: p.userAvatarUrl,
       createdAt: p.createdAt,
@@ -137,6 +162,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
           ? null
           : Post(
               id: model.id,
+              authorId: model.authorId,
               userName: '',
               userAvatarUrl: '',
               createdAt: model.createdAt,
@@ -191,7 +217,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       _loadingComments = true;
     });
     try {
-      await PostsApi().listComments(_post!.id);
+      await _commentRepo.getComments(postId: _post!.id, limit: 1);
       if (!mounted) return;
     } catch (e) {
       if (!mounted) return;
@@ -212,10 +238,40 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     }
   }
 
-  void _toggleTranslation() {
-    setState(() {
-      _showTranslation = !_showTranslation;
-    });
+  Future<void> _retranslateCurrentPost(String target) async {
+    if (_post == null) return;
+    final text = _post!.text.trim();
+    if (text.isEmpty) return;
+    try {
+      final repo = FirebaseTranslateRepository();
+      final translated = await repo.translateText(text, target);
+      if (!mounted) return;
+      setState(() {
+        _translatedText = translated;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleTranslation() async {
+    if (_post == null) return;
+    final text = _post!.text.trim();
+    if (!_showTranslation && _translatedText == null && text.isNotEmpty) {
+      try {
+        final target = context.read<LanguageProvider>().ugcTargetCode;
+        final repo = FirebaseTranslateRepository();
+        final translated = await repo.translateText(text, target);
+        if (!mounted) return;
+        setState(() {
+          _translatedText = translated;
+          _lastUgcCode = target;
+        });
+      } catch (_) {}
+    }
+    if (mounted) {
+      setState(() {
+        _showTranslation = !_showTranslation;
+      });
+    }
   }
 
 
@@ -274,6 +330,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     );
     final updated = PostDetail(
       id: original.id,
+      authorId: original.authorId,
       authorName: original.authorName,
       authorAvatarUrl: original.authorAvatarUrl,
       createdAt: original.createdAt,
@@ -294,9 +351,9 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
 
     try {
       if (wasLiked) {
-        await PostsApi().unlike(postId);
+        await _postRepo.unlikePost(postId);
       } else {
-        await PostsApi().like(postId);
+        await _postRepo.likePost(postId);
       }
     } catch (e) {
       if (!mounted) return;
@@ -333,6 +390,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     );
     final updated = PostDetail(
       id: original.id,
+      authorId: original.authorId,
       authorName: original.authorName,
       authorAvatarUrl: original.authorAvatarUrl,
       createdAt: original.createdAt,
@@ -353,9 +411,9 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
 
     try {
       if (willBookmark) {
-        await PostsApi().bookmark(postId);
+        await _postRepo.bookmarkPost(postId);
       } else {
-        await PostsApi().unbookmark(postId);
+        await _postRepo.unbookmarkPost(postId);
       }
     } catch (e) {
       if (!mounted) return;
@@ -437,7 +495,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     List<Comment> comments = [];
     try {
-      comments = await PostsApi().listComments(_post!.id);
+      comments = await _loadCommentsForPost(_post!.id);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -459,7 +517,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       isDarkMode: isDark,
       onAddComment: (text) async {
         try {
-          await PostsApi().addComment(_post!.id, content: text);
+          await _commentRepo.createComment(postId: _post!.id, text: text);
           // Optimistically increment comments count
           final original = _post!;
           final updatedCounts = PostCounts(
@@ -472,6 +530,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
           setState(() {
             _post = PostDetail(
               id: original.id,
+              authorId: original.authorId,
               authorName: original.authorName,
               authorAvatarUrl: original.authorAvatarUrl,
               createdAt: original.createdAt,
@@ -506,8 +565,8 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       },
       onReplyToComment: (commentId, replyText) async {
         try {
-          await PostsApi().addComment(_post!.id,
-              content: replyText, parentCommentId: commentId);
+          await _commentRepo.createComment(
+              postId: _post!.id, text: replyText, parentCommentId: commentId);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -528,6 +587,28 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
         }
       },
     );
+  }
+
+  Future<List<Comment>> _loadCommentsForPost(String postId) async {
+    final list = await _commentRepo.getComments(postId: postId, limit: 200);
+    final uids = list.map((m) => m.authorId).toSet().toList();
+    final profiles = await _userRepo.getUsers(uids);
+    final byId = {for (final p in profiles) p.uid: p};
+    return list.map((m) {
+      final u = byId[m.authorId];
+      return Comment(
+        id: m.id,
+        userId: m.authorId,
+        userName: (u?.displayName ?? u?.username ?? 'User'),
+        userAvatarUrl: (u?.avatarUrl ?? ''),
+        text: m.text,
+        createdAt: m.createdAt,
+        likesCount: m.likesCount,
+        isLikedByUser: false,
+        replies: const [],
+        parentCommentId: m.parentCommentId,
+      );
+    }).toList();
   }
 
   Future<void> _submitComment() async {
@@ -556,6 +637,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
       setState(() {
         _post = PostDetail(
           id: original.id,
+          authorId: original.authorId,
           authorName: original.authorName,
           authorAvatarUrl: original.authorAvatarUrl,
           createdAt: original.createdAt,
@@ -750,7 +832,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                   if (_post!.text.isNotEmpty) ...[
                                     Text(
                                       _showTranslation
-                                          ? 'Translated: ${_post!.text}'
+                                          ? (_translatedText ?? _post!.text)
                                           : _post!.text,
                                       style: GoogleFonts.inter(
                                         fontSize: 16,
@@ -760,19 +842,21 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                       ),
                                     ),
                                     const SizedBox(height: 8),
-                                    GestureDetector(
-                                      onTap: _toggleTranslation,
-                                      child: Text(
-                                        _showTranslation
-                                            ? 'Show Original'
-                                            : 'Translate',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 14,
-                                          color: const Color(0xFFBFAE01),
-                                          fontWeight: FontWeight.w500,
+                                    // Only show translate button if translation is enabled in settings
+                                    if (context.watch<LanguageProvider>().postTranslationEnabled)
+                                      GestureDetector(
+                                        onTap: _toggleTranslation,
+                                        child: Text(
+                                          _showTranslation
+                                              ? 'Show Original'
+                                              : 'Translate',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: const Color(0xFFBFAE01),
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
-                                    ),
                                     const SizedBox(height: 20),
                                   ],
 

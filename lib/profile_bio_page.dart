@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'interest_selection_page.dart';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
@@ -64,6 +66,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     if (context.isMobile) {
@@ -103,7 +106,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                           onPressed: () => Navigator.pop(context),
                         ),
                         Text(
-                          'Bio',
+                          lang.t('profile_bio.title'),
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -126,7 +129,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
             children: [
               const SizedBox(height: 32),
               Text(
-                "Tell us about yourself",
+                lang.t('profile_bio.heading'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -135,7 +138,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Write a short bio that describes who you are and what you do',
+                lang.t('profile_bio.subtitle'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   color: const Color(0xFF666666),
@@ -164,8 +167,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                       color: isDarkMode ? Colors.white : Colors.black,
                     ),
                     decoration: InputDecoration(
-                      hintText:
-                          'Wellness enthusiast 💪 Lover of clean living, mindful habits, and healthy vibes ✨🌱\n\nTell your story, share your passions, or describe what makes you unique...',
+                      hintText: lang.t('profile_bio.hint'),
                       hintStyle: GoogleFonts.inter(
                         fontSize: 16,
                         color: const Color(0xFF999999),
@@ -206,7 +208,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                         ),
                       ),
                       child: Text(
-                        'Skip',
+                        lang.t('profile_bio.skip'),
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -229,7 +231,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                         elevation: 0,
                       ),
                       child: Text(
-                        _isSaving ? 'Saving...' : 'Next',
+                        _isSaving ? lang.t('profile_bio.saving') : lang.t('profile_bio.next'),
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

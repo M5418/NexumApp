@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'profile_cover_page.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -33,6 +35,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
   }
 
   void _showPhotoSourceSheet() {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
@@ -47,7 +50,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: Text('Take Photo', style: GoogleFonts.inter()),
+                title: Text(lang.t('profile_photo.take_photo'), style: GoogleFonts.inter()),
                 onTap: () async {
                   Navigator.pop(context);
                   await _pickPhoto(ImageSource.camera);
@@ -55,7 +58,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: Text('Choose from Gallery', style: GoogleFonts.inter()),
+                title: Text(lang.t('profile_photo.choose_gallery'), style: GoogleFonts.inter()),
                 onTap: () async {
                   Navigator.pop(context);
                   await _pickPhoto(ImageSource.gallery);
@@ -65,7 +68,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                 ListTile(
                   leading: const Icon(Icons.delete_outline, color: Colors.red),
                   title: Text(
-                    'Remove Photo',
+                    lang.t('common.delete'),
                     style: GoogleFonts.inter(color: Colors.red),
                   ),
                   onTap: () {
@@ -104,18 +107,18 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
         if (!permissionStatus.isGranted) {
           if (permissionStatus.isDenied) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Permission denied. Please allow access to continue.'),
+              SnackBar(
+                content: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.permission_denied')),
                 backgroundColor: Colors.red,
               ),
             );
           } else if (permissionStatus.isPermanentlyDenied) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text('Access permanently denied. Please enable in settings.'),
+                content: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.permission_denied_settings')),
                 backgroundColor: Colors.red,
                 action: SnackBarAction(
-                  label: 'Settings',
+                  label: Provider.of<LanguageProvider>(context, listen: false).t('common.settings'),
                   textColor: Colors.white,
                   onPressed: () => openAppSettings(),
                 ),
@@ -162,8 +165,8 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unexpected error occurred.'),
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.unexpected_error')),
           backgroundColor: Colors.red,
         ),
       );
@@ -191,8 +194,8 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
     } catch (_) {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to upload profile photo. You can try again later.'),
+          SnackBar(
+            content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.upload_photo_failed')),
             backgroundColor: Colors.red,
           ),
         );
@@ -219,17 +222,18 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final lang = context.watch<LanguageProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (context.isMobile) {
       // MOBILE: app bar pattern like other steps (no gradient)
       return Scaffold(
-        backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+        backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(100.0),
           child: Container(
             decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+              color: isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(25),
                 bottomRight: Radius.circular(25),
@@ -253,16 +257,16 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                         IconButton(
                           icon: Icon(
                             Icons.arrow_back,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                            color: isDark ? Colors.white : Colors.black,
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
                         Text(
-                          'Profil details',
+                          lang.t('profile_photo.title'),
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                            color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
                       ],
@@ -284,7 +288,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: isDarkMode ? Colors.white : Colors.black,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
               const SizedBox(height: 12),
@@ -307,7 +311,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                       color: const Color(0xFFBFAE01),
                       width: 3,
                     ),
-                    color: isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                    color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
                   ),
                   child: _photoBytes != null
                       ? ClipOval(
@@ -324,14 +328,14 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                             Icon(
                               Icons.add_a_photo,
                               size: 48,
-                              color: isDarkMode ? Colors.white54 : Colors.black54,
+                              color: isDark ? Colors.white54 : Colors.black54,
                             ),
                             const SizedBox(height: 8),
                             Text(
                               'Add Photo',
                               style: GoogleFonts.inter(
                                 fontSize: 16,
-                                color: isDarkMode ? Colors.white54 : Colors.black54,
+                                color: isDark ? Colors.white54 : Colors.black54,
                               ),
                             ),
                           ],
@@ -370,7 +374,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
 
     // DESKTOP: centered popup card
     return Scaffold(
-      backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+      backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -378,7 +382,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Material(
-                color: isDarkMode ? const Color(0xFF000000) : Colors.white,
+                color: isDark ? const Color(0xFF000000) : Colors.white,
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
@@ -387,7 +391,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                       Row(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.close, color: isDarkMode ? Colors.white : Colors.black),
+                            icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.black),
                             onPressed: () => Navigator.pop(context),
                           ),
                           const SizedBox(width: 8),
@@ -396,7 +400,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: isDarkMode ? Colors.white : Colors.black,
+                              color: isDark ? Colors.white : Colors.black,
                             ),
                           ),
                         ],
@@ -416,7 +420,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                                 style: GoogleFonts.inter(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
-                                  color: isDarkMode ? Colors.white : Colors.black,
+                                  color: isDark ? Colors.white : Colors.black,
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -440,7 +444,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                                       color: const Color(0xFFBFAE01),
                                       width: 3,
                                     ),
-                                    color: isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                                    color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
                                   ),
                                   child: _photoBytes != null
                                       ? ClipOval(
@@ -457,14 +461,14 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                                             Icon(
                                               Icons.add_a_photo,
                                               size: 48,
-                                              color: isDarkMode ? Colors.white54 : Colors.black54,
+                                              color: isDark ? Colors.white54 : Colors.black54,
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
                                               'Add Photo',
                                               style: GoogleFonts.inter(
                                                 fontSize: 16,
-                                                color: isDarkMode ? Colors.white54 : Colors.black54,
+                                                color: isDark ? Colors.white54 : Colors.black54,
                                               ),
                                             ),
                                           ],

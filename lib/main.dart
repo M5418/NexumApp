@@ -1,11 +1,12 @@
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_wrapper.dart';
 import 'theme_provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:flutter/foundation.dart';
+import 'firebase_options.dart';
 import 'repositories/interfaces/auth_repository.dart';
 import 'repositories/interfaces/storage_repository.dart';
 import 'repositories/interfaces/user_repository.dart';
@@ -34,15 +35,82 @@ import 'repositories/firebase/firebase_mentorship_repository.dart';
 import 'repositories/firebase/firebase_book_repository.dart';
 import 'repositories/firebase/firebase_podcast_repository.dart';
 import 'repositories/firebase/firebase_story_repository.dart';
+import 'repositories/firebase/firebase_kyc_repository.dart';
+import 'repositories/firebase/firebase_report_repository.dart';
+import 'repositories/firebase/firebase_search_repository.dart';
+import 'repositories/firebase/firebase_translate_repository.dart';
+import 'repositories/firebase/firebase_invitation_repository.dart';
+import 'repositories/interfaces/kyc_repository.dart';
+import 'repositories/interfaces/report_repository.dart';
+import 'repositories/interfaces/search_repository.dart';
+import 'repositories/interfaces/translate_repository.dart';
+import 'repositories/interfaces/invitation_repository.dart';
+import 'repositories/interfaces/draft_repository.dart';
+import 'repositories/firebase/firebase_draft_repository.dart';
+import 'repositories/interfaces/bookmark_repository.dart';
+import 'repositories/firebase/firebase_bookmark_repository.dart';
+import 'repositories/interfaces/block_repository.dart';
+import 'repositories/firebase/firebase_block_repository.dart';
+import 'repositories/interfaces/mute_repository.dart';
+import 'repositories/firebase/firebase_mute_repository.dart';
+import 'services/community_interest_sync_service.dart';
 
-void main() async {
+// Firebase App Check reCAPTCHA Enterprise site key
+// Pass via --dart-define when running:
+// flutter run -d chrome --dart-define=RECAPTCHA_ENTERPRISE_SITE_KEY=<your_key>
+const String kRecaptchaEnterpriseSiteKey = String.fromEnvironment(
+  'RECAPTCHA_ENTERPRISE_SITE_KEY',
+  defaultValue: '',
+);
+
+/// Sanity check: log Firebase configuration (dev only)
+void _sanityLogFirebase() {
+  final options = Firebase.app().options;
+  debugPrint('Firebase initialized: projectId=${options.projectId} appId=${options.appId}');
+}
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  if (!kIsWeb) {
-    await FirebaseAppCheck.instance.activate();
+  
+  // Prevent duplicate Firebase initialization on hot reload
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    // App already initialized (hot restart), ignore
+    debugPrint('Firebase already initialized: $e');
   }
+  
+  // Sanity check (dev only)
+  _sanityLogFirebase();
+  
+  // Initialize interest-based communities (one-time setup, safe to call multiple times)
+  CommunityInterestSyncService().initializeInterestCommunities().catchError((e) {
+    debugPrint('Community initialization error (non-critical): $e');
+  });
+  
+  // App Check Configuration
+  // Firebase Console: Keep all services in Monitoring (not Enforced)
+  // Web: reCAPTCHA Enterprise only
+  // Mobile: Platform-specific providers
+  if (kIsWeb) {
+    if (kRecaptchaEnterpriseSiteKey.isNotEmpty) {
+      await FirebaseAppCheck.instance.activate(
+        webProvider: ReCaptchaEnterpriseProvider(kRecaptchaEnterpriseSiteKey),
+      );
+    }
+  } else {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: kReleaseMode 
+        ? AndroidProvider.playIntegrity 
+        : AndroidProvider.debug,
+      appleProvider: kReleaseMode 
+        ? AppleProvider.appAttest 
+        : AppleProvider.debug,
+    );
+  }
+  
   runApp(const MyApp());
 }
 
@@ -52,45 +120,45 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => ThemeProvider()),
-          Provider<AuthRepository>(create: (_) => FirebaseAuthRepository()),
-          Provider<StorageRepository>(create: (_) => FirebaseStorageRepository()),
-          Provider<UserRepository>(create: (_) => FirebaseUserRepository()),
-          Provider<PostRepository>(create: (_) => FirebasePostRepository()),
-          Provider<CommentRepository>(create: (_) => FirebaseCommentRepository()),
-          Provider<FollowRepository>(create: (_) => FirebaseFollowRepository()),
-          Provider<NotificationRepository>(create: (_) => FirebaseNotificationRepository()),
-          Provider<ConversationRepository>(create: (_) => FirebaseConversationRepository()),
-          Provider<MessageRepository>(create: (_) => FirebaseMessageRepository()),
-          Provider<CommunityRepository>(create: (_) => FirebaseCommunityRepository()),
-          Provider<MentorshipRepository>(create: (_) => FirebaseMentorshipRepository()),
-          Provider<BookRepository>(create: (_) => FirebaseBookRepository()),
-          Provider<PodcastRepository>(create: (_) => FirebasePodcastRepository()),
-          Provider<StoryRepository>(create: (_) => FirebaseStoryRepository()),
-        ],
-        child: const AppWrapper(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        Provider<AuthRepository>(create: (_) => FirebaseAuthRepository()),
+        Provider<StorageRepository>(create: (_) => FirebaseStorageRepository()),
+        Provider<UserRepository>(create: (_) => FirebaseUserRepository()),
+        Provider<PostRepository>(create: (_) => FirebasePostRepository()),
+        Provider<CommentRepository>(create: (_) => FirebaseCommentRepository()),
+        Provider<FollowRepository>(create: (_) => FirebaseFollowRepository()),
+        Provider<NotificationRepository>(create: (_) => FirebaseNotificationRepository()),
+        Provider<ConversationRepository>(create: (_) => FirebaseConversationRepository()),
+        Provider<MessageRepository>(create: (_) => FirebaseMessageRepository()),
+        Provider<CommunityRepository>(create: (_) => FirebaseCommunityRepository()),
+        Provider<MentorshipRepository>(create: (_) => FirebaseMentorshipRepository()),
+        Provider<BookRepository>(create: (_) => FirebaseBookRepository()),
+        Provider<PodcastRepository>(create: (_) => FirebasePodcastRepository()),
+        Provider<StoryRepository>(create: (_) => FirebaseStoryRepository()),
+        Provider<KycRepository>(create: (_) => FirebaseKycRepository()),
+        Provider<ReportRepository>(create: (_) => FirebaseReportRepository()),
+        Provider<SearchRepository>(create: (_) => FirebaseSearchRepository()),
+        Provider<TranslateRepository>(create: (_) => FirebaseTranslateRepository()),
+        Provider<InvitationRepository>(create: (_) => FirebaseInvitationRepository()),
+        Provider<DraftRepository>(create: (_) => FirebaseDraftRepository()),
+        Provider<BookmarkRepository>(create: (_) => FirebaseBookmarkRepository()),
+        Provider<BlockRepository>(create: (_) => FirebaseBlockRepository()),
+        Provider<MuteRepository>(create: (_) => FirebaseMuteRepository()),
+      ],
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp(
+            title: 'Nexum',
+            theme: themeProvider.lightTheme,
+            darkTheme: themeProvider.darkTheme,
+            // Drive theme from in-app toggle
+            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            home: const AppWrapper(),
+          );
+        },
       ),
     );
   }

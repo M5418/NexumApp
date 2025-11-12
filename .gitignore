@@ -43,3 +43,36 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase Functions environment variables
+functions/.env
+.env
+
+# Documentation and temporary MD files (not needed in repo)
+*_GUIDE.md
+*_SETUP.md
+*_CHECKLIST.md
+*_DEBUG.md
+*_SUMMARY.md
+*_TRACKER.md
+*_PLAN.md
+*_REPORT.md
+*_START.md
+*_FIX.md
+*_AUDIT.md
+BROKEN_IMAGES_FIX.md
+CACHE_MANAGEMENT.md
+FIXES_APPLIED.md
+PRIVACY_POLICY.md
+TROUBLESHOOTING_*.md
+
+# Certificates (should not be in repo)
+*.p12
+*.pem
+
+# Admin tools (not for main repo)
+admin-tools/
+
+# Scripts (deployment scripts can stay but generated ones ignored)
+cors.json
+storage-cors.json

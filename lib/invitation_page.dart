@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'widgets/segmented_tabs.dart';
-import 'core/invitations_api.dart';
+import 'repositories/firebase/firebase_invitation_repository.dart';
+import 'repositories/interfaces/invitation_repository.dart';
 import 'chat_page.dart';
 import 'models/message.dart';
 
@@ -32,10 +35,10 @@ class _InvitationPageState extends State<InvitationPage>
   BulkAction? _currentAction;
   final Set<String> _selectedIds = <String>{};
 
-  List<Invitation> _received = [];
-  List<Invitation> _sent = [];
+  List<InvitationModel> _received = [];
+  List<InvitationModel> _sent = [];
 
-  final InvitationsApi _api = InvitationsApi();
+  final FirebaseInvitationRepository _api = FirebaseInvitationRepository();
 
   @override
   void initState() {
@@ -62,6 +65,7 @@ class _InvitationPageState extends State<InvitationPage>
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final theme = Theme.of(context);
     final isDark = widget.isDarkMode ?? theme.brightness == Brightness.dark;
 
@@ -71,11 +75,11 @@ class _InvitationPageState extends State<InvitationPage>
       body: SafeArea(
         child: Column(
           children: [
-            _buildAppBar(isDark),
+            _buildAppBar(isDark, lang),
             Padding(
               padding: const EdgeInsets.all(16),
               child: SegmentedTabs(
-                tabs: const ['Invitations', 'Invitations Sent'],
+                tabs: [lang.t('invitations.tab_invitations'), lang.t('invitations.tab_sent')],
                 selectedIndex: _selectedTabIndex,
                 onTabSelected: (index) {
                   setState(() {
@@ -89,21 +93,21 @@ class _InvitationPageState extends State<InvitationPage>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildList(isDark, _received, isSent: false),
-                  _buildList(isDark, _sent, isSent: true),
+                  _buildList(isDark, _received, isSent: false, lang: lang),
+                  _buildList(isDark, _sent, isSent: true, lang: lang),
                 ],
               ),
             ),
-            _buildBulkActionBar(isDark),
+            _buildBulkActionBar(isDark, lang),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAppBar(bool isDark) {
+  Widget _buildAppBar(bool isDark, LanguageProvider lang) {
     final String title =
-        _selectedTabIndex == 0 ? 'Invitations' : 'Invitations Sent';
+        _selectedTabIndex == 0 ? lang.t('invitations.title') : lang.t('invitations.sent_title');
     return Container(
       height: 80,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -151,8 +155,8 @@ class _InvitationPageState extends State<InvitationPage>
               border: Border.all(color: const Color(0xFF666666), width: 0.6),
             ),
             child: PopupMenuButton<BulkAction>(
-              tooltip: 'Options',
-              icon: const Icon(
+              tooltip: Provider.of<LanguageProvider>(context, listen: false).t('common.options'),
+              icon: Icon(
                 Icons.more_horiz,
                 size: 18,
                 color: Color(0xFF666666),
@@ -171,36 +175,36 @@ class _InvitationPageState extends State<InvitationPage>
                   PopupMenuItem<BulkAction>(
                     enabled: false,
                     child: Text(
-                      isReceived ? 'Invitations' : 'Invitations Sent',
+                      isReceived ? lang.t('invitations.title') : lang.t('invitations.sent_title'),
                       style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                     ),
                   ),
-                  const PopupMenuDivider(height: 8),
+                  PopupMenuDivider(height: 8),
                 ];
                 if (isReceived) {
-                  items.addAll(const [
+                  items.addAll([
                     PopupMenuItem(
                       value: BulkAction.accept,
-                      child: Text('Accept'),
+                      child: Text(lang.t('invitations.accept')),
                     ),
                     PopupMenuItem(
                       value: BulkAction.reject,
-                      child: Text('Reject'),
+                      child: Text(lang.t('invitations.reject')),
                     ),
                     PopupMenuItem(
                       value: BulkAction.delete,
-                      child: Text('Delete'),
+                      child: Text(lang.t('invitations.delete')),
                     ),
                   ]);
                 } else {
-                  items.addAll(const [
+                  items.addAll([
                     PopupMenuItem(
                       value: BulkAction.cancel,
-                      child: Text('Cancel'),
+                      child: Text(lang.t('common.cancel')),
                     ),
                     PopupMenuItem(
                       value: BulkAction.delete,
-                      child: Text('Delete'),
+                      child: Text(lang.t('invitations.delete')),
                     ),
                   ]);
                 }
@@ -213,19 +217,18 @@ class _InvitationPageState extends State<InvitationPage>
     );
   }
 
-  Widget _buildList(
-    bool isDark,
-    List<Invitation> data, {
+  Widget _buildList(bool isDark, List<InvitationModel> invitations, {
     required bool isSent,
+    required LanguageProvider lang,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: ListView.separated(
         padding: const EdgeInsets.only(bottom: 24),
-        itemCount: data.length,
+        itemCount: invitations.length,
         separatorBuilder: (context, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
-          final item = data[index];
+          final invitation = invitations[index];
           final bool showToggle = _selectionMode && _currentAction != null;
           return Container(
             decoration: BoxDecoration(
@@ -245,13 +248,13 @@ class _InvitationPageState extends State<InvitationPage>
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundImage: item.sender.avatarUrl != null
-                      ? NetworkImage(item.sender.avatarUrl!)
+                  backgroundImage: invitation.sender?.avatarUrl != null
+                      ? NetworkImage(invitation.sender!.avatarUrl!)
                       : null,
-                  child: item.sender.avatarUrl == null
+                  child: invitation.sender?.avatarUrl == null
                       ? Text(
-                          item.sender.name.isNotEmpty
-                              ? item.sender.name[0].toUpperCase()
+                          invitation.sender != null && invitation.sender!.name.isNotEmpty
+                              ? invitation.sender!.name[0].toUpperCase()
                               : 'U',
                           style: GoogleFonts.inter(
                             fontSize: 16,
@@ -270,7 +273,7 @@ class _InvitationPageState extends State<InvitationPage>
                         children: [
                           Expanded(
                             child: Text(
-                              isSent ? item.receiver.name : item.sender.name,
+                              isSent ? (invitation.receiver?.name ?? 'User') : (invitation.sender?.name ?? 'User'),
                               style: GoogleFonts.inter(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -282,30 +285,30 @@ class _InvitationPageState extends State<InvitationPage>
                           ),
                           if (!showToggle && !isSent) ...[
                             _pillButton(
-                              label: 'Accept',
+                              label: lang.t('invitations.accept'),
                               onTap: () =>
-                                  _applySingle(BulkAction.accept, item.id),
+                                  _applySingle(BulkAction.accept, invitation.id),
                             ),
                             const SizedBox(width: 8),
                             _pillButton(
-                              label: 'Reject',
+                              label: lang.t('invitations.reject'),
                               onTap: () =>
-                                  _applySingle(BulkAction.reject, item.id),
+                                  _applySingle(BulkAction.reject, invitation.id),
                             ),
                           ] else if (!showToggle && isSent) ...[
                             _pillButton(
-                              label: 'Cancel',
+                              label: lang.t('common.cancel'),
                               onTap: () =>
-                                  _applySingle(BulkAction.cancel, item.id),
+                                  _applySingle(BulkAction.cancel, invitation.id),
                             ),
                           ] else ...[
-                            _selectionToggleForAction(item.id),
+                            _selectionToggleForAction(invitation.id),
                           ],
                         ],
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        isSent ? item.receiver.username : item.sender.username,
+                        isSent ? (invitation.receiver?.username ?? '@user') : (invitation.sender?.username ?? '@user'),
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           color: const Color(0xFF666666),
@@ -313,7 +316,7 @@ class _InvitationPageState extends State<InvitationPage>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        item.invitationContent,
+                        invitation.invitationContent,
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: const Color(0xFF666666),
@@ -398,7 +401,7 @@ class _InvitationPageState extends State<InvitationPage>
       switch (action) {
         case BulkAction.accept:
           // Capture the invitation before it's removed by reload
-          Invitation? invitation;
+          InvitationModel? invitation;
           try {
             invitation = _received.firstWhere((e) => e.id == id);
           } catch (_) {
@@ -410,8 +413,8 @@ class _InvitationPageState extends State<InvitationPage>
           if (mounted && conversationId != null && invitation != null) {
             final other = ChatUser(
               id: invitation.senderId,
-              name: invitation.sender.name,
-              avatarUrl: invitation.sender.avatarUrl,
+              name: invitation.sender?.name ?? 'User',
+              avatarUrl: invitation.sender?.avatarUrl ?? '',
             );
             Navigator.of(context).push(
               MaterialPageRoute(
@@ -519,21 +522,21 @@ class _InvitationPageState extends State<InvitationPage>
     }
   }
 
-  Widget _buildBulkActionBar(bool isDark) {
+  Widget _buildBulkActionBar(bool isDark, LanguageProvider lang) {
     if (!_selectionMode) return const SizedBox.shrink();
     final String cta;
     switch (_currentAction) {
       case BulkAction.accept:
-        cta = 'Accept selected';
+        cta = lang.t('invitations.accept_selected');
         break;
       case BulkAction.reject:
-        cta = 'Reject selected';
+        cta = lang.t('invitations.reject_selected');
         break;
       case BulkAction.delete:
-        cta = 'Delete selected';
+        cta = lang.t('invitations.delete_selected');
         break;
       case BulkAction.cancel:
-        cta = 'Cancel selected';
+        cta = lang.t('invitations.cancel_selected');
         break;
       default:
         cta = 'Apply';
@@ -551,8 +554,8 @@ class _InvitationPageState extends State<InvitationPage>
           Expanded(
             child: Text(
               _selectedIds.isEmpty
-                  ? 'Select invitations'
-                  : '${_selectedIds.length} selected',
+                  ? lang.t('invitations.select_invitations')
+                  : '${_selectedIds.length} ${lang.t('invitations.selected')}',
               style: GoogleFonts.inter(fontSize: 14),
             ),
           ),
@@ -564,7 +567,7 @@ class _InvitationPageState extends State<InvitationPage>
                 _selectedIds.clear();
               });
             },
-            child: const Text('Close'),
+            child: Text(lang.t('invitations.close')),
           ),
           const SizedBox(width: 8),
           ElevatedButton(
@@ -587,8 +590,8 @@ class _InvitationPageState extends State<InvitationPage>
 
   Future<void> _loadInvitations() async {
     try {
-      final received = await _api.getReceivedInvitations();
-      final sent = await _api.getSentInvitations();
+      final received = await _api.getMyReceivedInvitations();
+      final sent = await _api.getMySentInvitations();
       setState(() {
         // Show only pending invitations so accepted/refused disappear
         _received = received.where((i) => i.status == 'pending').toList();

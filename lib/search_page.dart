@@ -2,16 +2,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 
-import 'widgets/segmented_tabs.dart';
 import 'widgets/post_card.dart';
+import 'widgets/segmented_tabs.dart';
+import 'core/i18n/language_provider.dart';
 import 'models/post.dart';
 
 import 'widgets/community_card.dart';
 import 'conversations_page.dart'; // for CommunityItem model
 import 'community_page.dart';
 
-import 'core/search_api.dart';
+import 'repositories/firebase/firebase_search_repository.dart';
+import 'repositories/interfaces/search_repository.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -24,12 +27,12 @@ class _SearchPageState extends State<SearchPage> {
   final TextEditingController _controller = TextEditingController();
   int _selectedTabIndex = 0;
 
-  final SearchApi _searchApi = SearchApi();
+  final FirebaseSearchRepository _searchRepo = FirebaseSearchRepository();
 
   bool _loading = false;
   String? _error;
 
-  List<SearchAccount> _accounts = const [];
+  List<SearchUser> _accounts = const [];
   List<Post> _posts = const [];
   List<CommunityItem> _communities = const [];
 
@@ -76,10 +79,10 @@ class _SearchPageState extends State<SearchPage> {
     });
 
     try {
-      final result = await _searchApi.search(query: q, limit: 12);
+      final result = await _searchRepo.search(query: q, limit: 12);
       if (!mounted) return;
       setState(() {
-        _accounts = result.accounts;
+        _accounts = result.users;
         _posts = result.posts;
         _communities = result.communities
             .map((c) => CommunityItem(
@@ -177,7 +180,7 @@ class _SearchPageState extends State<SearchPage> {
                               decoration: InputDecoration(
                                 isDense: true,
                                 border: InputBorder.none,
-                                hintText: 'Search...',
+                                hintText: Provider.of<LanguageProvider>(context).t('search.hint'),
                                 hintStyle: GoogleFonts.inter(
                                   color: const Color(0xFF666666),
                                 ),

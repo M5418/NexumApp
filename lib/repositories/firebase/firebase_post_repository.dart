@@ -53,22 +53,36 @@ class FirebasePostRepository implements PostRepository {
 
   @override
   Future<List<PostModel>> getFeed({int limit = 20, PostModel? lastPost}) async {
-    Query<Map<String, dynamic>> q = _posts.orderBy('createdAt', descending: true).limit(limit);
-    if (lastPost?.snapshot != null) {
-      q = q.startAfterDocument(lastPost!.snapshot!);
+    try {
+      Query<Map<String, dynamic>> q = _posts.orderBy('createdAt', descending: true).limit(limit);
+      if (lastPost?.snapshot != null) {
+        q = q.startAfterDocument(lastPost!.snapshot!);
+      }
+      final snap = await q.get();
+      print('✅ Posts fetched successfully: ${snap.docs.length} posts');
+      return snap.docs.map(_fromDoc).toList();
+    } catch (e) {
+      print('❌ Posts getFeed error: $e');
+      print('🔍 Check: 1) Firestore rules for posts collection 2) Network connectivity');
+      rethrow;
     }
-    final snap = await q.get();
-    return snap.docs.map(_fromDoc).toList();
   }
 
   @override
   Future<List<PostModel>> getUserPosts({required String uid, int limit = 20, PostModel? lastPost}) async {
-    Query<Map<String, dynamic>> q = _posts.where('authorId', isEqualTo: uid).orderBy('createdAt', descending: true).limit(limit);
-    if (lastPost?.snapshot != null) {
-      q = q.startAfterDocument(lastPost!.snapshot!);
+    try {
+      Query<Map<String, dynamic>> q = _posts.where('authorId', isEqualTo: uid).orderBy('createdAt', descending: true).limit(limit);
+      if (lastPost?.snapshot != null) {
+        q = q.startAfterDocument(lastPost!.snapshot!);
+      }
+      final snap = await q.get();
+      print('✅ User posts fetched successfully: ${snap.docs.length} posts for uid: $uid');
+      return snap.docs.map(_fromDoc).toList();
+    } catch (e) {
+      print('❌ Posts getUserPosts error for uid $uid: $e');
+      print('🔍 Check: 1) Firestore rules for posts collection 2) User exists 3) Network connectivity');
+      rethrow;
     }
-    final snap = await q.get();
-    return snap.docs.map(_fromDoc).toList();
   }
 
   @override
@@ -144,6 +158,8 @@ class FirebasePostRepository implements PostRepository {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
     final likeRef = _posts.doc(postId).collection('likes').doc(u.uid);
+    final likeDoc = await likeRef.get();
+    if (likeDoc.exists) return; // already liked; idempotent
     final batch = _db.batch();
     batch.set(likeRef, {'createdAt': Timestamp.now()});
     batch.update(_posts.doc(postId), {'summary.likes': FieldValue.increment(1)});
@@ -155,6 +171,8 @@ class FirebasePostRepository implements PostRepository {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
     final likeRef = _posts.doc(postId).collection('likes').doc(u.uid);
+    final likeDoc = await likeRef.get();
+    if (!likeDoc.exists) return; // nothing to unlike; idempotent
     final batch = _db.batch();
     batch.delete(likeRef);
     batch.update(_posts.doc(postId), {'summary.likes': FieldValue.increment(-1)});
@@ -166,6 +184,8 @@ class FirebasePostRepository implements PostRepository {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
     final ref = _posts.doc(postId).collection('bookmarks').doc(u.uid);
+    final bmDoc = await ref.get();
+    if (bmDoc.exists) return; // already bookmarked
     final batch = _db.batch();
     batch.set(ref, {'createdAt': Timestamp.now()});
     batch.update(_posts.doc(postId), {'summary.bookmarks': FieldValue.increment(1)});
@@ -177,6 +197,8 @@ class FirebasePostRepository implements PostRepository {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
     final ref = _posts.doc(postId).collection('bookmarks').doc(u.uid);
+    final bmDoc = await ref.get();
+    if (!bmDoc.exists) return; // nothing to unbookmark
     final batch = _db.batch();
     batch.delete(ref);
     batch.update(_posts.doc(postId), {'summary.bookmarks': FieldValue.increment(-1)});

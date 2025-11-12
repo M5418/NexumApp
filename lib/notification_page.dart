@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'repositories/firebase/firebase_notification_repository.dart';
+import 'package:provider/provider.dart';
 import 'repositories/interfaces/notification_repository.dart';
+import 'core/i18n/language_provider.dart';
+import 'repositories/firebase/firebase_notification_repository.dart';
 
 // Navigation targets
 import 'post_page.dart';
@@ -144,7 +146,7 @@ class _NotificationPageState extends State<NotificationPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Notification',
+          Provider.of<LanguageProvider>(context).t('notifications.title'),
           style: GoogleFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -184,7 +186,7 @@ class _NotificationPageState extends State<NotificationPage> {
                           const SizedBox(height: 12),
                           ElevatedButton(
                             onPressed: _fetch,
-                            child: const Text('Retry'),
+                            child: Text(Provider.of<LanguageProvider>(context).t('notifications.retry')),
                           ),
                         ],
                       ),
@@ -220,13 +222,13 @@ class _NotificationPageState extends State<NotificationPage> {
                                           children: [
                                             const SizedBox(height: 10),
                                             _SectionHeader(
-                                                label: 'Today', isDark: isDark),
+                                                label: Provider.of<LanguageProvider>(context, listen: false).t('common.today'), isDark: isDark),
                                             ...today.map((n) =>
                                                 _NotificationTile(
                                                     item: n, isDark: isDark)),
                                             const SizedBox(height: 6),
                                             _SectionHeader(
-                                                label: 'Yesterday',
+                                                label: Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday'),
                                                 isDark: isDark),
                                             ...yesterday.map((n) =>
                                                 _NotificationTile(
@@ -236,7 +238,7 @@ class _NotificationPageState extends State<NotificationPage> {
                                       : Padding(
                                           padding: const EdgeInsets.all(16),
                                           child: Text(
-                                            'No notifications',
+                                            Provider.of<LanguageProvider>(context).t('notifications.no_notifications'),
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               color: isDark
@@ -277,12 +279,12 @@ class _NotificationPageState extends State<NotificationPage> {
                                       children: [
                                         const SizedBox(height: 10),
                                         _SectionHeader(
-                                            label: 'Today', isDark: isDark),
+                                            label: Provider.of<LanguageProvider>(context, listen: false).t('common.today'), isDark: isDark),
                                         ...today.map((n) => _NotificationTile(
                                             item: n, isDark: isDark)),
                                         const SizedBox(height: 6),
                                         _SectionHeader(
-                                            label: 'Yesterday', isDark: isDark),
+                                            label: Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday'), isDark: isDark),
                                         ...yesterday.map((n) =>
                                             _NotificationTile(
                                                 item: n, isDark: isDark)),
@@ -291,7 +293,7 @@ class _NotificationPageState extends State<NotificationPage> {
                                   : Padding(
                                       padding: const EdgeInsets.all(16),
                                       child: Text(
-                                        'No notifications',
+                                        Provider.of<LanguageProvider>(context).t('notifications.no_notifications'),
                                         style: GoogleFonts.inter(
                                           fontSize: 14,
                                           color: isDark

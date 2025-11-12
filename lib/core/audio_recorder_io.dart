@@ -17,15 +17,38 @@ class AudioRecorder {
 
   Future<bool> hasPermission() async {
     final status = await Permission.microphone.status;
+    
+    // Already granted
     if (status.isGranted) return true;
+    
+    // If permanently denied, user needs to go to Settings
+    if (status.isPermanentlyDenied) {
+      debugPrint('⚠️ Microphone permission permanently denied. Opening Settings...');
+      await openAppSettings();
+      return false;
+    }
+    
+    // Request permission - this shows the iOS system dialog
+    debugPrint('🎤 Requesting microphone permission...');
     final result = await Permission.microphone.request();
-    return result.isGranted;
+    
+    if (result.isGranted) {
+      debugPrint('✅ Microphone permission granted');
+      return true;
+    } else if (result.isPermanentlyDenied) {
+      debugPrint('⚠️ Microphone permission permanently denied');
+      await openAppSettings();
+      return false;
+    } else {
+      debugPrint('❌ Microphone permission denied');
+      return false;
+    }
   }
 
   Future<String?> startRecording() async {
     try {
       if (!await hasPermission()) {
-        throw Exception('Microphone permission denied by OS');
+        throw Exception('Microphone permission denied. Please enable microphone access in Settings.');
       }
 
       _recordingStartTime = DateTime.now();
@@ -44,10 +67,11 @@ class AudioRecorder {
         path: _currentRecordingPath!,
       );
 
+      debugPrint('✅ AudioRecorder(IO): Recording started successfully');
       return _currentRecordingPath;
     } catch (e) {
       debugPrint('❌ AudioRecorder(IO): Failed to start recording: $e');
-      return null;
+      rethrow; // Let caller handle the error with user feedback
     }
   }
 
@@ -57,25 +81,31 @@ class AudioRecorder {
 
       if (_recordingStartTime == null) {
         _cleanupAfterStop();
-        return null;
+        throw Exception('Recording was not started properly');
       }
 
       if (path == null) {
         _cleanupAfterStop();
-        return null;
+        throw Exception('Failed to save recording');
       }
 
       final file = File(path);
       if (!await file.exists()) {
         _cleanupAfterStop();
-        return null;
+        throw Exception('Recording file not found');
       }
 
       final duration = DateTime.now().difference(_recordingStartTime!);
       final fileSize = await file.length();
 
+      if (fileSize == 0) {
+        _cleanupAfterStop();
+        throw Exception('Recording is empty');
+      }
+
       _cleanupAfterStop();
 
+      debugPrint('✅ AudioRecorder(IO): Recording stopped successfully (${duration.inSeconds}s, $fileSize bytes)');
       return VoiceRecordingResult(
         filePath: path,
         duration: duration,
@@ -85,7 +115,7 @@ class AudioRecorder {
     } catch (e) {
       debugPrint('❌ AudioRecorder(IO): Failed to stop recording: $e');
       _cleanupAfterStop();
-      return null;
+      rethrow;
     }
   }
 

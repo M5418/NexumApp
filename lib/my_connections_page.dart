@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'widgets/badge_icon.dart';
 import 'widgets/segmented_tabs.dart';
 import 'widgets/animated_navbar.dart';
-import 'core/users_api.dart';
-import 'core/connections_api.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/firebase/firebase_follow_repository.dart';
 import 'other_user_profile_page.dart';
 
 class MyConnectionUser {
@@ -87,24 +89,36 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
   Future<void> _loadUsers() async {
     debugPrint('🔍 MyConnectionsPage: Starting to load users...');
     try {
-      final users = await UsersApi().list();
-      debugPrint(
-        '🔍 MyConnectionsPage: Received ${users.length} users from API',
-      );
+      final followRepo = FirebaseFollowRepository();
+      final userRepo = FirebaseUserRepository();
 
-      final status = await ConnectionsApi().status();
-      debugPrint(
-        '🔍 MyConnectionsPage: Connection status - Outbound: ${status.outbound.length}, Inbound: ${status.inbound.length}',
-      );
+      // Load connection status sets
+      final status = await followRepo.getConnectionsStatus();
+      final ids = <String>{...status.inbound, ...status.outbound}.toList();
+      debugPrint('🔍 MyConnectionsPage: Connection status - Outbound: ${status.outbound.length}, Inbound: ${status.inbound.length}');
 
-      final mapped = users.map((u) => MyConnectionUser.fromJson(u)).toList();
-
-      for (final u in mapped) {
-        u.youConnectTo = status.outbound.contains(u.id);
-        u.theyConnectToYou = status.inbound.contains(u.id);
-        debugPrint(
-          '🔍 MyConnectionsPage: User ${u.name} (ID: ${u.id}) - YouConnect: ${u.youConnectTo}, TheyConnect: ${u.theyConnectToYou}',
-        );
+      // Hydrate user profiles for all connected ids
+      final mapped = <MyConnectionUser>[];
+      if (ids.isNotEmpty) {
+        final profiles = await userRepo.getUsers(ids);
+        for (final p in profiles) {
+          final display = (p.displayName ?? p.username ?? 'User');
+          final letter = display.isNotEmpty ? display[0].toUpperCase() : 'U';
+          mapped.add(
+            MyConnectionUser(
+              id: p.uid,
+              name: display,
+              username: '@${p.username ?? 'user'}',
+              avatarUrl: p.avatarUrl,
+              coverUrl: p.coverUrl,
+              avatarLetter: letter,
+              bio: p.bio ?? '',
+              status: '',
+              youConnectTo: status.outbound.contains(p.uid),
+              theyConnectToYou: status.inbound.contains(p.uid),
+            ),
+          );
+        }
       }
 
       if (mounted) {
@@ -112,9 +126,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
           _users = mapped;
           _loading = false;
         });
-        debugPrint(
-          '🔍 MyConnectionsPage: Successfully loaded ${_users.length} users',
-        );
+        debugPrint('🔍 MyConnectionsPage: Successfully loaded ${_users.length} users');
       }
     } catch (e) {
       debugPrint('❌ MyConnectionsPage: Error loading users: $e');
@@ -129,11 +141,11 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to load connections: ${e.toString()}'),
+                content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('my_connections.load_failed')}: ${e.toString()}'),
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 5),
                 action: SnackBarAction(
-                  label: 'Retry',
+                  label: Provider.of<LanguageProvider>(context, listen: false).t('common.retry'),
                   textColor: Colors.white,
                   onPressed: () => _loadUsers(),
                 ),
@@ -147,6 +159,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -155,7 +168,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
       body: SafeArea(
         child: Column(
           children: [
-            _buildAppBar(isDark),
+            _buildAppBar(isDark, lang),
             _buildTabSwitcher(isDark),
             Expanded(
               child: _loading
@@ -163,8 +176,8 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
                   : TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildInboundList(isDark), // Connected to me
-                        _buildOutboundList(isDark), // I Connect
+                        _buildInboundList(isDark, lang), // Connected to me
+                        _buildOutboundList(isDark, lang), // I Connect
                       ],
                     ),
             ),
@@ -180,7 +193,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     );
   }
 
-  Widget _buildAppBar(bool isDark) {
+  Widget _buildAppBar(bool isDark, LanguageProvider lang) {
     return Container(
       height: 80,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -219,7 +232,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'My Connections',
+                  lang.t('my_connections.title'),
                   style: GoogleFonts.inter(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -275,7 +288,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
             Align(
               alignment: Alignment.center,
               child: SegmentedTabs(
-                tabs: const ['Connected to me', 'I Connect'],
+                tabs: [Provider.of<LanguageProvider>(context, listen: false).t('my_connections.tab_connected_to_me'), Provider.of<LanguageProvider>(context, listen: false).t('my_connections.tab_i_connect')],
                 selectedIndex: _selectedTabIndex,
                 onTabSelected: (index) {
                   setState(() {
@@ -318,7 +331,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
   }
 
   // Inbound: users who connected to the current user
-  Widget _buildInboundList(bool isDark) {
+  Widget _buildInboundList(bool isDark, LanguageProvider lang) {
     final inbound = _users.where((u) => u.theyConnectToYou).toList();
     return _listContainer(
       isDark: isDark,
@@ -333,14 +346,14 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
         ),
         itemBuilder: (context, index) {
           final user = inbound[index];
-          return _connectionTile(user, isDark);
+          return _connectionTile(user, isDark, lang);
         },
       ),
     );
   }
 
   // Outbound: users the current user connected to
-  Widget _buildOutboundList(bool isDark) {
+  Widget _buildOutboundList(bool isDark, LanguageProvider lang) {
     final outbound = _users.where((u) => u.youConnectTo).toList();
     return _listContainer(
       isDark: isDark,
@@ -355,7 +368,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
         ),
         itemBuilder: (context, index) {
           final user = outbound[index];
-          return _connectionTile(user, isDark);
+          return _connectionTile(user, isDark, lang);
         },
       ),
     );
@@ -382,7 +395,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     );
   }
 
-  Widget _connectionTile(MyConnectionUser user, bool isDark) {
+  Widget _connectionTile(MyConnectionUser user, bool isDark, LanguageProvider lang) {
     final secondaryText = const Color(0xFF666666);
     return InkWell(
       onTap: () {
@@ -447,14 +460,14 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
               ),
             ),
             const SizedBox(width: 12),
-            _actionButton(user, isDark),
+            _actionButton(user, isDark, lang),
           ],
         ),
       ),
     );
   }
 
-  Widget _actionButton(MyConnectionUser user, bool isDark) {
+  Widget _actionButton(MyConnectionUser user, bool isDark, LanguageProvider lang) {
     if (user.youConnectTo) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -463,7 +476,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
-          'Connected',
+          lang.t('my_connections.connected'),
           style: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -475,16 +488,16 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
 
     return GestureDetector(
       onTap: () async {
-        final api = ConnectionsApi();
+        final repo = FirebaseFollowRepository();
         final next = !user.youConnectTo;
         setState(() {
           user.youConnectTo = next;
         });
         try {
           if (next) {
-            await api.connect(user.id);
+            await repo.followUser(user.id);
           } else {
-            await api.disconnect(user.id);
+            await repo.unfollowUser(user.id);
           }
         } catch (e) {
           if (mounted) {
@@ -493,7 +506,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
             });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to ${next ? 'connect' : 'disconnect'}'),
+                content: Text(lang.t('my_connections.action_failed')),
               ),
             );
           }

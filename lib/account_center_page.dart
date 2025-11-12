@@ -3,15 +3,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'core/profile_api.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
+import 'repositories/firebase/firebase_kyc_repository.dart';
+import 'repositories/interfaces/user_repository.dart';
+import 'kyc_verification_page.dart';
+import 'kyc_status_page.dart';
+import 'repositories/interfaces/auth_repository.dart';
 import 'sign_in_page.dart';
 import 'change_password_page.dart';
 import 'change_email_page.dart';
-import 'kyc_verification_page.dart';
-import 'kyc_status_page.dart';
-import 'core/kyc_api.dart';
-import 'package:provider/provider.dart';
-import 'repositories/interfaces/auth_repository.dart';
 
 class AccountCenterPage extends StatefulWidget {
   const AccountCenterPage({super.key});
@@ -26,6 +27,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
   String _fullName = '';
   String _username = '';
   String _avatarUrl = '';
+  String _status = '';
 
   @override
   void initState() {
@@ -34,24 +36,25 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
   }
 
   Future<String?> _promptPassword(BuildContext context) async {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
     final controller = TextEditingController();
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Confirm Password', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        title: Text(lang.t('account_center.confirm_password'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         content: TextField(
           controller: controller,
           obscureText: true,
-          decoration: const InputDecoration(hintText: 'Enter your current password'),
+          decoration: InputDecoration(hintText: Provider.of<LanguageProvider>(ctx, listen: false).t('account_center.enter_password')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.inter()),
+            child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.cancel'), style: GoogleFonts.inter()),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text('Confirm', style: GoogleFonts.inter(color: Color(0xFFBFAE01))),
+            child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.confirm'), style: GoogleFonts.inter(color: Color(0xFFBFAE01))),
           ),
         ],
       ),
@@ -76,21 +79,23 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
       });
     }
 
-    // Load profile details (avatar, full name, username) from Firestore
+    // Load profile details from Firebase
     try {
-      final profApi = ProfileApi();
-      final profRes = await profApi.me();
-      final body = Map<String, dynamic>.from(profRes);
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final fullName = (data['full_name'] ?? '').toString();
-      final username = (data['username'] ?? '').toString();
-      final avatarUrl = (data['profile_photo_url'] ?? '').toString();
-
-      if (mounted) {
+      final userRepo = context.read<UserRepository>();
+      final profile = await userRepo.getCurrentUserProfile();
+      
+      if (profile != null && mounted) {
+        final firstName = profile.firstName ?? '';
+        final lastName = profile.lastName ?? '';
+        final fullName = firstName.isNotEmpty || lastName.isNotEmpty
+            ? '$firstName $lastName'.trim()
+            : (profile.displayName ?? '');
+        
         setState(() {
           _fullName = fullName;
-          _username = username;
-          _avatarUrl = avatarUrl;
+          _username = profile.username ?? '';
+          _avatarUrl = profile.avatarUrl ?? '';
+          _status = profile.status ?? '';
         });
       }
     } catch (_) {
@@ -100,6 +105,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final background = isDark
         ? const Color(0xFF0C0C0C)
@@ -117,7 +123,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Account Center',
+          lang.t('account_center.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -135,7 +141,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Profile Information'),
+                _sectionTitle(lang.t('account_center.section_profile')),
                 const SizedBox(height: 12),
                 ListTile(
                   leading: CircleAvatar(
@@ -155,7 +161,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                         : null,
                   ),
                   title: Text(
-                    _fullName.isNotEmpty ? _fullName : 'User',
+                    _fullName.isNotEmpty ? _fullName : lang.t('account_center.user'),
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
@@ -164,11 +170,15 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                   ),
                 ),
                 const Divider(height: 1),
+                if (_status.isNotEmpty) ...[
+                  _infoRow(lang.t('account_center.info_status'), _status),
+                  const Divider(height: 1),
+                ],
                 _infoRow(
-                  'Email',
+                  lang.t('account_center.info_email'),
                   _email.isNotEmpty ? _email : 'user@example.com',
                 ),
-                _infoRow('Phone', 'No phone number added yet'),
+                _infoRow(lang.t('account_center.info_phone'), lang.t('account_center.no_phone')),
               ],
             ),
           ),
@@ -180,12 +190,12 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Account & Security'),
+                _sectionTitle(lang.t('account_center.section_security')),
                 const SizedBox(height: 8),
                 _navTile(
                   icon: Icons.lock_outline,
-                  title: 'Change Password',
-                  subtitle: 'Update your password',
+                  title: lang.t('account_center.change_password'),
+                  subtitle: lang.t('account_center.change_password_subtitle'),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -197,8 +207,8 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                 ),
                 _navTile(
                   icon: Icons.email_outlined,
-                  title: 'Change Email',
-                  subtitle: 'Update your email address',
+                  title: lang.t('account_center.change_email'),
+                  subtitle: lang.t('account_center.change_email_subtitle'),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -210,15 +220,15 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                 ),
                 _navTile(
                   icon: Icons.verified_user_outlined,
-                  title: 'Verify KYC',
-                  subtitle: 'Verify your identity',
+                  title: lang.t('account_center.verify_kyc'),
+                  subtitle: lang.t('account_center.verify_kyc_subtitle'),
                   onTap: () async {
                     final ctx = context;
-                    final res = await KycApi().getMine();
-                    if (res['ok'] == true) {
-                      final data = res['data'];
-                      final status = (data == null) ? null : (data['status'] ?? '').toString();
-                      if (data == null || status == 'rejected') {
+                    final kycRepo = FirebaseKycRepository();
+                    final kycModel = await kycRepo.getMyKyc();
+                    if (kycModel != null) {
+                      final status = kycModel.status;
+                      if (status == 'rejected') {
                         if (!ctx.mounted) return;
                         Navigator.push(
                           ctx,
@@ -242,9 +252,9 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                 ),
                 _navTile(
                   icon: Icons.phone_outlined,
-                  title: 'Change Phone Number',
-                  subtitle: 'Add or update your phone',
-                  onTap: () => _showSnack('Change phone number coming soon'),
+                  title: lang.t('account_center.change_phone'),
+                  subtitle: lang.t('account_center.change_phone_subtitle'),
+                  onTap: () => _showSnack(lang.t('account_center.coming_soon')),
                   isLast: true,
                 ),
               ],
@@ -258,30 +268,30 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Data & Permissions'),
+                _sectionTitle(lang.t('account_center.section_data')),
                 const SizedBox(height: 8),
                 _navTile(
                   icon: Icons.download_outlined,
-                  title: 'Download Your Data',
-                  subtitle: 'Coming soon',
-                  onTap: () => _showSnack('Coming soon'),
+                  title: lang.t('account_center.download_data'),
+                  subtitle: lang.t('account_center.coming_soon'),
+                  onTap: () => _showSnack(lang.t('account_center.coming_soon')),
                 ),
                 _navTile(
                   icon: Icons.receipt_long_outlined,
-                  title: 'Ads Preferences',
-                  subtitle: 'Coming soon',
-                  onTap: () => _showSnack('Coming soon'),
+                  title: lang.t('account_center.ads_prefs'),
+                  subtitle: lang.t('account_center.coming_soon'),
+                  onTap: () => _showSnack(lang.t('account_center.coming_soon')),
                 ),
                 _navTile(
                   icon: Icons.person_off_outlined,
-                  title: 'Deactivate Account',
-                  subtitle: 'Coming soon',
-                  onTap: () => _showSnack('Coming soon'),
+                  title: lang.t('account_center.deactivate'),
+                  subtitle: lang.t('account_center.coming_soon'),
+                  onTap: () => _showSnack(lang.t('account_center.coming_soon')),
                 ),
                 _navTile(
                   icon: Icons.delete_outline,
-                  title: 'Delete Account',
-                  subtitle: 'Permanently delete your account',
+                  title: lang.t('account_center.delete'),
+                  subtitle: lang.t('account_center.delete_subtitle'),
                   onTap: _handleDeleteAccount,
                   isLast: true,
                 ),
@@ -404,8 +414,9 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
       );
     } catch (_) {
       if (!navContext.mounted) return;
+      final lang = Provider.of<LanguageProvider>(navContext, listen: false);
       ScaffoldMessenger.of(navContext).showSnackBar(
-        SnackBar(content: Text('Failed to delete account', style: GoogleFonts.inter())),
+        SnackBar(content: Text(lang.t('account_center.delete_failed'), style: GoogleFonts.inter())),
       );
     }
   }
@@ -430,7 +441,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: GoogleFonts.inter()),
+            child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.cancel'), style: GoogleFonts.inter()),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),

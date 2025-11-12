@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'sign_in_page.dart';
 import 'profile_flow_start.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/auth_repository.dart';
 import 'repositories/interfaces/user_repository.dart';
@@ -538,11 +539,17 @@ class _SignUpPageState extends State<SignUpPage> {
       final userRepo = context.read<UserRepository>();
       final authRes = await authRepo.signUpWithEmail(email: email, password: password);
       if (!authRes.success || authRes.user == null) {
+        if (!mounted) return;
         _showSnack(authRes.error ?? lang.t('errors.sign_up_failed'));
         return;
       }
       final uid = authRes.user!.uid;
-      await userRepo.updateUserProfile(UserProfile(uid: uid, email: email, createdAt: DateTime.now(), lastActive: DateTime.now()));
+      await userRepo.updateUserProfile(uid, {
+        'uid': uid,
+        'email': email,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastActive': FieldValue.serverTimestamp(),
+      });
 
       // Navigate to profile setup; user is already signed in with Firebase
       if (mounted) {
@@ -552,7 +559,9 @@ class _SignUpPageState extends State<SignUpPage> {
         );
       }
     } catch (e) {
-      _showSnack(lang.t('errors.sign_up_failed_try'));
+      if (mounted) {
+        _showSnack(lang.t('errors.sign_up_failed_try'));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

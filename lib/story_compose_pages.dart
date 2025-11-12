@@ -7,9 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
-import 'package:dio/dio.dart';
 
-import 'core/api_client.dart';
 import 'core/files_api.dart';
 
 enum StoryComposeType { image, video, text, mixed }
@@ -454,27 +452,10 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
   }
 
   Future<Map<String, String>> _uploadBytesWeb(Uint8List bytes, {required String ext, required String mime}) async {
-    final dio = ApiClient().dio;
-    final pres = await dio.post('/api/files/presign-upload', data: {'ext': ext});
-    final data = Map<String, dynamic>.from(Map<String, dynamic>.from(pres.data)['data'] ?? {});
-    final putUrl = data['putUrl'] as String;
-    final key = data['key'] as String;
-    final readUrl = (data['readUrl'] ?? '').toString();
-    final publicUrl = (data['publicUrl'] ?? '').toString();
-    final bestUrl = readUrl.isNotEmpty ? readUrl : publicUrl;
-
-    final s3 = Dio();
-    await s3.put(
-      putUrl,
-      data: bytes,
-       options: Options(headers: {'Content-Type': mime}),
-    );
-
-    try {
-      await dio.post('/api/files/confirm', data: {'key': key, 'url': bestUrl});
-    } catch (_) {}
-
-    return {'key': key, 'url': bestUrl};
+    // Use Firebase Storage directly for web uploads
+    final filesApi = FilesApi();
+    final result = await filesApi.uploadBytes(bytes, ext: ext);
+    return result;
   }
 
   // Post to backend

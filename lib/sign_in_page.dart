@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'core/i18n/language_provider.dart';
 import 'sign_up_page.dart';
 import 'forgot_password_page.dart';
 import 'home_feed_page.dart';
@@ -44,7 +45,7 @@ class _SignInPageState extends State<SignInPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please enter both email and password',
+            Provider.of<LanguageProvider>(context, listen: false).t('signin.error_empty'),
             style: GoogleFonts.inter(),
           ),
           backgroundColor: Colors.red,
@@ -77,13 +78,13 @@ class _SignInPageState extends State<SignInPage> {
             case 'invalid-credential':
             case 'wrong-password':
             case 'user-not-found':
-              msg = 'Invalid email or password';
+              msg = Provider.of<LanguageProvider>(context, listen: false).t('signin.error_invalid');
               break;
             case 'invalid-email':
-              msg = 'Please enter a valid email and password';
+              msg = Provider.of<LanguageProvider>(context, listen: false).t('signin.error_validation');
               break;
             case 'too-many-requests':
-              msg = 'Too many attempts. Try again later.';
+              msg = Provider.of<LanguageProvider>(context, listen: false).t('signin.error_too_many');
               break;
             default:
               msg = 'Sign in failed: $err';
@@ -104,7 +105,7 @@ class _SignInPageState extends State<SignInPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Sign in failed. Please try again.',
+              Provider.of<LanguageProvider>(context, listen: false).t('signin.error_generic'),
               style: GoogleFonts.inter(),
             ),
             backgroundColor: Colors.red,
@@ -147,7 +148,7 @@ class _SignInPageState extends State<SignInPage> {
                   const SizedBox(height: 50),
                   // NEXUM Title
                   Text(
-                    'NEXUM',
+                    Provider.of<LanguageProvider>(context, listen: false).t('signin.nexum'),
                     style: GoogleFonts.inika(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -178,7 +179,7 @@ class _SignInPageState extends State<SignInPage> {
                       children: [
                         // Welcome Back Headline
                         Text(
-                          'Welcome Back',
+                          Provider.of<LanguageProvider>(context, listen: false).t('signin.welcome_back'),
                           style: GoogleFonts.inter(
                             fontSize: 34,
                             fontWeight: FontWeight.w600,
@@ -188,7 +189,7 @@ class _SignInPageState extends State<SignInPage> {
                         const SizedBox(height: 16),
                         // Subtext
                         Text(
-                          'Fill out the information in order to access your account',
+                          Provider.of<LanguageProvider>(context, listen: false).t('signin.subtitle'),
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w400,
@@ -203,7 +204,7 @@ class _SignInPageState extends State<SignInPage> {
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
-                            hintText: 'Email',
+                            hintText: Provider.of<LanguageProvider>(context, listen: false).t('signin.email_hint'),
                             hintStyle: GoogleFonts.inter(
                               color: isDarkMode
                                   ? const Color(0xFFAAAAAA)
@@ -245,7 +246,7 @@ class _SignInPageState extends State<SignInPage> {
                           controller: _passwordController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
-                            hintText: 'Password',
+                            hintText: Provider.of<LanguageProvider>(context, listen: false).t('signin.password_hint'),
                             hintStyle: GoogleFonts.inter(
                               color: isDarkMode
                                   ? const Color(0xFFAAAAAA)
@@ -309,7 +310,7 @@ class _SignInPageState extends State<SignInPage> {
                             );
                           },
                           child: Text(
-                            'Forgot Password?',
+                            Provider.of<LanguageProvider>(context, listen: false).t('signin.forgot_password'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w400,
@@ -345,7 +346,7 @@ class _SignInPageState extends State<SignInPage> {
                                     ),
                                   )
                                 : Text(
-                                    'Sign In',
+                                    Provider.of<LanguageProvider>(context, listen: false).t('signin.sign_in'),
                                     style: GoogleFonts.inter(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -377,7 +378,7 @@ class _SignInPageState extends State<SignInPage> {
                                       );
                                     },
                                     child: Text(
-                                      'Sign Up',
+                                      Provider.of<LanguageProvider>(context, listen: false).t('signin.sign_up'),
                                       style: GoogleFonts.inter(
                                         fontSize: 16,
                                         color: const Color(0xFFBFAE01),

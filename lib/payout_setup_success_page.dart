@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class PayoutSetupSuccessPage extends StatelessWidget {
   const PayoutSetupSuccessPage({super.key});
@@ -26,7 +28,7 @@ class PayoutSetupSuccessPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'Payout setup complete',
+                Provider.of<LanguageProvider>(context, listen: false).t('payout_success.title'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
@@ -34,7 +36,7 @@ class PayoutSetupSuccessPage extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'You can now receive payouts to your connected account.',
+                Provider.of<LanguageProvider>(context, listen: false).t('payout_success.subtitle'),
                 style: GoogleFonts.inter(color: const Color(0xFF666666)),
                 textAlign: TextAlign.center,
               ),
@@ -50,7 +52,7 @@ class PayoutSetupSuccessPage extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  'Back to Monetization',
+                  Provider.of<LanguageProvider>(context, listen: false).t('payout_success.back'),
                   style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                 ),
               ),

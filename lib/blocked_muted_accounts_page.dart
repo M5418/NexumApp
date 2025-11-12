@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
+import 'repositories/interfaces/block_repository.dart';
+import 'repositories/interfaces/mute_repository.dart';
 
 class BlockedMutedAccountsPage extends StatefulWidget {
   const BlockedMutedAccountsPage({super.key});
@@ -15,17 +19,55 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
 
   final TextEditingController _searchCtrl = TextEditingController();
 
-  final List<String> _blocked = [
-    'spam_user_01',
-    'troll_account',
-    'noisy_marketer',
-  ];
-  final List<String> _muted = ['loud_friend', 'brand_promo', 'sports_news'];
+  List<BlockedUser> _blocked = [];
+  List<MutedUser> _muted = [];
+  bool _loadingBlocked = true;
+  bool _loadingMuted = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    _loadBlocked();
+    _loadMuted();
+  }
+
+  Future<void> _loadBlocked() async {
+    try {
+      final blockRepo = context.read<BlockRepository>();
+      final users = await blockRepo.getBlockedUsers();
+      if (mounted) {
+        setState(() {
+          _blocked = users;
+          _loadingBlocked = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingBlocked = false);
+      }
+    }
+  }
+
+  Future<void> _loadMuted() async {
+    try {
+      final muteRepo = context.read<MuteRepository>();
+      final users = await muteRepo.getMutedUsers();
+      if (mounted) {
+        setState(() {
+          _muted = users;
+          _loadingMuted = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingMuted = false);
+      }
+    }
   }
 
   @override
@@ -54,7 +96,7 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Blocked & Muted',
+          Provider.of<LanguageProvider>(context).t('blocked_muted.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -102,9 +144,9 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
                   fontWeight: FontWeight.w500,
                 ),
                 labelPadding: const EdgeInsets.symmetric(horizontal: 24),
-                tabs: const [
-                  Tab(text: 'Blocked'),
-                  Tab(text: 'Muted'),
+                tabs: [
+                  Tab(text: Provider.of<LanguageProvider>(context).t('blocked_muted.blocked_tab')),
+                  Tab(text: Provider.of<LanguageProvider>(context).t('blocked_muted.muted_tab')),
                 ],
               ),
             ),
@@ -118,7 +160,7 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'Search accounts',
+                hintText: Provider.of<LanguageProvider>(context, listen: false).t('common.search_accounts'),
                 prefixIcon: const Icon(Icons.search),
                 border: const OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(20)),
@@ -132,22 +174,8 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildList(
-                  items: _filtered(_blocked),
-                  emptyLabel: 'No blocked accounts',
-                  actionLabel: 'Unblock',
-                  onAction: (u) => setState(() => _blocked.remove(u)),
-                  onAdd: () => _addDialog(isBlocked: true),
-                  cardColor: cardColor,
-                ),
-                _buildList(
-                  items: _filtered(_muted),
-                  emptyLabel: 'No muted accounts',
-                  actionLabel: 'Unmute',
-                  onAction: (u) => setState(() => _muted.remove(u)),
-                  onAdd: () => _addDialog(isBlocked: false),
-                  cardColor: cardColor,
-                ),
+                _buildBlockedList(cardColor),
+                _buildMutedList(cardColor),
               ],
             ),
           ),
@@ -156,136 +184,175 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
     );
   }
 
-  List<String> _filtered(List<String> source) {
+  List<BlockedUser> _filteredBlocked() {
     final q = _searchCtrl.text.trim().toLowerCase();
-    if (q.isEmpty) return source;
-    return source.where((e) => e.toLowerCase().contains(q)).toList();
+    if (q.isEmpty) return _blocked;
+    return _blocked.where((user) => 
+      (user.blockedUsername ?? '').toLowerCase().contains(q)
+    ).toList();
   }
 
-  Widget _buildList({
-    required List<String> items,
-    required String emptyLabel,
-    required String actionLabel,
-    required void Function(String user) onAction,
-    required VoidCallback onAdd,
-    required Color cardColor,
-  }) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.person_add_alt_1, size: 18),
-              label: Text(
-                'Add',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+  List<MutedUser> _filteredMuted() {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    if (q.isEmpty) return _muted;
+    return _muted.where((user) => 
+      (user.mutedUsername ?? '').toLowerCase().contains(q)
+    ).toList();
+  }
+
+  Widget _buildBlockedList(Color cardColor) {
+    if (_loadingBlocked) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final items = _filteredBlocked();
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      itemBuilder: (_, i) {
+        final user = items[i];
+        return Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFBFAE01),
-                side: const BorderSide(color: Color(0xFFBFAE01), width: 2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+            ],
+          ),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundImage: user.blockedAvatarUrl != null && user.blockedAvatarUrl!.isNotEmpty
+                  ? NetworkImage(user.blockedAvatarUrl!)
+                  : null,
+              child: user.blockedAvatarUrl == null || user.blockedAvatarUrl!.isEmpty
+                  ? Text((user.blockedUsername ?? 'U')[0].toUpperCase())
+                  : null,
+            ),
+            title: Text(
+              user.blockedUsername ?? 'Unknown User',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+            ),
+            trailing: TextButton(
+              onPressed: () => _handleUnblock(user.blockedUid),
+              child: Text(
+                Provider.of<LanguageProvider>(context).t('blocked_muted.unblock'),
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFBFAE01),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
           ),
-        ),
-        Expanded(
-          child: items.isEmpty
-              ? Center(
-                  child: Text(
-                    emptyLabel,
-                    style: GoogleFonts.inter(color: const Color(0xFF666666)),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  itemBuilder: (_, i) {
-                    final user = items[i];
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          child: Text(user.substring(0, 1).toUpperCase()),
-                        ),
-                        title: Text(
-                          user,
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w500),
-                        ),
-                        trailing: TextButton(
-                          onPressed: () => onAction(user),
-                          child: Text(
-                            actionLabel,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFFBFAE01),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  separatorBuilder: (context, _) => const SizedBox(height: 10),
-                  itemCount: items.length,
-                ),
-        ),
-      ],
+        );
+      },
+      separatorBuilder: (context, _) => const SizedBox(height: 10),
+      itemCount: items.length,
     );
   }
 
-  Future<void> _addDialog({required bool isBlocked}) async {
-    final ctrl = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          isBlocked ? 'Block account' : 'Mute account',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-        ),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(
-            hintText: 'Enter @username',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
+  Widget _buildMutedList(Color cardColor) {
+    if (_loadingMuted) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final items = _filteredMuted();
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      itemBuilder: (_, i) {
+        final user = items[i];
+        return Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundImage: user.mutedAvatarUrl != null && user.mutedAvatarUrl!.isNotEmpty
+                  ? NetworkImage(user.mutedAvatarUrl!)
+                  : null,
+              child: user.mutedAvatarUrl == null || user.mutedAvatarUrl!.isEmpty
+                  ? Text((user.mutedUsername ?? 'U')[0].toUpperCase())
+                  : null,
+            ),
+            title: Text(
+              user.mutedUsername ?? 'Unknown User',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+            ),
+            trailing: TextButton(
+              onPressed: () => _handleUnmute(user.mutedUid),
+              child: Text(
+                'Unmute',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFBFAE01),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.inter()),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: Text(
-              'Add',
-              style: GoogleFonts.inter(color: const Color(0xFFBFAE01)),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
+      separatorBuilder: (context, _) => const SizedBox(height: 10),
+      itemCount: items.length,
     );
-    if (result == null || result.isEmpty) return;
-    setState(() {
-      if (isBlocked) {
-        if (!_blocked.contains(result)) _blocked.add(result);
-      } else {
-        if (!_muted.contains(result)) _muted.add(result);
+  }
+
+  Future<void> _handleUnblock(String blockedUid) async {
+    try {
+      final blockRepo = context.read<BlockRepository>();
+      await blockRepo.unblockUser(blockedUid);
+      _loadBlocked();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('blocked_muted.unblock_success'), style: GoogleFonts.inter()),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('blocked_muted.unblock_failed'), style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleUnmute(String mutedUid) async {
+    try {
+      final muteRepo = context.read<MuteRepository>();
+      await muteRepo.unmuteUser(mutedUid);
+      _loadMuted();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('blocked_muted.unmute_success'), style: GoogleFonts.inter()),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('blocked_muted.unmute_failed'), style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

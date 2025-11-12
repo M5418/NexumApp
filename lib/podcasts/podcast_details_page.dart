@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
 import 'player_page.dart';
 import 'add_to_playlist_sheet.dart';
+import '../repositories/interfaces/bookmark_repository.dart';
+import '../repositories/models/bookmark_model.dart';
 
 class PodcastDetailsPage extends StatefulWidget {
   final Podcast podcast;
@@ -17,11 +20,26 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
   late Podcast podcast;
   bool _togglingLike = false;
   bool _togglingFav = false;
+  bool _togglingBookmark = false;
+  bool _isBookmarked = false;
 
   @override
   void initState() {
     super.initState();
     podcast = widget.podcast;
+    _checkBookmarkStatus();
+  }
+
+  Future<void> _checkBookmarkStatus() async {
+    try {
+      final bookmarkRepo = context.read<BookmarkRepository>();
+      final isBookmarked = await bookmarkRepo.isBookmarked(podcast.id, BookmarkType.podcast);
+      if (mounted) {
+        setState(() => _isBookmarked = isBookmarked);
+      }
+    } catch (e) {
+      // Ignore error
+    }
   }
 
   Future<void> _toggleLike() async {
@@ -50,6 +68,43 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
         podcast.favorites = podcast.favorites + 1;
       }
     });
+  }
+
+  Future<void> _toggleBookmark() async {
+    if (_togglingBookmark) return;
+    setState(() {
+      _togglingBookmark = true;
+      _isBookmarked = !_isBookmarked;
+    });
+
+    try {
+      final bookmarkRepo = context.read<BookmarkRepository>();
+      if (_isBookmarked) {
+        await bookmarkRepo.bookmarkPodcast(
+          podcastId: podcast.id,
+          title: podcast.title,
+          coverUrl: podcast.coverUrl,
+          authorName: podcast.author,
+          description: podcast.description,
+        );
+      } else {
+        await bookmarkRepo.removeBookmarkByItem(podcast.id, BookmarkType.podcast);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isBookmarked = !_isBookmarked);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bookmark failed: $e', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _togglingBookmark = false);
+      }
+    }
   }
 
   @override
@@ -109,6 +164,14 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                   tooltip: podcast.meFavorite ? 'Unfavorite' : 'Favorite',
                   onPressed: _togglingFav ? null : _toggleFavorite,
                   icon: const Icon(Icons.star, color: Color(0xFFBFAE01)),
+                ),
+                IconButton(
+                  tooltip: _isBookmarked ? 'Remove bookmark' : 'Bookmark',
+                  onPressed: _togglingBookmark ? null : _toggleBookmark,
+                  icon: Icon(
+                    _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                    color: const Color(0xFFBFAE01),
+                  ),
                 ),
                 IconButton(
                   tooltip: 'Add to playlist',

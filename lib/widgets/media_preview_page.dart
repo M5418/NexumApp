@@ -172,15 +172,9 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
       final mime = _mimeFromPath(current.path);
 
       if (kIsWeb) {
-        // Use in-memory file
+        // Use plugin-returned XFile when available, else in-memory bytes
         if (editedXFile != null) {
-          final b = await editedXFile.readAsBytes();
-          final web = XFile.fromData(
-            b,
-            mimeType: mime,
-            name: 'edited_${DateTime.now().millisecondsSinceEpoch}.${_extForMime(mime)}',
-          );
-          setState(() => _files[_index] = web);
+          setState(() => _files[_index] = editedXFile!);
         } else if (editedBytes != null) {
           final web = XFile.fromData(
             editedBytes,
@@ -190,12 +184,12 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
           setState(() => _files[_index] = web);
         }
       } else {
-        // Mobile/Desktop: prefer path, else bytes
-        if (editedPath != null && editedPath.isNotEmpty) {
+        // Mobile/Desktop: prefer XFile, then path, else bytes
+        if (editedXFile != null) {
+          setState(() => _files[_index] = editedXFile!);
+        } else if (editedPath != null && editedPath.isNotEmpty) {
           final xf = XFile(editedPath, mimeType: mime, name: io.File(editedPath).uri.pathSegments.last);
           setState(() => _files[_index] = xf);
-        } else if (editedXFile != null) {
-          setState(() => _files[_index] = editedXFile!);
         } else if (editedBytes != null) {
           final ext = _extForMime(mime);
           final dirPath = io.File(current.path).parent.path;

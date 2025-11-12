@@ -5,10 +5,12 @@ import 'translations.dart';
 
 class LanguageProvider extends ChangeNotifier {
   static const _prefKey = 'app_language_code';
-    static const _prefUgcKey = 'ugc_translate_code';
+  static const _prefUgcKey = 'ugc_translate_code';
+  static const _prefTranslationEnabledKey = 'post_translation_enabled';
 
   Locale _locale = const Locale('en');
   String _ugcTargetCode = 'en';
+  bool _postTranslationEnabled = false; // Default OFF
 
   LanguageProvider() {
     _load();
@@ -17,6 +19,7 @@ class LanguageProvider extends ChangeNotifier {
   Locale get locale => _locale;
   String get code => _locale.languageCode;
   String get ugcTargetCode => _ugcTargetCode;
+  bool get postTranslationEnabled => _postTranslationEnabled;
 
   static List<String> get supportedCodes => Translations.supportedCodes;
 
@@ -43,9 +46,13 @@ class LanguageProvider extends ChangeNotifier {
       } else {
         _ugcTargetCode = _locale.languageCode;
       }
+
+      // Post translation enabled (default false)
+      _postTranslationEnabled = prefs.getBool(_prefTranslationEnabledKey) ?? false;
     } catch (_) {
       _locale = const Locale('en');
       _ugcTargetCode = 'en';
+      _postTranslationEnabled = false;
     }
     notifyListeners();
   }
@@ -73,6 +80,17 @@ class LanguageProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+
+  Future<void> setPostTranslationEnabled(bool enabled) async {
+    _postTranslationEnabled = enabled;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefTranslationEnabledKey, enabled);
+    } catch (_) {
+      // ignore persistence failure
+    }
+    notifyListeners();
+  }
 
   String t(String key, {Map<String, String>? params}) {
     final langMap =

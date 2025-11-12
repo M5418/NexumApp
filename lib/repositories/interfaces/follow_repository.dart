@@ -45,6 +45,16 @@ abstract class FollowRepository {
     required String userId,
     int limit = 50,
   });
+
+  // Get connections status (for compatibility with ConnectionsApi)
+  Future<ConnectionsStatus> getConnectionsStatus();
+}
+
+class ConnectionsStatus {
+  final Set<String> inbound; // they follow you
+  final Set<String> outbound; // you follow them
+
+  ConnectionsStatus({required this.inbound, required this.outbound});
 }
 
 class FollowModel {

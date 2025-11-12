@@ -34,6 +34,7 @@ class RepostedBy {
 
 class Post {
   final String id;
+  final String authorId;
   final String userName;
   final String userAvatarUrl;
   final DateTime createdAt;
@@ -50,6 +51,7 @@ class Post {
 
   const Post({
     required this.id,
+    required this.authorId,
     required this.userName,
     required this.userAvatarUrl,
     required this.createdAt,
@@ -67,6 +69,7 @@ class Post {
 
   Post copyWith({
     String? id,
+    String? authorId,
     String? userName,
     String? userAvatarUrl,
     DateTime? createdAt,
@@ -83,6 +86,7 @@ class Post {
   }) {
     return Post(
       id: id ?? this.id,
+      authorId: authorId ?? this.authorId,
       userName: userName ?? this.userName,
       userAvatarUrl: userAvatarUrl ?? this.userAvatarUrl,
       createdAt: createdAt ?? this.createdAt,

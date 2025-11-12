@@ -3,12 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../core/files_api.dart';
 import '../data/interest_domains.dart';
+import '../repositories/interfaces/draft_repository.dart';
+import '../repositories/interfaces/podcast_repository.dart';
+import '../repositories/models/draft_model.dart';
 
 class CreatePodcastPage extends StatefulWidget {
-  const CreatePodcastPage({super.key});
+  final DraftModel? draft;
+  
+  const CreatePodcastPage({super.key, this.draft});
 
   @override
   State<CreatePodcastPage> createState() => _CreatePodcastPageState();
@@ -28,6 +34,27 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   bool _creating = false;
   bool _uploadingCover = false;
   bool _uploadingAudio = false;
+  bool _isEditingDraft = false;
+  String? _draftId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.draft != null) {
+      _loadDraft(widget.draft!);
+    }
+  }
+
+  void _loadDraft(DraftModel draft) {
+    _isEditingDraft = true;
+    _draftId = draft.id;
+    _titleCtrl.text = draft.title;
+    _descCtrl.text = draft.body;
+    _coverUrl = draft.coverUrl;
+    _audioUrl = draft.audioUrl;
+    _categoryCtrl.text = draft.category ?? '';
+    setState(() {});
+  }
 
   @override
   void dispose() {
@@ -104,26 +131,102 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
     }
   }
 
-  Future<void> _submit({required bool publish}) async {
+  Future<void> _saveDraft() async {
     if (_titleCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Title is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
+
     setState(() => _creating = true);
     try {
-      // Placeholder: podcast creation will be handled elsewhere
-      await Future.delayed(const Duration(milliseconds: 500));
+      final draftRepo = context.read<DraftRepository>();
+      
+      if (_isEditingDraft && _draftId != null) {
+        // Update existing draft
+        await draftRepo.updatePodcastDraft(
+          draftId: _draftId!,
+          title: _titleCtrl.text.trim(),
+          description: _descCtrl.text.trim(),
+          coverUrl: _coverUrl,
+          audioUrl: _audioUrl,
+          category: _categoryCtrl.text.trim().isEmpty ? null : _categoryCtrl.text.trim(),
+        );
+      } else {
+        // Create new draft
+        await draftRepo.savePodcastDraft(
+          title: _titleCtrl.text.trim(),
+          description: _descCtrl.text.trim(),
+          coverUrl: _coverUrl,
+          audioUrl: _audioUrl,
+          category: _categoryCtrl.text.trim().isEmpty ? null : _categoryCtrl.text.trim(),
+        );
+      }
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(publish ? 'Podcast published' : 'Draft saved', style: GoogleFonts.inter())),
+        SnackBar(content: Text('Saved to drafts', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
       );
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create podcast: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text('Failed to save draft: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
+  Future<void> _publish() async {
+    if (_titleCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Title is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    setState(() => _creating = true);
+    try {
+      final podcastRepo = context.read<PodcastRepository>();
+      
+      final tags = _tagsCtrl.text.trim().isEmpty 
+          ? <String>[]
+          : _tagsCtrl.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+
+      await podcastRepo.createPodcast(
+        title: _titleCtrl.text.trim(),
+        author: _authorCtrl.text.trim().isEmpty ? null : _authorCtrl.text.trim(),
+        description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+        coverUrl: _coverUrl,
+        audioUrl: _audioUrl,
+        language: _languageCtrl.text.trim().isEmpty ? null : _languageCtrl.text.trim(),
+        category: _categoryCtrl.text.trim().isEmpty ? null : _categoryCtrl.text.trim(),
+        tags: tags.isEmpty ? null : tags,
+        isPublished: true,
+      );
+
+      // Delete draft if editing an existing one
+      if (_isEditingDraft && _draftId != null) {
+        try {
+          if (!mounted) return;
+          final draftRepo = context.read<DraftRepository>();
+          await draftRepo.deleteDraft(_draftId!);
+        } catch (e) {
+          // Non-critical error, continue
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Podcast published', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to publish podcast: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _creating = false);
@@ -363,14 +466,14 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _creating ? null : () => _submit(publish: false),
+                        onPressed: _creating ? null : _saveDraft,
                         child: Text('Save as Draft', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _creating ? null : () => _submit(publish: true),
+                        onPressed: _creating ? null : _publish,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFBFAE01),
                           foregroundColor: Colors.black,

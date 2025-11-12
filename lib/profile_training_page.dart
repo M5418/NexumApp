@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_bio_page.dart';
@@ -21,11 +22,62 @@ class ProfileTrainingPage extends StatefulWidget {
 class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
   final List<Map<String, TextEditingController>> _trainingControllers = [];
   bool _isSaving = false;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _addTraining(); // Start with one training field
+    _loadExistingData();
+  }
+
+  Future<void> _loadExistingData() async {
+    try {
+      final res = await ProfileApi().me();
+      final body = Map<String, dynamic>.from(res);
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final trainings = _parseListOfMap(data['trainings']);
+
+      if (!mounted) return;
+      setState(() {
+        if (trainings.isEmpty) {
+          _addTraining(); // Start with one empty field
+        } else {
+          // Load existing trainings
+          for (final training in trainings) {
+            _trainingControllers.add({
+              'title': TextEditingController(text: (training['title'] ?? '').toString()),
+              'subtitle': TextEditingController(text: (training['subtitle'] ?? '').toString()),
+            });
+          }
+        }
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _addTraining(); // Fallback to empty field on error
+        _loading = false;
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> _parseListOfMap(dynamic value) {
+    try {
+      if (value == null) return [];
+      if (value is String) {
+        final decoded = jsonDecode(value);
+        if (decoded is List) {
+          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+        return [];
+      }
+      if (value is List) {
+        return value.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
@@ -126,6 +178,14 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    if (_loading) {
+      return Scaffold(
+        backgroundColor:
+            isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     if (context.isMobile) {
       // MOBILE: original layout unchanged

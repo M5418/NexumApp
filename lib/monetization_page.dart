@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'monetization_analytics_page.dart';
@@ -52,7 +54,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Monetization',
+          Provider.of<LanguageProvider>(context, listen: false).t('monetization.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -131,7 +133,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
               ),
               const SizedBox(width: 8),
               Text(
-                _eligible ? 'You are eligible' : 'Eligibility in review',
+                _eligible ? Provider.of<LanguageProvider>(context, listen: false).t('monetization.eligible') : Provider.of<LanguageProvider>(context, listen: false).t('monetization.review'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -142,8 +144,8 @@ class _MonetizationPageState extends State<MonetizationPage> {
           const SizedBox(height: 8),
           Text(
             _eligible
-                ? 'Great! You meet the current requirements to monetize your content.'
-                : 'We are reviewing your account. You will be notified once you are eligible.',
+                ? Provider.of<LanguageProvider>(context, listen: false).t('monetization.eligible_desc')
+                : Provider.of<LanguageProvider>(context, listen: false).t('monetization.review_desc'),
             style: GoogleFonts.inter(
               color: const Color(0xFF666666),
               fontSize: 12,
@@ -161,7 +163,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Earnings summary',
+            Provider.of<LanguageProvider>(context, listen: false).t('monetization.earnings_summary'),
             style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w600,

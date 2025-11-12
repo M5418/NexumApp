@@ -14,6 +14,7 @@ import 'invitation_page.dart';
 import 'conversation_search_page.dart';
 import 'notification_page.dart';
 import 'profile_page.dart';
+import 'core/i18n/language_provider.dart'; // Fixed import path
 
 import 'package:provider/provider.dart';
 import 'repositories/interfaces/conversation_repository.dart';
@@ -346,7 +347,7 @@ String _formatTime(DateTime? dt) {
             children: [
               ListTile(
                 leading: Icon(item.muted ? Icons.volume_up : Icons.volume_off),
-                title: Text(item.muted ? 'Unmute' : 'Mute'),
+                title: Text(Provider.of<LanguageProvider>(context, listen: false).t(item.muted ? 'conversations.unmute' : 'conversations.mute')),
                 onTap: () async {
                   final ctx = context;
                   Navigator.pop(ctx);
@@ -368,14 +369,14 @@ String _formatTime(DateTime? dt) {
                   } catch (e) {
                     if (!ctx.mounted) return;
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text('Action failed: $e')),
+                      SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('conversations.action_failed')}: $e')),
                     );
                   }
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.mark_email_read_outlined),
-                title: const Text('Mark as read'),
+                title: Text(Provider.of<LanguageProvider>(context, listen: false).t('conversations.mark_read')),
                 onTap: () async {
                   final ctx = context;
                   Navigator.pop(ctx);
@@ -393,14 +394,14 @@ String _formatTime(DateTime? dt) {
                   } catch (e) {
                     if (!ctx.mounted) return;
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text('Failed to mark read: $e')),
+                      SnackBar(content: Text('${Provider.of<LanguageProvider>(ctx, listen: false).t('conversations.mark_read_failed')}: $e')),
                     );
                   }
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Delete'),
+                title: Text(Provider.of<LanguageProvider>(context, listen: false).t('conversations.delete')),
                 onTap: () async {
                   final ctx = context;
                   Navigator.pop(ctx);
@@ -418,7 +419,7 @@ String _formatTime(DateTime? dt) {
                   } catch (e) {
                     if (!ctx.mounted) return;
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text('Failed to delete: $e')),
+                      SnackBar(content: Text('${Provider.of<LanguageProvider>(ctx, listen: false).t('conversations.delete_failed')}: $e')),
                     );
                   }
                 },
@@ -588,12 +589,12 @@ Widget _buildDesktopBody(bool isDark) {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _navButton(isDark, icon: Icons.home_outlined, label: 'Home', onTap: () {
+                  _navButton(isDark, icon: Icons.home_outlined, label: Provider.of<LanguageProvider>(context, listen: false).t('nav.home'), onTap: () {
                     if (Navigator.of(context).canPop()) Navigator.of(context).pop();
                   }),
-                  _navButton(isDark, icon: Icons.people_outline, label: 'Connections', onTap: () {}),
-                  _navButton(isDark, icon: Icons.chat_bubble_outline, label: 'Conversations', selected: true, onTap: () {}),
-                  _navButton(isDark, icon: Icons.person_outline, label: 'My Profil', onTap: () {
+                  _navButton(isDark, icon: Icons.people_outline, label: Provider.of<LanguageProvider>(context, listen: false).t('nav.connections'), onTap: () {}),
+                  _navButton(isDark, icon: Icons.chat_bubble_outline, label: Provider.of<LanguageProvider>(context, listen: false).t('conversations.title'), selected: true, onTap: () {}),
+                  _navButton(isDark, icon: Icons.person_outline, label: Provider.of<LanguageProvider>(context, listen: false).t('nav.profile'), onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
                   }),
                 ],
@@ -616,7 +617,7 @@ Widget _buildDesktopBody(bool isDark) {
       centerTitle: false,
       automaticallyImplyLeading: false,
       title: Text(
-        'Conversations',
+        Provider.of<LanguageProvider>(context, listen: false).t('conversations.title'),
         style: GoogleFonts.inter(
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -625,7 +626,7 @@ Widget _buildDesktopBody(bool isDark) {
       ),
       actions: [
         IconButton(
-          tooltip: 'Search',
+          tooltip: Provider.of<LanguageProvider>(context, listen: false).t('common.search'),
           icon: const Icon(Icons.search, color: iconColor),
           onPressed: () {
             Navigator.push(
@@ -635,12 +636,12 @@ Widget _buildDesktopBody(bool isDark) {
           },
         ),
         IconButton(
-          tooltip: 'Invitations',
+          tooltip: Provider.of<LanguageProvider>(context, listen: false).t('invitations.title'),
           icon: const Icon(Icons.mail_outline, color: iconColor),
           onPressed: _navigateToInvitations,
         ),
         IconButton(
-          tooltip: 'New chat',
+          tooltip: Provider.of<LanguageProvider>(context, listen: false).t('common.new_chat'),
           icon: const Icon(Icons.add, color: iconColor),
           onPressed: _showNewChatBottomSheet,
         ),
@@ -697,15 +698,15 @@ Widget _buildDesktopBody(bool isDark) {
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: Row(
               children: [
-                Text('Conversations', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black)),
+                Text(Provider.of<LanguageProvider>(context, listen: false).t('conversations.title'), style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black)),
                 const Spacer(),
-                _circleIcon(icon: Icons.search, tooltip: 'Search', onTap: () {
+                _circleIcon(icon: Icons.search, tooltip: Provider.of<LanguageProvider>(context, listen: false).t('common.search'), onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const ConversationSearchPage()));
                 }),
                 const SizedBox(width: 8),
                                 _circleIcon(
                   icon: Icons.mail_outline,
-                  tooltip: 'Invitations',
+                  tooltip: Provider.of<LanguageProvider>(context, listen: false).t('invitations.title'),
                   onTap: () async {
                     final size = MediaQuery.of(context).size;
                     final desktop = kIsWeb && (context.isDesktop || context.isLargeDesktop);
@@ -745,14 +746,14 @@ Widget _buildDesktopBody(bool isDark) {
                   },
                 ),
                 const SizedBox(width: 8),
-                _circleIcon(icon: Icons.add, tooltip: 'New chat', filled: true, onTap: _showNewChatBottomSheet),
+                _circleIcon(icon: Icons.add, tooltip: Provider.of<LanguageProvider>(context, listen: false).t('common.new_chat'), filled: true, onTap: _showNewChatBottomSheet),
               ],
             ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: SegmentedTabs(
-              tabs: const ['Chats', 'Communities'],
+              tabs: [Provider.of<LanguageProvider>(context, listen: false).t('conversations.chats'), Provider.of<LanguageProvider>(context, listen: false).t('conversations.communities')],
               selectedIndex: _selectedTabIndex,
               onTabSelected: (index) {
                 setState(() {
@@ -787,7 +788,7 @@ Widget _buildDesktopBody(bool isDark) {
           boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues (alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Center(
-          child: Text('Select a chat or community',
+          child: Text(Provider.of<LanguageProvider>(context, listen: false).t('conversations.select_chat'),
               style: GoogleFonts.inter(fontSize: 16, color: isDark ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w600)),
         ),
       );
@@ -837,7 +838,7 @@ Widget _buildDesktopBody(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: SegmentedTabs(
-        tabs: const ['Chats', 'Communities'],
+        tabs: [Provider.of<LanguageProvider>(context, listen: false).t('conversations.chats'), Provider.of<LanguageProvider>(context, listen: false).t('conversations.communities')],
         selectedIndex: _selectedTabIndex,
         onTabSelected: (index) {
           setState(() {
@@ -874,7 +875,7 @@ Widget _buildDesktopBody(bool isDark) {
               const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: _loadConversations,
-                child: const Text('Retry'),
+                child: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.retry')),
               ),
             ],
           ),
@@ -940,7 +941,7 @@ Widget _buildDesktopBody(bool isDark) {
               const SizedBox(height: 10),
               ElevatedButton(
                 onPressed: _loadCommunities,
-                child: const Text('Retry'),
+                child: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.retry')),
               ),
             ],
           ),

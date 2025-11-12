@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
+import '../core/i18n/language_provider.dart';
 
 class ChatInput extends StatefulWidget {
   final Function(String) onSendMessage;
@@ -212,7 +214,7 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                                     controller: _controller,
                                     focusNode: _focusNode,
                                     decoration: InputDecoration(
-                                      hintText: 'Type a message...',
+                                      hintText: Provider.of<LanguageProvider>(context, listen: false).t('chat.type_message'),
                                       hintStyle: GoogleFonts.inter(
                                         fontSize: 16,
                                         color: const Color(0xFF666666),

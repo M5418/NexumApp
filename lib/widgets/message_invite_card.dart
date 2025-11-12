@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../core/invitations_api.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import '../repositories/firebase/firebase_invitation_repository.dart';
+import '../repositories/interfaces/invitation_repository.dart';
 
 class MessageInviteCard extends StatefulWidget {
   final String receiverId;
@@ -10,7 +12,7 @@ class MessageInviteCard extends StatefulWidget {
   final String avatarUrl;
   final String coverUrl;
   final VoidCallback onClose;
-  final Function(Invitation)? onInvitationSent;
+  final Function(InvitationModel)? onInvitationSent;
 
   const MessageInviteCard({
     super.key,
@@ -54,9 +56,37 @@ class _MessageInviteCardState extends State<MessageInviteCard> {
     });
 
     try {
-      final invitation = await InvitationsApi().sendInvitation(
-        receiverId: widget.receiverId,
-        invitationContent: _messageController.text.trim(),
+      final message = _messageController.text.trim();
+      final user = fb.FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please sign in to send invitations', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final repo = FirebaseInvitationRepository();
+      final id = await repo.createInvitation(
+        fromUserId: user.uid,
+        toUserId: widget.receiverId,
+        message: message,
+      );
+
+      // Build a minimal InvitationModel for callback compatibility
+      final invitation = InvitationModel(
+        id: id,
+        fromUserId: user.uid,
+        toUserId: widget.receiverId,
+        message: message,
+        status: 'pending',
+        conversationId: null,
+        createdAt: DateTime.now(),
+        respondedAt: null,
+        sender: null,
+        receiver: null,
       );
 
       if (mounted) {

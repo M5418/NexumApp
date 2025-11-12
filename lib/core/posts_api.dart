@@ -39,7 +39,7 @@ class PostsApi {
     final byId = <String, PostModel>{};
     for (final m in [...liked, ...bookmarked, ...reposts]) {
       // Exclude my own original posts (allow repost rows)
-      final isMyOriginal = m.authorId == uid && (m.repostOf == null || m.repostOf!.isEmpty);
+      final isMyOriginal = m.authorId == uid && (m.repostOf?.isEmpty ?? true);
       if (isMyOriginal) continue;
       byId[m.id] = m;
     }
@@ -145,6 +145,7 @@ class PostsApi {
     }
     return Post(
       id: m.id,
+      authorId: m.authorId,
       userName: author?.displayName ?? author?.username ?? author?.email ?? 'User',
       userAvatarUrl: author?.avatarUrl ?? '',
       createdAt: m.createdAt,

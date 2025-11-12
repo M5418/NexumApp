@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'sign_in_page.dart';
 
@@ -77,7 +79,7 @@ class PasswordResetSentPage extends StatelessWidget {
                         const SizedBox(height: 24),
                         // Email Sent Headline
                         Text(
-                          'Check Your Email',
+                          Provider.of<LanguageProvider>(context, listen: false).t('reset.title'),
                           style: GoogleFonts.inter(
                             fontSize: 34,
                             fontWeight: FontWeight.w600,
@@ -173,7 +175,7 @@ class PasswordResetSentPage extends StatelessWidget {
                               elevation: 0,
                             ),
                             child: Text(
-                              'Back to Sign In',
+                              Provider.of<LanguageProvider>(context, listen: false).t('reset.back_signin'),
                               style: GoogleFonts.inter(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,

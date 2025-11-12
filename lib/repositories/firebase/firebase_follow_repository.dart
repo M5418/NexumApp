@@ -87,4 +87,34 @@ class FirebaseFollowRepository implements FollowRepository {
   Stream<List<FollowModel>> followingStream({required String userId, int limit = 50}) {
     return _follows.where('followerId', isEqualTo: userId).orderBy('createdAt', descending: true).limit(limit).snapshots().map((s) => s.docs.map(_fromDoc).toList());
   }
+
+  @override
+  Future<ConnectionsStatus> getConnectionsStatus() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return ConnectionsStatus(inbound: {}, outbound: {});
+    }
+    
+    // Get followers (inbound - they follow you)
+    final followers = await _follows
+        .where('followedId', isEqualTo: user.uid)
+        .get();
+    
+    // Get following (outbound - you follow them)
+    final following = await _follows
+        .where('followerId', isEqualTo: user.uid)
+        .get();
+    
+    final inbound = followers.docs
+        .map((d) => (d.data()['followerId'] ?? '') as String)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    
+    final outbound = following.docs
+        .map((d) => (d.data()['followedId'] ?? '') as String)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    
+    return ConnectionsStatus(inbound: inbound, outbound: outbound);
+  }
 }

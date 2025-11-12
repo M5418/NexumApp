@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class MonetizationAnalyticsPage extends StatelessWidget {
   const MonetizationAnalyticsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final background = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final text = isDark ? Colors.white : Colors.black;
@@ -20,7 +23,7 @@ class MonetizationAnalyticsPage extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Monetization Analytics',
+          lang.t('monetization.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,

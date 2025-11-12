@@ -70,19 +70,30 @@ class FirebaseConversationRepository implements ConversationRepository {
 
   @override
   Future<List<ConversationSummaryModel>> list({int limit = 50}) async {
-    final u = _auth.currentUser;
-    if (u == null) return [];
-    final q = await _convs
-        .where('participants', arrayContains: u.uid)
-        .orderBy('lastMessageAt', descending: true)
-        .limit(limit)
-        .get();
+    try {
+      final u = _auth.currentUser;
+      if (u == null) {
+        print('⚠️  Conversations.list: No authenticated user');
+        return [];
+      }
+      
+      final q = await _convs
+          .where('participants', arrayContains: u.uid)
+          .orderBy('lastMessageAt', descending: true)
+          .limit(limit)
+          .get();
 
-    final items = <ConversationSummaryModel>[];
-    for (final d in q.docs) {
-      items.add(_fromDoc(d, u.uid));
+      final items = <ConversationSummaryModel>[];
+      for (final d in q.docs) {
+        items.add(_fromDoc(d, u.uid));
+      }
+      print('✅ Conversations fetched: ${items.length} conversations');
+      return items;
+    } catch (e) {
+      print('❌ Conversations.list error: $e');
+      print('🔍 Check: 1) Firestore rules for conversations 2) Auth status 3) Composite index');
+      rethrow;
     }
-    return items;
   }
 
   @override

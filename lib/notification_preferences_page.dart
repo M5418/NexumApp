@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class NotificationPreferencesPage extends StatefulWidget {
   const NotificationPreferencesPage({super.key});
@@ -25,6 +27,7 @@ class _NotificationPreferencesPageState
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final background = isDark
         ? const Color(0xFF0C0C0C)
@@ -42,7 +45,7 @@ class _NotificationPreferencesPageState
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Notification Preferences',
+          lang.t('notif_prefs.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -59,23 +62,23 @@ class _NotificationPreferencesPageState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Channels'),
+                _sectionTitle(lang.t('notif_prefs.channels')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Push Notifications',
-                  subtitle: 'Enable notifications on this device',
+                  title: lang.t('notif_prefs.push'),
+                  subtitle: lang.t('notif_prefs.push_subtitle'),
                   value: _pushEnabled,
                   onChanged: (v) => setState(() => _pushEnabled = v),
                 ),
                 _switchTile(
-                  title: 'Email Notifications',
-                  subtitle: 'Receive notifications via email',
+                  title: lang.t('notif_prefs.email'),
+                  subtitle: lang.t('notif_prefs.email_subtitle'),
                   value: _emailEnabled,
                   onChanged: (v) => setState(() => _emailEnabled = v),
                 ),
                 _switchTile(
-                  title: 'In-App Notifications',
-                  subtitle: 'Show notifications when using the app',
+                  title: lang.t('notif_prefs.in_app'),
+                  subtitle: lang.t('notif_prefs.in_app_subtitle'),
                   value: _inAppEnabled,
                   onChanged: (v) => setState(() => _inAppEnabled = v),
                 ),
@@ -88,29 +91,29 @@ class _NotificationPreferencesPageState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Categories (Push)'),
+                _sectionTitle(lang.t('notif_prefs.categories')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Likes',
-                  subtitle: 'When someone likes your post',
+                  title: lang.t('notif_prefs.likes'),
+                  subtitle: lang.t('notif_prefs.likes_subtitle'),
                   value: _likesPush,
                   onChanged: (v) => setState(() => _likesPush = v),
                 ),
                 _switchTile(
-                  title: 'Comments',
-                  subtitle: 'When someone comments on your post',
+                  title: lang.t('notif_prefs.comments'),
+                  subtitle: lang.t('notif_prefs.comments_subtitle'),
                   value: _commentsPush,
                   onChanged: (v) => setState(() => _commentsPush = v),
                 ),
                 _switchTile(
-                  title: 'Mentions',
-                  subtitle: 'When someone mentions you',
+                  title: lang.t('notif_prefs.mentions'),
+                  subtitle: lang.t('notif_prefs.mentions_subtitle'),
                   value: _mentionsPush,
                   onChanged: (v) => setState(() => _mentionsPush = v),
                 ),
                 _switchTile(
-                  title: 'New Connections',
-                  subtitle: 'When someone is connected to you',
+                  title: lang.t('notif_prefs.new_connections'),
+                  subtitle: lang.t('notif_prefs.new_connections_subtitle'),
                   value: _followsPush,
                   onChanged: (v) => setState(() => _followsPush = v),
                 ),
@@ -123,13 +126,13 @@ class _NotificationPreferencesPageState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Quiet Hours'),
+                _sectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('notif_prefs.quiet_hours')),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: _timePickerTile(
-                        'Start',
+                        Provider.of<LanguageProvider>(context, listen: false).t('notif_prefs.start'),
                         _quietStart,
                         (t) => setState(() => _quietStart = t),
                       ),
@@ -137,7 +140,7 @@ class _NotificationPreferencesPageState
                     const SizedBox(width: 12),
                     Expanded(
                       child: _timePickerTile(
-                        'End',
+                        Provider.of<LanguageProvider>(context, listen: false).t('notif_prefs.end'),
                         _quietEnd,
                         (t) => setState(() => _quietEnd = t),
                       ),
@@ -146,7 +149,7 @@ class _NotificationPreferencesPageState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'No push notifications during quiet hours.',
+                  Provider.of<LanguageProvider>(context, listen: false).t('notif_prefs.quiet_description'),
                   style: GoogleFonts.inter(
                     color: const Color(0xFF666666),
                     fontSize: 12,
@@ -160,7 +163,7 @@ class _NotificationPreferencesPageState
             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Test notification sent',
+                  Provider.of<LanguageProvider>(context, listen: false).t('notif_prefs.test_sent'),
                   style: GoogleFonts.inter(),
                 ),
               ),

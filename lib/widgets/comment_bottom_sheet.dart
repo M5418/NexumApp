@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/comment.dart';
-import '../core/posts_api.dart';
+import '../repositories/firebase/firebase_comment_repository.dart';
+import '../repositories/firebase/firebase_user_repository.dart';
 import 'comment_widget.dart';
 
 class CommentBottomSheet extends StatefulWidget {
@@ -62,6 +63,9 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
 
   List<Comment> _comments = [];
 
+  final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
+  final FirebaseUserRepository _userRepo = FirebaseUserRepository();
+
   @override
   void initState() {
     super.initState();
@@ -90,7 +94,7 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
 
   Future<void> _refresh() async {
     try {
-      final latest = await PostsApi().listComments(widget.postId);
+      final latest = await _loadComments();
       if (!mounted) return;
       setState(() {
         _comments = latest;
@@ -98,6 +102,28 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
     } catch (_) {
       // ignore refresh error in UI
     }
+  }
+
+  Future<List<Comment>> _loadComments() async {
+    final list = await _commentRepo.getComments(postId: widget.postId, limit: 200);
+    final uids = list.map((m) => m.authorId).toSet().toList();
+    final profiles = await _userRepo.getUsers(uids);
+    final byId = {for (final p in profiles) p.uid: p};
+    return list.map((m) {
+      final u = byId[m.authorId];
+      return Comment(
+        id: m.id,
+        userId: m.authorId,
+        userName: (u?.displayName ?? u?.username ?? 'User'),
+        userAvatarUrl: (u?.avatarUrl ?? ''),
+        text: m.text,
+        createdAt: m.createdAt,
+        likesCount: m.likesCount,
+        isLikedByUser: false,
+        replies: const [],
+        parentCommentId: m.parentCommentId,
+      );
+    }).toList();
   }
 
   Future<void> _toggleLike(Comment comment) async {
@@ -134,9 +160,9 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
 
     try {
       if (willLike) {
-        await PostsApi().likeComment(widget.postId, comment.id);
+        await _commentRepo.likeComment(comment.id);
       } else {
-        await PostsApi().unlikeComment(widget.postId, comment.id);
+        await _commentRepo.unlikeComment(comment.id);
       }
     } catch (_) {
       // revert on failure
@@ -182,7 +208,7 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
     if (okPressed != true) return;
 
     try {
-      await PostsApi().deleteComment(widget.postId, comment.id);
+      await _commentRepo.deleteComment(comment.id);
       await _refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -211,9 +237,9 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
         if (widget.onReplyToComment != null) {
           await widget.onReplyToComment!.call(_replyingToCommentId!, text);
         } else {
-          await PostsApi().addComment(
-            widget.postId,
-            content: text,
+          await _commentRepo.createComment(
+            postId: widget.postId,
+            text: text,
             parentCommentId: _replyingToCommentId!,
           );
         }
@@ -221,7 +247,7 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
         if (widget.onAddComment != null) {
           await widget.onAddComment!.call(text);
         } else {
-          await PostsApi().addComment(widget.postId, content: text);
+          await _commentRepo.createComment(postId: widget.postId, text: text);
         }
       }
 

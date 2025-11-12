@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'core/profile_api.dart';
+import 'core/i18n/language_provider.dart';
 
 class FeedPreferencesPage extends StatefulWidget {
   const FeedPreferencesPage({super.key});
@@ -70,7 +72,7 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Preferences saved', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('feed_prefs.preferences_saved'), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
@@ -78,7 +80,7 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Save failed', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('feed_prefs.save_failed'), style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -98,6 +100,7 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final background = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final cardColor = isDark ? const Color(0xFF000000) : Colors.white;
@@ -113,7 +116,7 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Feed Preferences',
+          lang.t('feed_prefs.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -129,7 +132,7 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
               child: _saving
                   ? const SizedBox(
                       width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text('Save', style: GoogleFonts.inter(color: const Color(0xFFBFAE01), fontWeight: FontWeight.w600)),
+                  : Text(lang.t('common.save'), style: GoogleFonts.inter(color: const Color(0xFFBFAE01), fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -144,11 +147,11 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _sectionTitle('Timeline Content'),
+                      _sectionTitle(lang.t('feed_prefs.title')),
                       const SizedBox(height: 8),
                       _switchTile(
-                        title: 'Show Reposts',
-                        subtitle: 'Include posts that others have reposted',
+                        title: lang.t('feed_prefs.show_reposts'),
+                        subtitle: lang.t('feed_prefs.show_reposts_subtitle'),
                         value: _showReposts,
                         onChanged: (v) => setState(() {
                           _showReposts = v;
@@ -156,8 +159,8 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
                         }),
                       ),
                       _switchTile(
-                        title: 'Show Suggested Posts',
-                        subtitle: 'Posts with any #hashtag from any interest',
+                        title: lang.t('feed_prefs.show_suggested'),
+                        subtitle: lang.t('feed_prefs.show_suggested_subtitle'),
                         value: _showSuggested,
                         onChanged: (v) => setState(() {
                           _showSuggested = v;
@@ -165,8 +168,8 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
                         }),
                       ),
                       _switchTile(
-                        title: 'Prioritize Your Interests',
-                        subtitle: 'Show only posts with # that match your interests',
+                        title: lang.t('feed_prefs.prioritize_interests'),
+                        subtitle: lang.t('feed_prefs.prioritize_interests_subtitle'),
                         value: _prioritizeInterests,
                         onChanged: (v) => setState(() {
                           _prioritizeInterests = v;
@@ -182,7 +185,7 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _sectionTitle('Media'),
+                      _sectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('feed.media_section')),
                       const SizedBox(height: 8),
                       Container(
                         width: double.infinity,
@@ -194,7 +197,7 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'Coming soon...',
+                          lang.t('feed_prefs.coming_soon'),
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -213,7 +216,7 @@ class _FeedPreferencesPageState extends State<FeedPreferencesPage> {
                     side: const BorderSide(color: Color(0xFFBFAE01), width: 2),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   ),
-                  child: Text('Reset to defaults', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                  child: Text(lang.t('feed_prefs.reset'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
                 ),
               ],
             ),

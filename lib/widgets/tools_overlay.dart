@@ -124,8 +124,8 @@ class _ToolsCircle extends StatelessWidget {
     ];
 
     return Container(
-      width: 260,
-      height: 260,
+      width: 290,
+      height: 290,
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
@@ -141,7 +141,7 @@ class _ToolsCircle extends StatelessWidget {
         builder: (context, constraints) {
           final size = math.min(constraints.maxWidth, constraints.maxHeight);
           // Radius where icons/titles will sit
-          final r = (size / 2) - 56; // keeps items inside the circle nicely
+          final r = (size / 2) - 60; // keeps items inside the circle nicely
           final angleStep = 2 * math.pi / items.length; // 6 items
 
           return Stack(
@@ -165,8 +165,8 @@ class _ToolsCircle extends StatelessWidget {
                 ),
               // Center dot for visual balance
               Container(
-                width: 6,
-                height: 6,
+                width: 8,
+                height: 8,
                 decoration: const BoxDecoration(
                   color: Color(0xFFBFAE01),
                   shape: BoxShape.circle,
@@ -199,12 +199,12 @@ class _ToolTile extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(tool.icon, color: Colors.black, size: 22),
+          Icon(tool.icon, color: Colors.black, size: 24),
           const SizedBox(height: 6),
           Text(
             tool.label,
             style: GoogleFonts.inter(
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: FontWeight.w500,
               color: Colors.black,
             ),

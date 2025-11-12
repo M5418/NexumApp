@@ -69,10 +69,833 @@ class Translations {
 
       'settings.language_region.title': 'Language & Region',
       'settings.display_language': 'Display language',
+      'settings.language_applying': 'Applying language...',
+      'settings.language_refresh': 'Please wait while we refresh the app',
 
       'common.cancel': 'Cancel',
       'common.logout': 'Logout',
       'common.back': 'Back',
+      'common.save': 'Save',
+      'common.edit': 'Edit',
+      'common.delete': 'Delete',
+      'common.confirm': 'Confirm',
+      'common.close': 'Close',
+      'common.send': 'Send',
+      'common.share': 'Share',
+      'common.remove': 'Remove',
+      'common.stories': 'Stories',
+      'common.see_more': 'See more',
+      'common.skip': 'Skip',
+      'common.copy': 'Copy',
+      'common.loading': 'Loading...',
+      'common.error': 'Error',
+      'common.success': 'Success',
+      'common.retry': 'Retry',
+      'common.permission_denied': 'Permission denied',
+      'common.permission_denied_settings': 'Access permanently denied. Please enable in settings.',
+      'common.unexpected_error': 'Unexpected error occurred.',
+      'common.upload_photo_failed': 'Failed to upload profile photo. You can try again later.',
+      'common.upload_cover_failed': 'Failed to upload cover photo. You can try again later.',
+      'common.search': 'Search',
+      'common.filter': 'Filter',
+      'common.sort': 'Sort',
+      'common.apply': 'Apply',
+      'common.reset': 'Reset',
+      'common.add': 'Add',
+      'common.view': 'View',
+      'common.hide': 'Hide',
+      'common.show': 'Show',
+      'common.more': 'More',
+      'common.less': 'Less',
+      'common.yes': 'Yes',
+      'common.no': 'No',
+
+      // Navigation
+      'nav.home': 'Home',
+      'nav.connections': 'Connections',
+      'nav.conversations': 'Conversations',
+      'nav.profile': 'Profile',
+      'nav.search': 'Search',
+      'nav.notifications': 'Notifications',
+      'nav.settings': 'Settings',
+      'nav.create': 'Create',
+      'nav.activity': 'Activity',
+      'nav.bookmarks': 'Bookmarks',
+      'nav.drafts': 'Drafts',
+
+      // Home Feed
+      'home.for_you': 'For You',
+      'home.following': 'Following',
+      'home.no_posts': 'No posts yet',
+      'home.pull_refresh': 'Pull to refresh',
+      'home.load_more': 'Load more',
+      'home.error_loading': 'Error loading posts',
+      'home.refresh': 'Refresh',
+
+      // Post Actions
+      'post.create': 'Create Post',
+      'post.edit': 'Edit Post',
+      'post.delete': 'Delete Post',
+      'post.share': 'Share Post',
+      'post.report': 'Report',
+      'post.copy_link': 'Copy Link',
+      'post.save_draft': 'Save as Draft',
+      'post.discard': 'Discard',
+      'post.publishing': 'Publishing...',
+      'post.published': 'Post published',
+      'post.deleted': 'Post deleted',
+      'post.like': 'Like',
+      'post.unlike': 'Unlike',
+      'post.comment': 'Comment',
+      'post.repost': 'Repost',
+      'post.bookmark': 'Bookmark',
+      'post.whats_on_mind': "What's on your mind?",
+      'post.add_photos': 'Add Photos',
+      'post.add_video': 'Add Video',
+      'post.post_button': 'Post',
+
+      // Comments
+      'comments.add': 'Add a comment...',
+      'comments.reply': 'Reply',
+      'comments.delete': 'Delete Comment',
+      'comments.edit': 'Edit Comment',
+      'comments.no_comments': 'No comments yet',
+      'comments.view_all': 'View all comments',
+      'comments.hide': 'Hide comments',
+
+      // Profile
+      'profile.edit': 'Edit Profile',
+      'profile.followers': 'Followers',
+      'profile.following': 'Following',
+      'profile.posts': 'Posts',
+      'profile.about': 'About',
+      'profile.bio': 'Bio',
+      'profile.location': 'Location',
+      'profile.website': 'Website',
+      'profile.joined': 'Joined',
+      'profile.follow': 'Follow',
+      'profile.unfollow': 'Unfollow',
+      'profile.message': 'Message',
+      'profile.block': 'Block',
+      'profile.unblock': 'Unblock',
+      'profile.mute': 'Mute',
+      'profile.unmute': 'Unmute',
+
+      // Conversations
+      'chat.type_message': 'Type a message...',
+      'chat.send': 'Send',
+      'chat.no_conversations': 'No conversations yet',
+      'chat.start_conversation': 'Start a conversation',
+      'chat.online': 'Online',
+      'chat.offline': 'Offline',
+      'chat.typing': 'Typing...',
+      'chat.delete_conversation': 'Delete Conversation',
+      'chat.mute_conversation': 'Mute Conversation',
+      'chat.delete_message_title': 'Delete message?',
+      'chat.delete_for_me_or_everyone': 'Do you want to delete this message for you or for everyone?',
+      'chat.delete_this_message': 'Do you want to delete this message?',
+      'chat.delete_for_me': 'Delete for me',
+      'chat.delete_for_everyone': 'Delete for everyone',
+      'chat.last_seen': 'Last seen recently',
+      'chat.type_message_hint': 'Type a message...',
+      'chat.retry': 'Retry',
+
+      // Notifications (consolidated)
+      'notifications.title': 'Notifications',
+      'notifications.no_notifications': 'No notifications',
+      'notifications.mark_read': 'Mark as read',
+      'notifications.mark_all_read': 'Mark all as read',
+      'notifications.clear_all': 'Clear all',
+      'notifications.retry': 'Retry',
+
+      // Search (consolidated)
+      'search.hint': 'Search...',
+      'search.placeholder': 'Search...',
+      'search.no_results': 'No results found',
+      'search.people': 'People',
+      'search.posts': 'Posts',
+      'search.communities': 'Communities',
+      'search.recent': 'Recent searches',
+      'search.clear_recent': 'Clear recent',
+      'search.search_people': 'Search people',
+      'search.search_posts': 'Search posts',
+
+      // Messages
+      'messages.success.saved': 'Saved successfully',
+      'messages.success.updated': 'Updated successfully',
+      'messages.success.deleted': 'Deleted successfully',
+      'messages.success.sent': 'Sent successfully',
+      'messages.error.generic': 'Something went wrong',
+      'messages.error.network': 'Network error. Please try again.',
+      'messages.error.required_fields': 'Please fill all required fields',
+
+      // Dialogs
+      'dialogs.confirm_delete.title': 'Delete?',
+      'dialogs.confirm_delete.message': 'Are you sure you want to delete this?',
+      'dialogs.confirm_discard.title': 'Discard changes?',
+      'dialogs.confirm_discard.message': 'Your changes will be lost.',
+      'dialogs.repost.title': 'Repost this?',
+      'dialogs.repost.message': 'Are you sure you want to repost this?',
+      'dialogs.unrepost.title': 'Remove repost?',
+      'dialogs.unrepost.message': 'Are you sure you want to remove this repost?',
+
+      // Messages
+      'messages.repost_success': 'Post reposted successfully',
+      'messages.unrepost_success': 'Repost removed',
+      'messages.bookmark_failed': 'Bookmark failed',
+      'messages.like_failed': 'Like failed',
+      'messages.unlike_failed': 'Unlike failed',
+      'messages.shared_stories': 'Shared to Stories',
+      'messages.link_copied': 'Link copied to clipboard',
+      'messages.shared_telegram': 'Shared to Telegram',
+      'messages.shared_facebook': 'Shared to Facebook',
+      'messages.comment_posted': 'Comment posted!',
+      'messages.reply_posted': 'Reply posted!',
+      'messages.load_comments_failed': 'Load comments failed',
+      'messages.post_comment_failed': 'Post comment failed',
+      'messages.reply_failed': 'Reply failed',
+      'messages.bookmark_removed': 'Bookmark removed',
+      'messages.remove_bookmark_failed': 'Failed to remove bookmark',
+      'messages.load_bookmarks_failed': 'Failed to load bookmarks',
+      'messages.repost_failed': 'Repost failed',
+      'messages.remove_repost_failed': 'Failed to remove repost',
+      'messages.more_share': 'More share options',
+
+      // Bookmarks
+      'bookmarks.title': 'Bookmarks',
+      'bookmarks.posts': 'Posts',
+      'bookmarks.podcasts': 'Podcasts',
+      'bookmarks.books': 'Books',
+      'bookmarks.no_posts': 'No bookmarked posts yet',
+      'bookmarks.no_podcasts': 'No bookmarked podcasts yet',
+      'bookmarks.no_books': 'No bookmarked books yet',
+      'bookmarks.remove_title': 'Remove Bookmark?',
+      'bookmarks.remove_message': 'This will remove the bookmark from your collection.',
+
+      // Drafts
+      'drafts.title': 'Drafts',
+      'drafts.delete_title': 'Delete Draft?',
+      'drafts.delete_message': 'This will permanently delete this draft.',
+      'messages.draft_deleted': 'Draft deleted',
+      'messages.delete_draft_failed': 'Failed to delete draft',
+      'messages.load_drafts_failed': 'Failed to load drafts',
+
+      // Activity
+      'activity.title': 'Activity',
+      'activity.likes': 'Likes',
+      'activity.comments': 'Comments',
+      'activity.reposts': 'Reposts',
+      'activity.recently_deleted': 'Recently deleted',
+      'activity.archived': 'Archived',
+      'activity.account_history': 'Account History',
+      'activity.recent_searches': 'Recent Searches',
+      'activity.transfer_info': 'Transfer your information',
+      'activity.download_info': 'Download your information',
+
+      // Conversations
+      'conversations.title': 'Conversations',
+      'conversations.chats': 'Chats',
+      'conversations.communities': 'Communities',
+      'conversations.no_chats': 'No conversations yet',
+      'conversations.select_chat': 'Select a chat or community',
+      'conversations.mark_read': 'Mark as read',
+      'conversations.delete': 'Delete',
+      'conversations.action_failed': 'Action failed',
+      'conversations.mark_read_failed': 'Failed to mark read',
+      'conversations.delete_failed': 'Failed to delete',
+      'conversations.mute': 'Mute',
+      'conversations.unmute': 'Unmute',
+
+      // Connections
+      'connections.people': 'People',
+      'connections.select_user': 'Select a user',
+      'connections.see_more': 'See more',
+      'connections.connected': 'Connected',
+      'connections.connect': 'Connect',
+      'connections.disconnect': 'Disconnect',
+      'connections.invitation_sent': 'Invitation sent',
+      'connections.connect_failed': 'Failed to connect',
+      'connections.disconnect_failed': 'Failed to disconnect',
+      'connections.professional_experiences': 'Professional Experiences',
+      'connections.no_experiences': 'No professional experiences to display',
+      'connections.trainings': 'Trainings',
+      'connections.no_trainings': 'No trainings to display',
+      'connections.interests': 'Interests',
+      'connections.no_interests': 'No interests to display',
+      'connections.activity': 'Activity',
+      'connections.posts': 'Posts',
+      'connections.podcasts': 'Podcasts',
+      'connections.media': 'Media',
+      'connections.no_activity': 'No activity found',
+      'connections.no_posts': 'No posts found',
+      'connections.no_podcasts': 'No podcasts found',
+      'connections.no_media': 'No media found',
+
+      // Create Post
+      'create_post.title_hint': 'Title',
+      'create_post.whats_on_mind': "What's on your mind today?",
+      'create_post.post_button': 'Post',
+      'create_post.search_connections': 'Search connections...',
+      'create_post.search_community': 'Search community...',
+      'create_post.unexpected_error': 'Unexpected error occurred.',
+      'create_post.write_something': 'Write something before saving',
+      'create_post.saved_to_drafts': 'Saved to drafts',
+      'create_post.save_draft_failed': 'Failed to save draft',
+      'create_post.community': 'Community',
+      'create_post.save_as_draft': 'Save as Draft',
+      'create_post.create_post': 'Create Post',
+      'create_post.post_to_community': 'Post to Community?',
+      'create_post.community_post_notice': 'This post will be published in the community and will not appear in your home feed.',
+      'create_post.posted': 'Posted',
+      'create_post.publish_failed': 'Failed to publish post',
+
+      // Post Page
+      'post.load_failed': 'Load post failed',
+      'post.load_comments_failed': 'Load comments failed',
+      'post.user_muted': 'muted',
+      'post.mute_failed': 'Failed to mute user',
+      'post.block_title': 'Block',
+      'post.block_message': 'You will no longer see posts from this user, and they won\'t be able to see your content.',
+      'post.user_blocked': 'blocked',
+      'post.block_failed': 'Failed to block user',
+      'post.delete_post_title': 'Delete Post',
+      'post.delete_post_message': 'Are you sure you want to delete this post? This action cannot be undone.',
+      'post.delete_success': 'Post deleted successfully',
+      'post.delete_failed': 'Failed to delete post',
+      'post.reply_title': 'Reply',
+      'post.reply_hint': 'Write your reply...',
+      'post.send': 'Send',
+      'post.more_share': 'More share options',
+      'post.bookmark_failed': 'Bookmark failed',
+      'post.shared_stories': 'Shared to Stories',
+      'post.shared_telegram': 'Shared to Telegram',
+      'post.shared_facebook': 'Shared to Facebook',
+      'post.reply_posted': 'Reply posted!',
+      'post.comment_posted': 'Comment posted!',
+      'post.comment_failed': 'Failed to post comment',
+      'post.comments': 'Comments',
+      'common.link_copied': 'Link copied to clipboard',
+      'common.yesterday': 'Yesterday',
+      'common.today': 'Today',
+      'common.options': 'Options',
+      'common.settings': 'Settings',
+      'common.camera': 'Camera',
+      'common.gallery': 'Gallery',
+      'common.video': 'Video',
+      'common.file': 'File',
+      'common.new_chat': 'New chat',
+      'common.write_comment': 'Write a comment...',
+      'common.search_accounts': 'Search accounts',
+      'common.show_password': 'Show password',
+      'common.hide_password': 'Hide password',
+      'common.personal_information': 'Personal Information',
+      'common.birthday': 'Birthday',
+      'common.gender': 'Gender',
+      'common.location': 'Location',
+      'common.profile_photo': 'Profile Photo',
+
+      // Blocked & Muted Accounts
+      'blocked_muted.title': 'Blocked & Muted Accounts',
+      'blocked_muted.blocked_tab': 'Blocked',
+      'blocked_muted.muted_tab': 'Muted',
+      'blocked_muted.no_blocked': 'No blocked accounts',
+      'blocked_muted.no_muted': 'No muted accounts',
+      'blocked_muted.unblock': 'Unblock',
+      'blocked_muted.unmute': 'Unmute',
+      'blocked_muted.unblock_success': 'User unblocked',
+      'blocked_muted.unblock_failed': 'Failed to unblock user',
+      'blocked_muted.unmute_success': 'User unmuted',
+      'blocked_muted.unmute_failed': 'Failed to unmute user',
+
+      // Profile
+      'profile.menu.drafts': 'Drafts',
+      'profile.menu.bookmarks': 'Bookmarks',
+      'profile.menu.settings': 'Settings',
+      'profile.menu.help_center': 'Help Center',
+      'profile.menu.support': 'Support',
+      'profile.menu.terms': 'Terms & Conditions',
+      'profile.tabs.activity': 'Activity',
+      'profile.tabs.posts': 'Posts',
+      'profile.tabs.podcasts': 'Podcasts',
+      'profile.tabs.media': 'Media',
+      'profile.no_activity': 'No recent activity yet.',
+      'profile.no_posts': 'No posts yet.',
+      'profile.no_podcasts': 'No podcasts yet.',
+      'profile.no_experiences': 'No experiences added yet.',
+      'profile.no_trainings': 'No trainings added yet.',
+      'profile.no_interests': 'No interests selected yet.',
+      'profile.add_cover_image': 'Add cover image',
+      'profile.edit_profile': 'Edit Profile',
+      'profile.my_connections': 'My Connections',
+      'profile.professional_experiences': 'Professional Experiences',
+      'profile.trainings': 'Trainings',
+      'profile.interest': 'Interest',
+      'profile.activite': 'Activite',
+      'profile.publications': 'Publications',
+      'profile.medias': 'Médias',
+
+      // Feed Preferences
+      'feed_prefs.title': 'Feed Preferences',
+      'feed_prefs.preferences_saved': 'Preferences saved',
+      'feed_prefs.save_failed': 'Save failed',
+      'feed_prefs.show_reposts': 'Show Reposts',
+      'feed_prefs.show_reposts_subtitle': 'Include posts that others have reposted',
+      'feed_prefs.show_suggested': 'Show Suggested Posts',
+      'feed_prefs.show_suggested_subtitle': 'Posts with any #hashtag from any interest',
+      'feed_prefs.prioritize_interests': 'Prioritize Your Interests',
+      'feed_prefs.prioritize_interests_subtitle': 'Show only posts with # that match your interests',
+      'feed_prefs.coming_soon': 'Coming soon...',
+      'feed_prefs.reset': 'Reset to defaults',
+
+      // Content Controls
+      'content_controls.title': 'Content Controls',
+      'content_controls.safe_mode': 'Safe Mode',
+      'content_controls.hide_sensitive': 'Hide Sensitive Content',
+      'content_controls.blur_media': 'Blur Sensitive Media Thumbnails',
+      'content_controls.filter_profanity': 'Filter Profanity',
+      'content_controls.filter_profanity_subtitle': 'Automatically filter common profane words',
+      'content_controls.hide_spoilers': 'Hide Spoilers',
+      'content_controls.hide_spoilers_subtitle': 'Spoiler-tagged content will be hidden',
+
+      // Privacy & Visibility
+      'privacy.title': 'Privacy & Visibility',
+      'privacy.private_profile': 'Private Profile',
+      'privacy.show_activity': 'Show Activity Status',
+      'privacy.show_activity_subtitle': 'Allow others to see when you are active',
+      'privacy.approve_connections': 'Approve New Connection Requests',
+      'privacy.allow_mentions': 'Allow Mentions',
+      'privacy.allow_mentions_subtitle': 'Other users can mention your username',
+      'privacy.allow_tags': 'Allow Tags',
+      'privacy.allow_tags_subtitle': 'Other users can tag you in posts',
+      'privacy.show_online': 'Show Online Status',
+      'privacy.show_online_subtitle': 'Display when you are online',
+      'privacy.show_last_seen': 'Show Last Seen',
+      'privacy.show_last_seen_subtitle': 'Display your last active time',
+
+      // Notification Preferences
+      'notif_prefs.title': 'Notification Preferences',
+      'notif_prefs.push': 'Push Notifications',
+      'notif_prefs.likes': 'Likes',
+      'notif_prefs.comments': 'Comments',
+      'notif_prefs.reposts': 'Reposts',
+      'notif_prefs.new_connections': 'New Connections',
+      'notif_prefs.mentions': 'Mentions',
+      'notif_prefs.messages': 'Messages',
+
+      // Security & Login
+      'security.title': 'Security & Login',
+      'security.change_password': 'Change Password',
+      'security.two_factor': 'Two-Factor Authentication',
+      'security.active_sessions': 'Active Sessions',
+      'security.login_alerts': 'Login Alerts',
+
+      // Change Password
+      'change_password.title': 'Change Password',
+      'change_password.subtitle': 'Enter your current password and your new password',
+      'change_password.current': 'Current Password',
+      'change_password.new': 'New Password',
+      'change_password.confirm': 'Confirm New Password',
+      'change_password.submit': 'Request Change',
+      'change_password.back': 'Back to Account Center',
+      'change_password.success': 'Password changed successfully',
+      'change_password.failed': 'Failed to change password',
+
+      // Change Email
+      'change_email.title': 'Change Email',
+      'change_email.subtitle': 'Enter your new email address',
+      'change_email.current': 'Current Email',
+      'change_email.new': 'New Email',
+      'change_email.password': 'Confirm Password',
+      'change_email.submit': 'Request Change',
+      'change_email.back': 'Back to Account Center',
+      'change_email.success': 'Email changed successfully',
+      'change_email.failed': 'Failed to change email',
+
+      // My Connections
+      'my_connections.title': 'My Connections',
+      'my_connections.search': 'Search connections...',
+      'my_connections.no_connections': 'No connections yet',
+      'my_connections.load_failed': 'Failed to load connections',
+      'my_connections.action_failed': 'Failed to connect/disconnect',
+      'my_connections.tab_connected_to_me': 'Connected to me',
+      'my_connections.tab_i_connect': 'I Connect',
+
+      // Invitations
+      'invitations.title': 'Invitations',
+      'invitations.sent_title': 'Invitations Sent',
+      'invitations.tab_invitations': 'Invitations',
+      'invitations.tab_sent': 'Invitations Sent',
+      'invitations.received': 'Received',
+      'invitations.no_sent': 'No sent invitations',
+      'invitations.no_received': 'No received invitations',
+      'invitations.accept': 'Accept',
+      'invitations.reject': 'Reject',
+      'invitations.delete': 'Delete',
+      'invitations.close': 'Close',
+
+      // Connect Friends
+      'connect_friends.title': 'Connect with Friends',
+      'connect_friends.search': 'Search friends...',
+      'connect_friends.no_friends': 'No friends found',
+      'connect_friends.load_failed': 'Failed to load friends',
+      'connect_friends.action_failed': 'Failed to connect/disconnect',
+
+      // Security Login
+      'security.subtitle': 'Use an authenticator app to secure your logins',
+      'security.notification_subtitle': 'Get notified when a new device logs in to your account',
+      'security.setup_authenticator': 'Set up authenticator app',
+      'security.scan_qr': 'Scan a QR code in your OTP app',
+      'security.remove': 'Remove',
+      'security.no_devices': 'No remembered devices',
+      'security.sign_out': 'Sign out',
+      'security.sign_out_all': 'Sign out all',
+      'security.authenticator_placeholder': 'Authenticator setup (placeholder)',
+
+      // Sign In
+      'signin.nexum': 'NEXUM',
+      'signin.welcome_back': 'Welcome Back',
+      'signin.subtitle': 'Fill out the information in order to access your account',
+      'signin.email_hint': 'Email',
+      'signin.password_hint': 'Password',
+      'signin.forgot_password': 'Forgot Password?',
+      'signin.sign_in': 'Sign In',
+      'signin.sign_up': 'Sign Up',
+      'signin.error_empty': 'Please enter both email and password',
+      'signin.error_invalid': 'Invalid email or password',
+      'signin.error_validation': 'Please enter a valid email and password',
+      'signin.error_too_many': 'Too many attempts. Try again later.',
+      'signin.error_failed': 'Sign in failed',
+      'signin.error_generic': 'Sign in failed. Please try again.',
+
+      // Forgot Password
+      'forgot.title': 'Forgot Password?',
+      'forgot.subtitle': 'Enter your email address and we\'ll send you a link to reset your password',
+      'forgot.email_hint': 'Email',
+      'forgot.enter_email': 'Enter your email',
+
+      // Password Reset Sent
+      'reset.title': 'Check Your Email',
+      'reset.sent_to': 'We\'ve sent a password reset link to',
+      'reset.whats_next': 'What\'s next?',
+      'reset.back_signin': 'Back to Sign In',
+
+      // Language Region
+      'region.title': 'Language & Region',
+      'region.settings': 'Region Settings',
+      'region.24hour': 'Use 24-hour time',
+      'region.24hour_subtitle': 'Switch between 24-hour and 12-hour time formats',
+      'region.translation': 'Translation',
+      'region.enable_translation': 'Enable Post Translation',
+      'region.enable_translation_subtitle': 'Show translate button on posts and comments',
+      'region.auto_translate': 'Auto-translate posts & comments',
+      'region.auto_translate_subtitle': 'Automatically translate content to your language',
+      'region.translate_to': 'Translate posts to',
+      'region.reset_defaults': 'Reset to defaults',
+      'region.coming_soon': 'COMING SOON',
+
+      // Feed Preferences
+      'feed.media_section': 'Media',
+
+      // Content Controls
+      'content.add_keyword': 'Add a keyword to mute',
+      'content.add': 'Add',
+      'content.clear_reset': 'Clear all & reset',
+
+      // Notification Preferences
+      'notif_prefs.quiet_hours': 'Quiet Hours',
+      'notif_prefs.start': 'Start',
+      'notif_prefs.end': 'End',
+      'notif_prefs.quiet_description': 'No push notifications during quiet hours.',
+      'notif_prefs.test_sent': 'Test notification sent',
+
+      // Community
+      'community.load_failed': 'Failed to load community details',
+      'community.posts_failed': 'Failed to load community posts',
+      'community.user': 'User',
+
+      // Conversation Search
+      'convsearch.search_chats': 'Search chats...',
+      'convsearch.search_communities': 'Search communities...',
+      'convsearch.tabs_chats': 'Chats',
+      'convsearch.tabs_communities': 'Communities',
+      'convsearch.start_typing': 'Start typing to search your chats',
+      'convsearch.no_match': 'No chats match your search',
+
+      // Insights
+      'insights.title': 'Insights',
+      'insights.last_7_days': 'Last 7 days',
+      'insights.top_location': 'Top Location',
+      'insights.by_views': 'By Views',
+      'insights.weekly': 'Weekly',
+
+      // Monetization Page
+      'monetization.eligible': 'You are eligible',
+      'monetization.review': 'Eligibility in review',
+      'monetization.eligible_desc': 'Great! You meet the current requirements to monetize your content.',
+      'monetization.review_desc': 'We are reviewing your account. You will be notified once you are eligible.',
+      'monetization.earnings_summary': 'Earnings summary',
+
+      // Video Scroll
+      'video.like_failed': 'Like failed',
+      'video.unlike_failed': 'Unlike failed',
+
+      // Other User Profile
+      'other.posts_failed': 'Failed to load posts',
+      'other.user': 'User',
+
+      // Story Viewer
+      'story.no_stories': 'No stories to show',
+      'story.connect': 'Connect',
+      'story.music': 'Music',
+      'story.comment_hint': 'Type your comment...',
+
+      // App Branding
+      'app.name': 'NEXUM',
+
+      // Account Center Sections
+      'account_center.section_profile': 'Profile Information',
+      'account_center.section_security': 'Account & Security',
+      'account_center.section_data': 'Data & Permissions',
+      'account_center.info_status': 'Status',
+      'account_center.info_email': 'Email',
+      'account_center.info_phone': 'Phone',
+      'account_center.no_phone': 'No phone number added yet',
+
+      // KYC Verification
+      'kyc.title': 'Identity Verification',
+      'kyc.subtitle': 'Please provide your identification documents to verify your identity',
+      'kyc.document_type': 'Document Type',
+      'kyc.country_residence': 'Country of Residence',
+      'kyc.document_issuing': 'Document Issuing Country',
+      'kyc.document_number': 'Document number',
+      'kyc.expiry_date': 'Expiry date (YYYY-MM-DD)',
+      'kyc.upload_documents': 'Upload Documents',
+      'kyc.submit': 'Submit for Verification',
+      'kyc.back': 'Back to Account Center',
+      'kyc.select_country': 'Select Country',
+      'kyc.passport': 'Passport',
+      'kyc.passport_desc': 'International travel document',
+      'kyc.national_id': 'National ID',
+      'kyc.national_id_desc': 'Government-issued ID card',
+      'kyc.driving_license': 'Driving License',
+      'kyc.driving_license_desc': 'Valid driver\'s license',
+      'kyc.front_doc': 'Front of',
+      'kyc.back_doc': 'Back of',
+      'kyc.selfie': 'Selfie with Document',
+      'kyc.upload_front': 'Upload a clear photo of the front',
+      'kyc.upload_back': 'Upload a clear photo of the back',
+      'kyc.upload_selfie': 'Take a selfie holding your document',
+      'kyc.uploaded': 'Uploaded successfully',
+
+      // KYC Status
+      'kyc_status.title': 'KYC Status',
+      'kyc_status.back': 'Back',
+      'kyc_status.refresh': 'Refresh',
+      'kyc_status.approved': 'Approved',
+      'kyc_status.rejected': 'Rejected',
+      'kyc_status.pending': 'Pending',
+      'kyc_status.pending_answer': 'Pending — answer within 24h',
+      'kyc_status.approved_title': 'Verification Approved! ✓',
+      'kyc_status.approved_msg': 'Your KYC verification has been approved. You now have full access to all features.',
+      'kyc_status.rejected_title': 'Verification Rejected',
+      'kyc_status.rejected_msg': 'Unfortunately, your KYC verification was rejected. Please check your email for more details or contact support.',
+      'kyc_status.pending_title': 'Verification Under Review',
+      'kyc_status.pending_msg': 'Your KYC verification is currently under review. This process may take up to 24 hours. We will send you an email once your verification has been reviewed.',
+      'kyc_status.email_pending': 'You will receive an email notification once your verification is complete.',
+      'kyc_status.email_approved': 'Thank you for completing your verification!',
+      'kyc_status.email_rejected': 'Please contact support if you need assistance.',
+
+      // Activity Page
+      'activity.interactions': 'Interactions',
+      'activity.removed_archived': 'Removed & Archived Content',
+      'activity.how_you_use': 'How You Use Communi',
+      'activity.info_shared': 'Information you shared',
+
+      // Drafts Page
+      'drafts.no_posts': 'No post drafts yet',
+      'drafts.no_podcasts': 'No podcast drafts yet',
+      'drafts.untitled': 'Untitled',
+      'drafts.delete_confirm': 'This action cannot be undone.',
+      'drafts.delete_button': 'Delete',
+
+      // Payout Setup Success
+      'payout_success.title': 'Payout setup complete',
+      'payout_success.subtitle': 'You can now receive payouts to your connected account.',
+      'payout_success.back': 'Back to Monetization',
+
+      // Payout Setup
+      'payout.title': 'Set up payout',
+      'payout.step_country': 'Country',
+      'payout.step_account_type': 'Account Type',
+      'payout.step_personal': 'Personal Details',
+      'payout.step_method': 'Payout Method',
+      'payout.step_tax': 'Tax & Verification',
+      'payout.step_review': 'Review & Submit',
+      'payout.individual': 'Individual',
+      'payout.business': 'Business',
+      'payout.full_name': 'Full name',
+      'payout.date_birth': 'Date of birth (YYYY-MM-DD)',
+      'payout.address': 'Address',
+      'payout.iban': 'IBAN / Account number',
+      'payout.confirm_tax': 'I confirm tax information will be submitted',
+      'payout.confirm_kyc': 'I will complete KYC verification if required',
+      'payout.agree_terms': 'By submitting you agree to the payout terms.',
+      'payout.payout_provider': 'Payout provider',
+      'payout.account': 'Account',
+      'payout.country_canada': 'Canada',
+      'payout.country_us': 'United States',
+      'payout.country_france': 'France',
+      'payout.country_germany': 'Germany',
+      'payout.country_uk': 'United Kingdom',
+      'payout.stripe': 'Stripe',
+      'payout.bank_transfer': 'Bank transfer',
+      'payout.review_country': 'Country',
+      'payout.review_account_type': 'Account type',
+      'payout.review_full_name': 'Full name',
+
+      // Premium Subscription
+      'premium.title': 'Premium',
+      'premium.nexum_premium': 'Nexum Premium',
+      'premium.subtitle': 'Unlock advanced tools and elevate your experience',
+      'premium.what_you_get': 'What you get',
+      'premium.choose_plan': 'Choose your plan',
+      'premium.monthly': 'Monthly',
+      'premium.yearly': 'Yearly',
+      'premium.yearly_save': 'Save 20%',
+      'premium.subscribe': 'Subscribe',
+      'premium.manage_subscription': 'Manage subscription',
+      'premium.billing_history': 'Billing history',
+      'premium.manage_badge': 'Manage profile badge',
+      'premium.cancel_subscription': 'Cancel subscription',
+
+      // Status Selection
+      'status.title': 'Status',
+      'status.question': 'What will be your status on Nexum',
+      'status.entrepreneur': 'Entrepreneur',
+      'status.investor': 'Investor',
+      'status.saving': 'Saving...',
+      'status.next': 'Next',
+      'status.save_failed': 'Failed to save status. Try again.',
+      'status.default_user': 'User',
+
+      // Image Swipe
+      'image.save_to_photos': 'Save to Photos',
+      'image.share': 'Share',
+      'image.report': 'Report',
+      'image.delete': 'Delete',
+      'image.saved': 'Image saved to Photos',
+      'image.share_functionality': 'Share functionality',
+      'image.reported': 'Image reported',
+      'image.delete_title': 'Delete Image',
+      'image.delete_confirm': 'Are you sure you want to delete this image?',
+      'image.cancel': 'Cancel',
+      'image.deleted': 'Image deleted',
+
+      // Profile Bio
+      'profile_bio.title': 'Bio',
+      'profile_bio.heading': 'Tell us about yourself',
+      'profile_bio.subtitle': 'Write a short bio that describes who you are and what you do',
+      'profile_bio.hint': 'Wellness enthusiast 💪 Lover of clean living, mindful habits, and healthy vibes ✨🌱\n\nTell your story, share your passions, or describe what makes you unique...',
+      'profile_bio.skip': 'Skip',
+      'profile_bio.next': 'Next',
+      'profile_bio.saving': 'Saving...',
+
+      // Account Center
+      'account_center.title': 'Account Center',
+      'account_center.confirm_password': 'Confirm Password',
+      'account_center.enter_password': 'Enter your current password',
+      'account_center.change_password': 'Change Password',
+      'account_center.change_password_subtitle': 'Update your password',
+      'account_center.change_email': 'Change Email',
+      'account_center.change_email_subtitle': 'Update your email address',
+      'account_center.verify_kyc': 'Verify KYC',
+      'account_center.verify_kyc_subtitle': 'Verify your identity',
+      'account_center.change_phone': 'Change Phone Number',
+      'account_center.change_phone_subtitle': 'Add or update your phone',
+      'account_center.download_data': 'Download Your Data',
+      'account_center.ads_prefs': 'Ads Preferences',
+      'account_center.deactivate': 'Deactivate Account',
+      'account_center.delete': 'Delete Account',
+      'account_center.delete_subtitle': 'Permanently delete your account',
+      'account_center.coming_soon': 'Coming soon',
+      'account_center.delete_failed': 'Failed to delete account',
+      'account_center.user': 'User',
+
+      // Profile Photo
+      'profile_photo.title': 'Profile Photo',
+      'profile_photo.take_photo': 'Take Photo',
+      'profile_photo.choose_gallery': 'Choose from Gallery',
+      'profile_photo.permission_denied': 'Permission denied. Please allow access to continue.',
+      'profile_photo.upload_success': 'Photo uploaded successfully',
+      'profile_photo.upload_failed': 'Failed to upload photo',
+
+      // Profile Cover
+      'profile_cover.title': 'Cover Photo',
+      'profile.cover_description': 'Add a cover photo to make your profile stand out',
+      'profile.cover_photo': 'Cover Photo',
+      'profile_cover.take_photo': 'Take Photo',
+      'profile_cover.choose_gallery': 'Choose from Gallery',
+      'profile_cover.remove_cover': 'Remove Cover',
+      'profile_cover.permission_denied': 'Permission denied. Please allow access to continue.',
+      'profile_cover.upload_success': 'Cover uploaded successfully',
+      'profile_cover.upload_failed': 'Failed to upload cover',
+
+      // Conversation Search
+      'conversation_search.title': 'Search Conversations',
+      'conversation_search.hint': 'Search...',
+      'conversation_search.no_results': 'No conversations found',
+
+      // Profile Flow Start
+      'profile_flow.title': 'Profile Setup',
+      'profile_flow.heading': 'Complete Your Profile',
+      'profile_flow.subtitle': 'Help others connect with you by completing your profile in just a few steps.',
+      'profile_flow.step1_title': 'Personal Information',
+      'profile_flow.step1_desc': 'Add your name and username',
+      'profile_flow.step2_title': 'Birthday',
+      'profile_flow.step2_desc': 'Tell us when you were born',
+      'profile_flow.step3_title': 'Gender',
+      'profile_flow.step3_desc': 'Select your gender identity',
+      'profile_flow.step4_title': 'Location',
+      'profile_flow.step4_desc': 'Share your address details',
+      'profile_flow.step5_title': 'Profile Photo',
+      'profile_flow.step5_desc': 'Add a profile picture (optional)',
+      'profile_flow.step6_title': 'Cover Photo',
+      'profile_flow.step6_desc': 'Add a cover image (optional)',
+      'profile_flow.estimated_time': 'Estimated Time',
+      'profile_flow.time_to_complete': '3-5 minutes to complete',
+      'profile_flow.start_button': 'Start Profile Setup',
+
+      // Interest Selection
+      'interests.title': 'Select Your Interests',
+      'interests.subtitle': 'Choose topics you\'re interested in to personalize your feed',
+      'interests.search': 'Search interests...',
+      'interests.selected': 'selected',
+      'interests.continue': 'Continue',
+      'interests.skip': 'Skip for now',
+
+      // Profile Experience
+      'experience.title': 'Work Experience',
+      'experience.subtitle': 'List your work experiences, positions, or roles',
+      'experience.add': 'Add Experience',
+      'experience.company': 'Company',
+      'experience.position': 'Position',
+      'experience.start_date': 'Start Date',
+      'experience.end_date': 'End Date',
+      'experience.current': 'I currently work here',
+      'experience.description': 'Description',
+      'experience.save': 'Save Experience',
+      'experience.cancel': 'Cancel',
+      'experience.delete': 'Delete Experience',
+      'experience.job_title_label': 'Job Title/Position',
+      'experience.company_label': 'Company/Organization (Optional)',
+
+      // Monetization Analytics
+      'monetization.title': 'Monetization & Analytics',
+      'monetization.earnings': 'Total Earnings',
+      'monetization.views': 'Total Views',
+      'monetization.engagement': 'Engagement Rate',
+      'monetization.coming_soon': 'Coming Soon',
+
     },
     'fr': {
       'app.title': 'Nexum',
@@ -96,6 +919,34 @@ class Translations {
       'errors.unexpected_response': 'Réponse inattendue : jeton manquant',
       'errors.sign_up_failed': "Échec de l'inscription",
       'errors.sign_up_failed_try': "Échec de l'inscription. Veuillez réessayer.",
+      'post.bookmark_failed': 'Échec de l\'enregistrement',
+      'post.shared_stories': 'Partagé dans Stories',
+      'post.shared_telegram': 'Partagé sur Telegram',
+      'post.shared_facebook': 'Partagé sur Facebook',
+      'post.reply_posted': 'Réponse publiée !',
+      'post.comment_posted': 'Commentaire publié !',
+      'post.comment_failed': 'Échec de la publication du commentaire',
+      'post.comments': 'Commentaires',
+      'common.link_copied': 'Lien copié dans le presse-papiers',
+      'common.yesterday': 'Hier',
+      'common.today': 'Aujourd\'hui',
+      'common.options': 'Options',
+      'common.settings': 'Paramètres',
+      'common.camera': 'Caméra',
+      'common.gallery': 'Galerie',
+      'common.video': 'Vidéo',
+      'common.file': 'Fichier',
+      'common.new_chat': 'Nouvelle discussion',
+      'common.write_comment': 'Écrire un commentaire...',
+      'common.search_accounts': 'Rechercher des comptes',
+      'common.show_password': 'Afficher le mot de passe',
+      'common.hide_password': 'Masquer le mot de passe',
+      'common.personal_information': 'Informations personnelles',
+      'common.birthday': 'Anniversaire',
+      'common.gender': 'Genre',
+      'common.location': 'Localisation',
+      'common.profile_photo': 'Photo de profil',
+      'profile.cover_photo': 'Photo de couverture',
 
       'settings.title': 'Paramètres',
       'settings.section.personalization': 'Personnalisation et préférences',
@@ -109,16 +960,592 @@ class Translations {
       'settings.nav.blocked_muted': 'Comptes bloqués et masqués',
       'settings.nav.security_login': 'Sécurité et connexion',
       'settings.nav.logout': 'Déconnexion',
-
       'dialogs.logout.title': 'Se déconnecter ?',
       'dialogs.logout.message': 'Voulez-vous vraiment vous déconnecter ?',
 
       'settings.language_region.title': 'Langue et région',
-      'settings.display_language': "Langue d'affichage",
+      'settings.display_language': 'Langue d\'affichage',
+      'settings.language_applying': 'Application de la langue...',
+      'settings.language_refresh': 'Veuillez patienter pendant la mise à jour de l\'application',
 
       'common.cancel': 'Annuler',
       'common.logout': 'Déconnexion',
       'common.back': 'Retour',
+
+      // Navigation
+      'nav.home': 'Accueil',
+      'nav.connections': 'Connexions',
+      'nav.conversations': 'Conversations',
+      'nav.profile': 'Profil',
+      'nav.search': 'Recherche',
+      'nav.notifications': 'Notifications',
+      'nav.settings': 'Paramètres',
+      'nav.create': 'Créer',
+      'nav.activity': 'Activité',
+      'nav.bookmarks': 'Signets',
+      'nav.drafts': 'Brouillons',
+
+      // Common
+      'common.save': 'Enregistrer',
+      'common.edit': 'Modifier',
+      'common.delete': 'Supprimer',
+      'common.confirm': 'Confirmer',
+      'common.close': 'Fermer',
+      'common.send': 'Envoyer',
+      'common.share': 'Partager',
+      'common.retry': 'Réessayer',
+      'common.permission_denied': 'Permission refusée',
+      'common.permission_denied_settings': 'Accès définitivement refusé. Veuillez activer dans les paramètres.',
+      'common.unexpected_error': 'Erreur inattendue.',
+      'common.upload_photo_failed': 'Échec du téléchargement de la photo. Vous pouvez réessayer plus tard.',
+      'common.upload_cover_failed': 'Échec du téléchargement de la couverture. Vous pouvez réessayer plus tard.',
+
+      // Home Feed
+      'home.for_you': 'Pour vous',
+      'home.following': 'Abonnements',
+
+      // Post Actions
+      'post.repost': 'Republier',
+      'post.bookmark': 'Enregistrer',
+
+      // Dialogs
+      'dialogs.repost.title': 'Republier ceci ?',
+      'dialogs.repost.message': 'Êtes-vous sûr de vouloir republier ?',
+      'dialogs.unrepost.title': 'Retirer la republication ?',
+      'dialogs.unrepost.message': 'Êtes-vous sûr de vouloir retirer ?',
+
+      // Messages
+      'messages.repost_success': 'Republication réussie',
+      'messages.unrepost_success': 'Republication retirée',
+      'messages.bookmark_failed': 'Échec de l\'enregistrement',
+      'messages.like_failed': 'Échec du j\'aime',
+      'messages.unlike_failed': 'Échec du retrait',
+      'messages.shared_stories': 'Partagé dans Stories',
+      'messages.link_copied': 'Lien copié',
+      'messages.shared_telegram': 'Partagé sur Telegram',
+      'messages.shared_facebook': 'Partagé sur Facebook',
+      'messages.comment_posted': 'Commentaire publié !',
+      'messages.reply_posted': 'Réponse publiée !',
+      'messages.load_comments_failed': 'Échec du chargement',
+      'messages.post_comment_failed': 'Échec de la publication',
+      'messages.reply_failed': 'Échec de la réponse',
+      'messages.bookmark_removed': 'Signet supprimé',
+      'messages.remove_bookmark_failed': 'Échec de la suppression',
+      'messages.load_bookmarks_failed': 'Échec du chargement',
+      'messages.draft_deleted': 'Brouillon supprimé',
+      'messages.delete_draft_failed': 'Échec de la suppression',
+      'messages.load_drafts_failed': 'Échec du chargement',
+      'messages.repost_failed': 'Échec de republication',
+      'messages.remove_repost_failed': 'Échec de retrait',
+      'messages.more_share': 'Plus d\'options de partage',
+
+      // Bookmarks
+      'bookmarks.title': 'Signets',
+      'bookmarks.posts': 'Publications',
+      'bookmarks.podcasts': 'Podcasts',
+      'bookmarks.books': 'Livres',
+      'bookmarks.no_posts': 'Aucune publication enregistrée',
+      'bookmarks.no_podcasts': 'Aucun podcast enregistré',
+      'bookmarks.no_books': 'Aucun livre enregistré',
+      'bookmarks.remove_title': 'Supprimer le signet ?',
+      'bookmarks.remove_message': 'Cela supprimera le signet.',
+
+      // Drafts
+      'drafts.title': 'Brouillons',
+      'drafts.delete_title': 'Supprimer le brouillon ?',
+      'drafts.delete_message': 'Cette action est irréversible.',
+
+      // Notifications
+      'notifications.title': 'Notifications',
+      'notifications.no_notifications': 'Aucune notification',
+      'notifications.retry': 'Réessayer',
+
+      // Activity
+      'activity.title': 'Activité',
+      'activity.likes': 'J\'aime',
+      'activity.comments': 'Commentaires',
+      'activity.reposts': 'Republications',
+      'activity.recently_deleted': 'Supprimés récemment',
+      'activity.archived': 'Archivé',
+      'activity.account_history': 'Historique du compte',
+      'activity.recent_searches': 'Recherches récentes',
+      'activity.transfer_info': 'Transférer vos informations',
+      'activity.download_info': 'Télécharger vos informations',
+
+      // Conversations
+      'chat.type_message': 'Tapez un message...',
+      'conversations.title': 'Conversations',
+      'conversations.chats': 'Discussions',
+      'conversations.communities': 'Communautés',
+      'conversations.no_chats': 'Aucune conversation',
+      'conversations.select_chat': 'Sélectionner une discussion',
+      'conversations.mark_read': 'Marquer comme lu',
+      'conversations.delete': 'Supprimer',
+      'conversations.action_failed': 'Action échouée',
+      'conversations.mark_read_failed': 'Échec de marquage',
+      'conversations.delete_failed': 'Échec de suppression',
+      'conversations.mute': 'Mettre en sourdine',
+      'conversations.unmute': 'Réactiver le son',
+
+      // Connections
+      'connections.select_user': 'Sélectionner un utilisateur',
+      'connections.see_more': 'Voir plus',
+
+      // My Connections
+      'my_connections.tab_connected_to_me': 'Connectés à moi',
+      'my_connections.tab_i_connect': 'Je me connecte',
+
+      // Invitations
+      'invitations.tab_invitations': 'Invitations',
+      'invitations.tab_sent': 'Invitations envoyées',
+
+      // Create Post
+      'create_post.community': 'Communauté',
+      'create_post.save_as_draft': 'Enregistrer comme brouillon',
+      'create_post.create_post': 'Créer une publication',
+
+      // Recherche
+      'search.hint': 'Rechercher...',
+      'search.no_results': 'Aucun résultat',
+      'search.search_people': 'Rechercher des personnes',
+      'search.search_posts': 'Rechercher des publications',
+
+      // Profile
+      'profile.menu.drafts': 'Brouillons',
+      'profile.menu.bookmarks': 'Signets',
+      'profile.menu.settings': 'Paramètres',
+      'profile.menu.help_center': 'Centre d\'aide',
+      'profile.menu.support': 'Support',
+      'profile.menu.terms': 'Conditions générales',
+      'profile.tabs.activity': 'Activité',
+      'profile.tabs.posts': 'Publications',
+      'profile.tabs.podcasts': 'Podcasts',
+      'profile.tabs.media': 'Médias',
+      'profile.no_activity': 'Aucune activité récente.',
+      'profile.no_posts': 'Aucune publication.',
+      'profile.no_podcasts': 'Aucun podcast.',
+      'profile.no_experiences': 'Aucune expérience ajoutée.',
+      'profile.no_trainings': 'Aucune formation ajoutée.',
+      'profile.no_interests': 'Aucun intérêt sélectionné.',
+      'profile.add_cover_image': 'Ajouter une image de couverture',
+      'profile.edit_profile': 'Modifier le profil',
+      'profile.my_connections': 'Mes connexions',
+      'profile.professional_experiences': 'Expériences professionnelles',
+      'profile.trainings': 'Formations',
+      'profile.interest': 'Intérêt',
+      'profile.activite': 'Activité',
+      'profile.publications': 'Publications',
+      'profile.medias': 'Médias',
+
+      // Feed Preferences
+      'feed_prefs.title': 'Préférences du fil',
+      'feed_prefs.preferences_saved': 'Préférences enregistrées',
+      'feed_prefs.save_failed': 'Échec de l\'enregistrement',
+      'feed_prefs.show_reposts': 'Afficher les republications',
+      'feed_prefs.show_reposts_subtitle': 'Inclure les publications republiées par d\'autres',
+      'feed_prefs.show_suggested': 'Afficher les publications suggérées',
+      'feed_prefs.show_suggested_subtitle': 'Publications avec n\'importe quel #hashtag de vos intérêts',
+      'feed_prefs.prioritize_interests': 'Prioriser vos intérêts',
+      'feed_prefs.prioritize_interests_subtitle': 'Afficher uniquement les # correspondant à vos intérêts',
+      'feed_prefs.coming_soon': 'Bientôt disponible...',
+      'feed_prefs.reset': 'Réinitialiser',
+
+      // Content Controls
+      'content_controls.title': 'Contrôles de contenu',
+      'content_controls.safe_mode': 'Mode sécurisé',
+      'content_controls.hide_sensitive': 'Masquer le contenu sensible',
+      'content_controls.blur_media': 'Flouter les miniatures sensibles',
+      'content_controls.filter_profanity': 'Filtrer les grossièretés',
+      'content_controls.filter_profanity_subtitle': 'Filtrer automatiquement les mots vulgaires',
+      'content_controls.hide_spoilers': 'Masquer les spoilers',
+      'content_controls.hide_spoilers_subtitle': 'Le contenu spoiler sera masqué',
+
+      // Privacy & Visibility
+      'privacy.title': 'Confidentialité et visibilité',
+      'privacy.private_profile': 'Profil privé',
+      'privacy.show_activity': 'Afficher le statut d\'activité',
+      'privacy.show_activity_subtitle': 'Permettre aux autres de voir quand vous êtes actif',
+      'privacy.approve_connections': 'Approuver les nouvelles demandes',
+      'privacy.allow_mentions': 'Autoriser les mentions',
+      'privacy.allow_mentions_subtitle': 'Les autres peuvent mentionner votre nom',
+      'privacy.allow_tags': 'Autoriser les tags',
+      'privacy.allow_tags_subtitle': 'Les autres peuvent vous taguer',
+      'privacy.show_online': 'Afficher le statut en ligne',
+      'privacy.show_online_subtitle': 'Afficher quand vous êtes en ligne',
+      'privacy.show_last_seen': 'Afficher dernière visite',
+      'privacy.show_last_seen_subtitle': 'Afficher votre dernière heure d\'activité',
+
+      // Notification Preferences
+      'notif_prefs.title': 'Préférences de notification',
+      'notif_prefs.push': 'Notifications push',
+      'notif_prefs.likes': 'J\'aime',
+      'notif_prefs.comments': 'Commentaires',
+      'notif_prefs.reposts': 'Republications',
+      'notif_prefs.new_connections': 'Nouvelles connexions',
+      'notif_prefs.mentions': 'Mentions',
+      'notif_prefs.messages': 'Messages',
+
+      // Security & Login
+      'security.title': 'Sécurité et connexion',
+      'security.change_password': 'Changer le mot de passe',
+      'security.two_factor': 'Authentification à deux facteurs',
+      'security.active_sessions': 'Sessions actives',
+      'security.login_alerts': 'Alertes de connexion',
+
+      // Change Password
+      'change_password.title': 'Changer le mot de passe',
+      'change_password.subtitle': 'Entrez votre mot de passe actuel et votre nouveau mot de passe',
+      'change_password.current': 'Mot de passe actuel',
+      'change_password.new': 'Nouveau mot de passe',
+      'change_password.confirm': 'Confirmer le nouveau mot de passe',
+      'change_password.submit': 'Demander le changement',
+      'change_password.back': 'Retour au centre des comptes',
+      'change_password.success': 'Mot de passe changé avec succès',
+      'change_password.failed': 'Échec du changement de mot de passe',
+
+      // Change Email
+      'change_email.title': 'Changer l\'email',
+      'change_email.subtitle': 'Entrez votre nouvelle adresse e-mail',
+      'change_email.current': 'Email actuel',
+      'change_email.new': 'Nouvel email',
+      'change_email.password': 'Confirmer le mot de passe',
+      'change_email.submit': 'Demander le changement',
+      'change_email.back': 'Retour au centre des comptes',
+      'change_email.success': 'Email changé avec succès',
+      'change_email.failed': 'Échec du changement d\'email',
+
+      // My Connections
+      'my_connections.title': 'Mes connexions',
+      'my_connections.search': 'Rechercher des connexions...',
+      'my_connections.no_connections': 'Aucune connexion',
+      'my_connections.load_failed': 'Échec du chargement',
+      'my_connections.action_failed': 'Échec de l\'action',
+
+      // Invitations
+      'invitations.title': 'Invitations',
+      'invitations.sent': 'Envoyées',
+      'invitations.received': 'Reçues',
+      'invitations.no_sent': 'Aucune invitation envoyée',
+      'invitations.no_received': 'Aucune invitation reçue',
+      'invitations.accept': 'Accepter',
+      'invitations.reject': 'Refuser',
+      'invitations.delete': 'Supprimer',
+      'invitations.close': 'Fermer',
+
+      // Connect Friends
+      'connect_friends.title': 'Connecter avec des amis',
+      'connect_friends.search': 'Rechercher des amis...',
+      'connect_friends.no_friends': 'Aucun ami trouvé',
+      'connect_friends.load_failed': 'Échec du chargement',
+      'connect_friends.action_failed': 'Échec de l\'action',
+      // Security Login
+      'security.subtitle': 'Utilisez une application d\'authentificateur pour sécuriser vos connexions',
+      'security.notification_subtitle': 'Soyez notifié lorsqu\'un nouvel appareil se connecte à votre compte',
+      'security.setup_authenticator': 'Configurer l\'application d\'authentification',
+      'security.scan_qr': 'Scannez un code QR dans votre application OTP',
+      'security.remove': 'Supprimer',
+      'security.no_devices': 'Aucun appareil mémorisé',
+      'security.sign_out': 'Se déconnecter',
+      'security.sign_out_all': 'Déconnecter tous',
+      'security.authenticator_placeholder': 'Configuration de l\'authentificateur (placeholder)',
+
+      // Sign In
+      'signin.nexum': 'NEXUM',
+      'signin.welcome_back': 'Bon retour',
+      'signin.subtitle': 'Remplissez les informations pour accéder à votre compte',
+      'signin.email_hint': 'Email',
+      'signin.password_hint': 'Mot de passe',
+      'signin.forgot_password': 'Mot de passe oublié ?',
+      'signin.sign_in': 'Se connecter',
+      'signin.sign_up': 'S\'inscrire',
+      'signin.error_empty': 'Veuillez saisir l\'email et le mot de passe',
+      'signin.error_invalid': 'Email ou mot de passe invalide',
+      'signin.error_validation': 'Veuillez saisir un email et un mot de passe valides',
+      'signin.error_too_many': 'Trop de tentatives. Réessayez plus tard.',
+      'signin.error_failed': 'Échec de la connexion',
+      'signin.error_generic': 'Échec de la connexion. Veuillez réessayer.',
+
+      // Forgot Password
+      'forgot.title': 'Mot de passe oublié ?',
+      'forgot.subtitle': 'Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe',
+      'forgot.email_hint': 'Email',
+      'forgot.enter_email': 'Entrez votre email',
+
+      // Password Reset Sent
+      'reset.title': 'Vérifiez votre email',
+      'reset.sent_to': 'Nous avons envoyé un lien de réinitialisation à',
+      'reset.whats_next': 'Et après ?',
+      'reset.back_signin': 'Retour à la connexion',
+
+      // Language Region
+      'region.title': 'Langue et région',
+      'region.settings': 'Paramètres régionaux',
+      'region.24hour': 'Utiliser le format 24 heures',
+      'region.24hour_subtitle': 'Basculer entre le format 24 heures et 12 heures',
+      'region.translation': 'Traduction',
+      'region.enable_translation': 'Activer la traduction des publications',
+      'region.enable_translation_subtitle': 'Afficher le bouton traduire sur les publications et commentaires',
+      'region.auto_translate': 'Traduire automatiquement les publications et commentaires',
+      'region.auto_translate_subtitle': 'Traduire automatiquement le contenu dans votre langue',
+      'region.translate_to': 'Traduire les publications en',
+      'region.reset_defaults': 'Réinitialiser les paramètres par défaut',
+      'region.coming_soon': 'BIENTÔT DISPONIBLE',
+
+      // Feed Preferences
+      'feed.media_section': 'Médias',
+
+      // Content Controls
+      'content.add_keyword': 'Ajouter un mot-clé à mettre en sourdine',
+      'content.add': 'Ajouter',
+      'content.clear_reset': 'Tout effacer et réinitialiser',
+
+      // Notification Preferences
+      'notif_prefs.quiet_hours': 'Heures silencieuses',
+      'notif_prefs.start': 'Début',
+      'notif_prefs.end': 'Fin',
+      'notif_prefs.quiet_description': 'Pas de notifications push pendant les heures silencieuses.',
+      'notif_prefs.test_sent': 'Notification de test envoyée',
+
+      // Community
+      'community.load_failed': 'Échec du chargement des détails de la communauté',
+      'community.posts_failed': 'Échec du chargement des publications de la communauté',
+      'community.user': 'Utilisateur',
+
+      // Conversation Search
+      'convsearch.search_chats': 'Rechercher des discussions...',
+      'convsearch.search_communities': 'Rechercher des communautés...',
+      'convsearch.tabs_chats': 'Discussions',
+      'convsearch.tabs_communities': 'Communautés',
+      'convsearch.start_typing': 'Commencez à taper pour rechercher vos discussions',
+      'convsearch.no_match': 'Aucune discussion ne correspond à votre recherche',
+
+      // Insights
+      'insights.title': 'Statistiques',
+      'insights.last_7_days': '7 derniers jours',
+      'insights.top_location': 'Meilleure localisation',
+      'insights.by_views': 'Par vues',
+      'insights.weekly': 'Hebdomadaire',
+
+      // Monetization Page
+      'monetization.eligible': 'Vous êtes éligible',
+      'monetization.review': 'Éligibilité en cours d\'examen',
+      'monetization.eligible_desc': 'Excellent ! Vous remplissez les conditions requises pour monétiser votre contenu.',
+      'monetization.review_desc': 'Nous examinons votre compte. Vous serez notifié une fois éligible.',
+      'monetization.earnings_summary': 'Résumé des gains',
+
+      // Video Scroll
+      'video.like_failed': 'Échec du j\'aime',
+      'video.unlike_failed': 'Échec de l\'annulation du j\'aime',
+
+      // Other User Profile
+      'other.posts_failed': 'Échec du chargement des publications',
+      'other.user': 'Utilisateur',
+
+      // Story Viewer
+      'story.no_stories': 'Aucune story à afficher',
+      'story.connect': 'Se connecter',
+      'story.music': 'Musique',
+      'story.comment_hint': 'Tapez votre commentaire...',
+
+
+      // App Branding
+      'app.name': 'NEXUM',
+
+
+      // Activity Page
+      'activity.interactions': 'Interactions',
+      'activity.removed_archived': 'Contenu supprimé et archivé',
+      'activity.how_you_use': 'Comment vous utilisez Communi',
+      'activity.info_shared': 'Informations que vous avez partagées',
+
+
+      // Drafts Page
+      'drafts.no_posts': 'Aucun brouillon de publication pour le moment',
+      'drafts.no_podcasts': 'Aucun brouillon de podcast pour le moment',
+      'drafts.untitled': 'Sans titre',
+      'drafts.delete_confirm': 'Cette action ne peut pas être annulée.',
+      'drafts.delete_button': 'Supprimer',
+
+
+      // Payout Setup Success
+      'payout_success.title': 'Configuration du paiement terminée',
+      'payout_success.subtitle': 'Vous pouvez maintenant recevoir des paiements sur votre compte connecté.',
+      'payout_success.back': 'Retour à la monétisation',
+
+
+      // Payout Setup
+      'payout.title': 'Configurer le paiement',
+      'payout.step_country': 'Pays',
+      'payout.step_account_type': 'Type de compte',
+      'payout.step_personal': 'Détails personnels',
+      'payout.step_method': 'Méthode de paiement',
+      'payout.step_tax': 'Taxe et vérification',
+      'payout.step_review': 'Réviser et soumettre',
+      'payout.individual': 'Individuel',
+      'payout.business': 'Entreprise',
+      'payout.full_name': 'Nom complet',
+      'payout.date_birth': 'Date de naissance (AAAA-MM-JJ)',
+      'payout.address': 'Adresse',
+      'payout.iban': 'IBAN / Numéro de compte',
+      'payout.confirm_tax': 'Je confirme que les informations fiscales seront soumises',
+      'payout.confirm_kyc': 'Je complèterai la vérification KYC si nécessaire',
+      'payout.agree_terms': 'En soumettant, vous acceptez les conditions de paiement.',
+      'payout.payout_provider': 'Fournisseur de paiement',
+      'payout.account': 'Compte',
+      'payout.country_canada': 'Canada',
+      'payout.country_us': 'États-Unis',
+      'payout.country_france': 'France',
+      'payout.country_germany': 'Allemagne',
+      'payout.country_uk': 'Royaume-Uni',
+      'payout.stripe': 'Stripe',
+      'payout.bank_transfer': 'Virement bancaire',
+      'payout.review_country': 'Pays',
+      'payout.review_account_type': 'Type de compte',
+      'payout.review_full_name': 'Nom complet',
+
+
+      // Premium Subscription
+      'premium.title': 'Premium',
+      'premium.nexum_premium': 'Nexum Premium',
+      'premium.subtitle': 'Débloquez des outils avancés et améliorez votre expérience',
+      'premium.what_you_get': 'Ce que vous obtenez',
+      'premium.choose_plan': 'Choisissez votre plan',
+      'premium.monthly': 'Mensuel',
+      'premium.yearly': 'Annuel',
+      'premium.yearly_save': 'Économisez 20%',
+      'premium.subscribe': 'S\'abonner',
+      'premium.manage_subscription': 'Gérer l\'abonnement',
+      'premium.billing_history': 'Historique de facturation',
+      'premium.manage_badge': 'Gérer le badge de profil',
+      'premium.cancel_subscription': 'Annuler l\'abonnement',
+
+
+      // Status Selection
+      'status.title': 'Statut',
+      'status.question': 'Quel sera votre statut sur Nexum',
+      'status.entrepreneur': 'Entrepreneur',
+      'status.investor': 'Investisseur',
+      'status.saving': 'Enregistrement...',
+      'status.next': 'Suivant',
+      'status.save_failed': 'Échec de l\'enregistrement du statut. Réessayez.',
+      'status.default_user': 'Utilisateur',
+
+      // Image Swipe
+      'image.save_to_photos': 'Enregistrer dans Photos',
+      'image.share': 'Partager',
+      'image.report': 'Signaler',
+      'image.delete': 'Supprimer',
+      'image.saved': 'Image enregistrée dans Photos',
+      'image.share_functionality': 'Fonctionnalité de partage',
+      'image.reported': 'Image signalée',
+      'image.delete_title': 'Supprimer l\'image',
+      'image.delete_confirm': 'Êtes-vous sûr de vouloir supprimer cette image ?',
+      'image.cancel': 'Annuler',
+      'image.deleted': 'Image supprimée',
+
+
+
+      // Profile Bio
+      'profile_bio.title': 'Bio',
+      'profile_bio.heading': 'Parlez-nous de vous',
+      'profile_bio.subtitle': 'Écrivez une courte bio qui décrit qui vous êtes et ce que vous faites',
+      'profile_bio.hint': 'Passionné(e) de bien-être 💪 Amoureux d’une vie saine, d’habitudes conscientes et de bonnes vibrations ✨🌱\n\nRacontez votre histoire, partagez vos passions ou décrivez ce qui vous rend unique...',
+      'profile_bio.skip': 'Passer',
+      'profile_bio.next': 'Suivant',
+      'profile_bio.saving': 'Enregistrement...',
+
+      // Account Center
+      'account_center.title': 'Centre des comptes',
+      'account_center.confirm_password': 'Confirmer le mot de passe',
+      'account_center.enter_password': 'Entrez votre mot de passe actuel',
+      'account_center.change_password': 'Changer le mot de passe',
+      'account_center.change_password_subtitle': 'Mettre à jour votre mot de passe',
+      'account_center.change_email': 'Changer l\'email',
+      'account_center.change_email_subtitle': 'Mettre à jour votre adresse e-mail',
+      'account_center.verify_kyc': 'Vérifier KYC',
+      'account_center.verify_kyc_subtitle': 'Vérifiez votre identité',
+      'account_center.change_phone': 'Changer le numéro de téléphone',
+      'account_center.change_phone_subtitle': 'Ajouter ou mettre à jour votre téléphone',
+      'account_center.download_data': 'Télécharger vos données',
+      'account_center.ads_prefs': 'Préférences publicitaires',
+      'account_center.deactivate': 'Désactiver le compte',
+      'account_center.delete': 'Supprimer le compte',
+      'account_center.delete_subtitle': 'Supprimer définitivement votre compte',
+      'account_center.coming_soon': 'Bientôt disponible',
+      'account_center.delete_failed': 'Échec de la suppression du compte',
+      'account_center.user': 'Utilisateur',
+
+      // Profile Photo
+      'profile_photo.title': 'Photo de profil',
+      'profile_photo.take_photo': 'Prendre une photo',
+      'profile_photo.choose_gallery': 'Choisir dans la galerie',
+      'profile_photo.permission_denied': 'Permission refusée. Veuillez autoriser l\'accès.',
+      'profile_photo.upload_success': 'Photo téléchargée',
+      'profile_photo.upload_failed': 'Échec du téléchargement',
+
+      // Profile Cover
+      'profile_cover.title': 'Photo de couverture',
+      'profile_cover.take_photo': 'Prendre une photo',
+      'profile_cover.choose_gallery': 'Choisir dans la galerie',
+      'profile_cover.permission_denied': 'Permission refusée. Veuillez autoriser l\'accès.',
+      'profile_cover.upload_success': 'Couverture téléchargée',
+      'profile_cover.upload_failed': 'Échec du téléchargement',
+
+      // Conversation Search
+      'conversation_search.title': 'Rechercher des conversations',
+      'conversation_search.hint': 'Rechercher...',
+      'conversation_search.no_results': 'Aucune conversation trouvée',
+
+      // Profile Flow Start
+      'profile_flow.title': 'Configuration du profil',
+      'profile_flow.heading': 'Complétez votre profil',
+      'profile_flow.subtitle': 'Aidez les autres à se connecter avec vous en complétant votre profil en quelques étapes.',
+      'profile_flow.step1_title': 'Informations personnelles',
+      'profile_flow.step1_desc': 'Ajoutez votre nom et pseudo',
+      'profile_flow.step2_title': 'Anniversaire',
+      'profile_flow.step2_desc': 'Dites-nous quand vous êtes né',
+      'profile_flow.step3_title': 'Genre',
+      'profile_flow.step3_desc': 'Sélectionnez votre identité de genre',
+      'profile_flow.step4_title': 'Localisation',
+      'profile_flow.step4_desc': 'Partagez vos coordonnées',
+      'profile_flow.step5_title': 'Photo de profil',
+      'profile_flow.step5_desc': 'Ajoutez une photo de profil (optionnel)',
+      'profile_flow.step6_title': 'Photo de couverture',
+      'profile_flow.step6_desc': 'Ajoutez une image de couverture (optionnel)',
+      'profile_flow.estimated_time': 'Temps estimé',
+      'profile_flow.time_to_complete': '3-5 minutes pour terminer',
+      'profile_flow.start_button': 'Commencer la configuration',
+
+      // Interest Selection
+      'interests.title': 'Sélectionnez vos intérêts',
+      'interests.subtitle': 'Choisissez les sujets qui vous intéressent pour personnaliser votre fil',
+      'interests.search': 'Rechercher des intérêts...',
+      'interests.selected': 'sélectionnés',
+      'interests.continue': 'Continuer',
+      'interests.skip': 'Passer pour l\'instant',
+
+      // Profile Experience
+      'experience.title': 'Expérience professionnelle',
+      'experience.subtitle': 'Listez vos expériences professionnelles, postes ou rôles',
+      'experience.add': 'Ajouter une expérience',
+      'experience.company': 'Entreprise',
+      'experience.position': 'Poste',
+      'experience.start_date': 'Date de début',
+      'experience.end_date': 'Date de fin',
+      'experience.current': 'Je travaille actuellement ici',
+      'experience.description': 'Description',
+      'experience.save': 'Enregistrer l\'expérience',
+      'experience.cancel': 'Annuler',
+      'experience.delete': 'Supprimer l\'expérience',
+      'experience.job_title_label': 'Titre du poste/Position',
+      'experience.company_label': 'Entreprise/Organisation (Optionnel)',
+
+      // Monetization Analytics
+      'monetization.title': 'Monétisation et analyses',
+      'monetization.earnings': 'Revenus totaux',
+      'monetization.views': 'Vues totales',
+      'monetization.engagement': 'Taux d\'engagement',
+      'monetization.coming_soon': 'Bientôt disponible',
     },
     'pt': {
       'app.title': 'Nexum',
@@ -142,6 +1569,34 @@ class Translations {
       'errors.unexpected_response': 'Resposta inesperada: token ausente',
       'errors.sign_up_failed': 'Falha no cadastro',
       'errors.sign_up_failed_try': 'Falha no cadastro. Tente novamente.',
+      'post.bookmark_failed': 'Falha ao salvar',
+      'post.shared_stories': 'Compartilhado no Stories',
+      'post.shared_telegram': 'Compartilhado no Telegram',
+      'post.shared_facebook': 'Compartilhado no Facebook',
+      'post.reply_posted': 'Resposta publicada!',
+      'post.comment_posted': 'Comentário publicado!',
+      'post.comment_failed': 'Falha ao publicar comentário',
+      'post.comments': 'Comentários',
+      'common.link_copied': 'Link copiado para a área de transferência',
+      'common.yesterday': 'Ontem',
+      'common.today': 'Hoje',
+      'common.options': 'Opções',
+      'common.settings': 'Configurações',
+      'common.camera': 'Câmera',
+      'common.gallery': 'Galeria',
+      'common.video': 'Vídeo',
+      'common.file': 'Arquivo',
+      'common.new_chat': 'Novo chat',
+      'common.write_comment': 'Escrever um comentário...',
+      'common.search_accounts': 'Pesquisar contas',
+      'common.show_password': 'Mostrar senha',
+      'common.hide_password': 'Ocultar senha',
+      'common.personal_information': 'Informações pessoais',
+      'common.birthday': 'Aniversário',
+      'common.gender': 'Gênero',
+      'common.location': 'Localização',
+      'common.profile_photo': 'Foto de perfil',
+      'profile.cover_photo': 'Foto de capa',
 
       'settings.title': 'Configurações',
       'settings.section.personalization': 'Personalização e preferências',
@@ -161,10 +1616,553 @@ class Translations {
 
       'settings.language_region.title': 'Idioma e região',
       'settings.display_language': 'Idioma de exibição',
+      'settings.language_applying': 'Aplicando idioma...',
+      'settings.language_refresh': 'Aguarde enquanto atualizamos o aplicativo',
 
       'common.cancel': 'Cancelar',
       'common.logout': 'Sair',
       'common.back': 'Voltar',
+
+      // Navigation
+      'nav.home': 'Início',
+      'nav.connections': 'Conexões',
+      'nav.conversations': 'Conversas',
+      'nav.profile': 'Perfil',
+
+      // Common
+      'common.save': 'Salvar',
+      'common.confirm': 'Confirmar',
+
+      'common.retry': 'Tentar novamente',
+      'common.permission_denied': 'Permissão negada',
+      'common.permission_denied_settings': 'Acesso permanentemente negado. Ative nas configurações.',
+      'common.unexpected_error': 'Erro inesperado.',
+      'common.upload_photo_failed': 'Falha ao enviar foto. Tente novamente mais tarde.',
+      'common.upload_cover_failed': 'Falha ao enviar capa. Tente novamente mais tarde.',
+
+      // Home Feed  
+      'home.for_you': 'Para você',
+      'home.following': 'Seguindo',
+
+      // Dialogs
+      'dialogs.repost.title': 'Republicar isto?',
+      'dialogs.repost.message': 'Tem certeza que deseja republicar?',
+      'dialogs.unrepost.title': 'Remover republicação?',
+      'dialogs.unrepost.message': 'Tem certeza que deseja remover?',
+
+      // Messages
+      'messages.repost_success': 'Republicado com sucesso',
+      'messages.unrepost_success': 'Republicação removida',
+      'messages.bookmark_failed': 'Falha ao salvar',
+      'messages.like_failed': 'Falha ao curtir',
+      'messages.unlike_failed': 'Falha ao descurtir',
+      'messages.shared_stories': 'Compartilhado nos Stories',
+      'messages.link_copied': 'Link copiado',
+      'messages.shared_telegram': 'Compartilhado no Telegram',
+      'messages.shared_facebook': 'Compartilhado no Facebook',
+      'messages.comment_posted': 'Comentário publicado!',
+      'messages.reply_posted': 'Resposta publicada!',
+      'messages.bookmark_removed': 'Favorito removido',
+      'messages.draft_deleted': 'Rascunho excluído',
+      'messages.repost_failed': 'Falha ao republicar',
+      'messages.remove_repost_failed': 'Falha ao remover',
+      'messages.more_share': 'Mais opções de compartilhamento',
+
+      // Bookmarks
+      'bookmarks.title': 'Favoritos',
+      'bookmarks.posts': 'Publicações',
+      'bookmarks.podcasts': 'Podcasts',
+      'bookmarks.books': 'Livros',
+      'bookmarks.no_posts': 'Nenhuma publicação salva',
+      'bookmarks.no_podcasts': 'Nenhum podcast salvo',
+      'bookmarks.no_books': 'Nenhum livro salvo',
+
+      // Drafts
+      'drafts.title': 'Rascunhos',
+
+      // Notifications
+      'notifications.title': 'Notificações',
+      'notifications.no_notifications': 'Sem notificações',
+      'notifications.retry': 'Tentar novamente',
+
+      // Activity
+      'activity.title': 'Atividade',
+      'activity.likes': 'Curtidas',
+      'activity.comments': 'Comentários',
+      'activity.reposts': 'Republicações',
+
+      // Conversations
+      'chat.type_message': 'Digite uma mensagem...',
+      'conversations.title': 'Conversas',
+      'conversations.chats': 'Chats',
+      'conversations.communities': 'Comunidades',
+      'conversations.no_chats': 'Nenhuma conversa',
+      'conversations.select_chat': 'Selecione um chat ou comunidade',
+      'conversations.mark_read': 'Marcar como lido',
+      'conversations.delete': 'Excluir',
+      'conversations.action_failed': 'Ação falhou',
+      'conversations.mark_read_failed': 'Falha ao marcar como lido',
+      'conversations.delete_failed': 'Falha ao excluir',
+      'conversations.mute': 'Silenciar',
+      'conversations.unmute': 'Reativar som',
+
+      // Connections
+      'connections.select_user': 'Selecionar um usuário',
+      'connections.see_more': 'Ver mais',
+
+      // My Connections
+      'my_connections.tab_connected_to_me': 'Conectados a mim',
+      'my_connections.tab_i_connect': 'Eu conecto',
+
+      // Invitations
+      'invitations.tab_invitations': 'Convites',
+      'invitations.tab_sent': 'Convites enviados',
+
+      // Create Post
+      'create_post.community': 'Comunidade',
+      'create_post.save_as_draft': 'Salvar como rascunho',
+      'create_post.create_post': 'Criar publicação',
+
+      // Search
+      'search.hint': 'Pesquisar...',
+      'search.no_results': 'Nenhum resultado',
+
+      // Profile
+      'profile.menu.drafts': 'Rascunhos',
+      'profile.menu.bookmarks': 'Favoritos',
+      'profile.menu.settings': 'Configurações',
+      'profile.menu.help_center': 'Central de ajuda',
+      'profile.menu.support': 'Suporte',
+      'profile.menu.terms': 'Termos e condições',
+      'profile.tabs.activity': 'Atividade',
+      'profile.tabs.posts': 'Publicações',
+      'profile.tabs.podcasts': 'Podcasts',
+      'profile.tabs.media': 'Mídia',
+      'profile.no_activity': 'Nenhuma atividade recente.',
+      'profile.no_posts': 'Nenhuma publicação.',
+      'profile.no_podcasts': 'Nenhum podcast.',
+      'profile.no_experiences': 'Nenhuma experiência adicionada.',
+      'profile.no_trainings': 'Nenhum treinamento adicionado.',
+      'profile.no_interests': 'Nenhum interesse selecionado.',
+      'profile.add_cover_image': 'Adicionar imagem de capa',
+      'profile.edit_profile': 'Editar Perfil',
+      'profile.my_connections': 'Minhas Conexões',
+      'profile.professional_experiences': 'Experiências Profissionais',
+      'profile.trainings': 'Treinamentos',
+      'profile.interest': 'Interesse',
+      'profile.activite': 'Atividade',
+      'profile.publications': 'Publicações',
+      'profile.medias': 'Mídias',
+
+      // Feed Preferences
+      'feed_prefs.title': 'Preferências do feed',
+      'feed_prefs.preferences_saved': 'Preferências salvas',
+      'feed_prefs.save_failed': 'Falha ao salvar',
+      'feed_prefs.show_reposts': 'Mostrar republicações',
+      'feed_prefs.show_reposts_subtitle': 'Incluir publicações republiadas por outros',
+      'feed_prefs.show_suggested': 'Mostrar publicações suggéridas',
+      'feed_prefs.show_suggested_subtitle': 'Publicações com qualquer #hashtag dos seus interesses',
+      'feed_prefs.prioritize_interests': 'Priorizar seus interesses',
+      'feed_prefs.prioritize_interests_subtitle': 'Mostrar apenas # que correspondem aos seus interesses',
+      'feed_prefs.coming_soon': 'Em breve...',
+      'feed_prefs.reset': 'Redefinir para padrão',
+
+      // Content Controls
+      'content_controls.title': 'Controles de conteúdo',
+      'content_controls.safe_mode': 'Modo seguro',
+      'content_controls.hide_sensitive': 'Ocultar conteúdo sensível',
+      'content_controls.blur_media': 'Desfocar miniaturas sensíveis',
+      'content_controls.filter_profanity': 'Filtrar palavrões',
+      'content_controls.filter_profanity_subtitle': 'Filtrar automaticamente palavras vulgares',
+      'content_controls.hide_spoilers': 'Ocultar spoilers',
+      'content_controls.hide_spoilers_subtitle': 'Conteúdo spoiler será ocultado',
+
+      // Privacy & Visibility
+      'privacy.title': 'Privacidade e visibilidade',
+      'privacy.private_profile': 'Perfil privado',
+      'privacy.show_activity': 'Mostrar status de atividade',
+      'privacy.show_activity_subtitle': 'Permitir que outros vejam quando você está ativo',
+      'privacy.approve_connections': 'Aprovar novas solicitações',
+      'privacy.allow_mentions': 'Permitir menções',
+      'privacy.allow_mentions_subtitle': 'Outros podem mencionar seu nome',
+      'privacy.allow_tags': 'Permitir tags',
+      'privacy.allow_tags_subtitle': 'Outros podem marcar você',
+      'privacy.show_online': 'Mostrar status online',
+      'privacy.show_online_subtitle': 'Exibir quando você está online',
+      'privacy.show_last_seen': 'Mostrar última vez visto',
+      'privacy.show_last_seen_subtitle': 'Exibir sua última hora de atividade',
+
+      // Notification Preferences
+      'notif_prefs.title': 'Preferências de notificação',
+      'notif_prefs.push': 'Notificações push',
+      'notif_prefs.likes': 'Curtidas',
+      'notif_prefs.comments': 'Comentários',
+      'notif_prefs.reposts': 'Republicações',
+      'notif_prefs.new_connections': 'Novas conexões',
+      'notif_prefs.mentions': 'Menções',
+      'notif_prefs.messages': 'Mensagens',
+
+      // Security & Login
+      'security.title': 'Segurança e login',
+      'security.change_password': 'Alterar senha',
+      'security.two_factor': 'Autenticação de dois fatores',
+      'security.active_sessions': 'Sessões ativas',
+      'security.login_alerts': 'Alertas de login',
+
+      // Change Password
+      'change_password.title': 'Alterar senha',
+      'change_password.subtitle': 'Digite sua senha atual e sua nova senha',
+      'change_password.current': 'Senha atual',
+      'change_password.new': 'Nova senha',
+      'change_password.confirm': 'Confirmar nova senha',
+      'change_password.submit': 'Solicitar alteração',
+      'change_password.back': 'Voltar para Central da conta',
+      'change_password.success': 'Senha alterada com sucesso',
+      'change_password.failed': 'Falha ao alterar senha',
+
+      // Change Email
+      'change_email.title': 'Alterar email',
+      'change_email.subtitle': 'Digite seu novo endereço de e-mail',
+      'change_email.current': 'Email atual',
+      'change_email.new': 'Novo email',
+      'change_email.password': 'Confirmar senha',
+      'change_email.submit': 'Solicitar alteração',
+      'change_email.back': 'Voltar para Central da conta',
+      'change_email.success': 'Email alterado com sucesso',
+      'change_email.failed': 'Falha ao alterar email',
+
+      // My Connections
+      'my_connections.title': 'Minhas conexões',
+      'my_connections.search': 'Pesquisar conexões...',
+      'my_connections.no_connections': 'Nenhuma conexão',
+      'my_connections.load_failed': 'Falha ao carregar',
+      'my_connections.action_failed': 'Falha na ação',
+
+      // Invitations
+      'invitations.title': 'Convites',
+      'invitations.sent': 'Enviados',
+      'invitations.received': 'Recebidos',
+      'invitations.no_sent': 'Nenhum convite enviado',
+      'invitations.no_received': 'Nenhum convite recebido',
+      'invitations.accept': 'Aceitar',
+      'invitations.reject': 'Rejeitar',
+      'invitations.delete': 'Excluir',
+      'invitations.close': 'Fechar',
+
+      // Connect Friends
+      'connect_friends.title': 'Conectar com amigos',
+      'connect_friends.search': 'Pesquisar amigos...',
+      'connect_friends.no_friends': 'Nenhum amigo encontrado',
+      'connect_friends.load_failed': 'Falha ao carregar',
+      'connect_friends.action_failed': 'Falha na ação',
+      // Security Login
+      'security.subtitle': 'Use um aplicativo autenticador para proteger seus logins',
+      'security.notification_subtitle': 'Seja notificado quando um novo dispositivo fizer login em sua conta',
+      'security.setup_authenticator': 'Configurar aplicativo autenticador',
+      'security.scan_qr': 'Escaneie um código QR em seu aplicativo OTP',
+      'security.remove': 'Remover',
+      'security.no_devices': 'Nenhum dispositivo lembrado',
+      'security.sign_out': 'Sair',
+      'security.sign_out_all': 'Sair de todos',
+      'security.authenticator_placeholder': 'Configuração do autenticador (placeholder)',
+
+      // Sign In
+      'signin.nexum': 'NEXUM',
+      'signin.welcome_back': 'Bem-vindo de volta',
+      'signin.subtitle': 'Preencha as informações para acessar sua conta',
+      'signin.email_hint': 'Email',
+      'signin.password_hint': 'Senha',
+      'signin.forgot_password': 'Esqueceu a senha?',
+      'signin.sign_in': 'Entrar',
+      'signin.sign_up': 'Cadastrar-se',
+      'signin.error_empty': 'Por favor, insira email e senha',
+      'signin.error_invalid': 'Email ou senha inválidos',
+      'signin.error_validation': 'Por favor, insira um email e senha válidos',
+      'signin.error_too_many': 'Muitas tentativas. Tente novamente mais tarde.',
+      'signin.error_failed': 'Falha no login',
+      'signin.error_generic': 'Falha no login. Por favor, tente novamente.',
+
+      // Forgot Password
+      'forgot.title': 'Esqueceu a senha?',
+      'forgot.subtitle': 'Digite seu endereço de email e enviaremos um link para redefinir sua senha',
+      'forgot.email_hint': 'Email',
+      'forgot.enter_email': 'Digite seu email',
+
+      // Password Reset Sent
+      'reset.title': 'Verifique seu email',
+      'reset.sent_to': 'Enviamos um link de redefinição de senha para',
+      'reset.whats_next': 'O que vem a seguir?',
+      'reset.back_signin': 'Voltar ao login',
+
+      // Language Region
+      'region.title': 'Idioma e região',
+      'region.settings': 'Configurações regionais',
+      'region.24hour': 'Usar formato de 24 horas',
+      'region.24hour_subtitle': 'Alternar entre formatos de 24 e 12 horas',
+      'region.translation': 'Tradução',
+      'region.enable_translation': 'Ativar tradução de publicações',
+      'region.enable_translation_subtitle': 'Mostrar botão de tradução em publicações e comentários',
+      'region.auto_translate': 'Traduzir automaticamente publicações e comentários',
+      'region.auto_translate_subtitle': 'Traduzir automaticamente o conteúdo para seu idioma',
+      'region.translate_to': 'Traduzir publicações para',
+      'region.reset_defaults': 'Restaurar padrões',
+      'region.coming_soon': 'EM BREVE',
+
+      // Feed Preferences
+      'feed.media_section': 'Mídia',
+
+      // Content Controls
+      'content.add_keyword': 'Adicionar palavra-chave para silenciar',
+      'content.add': 'Adicionar',
+      'content.clear_reset': 'Limpar tudo e redefinir',
+
+      // Notification Preferences
+      'notif_prefs.quiet_hours': 'Horário silencioso',
+      'notif_prefs.start': 'Início',
+      'notif_prefs.end': 'Fim',
+      'notif_prefs.quiet_description': 'Sem notificações push durante o horário silencioso.',
+      'notif_prefs.test_sent': 'Notificação de teste enviada',
+
+      // Community
+      'community.load_failed': 'Falha ao carregar detalhes da comunidade',
+      'community.posts_failed': 'Falha ao carregar publicações da comunidade',
+      'community.user': 'Usuário',
+
+      // Conversation Search
+      'convsearch.search_chats': 'Pesquisar chats...',
+      'convsearch.search_communities': 'Pesquisar comunidades...',
+      'convsearch.tabs_chats': 'Chats',
+      'convsearch.tabs_communities': 'Comunidades',
+      'convsearch.start_typing': 'Comece a digitar para pesquisar seus chats',
+      'convsearch.no_match': 'Nenhum chat corresponde à sua pesquisa',
+
+      // Insights
+      'insights.title': 'Estatísticas',
+      'insights.last_7_days': 'Últimos 7 dias',
+      'insights.top_location': 'Melhor localização',
+      'insights.by_views': 'Por visualizações',
+      'insights.weekly': 'Semanal',
+
+      // Monetization Page
+      'monetization.eligible': 'Você é elegível',
+      'monetization.review': 'Elegibilidade em revisão',
+      'monetization.eligible_desc': 'Ótimo! Você atende aos requisitos atuais para monetizar seu conteúdo.',
+      'monetization.review_desc': 'Estamos revisando sua conta. Você será notificado quando for elegível.',
+      'monetization.earnings_summary': 'Resumo de ganhos',
+
+      // Video Scroll
+      'video.like_failed': 'Falha ao curtir',
+      'video.unlike_failed': 'Falha ao descurtir',
+
+      // Other User Profile
+      'other.posts_failed': 'Falha ao carregar publicações',
+      'other.user': 'Usuário',
+
+      // Story Viewer
+      'story.no_stories': 'Nenhuma história para mostrar',
+      'story.connect': 'Conectar',
+      'story.music': 'Música',
+      'story.comment_hint': 'Digite seu comentário...',
+
+
+      // App Branding
+      'app.name': 'NEXUM',
+
+
+      // Activity Page
+      'activity.interactions': 'Interações',
+      'activity.removed_archived': 'Conteúdo removido e arquivado',
+      'activity.how_you_use': 'Como você usa Communi',
+      'activity.info_shared': 'Informações que você compartilhou',
+
+
+      // Drafts Page
+      'drafts.no_posts': 'Ainda sem rascunhos de publicação',
+      'drafts.no_podcasts': 'Ainda sem rascunhos de podcast',
+      'drafts.untitled': 'Sem título',
+      'drafts.delete_confirm': 'Esta ação não pode ser desfeita.',
+      'drafts.delete_button': 'Excluir',
+
+
+      // Payout Setup Success
+      'payout_success.title': 'Configuração de pagamento concluída',
+      'payout_success.subtitle': 'Agora você pode receber pagamentos em sua conta conectada.',
+      'payout_success.back': 'Voltar para Monetização',
+
+
+      // Payout Setup
+      'payout.title': 'Configurar pagamento',
+      'payout.step_country': 'País',
+      'payout.step_account_type': 'Tipo de conta',
+      'payout.step_personal': 'Detalhes pessoais',
+      'payout.step_method': 'Método de pagamento',
+      'payout.step_tax': 'Imposto e verificação',
+      'payout.step_review': 'Revisar e enviar',
+      'payout.individual': 'Individual',
+      'payout.business': 'Empresa',
+      'payout.full_name': 'Nome completo',
+      'payout.date_birth': 'Data de nascimento (AAAA-MM-DD)',
+      'payout.address': 'Endereço',
+      'payout.iban': 'IBAN / Número da conta',
+      'payout.confirm_tax': 'Confirmo que as informações fiscais serão enviadas',
+      'payout.confirm_kyc': 'Completarei a verificação KYC se necessário',
+      'payout.agree_terms': 'Ao enviar, você concorda com os termos de pagamento.',
+      'payout.payout_provider': 'Fornecedor de pagamento',
+      'payout.account': 'Conta',
+      'payout.country_canada': 'Canadá',
+      'payout.country_us': 'Estados Unidos',
+      'payout.country_france': 'França',
+      'payout.country_germany': 'Alemanha',
+      'payout.country_uk': 'Reino Unido',
+      'payout.stripe': 'Stripe',
+      'payout.bank_transfer': 'Transferência bancária',
+      'payout.review_country': 'País',
+      'payout.review_account_type': 'Tipo de conta',
+      'payout.review_full_name': 'Nome completo',
+
+
+      // Premium Subscription
+      'premium.title': 'Premium',
+      'premium.nexum_premium': 'Nexum Premium',
+      'premium.subtitle': 'Desbloqueie ferramentas avançadas e eleve sua experiência',
+      'premium.what_you_get': 'O que você recebe',
+      'premium.choose_plan': 'Escolha seu plano',
+      'premium.monthly': 'Mensal',
+      'premium.yearly': 'Anual',
+      'premium.yearly_save': 'Economize 20%',
+      'premium.subscribe': 'Assinar',
+      'premium.manage_subscription': 'Gerenciar assinatura',
+      'premium.billing_history': 'Histórico de cobrança',
+      'premium.manage_badge': 'Gerenciar emblema do perfil',
+      'premium.cancel_subscription': 'Cancelar assinatura',
+
+
+      // Status Selection
+      'status.title': 'Status',
+      'status.question': 'Qual será seu status no Nexum',
+      'status.entrepreneur': 'Empreendedor',
+      'status.investor': 'Investidor',
+      'status.saving': 'Salvando...',
+      'status.next': 'Próximo',
+      'status.save_failed': 'Falha ao salvar status. Tente novamente.',
+      'status.default_user': 'Usuário',
+
+      // Image Swipe
+      'image.save_to_photos': 'Salvar em Fotos',
+      'image.share': 'Compartilhar',
+      'image.report': 'Denunciar',
+      'image.delete': 'Excluir',
+      'image.saved': 'Imagem salva em Fotos',
+      'image.share_functionality': 'Funcionalidade de compartilhamento',
+      'image.reported': 'Imagem denunciada',
+      'image.delete_title': 'Excluir Imagem',
+      'image.delete_confirm': 'Tem certeza de que deseja excluir esta imagem?',
+      'image.cancel': 'Cancelar',
+      'image.deleted': 'Imagem excluída',
+
+
+
+      // Profile Bio
+      'profile_bio.title': 'Bio',
+      'profile_bio.heading': 'Conte-nos sobre você',
+      'profile_bio.subtitle': 'Escreva uma breve bio que descreva quem você é e o que faz',
+      'profile_bio.hint': 'Entusiasta do bem-estar 💪 Amante de uma vida saudável, hábitos conscientes e boas vibrações ✨🌱\n\nConte sua história, compartilhe suas paixões ou descreva o que te torna único...',
+      'profile_bio.skip': 'Pular',
+      'profile_bio.next': 'Próximo',
+      'profile_bio.saving': 'Salvando...',
+
+      // Account Center
+      'account_center.title': 'Central da conta',
+      'account_center.confirm_password': 'Confirmar senha',
+      'account_center.enter_password': 'Digite sua senha atual',
+      'account_center.change_password': 'Alterar senha',
+      'account_center.change_password_subtitle': 'Atualizar sua senha',
+      'account_center.change_email': 'Alterar email',
+      'account_center.change_email_subtitle': 'Atualizar seu endereço de e-mail',
+      'account_center.verify_kyc': 'Verificar KYC',
+      'account_center.verify_kyc_subtitle': 'Verificar sua identidade',
+      'account_center.change_phone': 'Alterar número de telefone',
+      'account_center.change_phone_subtitle': 'Adicionar ou atualizar seu telefone',
+      'account_center.download_data': 'Baixar seus dados',
+      'account_center.ads_prefs': 'Preferências de anúncios',
+      'account_center.deactivate': 'Desativar conta',
+      'account_center.delete': 'Excluir conta',
+      'account_center.delete_subtitle': 'Excluir permanentemente sua conta',
+      'account_center.coming_soon': 'Em breve',
+      'account_center.delete_failed': 'Falha ao excluir conta',
+      'account_center.user': 'Usuário',
+
+      // Profile Photo
+      'profile_photo.title': 'Foto de perfil',
+      'profile_photo.take_photo': 'Tirar foto',
+      'profile_photo.choose_gallery': 'Escolher da galeria',
+      'profile_photo.permission_denied': 'Permissão negada. Por favor, permita o acesso.',
+      'profile_photo.upload_success': 'Foto enviada',
+      'profile_photo.upload_failed': 'Falha no envio',
+
+      // Profile Cover
+      'profile_cover.title': 'Foto de capa',
+      'profile_cover.take_photo': 'Tirar foto',
+      'profile_cover.choose_gallery': 'Escolher da galeria',
+      'profile_cover.permission_denied': 'Permissão negada. Por favor, permita o acesso.',
+      'profile_cover.upload_success': 'Capa enviada',
+      'profile_cover.upload_failed': 'Falha no envio',
+
+      // Conversation Search
+      'conversation_search.title': 'Pesquisar conversas',
+      'conversation_search.hint': 'Pesquisar...',
+      'conversation_search.no_results': 'Nenhuma conversa encontrada',
+
+      // Profile Flow Start
+      'profile_flow.title': 'Configuração do perfil',
+      'profile_flow.heading': 'Complete seu perfil',
+      'profile_flow.subtitle': 'Ajude outros a se conectar com você completando seu perfil em algumas etapas.',
+      'profile_flow.step1_title': 'Informações pessoais',
+      'profile_flow.step1_desc': 'Adicione seu nome e nome de usuário',
+      'profile_flow.step2_title': 'Aniversário',
+      'profile_flow.step2_desc': 'Diga-nos quando você nasceu',
+      'profile_flow.step3_title': 'Gênero',
+      'profile_flow.step3_desc': 'Selecione sua identidade de gênero',
+      'profile_flow.step4_title': 'Localização',
+      'profile_flow.step4_desc': 'Compartilhe seus detalhes de endereço',
+      'profile_flow.step5_title': 'Foto de perfil',
+      'profile_flow.step5_desc': 'Adicione uma foto de perfil (opcional)',
+      'profile_flow.step6_title': 'Foto de capa',
+      'profile_flow.step6_desc': 'Adicione uma imagem de capa (opcional)',
+      'profile_flow.estimated_time': 'Tempo estimado',
+      'profile_flow.time_to_complete': '3-5 minutos para completar',
+      'profile_flow.start_button': 'Iniciar configuração',
+
+      // Interest Selection
+      'interests.title': 'Selecione seus interesses',
+      'interests.subtitle': 'Escolha tópicos de seu interesse para personalizar seu feed',
+      'interests.search': 'Pesquisar interesses...',
+      'interests.selected': 'selecionados',
+      'interests.continue': 'Continuar',
+      'interests.skip': 'Pular por enquanto',
+
+      // Profile Experience
+      'experience.title': 'Experiência profissional',
+      'experience.subtitle': 'Liste suas experiências de trabalho, cargos ou funções',
+      'experience.add': 'Adicionar experiência',
+      'experience.company': 'Empresa',
+      'experience.position': 'Cargo',
+      'experience.start_date': 'Data de início',
+      'experience.end_date': 'Data de término',
+      'experience.current': 'Atualmente trabalho aqui',
+      'experience.description': 'Descrição',
+      'experience.save': 'Salvar experiência',
+      'experience.cancel': 'Cancelar',
+      'experience.delete': 'Excluir experiência',
+      'experience.job_title_label': 'Título do cargo/Posição',
+      'experience.company_label': 'Empresa/Organização (Opcional)',
+
+      // Monetization Analytics
+      'monetization.title': 'Monetização e análises',
+      'monetization.earnings': 'Ganhos totais',
+      'monetization.views': 'Visualizações totais',
+      'monetization.engagement': 'Taxa de engajamento',
+      'monetization.coming_soon': 'Em breve',
     },
     'es': {
       'app.title': 'Nexum',
@@ -188,6 +2186,34 @@ class Translations {
       'errors.unexpected_response': 'Respuesta inesperada: falta el token',
       'errors.sign_up_failed': 'Registro fallido',
       'errors.sign_up_failed_try': 'El registro falló. Inténtalo de nuevo.',
+      'post.bookmark_failed': 'Error al guardar',
+      'post.shared_stories': 'Compartido en Stories',
+      'post.shared_telegram': 'Compartido en Telegram',
+      'post.shared_facebook': 'Compartido en Facebook',
+      'post.reply_posted': '¡Respuesta publicada!',
+      'post.comment_posted': '¡Comentario publicado!',
+      'post.comment_failed': 'Error al publicar comentario',
+      'post.comments': 'Comentarios',
+      'common.link_copied': 'Enlace copiado al portapapeles',
+      'common.yesterday': 'Ayer',
+      'common.today': 'Hoy',
+      'common.options': 'Opciones',
+      'common.settings': 'Configuración',
+      'common.camera': 'Cámara',
+      'common.gallery': 'Galería',
+      'common.video': 'Video',
+      'common.file': 'Archivo',
+      'common.new_chat': 'Nuevo chat',
+      'common.write_comment': 'Escribir un comentario...',
+      'common.search_accounts': 'Buscar cuentas',
+      'common.show_password': 'Mostrar contraseña',
+      'common.hide_password': 'Ocultar contraseña',
+      'common.personal_information': 'Información personal',
+      'common.birthday': 'Cumpleaños',
+      'common.gender': 'Género',
+      'common.location': 'Ubicación',
+      'common.profile_photo': 'Foto de perfil',
+      'profile.cover_photo': 'Foto de portada',
 
       'settings.title': 'Configuración',
       'settings.section.personalization': 'Personalización y preferencias',
@@ -207,10 +2233,546 @@ class Translations {
 
       'settings.language_region.title': 'Idioma y región',
       'settings.display_language': 'Idioma de visualización',
+      'settings.language_applying': 'Aplicando idioma...',
+      'settings.language_refresh': 'Por favor espera mientras actualizamos la aplicación',
 
       'common.cancel': 'Cancelar',
       'common.logout': 'Cerrar sesión',
       'common.back': 'Atrás',
+
+      // Navigation
+      'nav.home': 'Inicio',
+      'nav.connections': 'Conexiones',
+      'nav.conversations': 'Conversaciones',
+      'nav.profile': 'Perfil',
+
+      // Common
+      'common.save': 'Guardar',
+      'common.confirm': 'Confirmar',
+
+      'common.retry': 'Reintentar',
+      'common.permission_denied': 'Permiso denegado',
+      'common.permission_denied_settings': 'Acceso permanentemente denegado. Habilite en la configuración.',
+      'common.unexpected_error': 'Error inesperado.',
+      'common.upload_photo_failed': 'Error al subir foto. Inténtelo más tarde.',
+      'common.upload_cover_failed': 'Error al subir portada. Inténtelo más tarde.',
+
+      // Home Feed
+      'home.for_you': 'Para ti',
+      'home.following': 'Siguiendo',
+
+      // Dialogs
+      'dialogs.repost.title': '¿Republicar esto?',
+      'dialogs.repost.message': '¿Estás seguro de republicar?',
+      'dialogs.unrepost.title': '¿Quitar republicación?',
+      'dialogs.unrepost.message': '¿Estás seguro de quitar?',
+
+      // Messages
+      'messages.repost_success': 'Republicado exitosamente',
+      'messages.unrepost_success': 'Republicación eliminada',
+      'messages.bookmark_failed': 'Error al guardar',
+      'messages.like_failed': 'Error al dar me gusta',
+      'messages.unlike_failed': 'Error al quitar',
+      'messages.shared_stories': 'Compartido en Stories',
+      'messages.link_copied': 'Enlace copiado',
+      'messages.shared_telegram': 'Compartido en Telegram',
+      'messages.shared_facebook': 'Compartido en Facebook',
+      'messages.comment_posted': '¡Comentario publicado!',
+      'messages.reply_posted': '¡Respuesta publicada!',
+      'messages.repost_failed': 'Error al republicar',
+      'messages.remove_repost_failed': 'Error al eliminar',
+      'messages.more_share': 'Más opciones para compartir',
+
+      // Bookmarks
+      'bookmarks.title': 'Marcadores',
+      'bookmarks.posts': 'Publicaciones',
+      'bookmarks.no_posts': 'Sin publicaciones guardadas',
+
+      // Drafts
+      'drafts.title': 'Borradores',
+
+      // Notifications
+      'notifications.title': 'Notificaciones',
+      'notifications.no_notifications': 'Sin notificaciones',
+      'notifications.retry': 'Reintentar',
+
+      // Activity
+      'activity.title': 'Actividad',
+      'activity.likes': 'Me gusta',
+      'activity.comments': 'Comentarios',
+
+      // Conversations
+      'chat.type_message': 'Escribe un mensaje...',
+      'conversations.title': 'Conversaciones',
+      'conversations.chats': 'Chats',
+      'conversations.communities': 'Comunidades',
+      'conversations.no_chats': 'Sin conversaciones',
+      'conversations.select_chat': 'Seleccionar chat o comunidad',
+      'conversations.mark_read': 'Marcar como leído',
+      'conversations.delete': 'Eliminar',
+      'conversations.action_failed': 'Acción fallida',
+      'conversations.mark_read_failed': 'Error al marcar como leído',
+      'conversations.delete_failed': 'Error al eliminar',
+      'conversations.mute': 'Silenciar',
+      'conversations.unmute': 'Activar sonido',
+
+      // Connections
+      'connections.select_user': 'Seleccionar un usuario',
+      'connections.see_more': 'Ver más',
+
+      // My Connections
+      'my_connections.tab_connected_to_me': 'Conectados a mí',
+      'my_connections.tab_i_connect': 'Yo conecto',
+
+      // Invitations
+      'invitations.tab_invitations': 'Invitaciones',
+      'invitations.tab_sent': 'Invitaciones enviadas',
+
+      // Create Post
+      'create_post.community': 'Comunidad',
+      'create_post.save_as_draft': 'Guardar como borrador',
+      'create_post.create_post': 'Crear publicación',
+
+      // Búsqueda
+      'search.hint': 'Buscar...',
+      'search.no_results': 'Sin resultados',
+
+      // Profile
+      'profile.menu.drafts': 'Borradores',
+      'profile.menu.bookmarks': 'Marcadores',
+      'profile.menu.settings': 'Configuración',
+      'profile.menu.help_center': 'Centro de ayuda',
+      'profile.menu.support': 'Soporte',
+      'profile.menu.terms': 'Términos y condiciones',
+      'profile.tabs.activity': 'Actividad',
+      'profile.tabs.posts': 'Publicaciones',
+      'profile.tabs.podcasts': 'Podcasts',
+      'profile.tabs.media': 'Medios',
+      'profile.no_activity': 'Sin actividad reciente.',
+      'profile.no_posts': 'Sin publicaciones.',
+      'profile.no_podcasts': 'Sin podcasts.',
+      'profile.no_experiences': 'Sin experiencias añadidas.',
+      'profile.no_trainings': 'Sin entrenamientos añadidos.',
+      'profile.no_interests': 'Sin intereses seleccionados.',
+      'profile.add_cover_image': 'Agregar imagen de portada',
+      'profile.edit_profile': 'Editar Perfil',
+      'profile.my_connections': 'Mis Conexiones',
+      'profile.professional_experiences': 'Experiencias Profesionales',
+      'profile.trainings': 'Entrenamientos',
+      'profile.interest': 'Interés',
+      'profile.activite': 'Actividad',
+      'profile.publications': 'Publicaciones',
+      'profile.medias': 'Medios',
+
+      // Feed Preferences
+      'feed_prefs.title': 'Preferencias del feed',
+      'feed_prefs.preferences_saved': 'Preferencias guardadas',
+      'feed_prefs.save_failed': 'Error al guardar',
+      'feed_prefs.show_reposts': 'Mostrar republicaciones',
+      'feed_prefs.show_reposts_subtitle': 'Incluir publicaciones republicadas por otros',
+      'feed_prefs.show_suggested': 'Mostrar publicaciones sugeridas',
+      'feed_prefs.show_suggested_subtitle': 'Publicaciones con cualquier #hashtag de tus intereses',
+      'feed_prefs.prioritize_interests': 'Priorizar tus intereses',
+      'feed_prefs.prioritize_interests_subtitle': 'Mostrar solo # que coincidan con tus intereses',
+      'feed_prefs.coming_soon': 'Próximamente...',
+      'feed_prefs.reset': 'Restablecer valores predeterminados',
+
+      // Content Controls
+      'content_controls.title': 'Controles de contenido',
+      'content_controls.safe_mode': 'Modo seguro',
+      'content_controls.hide_sensitive': 'Ocultar contenido sensible',
+      'content_controls.blur_media': 'Desenfocar miniaturas sensibles',
+      'content_controls.filter_profanity': 'Filtrar groserías',
+      'content_controls.filter_profanity_subtitle': 'Filtrar automáticamente palabras vulgares',
+      'content_controls.hide_spoilers': 'Ocultar spoilers',
+      'content_controls.hide_spoilers_subtitle': 'El contenido con spoiler estará oculto',
+
+      // Privacy & Visibility
+      'privacy.title': 'Privacidad y visibilidad',
+      'privacy.private_profile': 'Perfil privado',
+      'privacy.show_activity': 'Mostrar estado de actividad',
+      'privacy.show_activity_subtitle': 'Permitir que otros vean cuándo estás activo',
+      'privacy.approve_connections': 'Aprobar nuevas solicitudes',
+      'privacy.allow_mentions': 'Permitir menciones',
+      'privacy.allow_mentions_subtitle': 'Otros pueden mencionar tu nombre',
+      'privacy.allow_tags': 'Permitir etiquetas',
+      'privacy.allow_tags_subtitle': 'Otros pueden etiquetarte',
+      'privacy.show_online': 'Mostrar estado en línea',
+      'privacy.show_online_subtitle': 'Mostrar cuándo estás en línea',
+      'privacy.show_last_seen': 'Mostrar última vez visto',
+      'privacy.show_last_seen_subtitle': 'Mostrar tu última hora de actividad',
+
+      // Notification Preferences
+      'notif_prefs.title': 'Preferencias de notificación',
+      'notif_prefs.push': 'Notificaciones push',
+      'notif_prefs.likes': 'Me gusta',
+      'notif_prefs.comments': 'Comentarios',
+      'notif_prefs.reposts': 'Republicaciones',
+      'notif_prefs.new_connections': 'Nuevas conexiones',
+      'notif_prefs.mentions': 'Menciones',
+      'notif_prefs.messages': 'Mensajes',
+
+      // Security & Login
+      'security.title': 'Seguridad e inicio de sesión',
+      'security.change_password': 'Cambiar contraseña',
+      'security.two_factor': 'Autenticación de dos factores',
+      'security.active_sessions': 'Sesiones activas',
+      'security.login_alerts': 'Alertas de inicio de sesión',
+
+      // Change Password
+      'change_password.title': 'Cambiar contraseña',
+      'change_password.subtitle': 'Ingresa tu contraseña actual y tu nueva contraseña',
+      'change_password.current': 'Contraseña actual',
+      'change_password.new': 'Nueva contraseña',
+      'change_password.confirm': 'Confirmar nueva contraseña',
+      'change_password.submit': 'Solicitar cambio',
+      'change_password.back': 'Volver al centro de cuentas',
+      'change_password.success': 'Contraseña cambiada exitosamente',
+      'change_password.failed': 'Error al cambiar contraseña',
+
+      // Change Email
+      'change_email.title': 'Cambiar correo',
+      'change_email.subtitle': 'Ingresa tu nueva dirección de correo',
+      'change_email.current': 'Correo actual',
+      'change_email.new': 'Nuevo correo',
+      'change_email.password': 'Confirmar contraseña',
+      'change_email.submit': 'Solicitar cambio',
+      'change_email.back': 'Volver al centro de cuentas',
+      'change_email.success': 'Correo cambiado exitosamente',
+      'change_email.failed': 'Error al cambiar correo',
+
+      // My Connections
+      'my_connections.title': 'Mis conexiones',
+      'my_connections.search': 'Buscar conexiones...',
+      'my_connections.no_connections': 'Sin conexiones',
+      'my_connections.load_failed': 'Error al cargar',
+      'my_connections.action_failed': 'Error en la acción',
+
+      // Invitations
+      'invitations.title': 'Invitaciones',
+      'invitations.sent': 'Enviadas',
+      'invitations.received': 'Recibidas',
+      'invitations.no_sent': 'Sin invitaciones enviadas',
+      'invitations.no_received': 'Sin invitaciones recibidas',
+      'invitations.accept': 'Aceptar',
+      'invitations.reject': 'Rechazar',
+      'invitations.delete': 'Eliminar',
+      'invitations.close': 'Cerrar',
+
+      // Connect Friends
+      'connect_friends.title': 'Conectar con amigos',
+      'connect_friends.search': 'Buscar amigos...',
+      'connect_friends.no_friends': 'No se encontraron amigos',
+      'connect_friends.load_failed': 'Error al cargar',
+      'connect_friends.action_failed': 'Error en la acción',
+      // Security Login
+      'security.subtitle': 'Usa una aplicación de autenticación para proteger tus inicios de sesión',
+      'security.notification_subtitle': 'Recibe notificaciones cuando un nuevo dispositivo inicie sesión en tu cuenta',
+      'security.setup_authenticator': 'Configurar aplicación de autenticación',
+      'security.scan_qr': 'Escanea un código QR en tu aplicación OTP',
+      'security.remove': 'Eliminar',
+      'security.no_devices': 'Sin dispositivos recordados',
+      'security.sign_out': 'Cerrar sesión',
+      'security.sign_out_all': 'Cerrar todas las sesiones',
+      'security.authenticator_placeholder': 'Configuración del autenticador (placeholder)',
+
+      // Sign In
+      'signin.nexum': 'NEXUM',
+      'signin.welcome_back': 'Bienvenido de nuevo',
+      'signin.subtitle': 'Completa la información para acceder a tu cuenta',
+      'signin.email_hint': 'Email',
+      'signin.password_hint': 'Contraseña',
+      'signin.forgot_password': '¿Olvidaste tu contraseña?',
+      'signin.sign_in': 'Iniciar sesión',
+      'signin.sign_up': 'Registrarse',
+      'signin.error_empty': 'Por favor ingresa email y contraseña',
+      'signin.error_invalid': 'Email o contraseña inválidos',
+      'signin.error_validation': 'Por favor ingresa un email y contraseña válidos',
+      'signin.error_too_many': 'Demasiados intentos. Inténtalo más tarde.',
+      'signin.error_failed': 'Error al iniciar sesión',
+      'signin.error_generic': 'Error al iniciar sesión. Por favor inténtalo de nuevo.',
+
+      // Forgot Password
+      'forgot.title': '¿Olvidaste tu contraseña?',
+      'forgot.subtitle': 'Ingresa tu dirección de email y te enviaremos un enlace para restablecer tu contraseña',
+      'forgot.email_hint': 'Email',
+      'forgot.enter_email': 'Ingresa tu email',
+
+      // Password Reset Sent
+      'reset.title': 'Revisa tu email',
+      'reset.sent_to': 'Hemos enviado un enlace de restablecimiento de contraseña a',
+      'reset.whats_next': '¿Qué sigue?',
+      'reset.back_signin': 'Volver al inicio de sesión',
+
+      // Language Region
+      'region.title': 'Idioma y región',
+      'region.settings': 'Configuración regional',
+      'region.24hour': 'Usar formato de 24 horas',
+      'region.24hour_subtitle': 'Cambiar entre formato de 24 y 12 horas',
+      'region.translation': 'Traducción',
+      'region.enable_translation': 'Activar traducción de publicaciones',
+      'region.enable_translation_subtitle': 'Mostrar botón de traducción en publicaciones y comentarios',
+      'region.auto_translate': 'Traducir automáticamente publicaciones y comentarios',
+      'region.auto_translate_subtitle': 'Traducir automáticamente el contenido a tu idioma',
+      'region.translate_to': 'Traducir publicaciones a',
+      'region.reset_defaults': 'Restaurar valores predeterminados',
+      'region.coming_soon': 'PRÓXIMAMENTE',
+
+      // Feed Preferences
+      'feed.media_section': 'Medios',
+
+      // Content Controls
+      'content.add_keyword': 'Agregar palabra clave para silenciar',
+      'content.add': 'Agregar',
+      'content.clear_reset': 'Borrar todo y restablecer',
+
+      // Notification Preferences
+      'notif_prefs.quiet_hours': 'Horas silenciosas',
+      'notif_prefs.start': 'Inicio',
+      'notif_prefs.end': 'Fin',
+      'notif_prefs.quiet_description': 'Sin notificaciones push durante las horas silenciosas.',
+      'notif_prefs.test_sent': 'Notificación de prueba enviada',
+
+      // Community
+      'community.load_failed': 'Error al cargar detalles de la comunidad',
+      'community.posts_failed': 'Error al cargar publicaciones de la comunidad',
+      'community.user': 'Usuario',
+
+      // Conversation Search
+      'convsearch.search_chats': 'Buscar chats...',
+      'convsearch.search_communities': 'Buscar comunidades...',
+      'convsearch.tabs_chats': 'Chats',
+      'convsearch.tabs_communities': 'Comunidades',
+      'convsearch.start_typing': 'Comienza a escribir para buscar tus chats',
+      'convsearch.no_match': 'Ningún chat coincide con tu búsqueda',
+
+      // Insights
+      'insights.title': 'Estadísticas',
+      'insights.last_7_days': 'Últimos 7 días',
+      'insights.top_location': 'Mejor ubicación',
+      'insights.by_views': 'Por vistas',
+      'insights.weekly': 'Semanal',
+
+      // Monetization Page
+      'monetization.eligible': 'Eres elegible',
+      'monetization.review': 'Elegibilidad en revisión',
+      'monetization.eligible_desc': '¡Excelente! Cumples con los requisitos actuales para monetizar tu contenido.',
+      'monetization.review_desc': 'Estamos revisando tu cuenta. Serás notificado cuando seas elegible.',
+      'monetization.earnings_summary': 'Resumen de ganancias',
+
+      // Video Scroll
+      'video.like_failed': 'Error al dar me gusta',
+      'video.unlike_failed': 'Error al quitar me gusta',
+
+      // Other User Profile
+      'other.posts_failed': 'Error al cargar publicaciones',
+      'other.user': 'Usuario',
+
+      // Story Viewer
+      'story.no_stories': 'No hay historias para mostrar',
+      'story.connect': 'Conectar',
+      'story.music': 'Música',
+      'story.comment_hint': 'Escribe tu comentario...',
+
+
+      // App Branding
+      'app.name': 'NEXUM',
+
+
+      // Activity Page
+      'activity.interactions': 'Interacciones',
+      'activity.removed_archived': 'Contenido eliminado y archivado',
+      'activity.how_you_use': 'Cómo usas Communi',
+      'activity.info_shared': 'Información que compartiste',
+
+
+      // Drafts Page
+      'drafts.no_posts': 'Aún no hay borradores de publicación',
+      'drafts.no_podcasts': 'Aún no hay borradores de podcast',
+      'drafts.untitled': 'Sin título',
+      'drafts.delete_confirm': 'Esta acción no se puede deshacer.',
+      'drafts.delete_button': 'Eliminar',
+
+
+      // Payout Setup Success
+      'payout_success.title': 'Configuración de pago completa',
+      'payout_success.subtitle': 'Ahora puedes recibir pagos en tu cuenta conectada.',
+      'payout_success.back': 'Volver a Monetización',
+
+
+      // Payout Setup
+      'payout.title': 'Configurar pago',
+      'payout.step_country': 'País',
+      'payout.step_account_type': 'Tipo de cuenta',
+      'payout.step_personal': 'Detalles personales',
+      'payout.step_method': 'Método de pago',
+      'payout.step_tax': 'Impuestos y verificación',
+      'payout.step_review': 'Revisar y enviar',
+      'payout.individual': 'Individual',
+      'payout.business': 'Empresa',
+      'payout.full_name': 'Nombre completo',
+      'payout.date_birth': 'Fecha de nacimiento (AAAA-MM-DD)',
+      'payout.address': 'Dirección',
+      'payout.iban': 'IBAN / Número de cuenta',
+      'payout.confirm_tax': 'Confirmo que se enviará información fiscal',
+      'payout.confirm_kyc': 'Completaré la verificación KYC si es necesario',
+      'payout.agree_terms': 'Al enviar, acepta los términos de pago.',
+      'payout.payout_provider': 'Proveedor de pago',
+      'payout.account': 'Cuenta',
+      'payout.country_canada': 'Canadá',
+      'payout.country_us': 'Estados Unidos',
+      'payout.country_france': 'Francia',
+      'payout.country_germany': 'Alemania',
+      'payout.country_uk': 'Reino Unido',
+      'payout.stripe': 'Stripe',
+      'payout.bank_transfer': 'Transferencia bancaria',
+      'payout.review_country': 'País',
+      'payout.review_account_type': 'Tipo de cuenta',
+      'payout.review_full_name': 'Nombre completo',
+
+
+      // Premium Subscription
+      'premium.title': 'Premium',
+      'premium.nexum_premium': 'Nexum Premium',
+      'premium.subtitle': 'Desbloquea herramientas avanzadas y mejora tu experiencia',
+      'premium.what_you_get': 'Lo que obtienes',
+      'premium.choose_plan': 'Elige tu plan',
+      'premium.monthly': 'Mensual',
+      'premium.yearly': 'Anual',
+      'premium.yearly_save': 'Ahorra 20%',
+      'premium.subscribe': 'Suscribirse',
+      'premium.manage_subscription': 'Gestionar suscripción',
+      'premium.billing_history': 'Historial de facturación',
+      'premium.manage_badge': 'Gestionar insignia del perfil',
+      'premium.cancel_subscription': 'Cancelar suscripción',
+
+
+      // Status Selection
+      'status.title': 'Estado',
+      'status.question': 'Cuál será tu estado en Nexum',
+      'status.entrepreneur': 'Emprendedor',
+      'status.investor': 'Inversor',
+      'status.saving': 'Guardando...',
+      'status.next': 'Siguiente',
+      'status.save_failed': 'Error al guardar el estado. Inténtalo de nuevo.',
+      'status.default_user': 'Usuario',
+
+      // Image Swipe
+      'image.save_to_photos': 'Guardar en Fotos',
+      'image.share': 'Compartir',
+      'image.report': 'Reportar',
+      'image.delete': 'Eliminar',
+      'image.saved': 'Imagen guardada en Fotos',
+      'image.share_functionality': 'Funcionalidad de compartir',
+      'image.reported': 'Imagen reportada',
+      'image.delete_title': 'Eliminar Imagen',
+      'image.delete_confirm': '¿Estás seguro de que quieres eliminar esta imagen?',
+      'image.cancel': 'Cancelar',
+      'image.deleted': 'Imagen eliminada',
+
+
+
+      // Profile Bio
+      'profile_bio.title': 'Bio',
+      'profile_bio.heading': 'Cuéntanos sobre ti',
+      'profile_bio.subtitle': 'Escribe una breve bio que describa quién eres y qué haces',
+      'profile_bio.hint': 'Entusiasta del bienestar 💪 Amante de la vida sana, hábitos conscientes y buenas vibras ✨🌱\n\nCuenta tu historia, comparte tus pasiones o describe lo que te hace único...',
+      'profile_bio.skip': 'Omitir',
+      'profile_bio.next': 'Siguiente',
+      'profile_bio.saving': 'Guardando...',
+
+      // Account Center
+      'account_center.title': 'Centro de cuentas',
+      'account_center.confirm_password': 'Confirmar contraseña',
+      'account_center.enter_password': 'Ingresa tu contraseña actual',
+      'account_center.change_password': 'Cambiar contraseña',
+      'account_center.change_password_subtitle': 'Actualizar tu contraseña',
+      'account_center.change_email': 'Cambiar correo',
+      'account_center.change_email_subtitle': 'Actualizar tu dirección de correo',
+      'account_center.verify_kyc': 'Verificar KYC',
+      'account_center.verify_kyc_subtitle': 'Verificar tu identidad',
+      'account_center.change_phone': 'Cambiar número de teléfono',
+      'account_center.change_phone_subtitle': 'Agregar o actualizar tu teléfono',
+      'account_center.download_data': 'Descargar tus datos',
+      'account_center.ads_prefs': 'Preferencias de anuncios',
+      'account_center.deactivate': 'Desactivar cuenta',
+      'account_center.delete': 'Eliminar cuenta',
+      'account_center.delete_subtitle': 'Eliminar permanentemente tu cuenta',
+      'account_center.coming_soon': 'Próximamente',
+      'account_center.delete_failed': 'Error al eliminar cuenta',
+      'account_center.user': 'Usuario',
+
+      // Profile Photo
+      'profile_photo.title': 'Foto de perfil',
+      'profile_photo.take_photo': 'Tomar foto',
+      'profile_photo.choose_gallery': 'Elegir de la galería',
+      'profile_photo.permission_denied': 'Permiso denegado. Por favor permite el acceso.',
+      'profile_photo.upload_success': 'Foto subida',
+      'profile_photo.upload_failed': 'Error al subir',
+
+      // Profile Cover
+      'profile_cover.title': 'Foto de portada',
+      'profile_cover.take_photo': 'Tomar foto',
+      'profile_cover.choose_gallery': 'Elegir de la galería',
+      'profile_cover.permission_denied': 'Permiso denegado. Por favor permite el acceso.',
+      'profile_cover.upload_success': 'Portada subida',
+      'profile_cover.upload_failed': 'Error al subir',
+
+      // Conversation Search
+      'conversation_search.title': 'Buscar conversaciones',
+      'conversation_search.hint': 'Buscar...',
+      'conversation_search.no_results': 'No se encontraron conversaciones',
+
+      // Profile Flow Start
+      'profile_flow.title': 'Configuración de perfil',
+      'profile_flow.heading': 'Completa tu perfil',
+      'profile_flow.subtitle': 'Ayuda a otros a conectarse contigo completando tu perfil en solo unos pasos.',
+      'profile_flow.step1_title': 'Información personal',
+      'profile_flow.step1_desc': 'Agrega tu nombre y nombre de usuario',
+      'profile_flow.step2_title': 'Cumpleaños',
+      'profile_flow.step2_desc': 'Dinos cuándo naciste',
+      'profile_flow.step3_title': 'Género',
+      'profile_flow.step3_desc': 'Selecciona tu identidad de género',
+      'profile_flow.step4_title': 'Ubicación',
+      'profile_flow.step4_desc': 'Comparte los detalles de tu dirección',
+      'profile_flow.step5_title': 'Foto de perfil',
+      'profile_flow.step5_desc': 'Agrega una foto de perfil (opcional)',
+      'profile_flow.step6_title': 'Foto de portada',
+      'profile_flow.step6_desc': 'Agrega una imagen de portada (opcional)',
+      'profile_flow.estimated_time': 'Tiempo estimado',
+      'profile_flow.time_to_complete': '3-5 minutos para completar',
+      'profile_flow.start_button': 'Iniciar configuración',
+
+      // Interest Selection
+      'interests.title': 'Selecciona tus intereses',
+      'interests.subtitle': 'Elige temas de tu interés para personalizar tu feed',
+      'interests.search': 'Buscar intereses...',
+      'interests.selected': 'seleccionados',
+      'interests.continue': 'Continuar',
+      'interests.skip': 'Omitir por ahora',
+
+      // Profile Experience
+      'experience.title': 'Experiencia laboral',
+      'experience.subtitle': 'Lista tus experiencias laborales, puestos o roles',
+      'experience.add': 'Agregar experiencia',
+      'experience.company': 'Empresa',
+      'experience.position': 'Puesto',
+      'experience.start_date': 'Fecha de inicio',
+      'experience.end_date': 'Fecha de finalización',
+      'experience.current': 'Actualmente trabajo aquí',
+      'experience.description': 'Descripción',
+      'experience.save': 'Guardar experiencia',
+      'experience.cancel': 'Cancelar',
+      'experience.delete': 'Eliminar experiencia',
+      'experience.job_title_label': 'Título del puesto/Posición',
+      'experience.company_label': 'Empresa/Organización (Opcional)',
+
+      // Monetization Analytics
+      'monetization.title': 'Monetización y análisis',
+      'monetization.earnings': 'Ganancias totales',
+      'monetization.views': 'Vistas totales',
+      'monetization.engagement': 'Tasa de participación',
+      'monetization.coming_soon': 'Próximamente',
     },
     'de': {
       'app.title': 'Nexum',
@@ -234,6 +2796,34 @@ class Translations {
       'errors.unexpected_response': 'Unerwartete Antwort: Token fehlt',
       'errors.sign_up_failed': 'Registrierung fehlgeschlagen',
       'errors.sign_up_failed_try': 'Registrierung fehlgeschlagen. Bitte versuche es erneut.',
+      'post.bookmark_failed': 'Fehler beim Speichern',
+      'post.shared_stories': 'In Stories geteilt',
+      'post.shared_telegram': 'Auf Telegram geteilt',
+      'post.shared_facebook': 'Auf Facebook geteilt',
+      'post.reply_posted': 'Antwort gepostet!',
+      'post.comment_posted': 'Kommentar gepostet!',
+      'post.comment_failed': 'Fehler beim Posten des Kommentars',
+      'post.comments': 'Kommentare',
+      'common.link_copied': 'Link in Zwischenablage kopiert',
+      'common.yesterday': 'Gestern',
+      'common.today': 'Heute',
+      'common.options': 'Optionen',
+      'common.settings': 'Einstellungen',
+      'common.camera': 'Kamera',
+      'common.gallery': 'Galerie',
+      'common.video': 'Video',
+      'common.file': 'Datei',
+      'common.new_chat': 'Neuer Chat',
+      'common.write_comment': 'Kommentar schreiben...',
+      'common.search_accounts': 'Konten suchen',
+      'common.show_password': 'Passwort anzeigen',
+      'common.hide_password': 'Passwort verbergen',
+      'common.personal_information': 'Persönliche Informationen',
+      'common.birthday': 'Geburtstag',
+      'common.gender': 'Geschlecht',
+      'common.location': 'Standort',
+      'common.profile_photo': 'Profilfoto',
+      'profile.cover_photo': 'Titelbild',
 
       'settings.title': 'Einstellungen',
       'settings.section.personalization': 'Personalisierung und Präferenzen',
@@ -253,10 +2843,546 @@ class Translations {
 
       'settings.language_region.title': 'Sprache und Region',
       'settings.display_language': 'Anzeigesprache',
+      'settings.language_applying': 'Sprache wird angewendet...',
+      'settings.language_refresh': 'Bitte warten Sie, während wir die App aktualisieren',
 
       'common.cancel': 'Abbrechen',
       'common.logout': 'Abmelden',
       'common.back': 'Zurück',
+
+      // Navigation
+      'nav.home': 'Startseite',
+      'nav.connections': 'Verbindungen',
+      'nav.conversations': 'Gespräche',
+      'nav.profile': 'Profil',
+
+      // Common
+      'common.save': 'Speichern',
+      'common.confirm': 'Bestätigen',
+
+      'common.retry': 'Wiederholen',
+      'common.permission_denied': 'Berechtigung verweigert',
+      'common.permission_denied_settings': 'Zugriff dauerhaft verweigert. In den Einstellungen aktivieren.',
+      'common.unexpected_error': 'Unerwarteter Fehler.',
+      'common.upload_photo_failed': 'Fehler beim Hochladen des Fotos. Später erneut versuchen.',
+      'common.upload_cover_failed': 'Fehler beim Hochladen des Titelbilds. Später erneut versuchen.',
+
+      // Home Feed
+      'home.for_you': 'Für dich',
+      'home.following': 'Folge ich',
+
+      // Dialogs
+      'dialogs.repost.title': 'Erneut posten?',
+      'dialogs.repost.message': 'Möchtest du wirklich erneut posten?',
+      'dialogs.unrepost.title': 'Repost entfernen?',
+      'dialogs.unrepost.message': 'Möchtest du wirklich entfernen?',
+
+      // Messages
+      'messages.repost_success': 'Erfolgreich gepostet',
+      'messages.unrepost_success': 'Repost entfernt',
+      'messages.bookmark_failed': 'Speichern fehlgeschlagen',
+      'messages.like_failed': 'Like fehlgeschlagen',
+      'messages.unlike_failed': 'Unlike fehlgeschlagen',
+      'messages.shared_stories': 'In Stories geteilt',
+      'messages.link_copied': 'Link kopiert',
+      'messages.shared_telegram': 'Auf Telegram geteilt',
+      'messages.shared_facebook': 'Auf Facebook geteilt',
+      'messages.comment_posted': 'Kommentar veröffentlicht!',
+      'messages.reply_posted': 'Antwort veröffentlicht!',
+      'messages.repost_failed': 'Repost fehlgeschlagen',
+      'messages.remove_repost_failed': 'Entfernen fehlgeschlagen',
+      'messages.more_share': 'Weitere Optionen zum Teilen',
+
+      // Bookmarks
+      'bookmarks.title': 'Lesezeichen',
+      'bookmarks.posts': 'Beiträge',
+      'bookmarks.no_posts': 'Keine gespeicherten Beiträge',
+
+      // Drafts
+      'drafts.title': 'Entwürfe',
+
+      // Notifications
+      'notifications.title': 'Benachrichtigungen',
+      'notifications.no_notifications': 'Keine Benachrichtigungen',
+      'notifications.retry': 'Wiederholen',
+
+      // Activity
+      'activity.title': 'Aktivität',
+      'activity.likes': 'Gefällt mir',
+      'activity.comments': 'Kommentare',
+
+      // Conversations
+      'chat.type_message': 'Nachricht eingeben...',
+      'conversations.title': 'Gespräche',
+      'conversations.chats': 'Chats',
+      'conversations.communities': 'Communities',
+      'conversations.no_chats': 'Keine Gespräche',
+      'conversations.select_chat': 'Chat oder Community auswählen',
+      'conversations.mark_read': 'Als gelesen markieren',
+      'conversations.delete': 'Löschen',
+      'conversations.action_failed': 'Aktion fehlgeschlagen',
+      'conversations.mark_read_failed': 'Fehler beim Markieren als gelesen',
+      'conversations.delete_failed': 'Löschen fehlgeschlagen',
+      'conversations.mute': 'Stummschalten',
+      'conversations.unmute': 'Stummschaltung aufheben',
+
+      // Connections
+      'connections.select_user': 'Benutzer auswählen',
+      'connections.see_more': 'Mehr anzeigen',
+
+      // My Connections
+      'my_connections.tab_connected_to_me': 'Mit mir verbunden',
+      'my_connections.tab_i_connect': 'Ich verbinde',
+
+      // Invitations
+      'invitations.tab_invitations': 'Einladungen',
+      'invitations.tab_sent': 'Gesendete Einladungen',
+
+      // Create Post
+      'create_post.community': 'Community',
+      'create_post.save_as_draft': 'Als Entwurf speichern',
+      'create_post.create_post': 'Beitrag erstellen',
+
+      // Suchearch
+      'search.hint': 'Suchen...',
+      'search.no_results': 'Keine Ergebnisse',
+
+      // Profile
+      'profile.menu.drafts': 'Entwürfe',
+      'profile.menu.bookmarks': 'Lesezeichen',
+      'profile.menu.settings': 'Einstellungen',
+      'profile.menu.help_center': 'Hilfecenter',
+      'profile.menu.support': 'Support',
+      'profile.menu.terms': 'Geschäftsbedingungen',
+      'profile.tabs.activity': 'Aktivität',
+      'profile.tabs.posts': 'Beiträge',
+      'profile.tabs.podcasts': 'Podcasts',
+      'profile.tabs.media': 'Medien',
+      'profile.no_activity': 'Noch keine Aktivität.',
+      'profile.no_posts': 'Noch keine Beiträge.',
+      'profile.no_podcasts': 'Noch keine Podcasts.',
+      'profile.no_experiences': 'Noch keine Erfahrungen hinzugefügt.',
+      'profile.no_trainings': 'Noch keine Schulungen hinzugefügt.',
+      'profile.no_interests': 'Noch keine Interessen ausgewählt.',
+      'profile.add_cover_image': 'Titelbild hinzufügen',
+      'profile.edit_profile': 'Profil bearbeiten',
+      'profile.my_connections': 'Meine Verbindungen',
+      'profile.professional_experiences': 'Berufserfahrungen',
+      'profile.trainings': 'Schulungen',
+      'profile.interest': 'Interesse',
+      'profile.activite': 'Aktivität',
+      'profile.publications': 'Veröffentlichungen',
+      'profile.medias': 'Medien',
+
+      // Feed Preferences
+      'feed_prefs.title': 'Feed-Einstellungen',
+      'feed_prefs.preferences_saved': 'Einstellungen gespeichert',
+      'feed_prefs.save_failed': 'Speichern fehlgeschlagen',
+      'feed_prefs.show_reposts': 'Reposts anzeigen',
+      'feed_prefs.show_reposts_subtitle': 'Von anderen geteilte Beiträge einbeziehen',
+      'feed_prefs.show_suggested': 'Vorgeschlagene Beiträge anzeigen',
+      'feed_prefs.show_suggested_subtitle': 'Beiträge mit beliebigen #Hashtags aus Interessen',
+      'feed_prefs.prioritize_interests': 'Ihre Interessen priorisieren',
+      'feed_prefs.prioritize_interests_subtitle': 'Nur # anzeigen, die Ihren Interessen entsprechen',
+      'feed_prefs.coming_soon': 'Demnächst...',
+      'feed_prefs.reset': 'Auf Standard zurücksetzen',
+
+      // Content Controls
+      'content_controls.title': 'Inhaltskontrollen',
+      'content_controls.safe_mode': 'Sicherer Modus',
+      'content_controls.hide_sensitive': 'Sensible Inhalte ausblenden',
+      'content_controls.blur_media': 'Sensible Miniaturansichten verschwimmen',
+      'content_controls.filter_profanity': 'Schimpfwörter filtern',
+      'content_controls.filter_profanity_subtitle': 'Vulgäre Wörter automatisch filtern',
+      'content_controls.hide_spoilers': 'Spoiler ausblenden',
+      'content_controls.hide_spoilers_subtitle': 'Spoiler-Inhalte werden ausgeblendet',
+
+      // Privacy & Visibility
+      'privacy.title': 'Datenschutz und Sichtbarkeit',
+      'privacy.private_profile': 'Privates Profil',
+      'privacy.show_activity': 'Aktivitätsstatus anzeigen',
+      'privacy.show_activity_subtitle': 'Anderen erlauben zu sehen, wann Sie aktiv sind',
+      'privacy.approve_connections': 'Neue Anfragen genehmigen',
+      'privacy.allow_mentions': 'Erwähnungen erlauben',
+      'privacy.allow_mentions_subtitle': 'Andere können Ihren Namen erwähnen',
+      'privacy.allow_tags': 'Tags erlauben',
+      'privacy.allow_tags_subtitle': 'Andere können Sie markieren',
+      'privacy.show_online': 'Online-Status anzeigen',
+      'privacy.show_online_subtitle': 'Anzeigen, wenn Sie online sind',
+      'privacy.show_last_seen': 'Zuletzt gesehen anzeigen',
+      'privacy.show_last_seen_subtitle': 'Ihre letzte Aktivitätszeit anzeigen',
+
+      // Notification Preferences
+      'notif_prefs.title': 'Benachrichtigungseinstellungen',
+      'notif_prefs.push': 'Push-Benachrichtigungen',
+      'notif_prefs.likes': 'Likes',
+      'notif_prefs.comments': 'Kommentare',
+      'notif_prefs.reposts': 'Reposts',
+      'notif_prefs.new_connections': 'Neue Verbindungen',
+      'notif_prefs.mentions': 'Erwähnungen',
+      'notif_prefs.messages': 'Nachrichten',
+
+      // Security & Login
+      'security.title': 'Sicherheit und Anmeldung',
+      'security.change_password': 'Passwort ändern',
+      'security.two_factor': 'Zwei-Faktor-Authentifizierung',
+      'security.active_sessions': 'Aktive Sitzungen',
+      'security.login_alerts': 'Anmeldewarnungen',
+
+      // Change Password
+      'change_password.title': 'Passwort ändern',
+      'change_password.subtitle': 'Geben Sie Ihr aktuelles und neues Passwort ein',
+      'change_password.current': 'Aktuelles Passwort',
+      'change_password.new': 'Neues Passwort',
+      'change_password.confirm': 'Neues Passwort bestätigen',
+      'change_password.submit': 'Änderung anfordern',
+      'change_password.back': 'Zurück zum Kontocenter',
+      'change_password.success': 'Passwort erfolgreich geändert',
+      'change_password.failed': 'Passwortänderung fehlgeschlagen',
+
+      // Change Email
+      'change_email.title': 'E-Mail ändern',
+      'change_email.subtitle': 'Geben Sie Ihre neue E-Mail-Adresse ein',
+      'change_email.current': 'Aktuelle E-Mail',
+      'change_email.new': 'Neue E-Mail',
+      'change_email.password': 'Passwort bestätigen',
+      'change_email.submit': 'Änderung anfordern',
+      'change_email.back': 'Zurück zum Kontocenter',
+      'change_email.success': 'E-Mail erfolgreich geändert',
+      'change_email.failed': 'E-Mailänderung fehlgeschlagen',
+
+      // My Connections
+      'my_connections.title': 'Meine Verbindungen',
+      'my_connections.search': 'Verbindungen suchen...',
+      'my_connections.no_connections': 'Keine Verbindungen',
+      'my_connections.load_failed': 'Laden fehlgeschlagen',
+      'my_connections.action_failed': 'Aktion fehlgeschlagen',
+
+      // Invitations
+      'invitations.title': 'Einladungen',
+      'invitations.sent': 'Gesendet',
+      'invitations.received': 'Empfangen',
+      'invitations.no_sent': 'Keine gesendeten Einladungen',
+      'invitations.no_received': 'Keine empfangenen Einladungen',
+      'invitations.accept': 'Akzeptieren',
+      'invitations.reject': 'Ablehnen',
+      'invitations.delete': 'Löschen',
+      'invitations.close': 'Schließen',
+
+      // Connect Friends
+      'connect_friends.title': 'Mit Freunden verbinden',
+      'connect_friends.search': 'Freunde suchen...',
+      'connect_friends.no_friends': 'Keine Freunde gefunden',
+      'connect_friends.load_failed': 'Laden fehlgeschlagen',
+      'connect_friends.action_failed': 'Aktion fehlgeschlagen',
+      // Security Login
+      'security.subtitle': 'Verwenden Sie eine Authentifizierungs-App, um Ihre Anmeldungen zu sichern',
+      'security.notification_subtitle': 'Benachrichtigung erhalten, wenn sich ein neues Gerät bei Ihrem Konto anmeldet',
+      'security.setup_authenticator': 'Authentifizierungs-App einrichten',
+      'security.scan_qr': 'QR-Code in Ihrer OTP-App scannen',
+      'security.remove': 'Entfernen',
+      'security.no_devices': 'Keine gespeicherten Geräte',
+      'security.sign_out': 'Abmelden',
+      'security.sign_out_all': 'Alle abmelden',
+      'security.authenticator_placeholder': 'Authentifikator-Einrichtung (Platzhalter)',
+
+      // Sign In
+      'signin.nexum': 'NEXUM',
+      'signin.welcome_back': 'Willkommen zurück',
+      'signin.subtitle': 'Füllen Sie die Informationen aus, um auf Ihr Konto zuzugreifen',
+      'signin.email_hint': 'Email',
+      'signin.password_hint': 'Passwort',
+      'signin.forgot_password': 'Passwort vergessen?',
+      'signin.sign_in': 'Anmelden',
+      'signin.sign_up': 'Registrieren',
+      'signin.error_empty': 'Bitte geben Sie Email und Passwort ein',
+      'signin.error_invalid': 'Ungültige Email oder Passwort',
+      'signin.error_validation': 'Bitte geben Sie eine gültige Email und Passwort ein',
+      'signin.error_too_many': 'Zu viele Versuche. Versuchen Sie es später erneut.',
+      'signin.error_failed': 'Anmeldung fehlgeschlagen',
+      'signin.error_generic': 'Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.',
+
+      // Forgot Password
+      'forgot.title': 'Passwort vergessen?',
+      'forgot.subtitle': 'Geben Sie Ihre Email-Adresse ein und wir senden Ihnen einen Link zum Zurücksetzen Ihres Passworts',
+      'forgot.email_hint': 'Email',
+      'forgot.enter_email': 'Geben Sie Ihre Email ein',
+
+      // Password Reset Sent
+      'reset.title': 'Überprüfen Sie Ihre Email',
+      'reset.sent_to': 'Wir haben einen Link zum Zurücksetzen des Passworts gesendet an',
+      'reset.whats_next': 'Was kommt als Nächstes?',
+      'reset.back_signin': 'Zurück zur Anmeldung',
+
+      // Language Region
+      'region.title': 'Sprache und Region',
+      'region.settings': 'Regionale Einstellungen',
+      'region.24hour': '24-Stunden-Format verwenden',
+      'region.24hour_subtitle': 'Zwischen 24-Stunden- und 12-Stunden-Format wechseln',
+      'region.translation': 'Übersetzung',
+      'region.enable_translation': 'Beitragsübersetzung aktivieren',
+      'region.enable_translation_subtitle': 'Übersetzungsschaltfläche bei Beiträgen und Kommentaren anzeigen',
+      'region.auto_translate': 'Beiträge und Kommentare automatisch übersetzen',
+      'region.auto_translate_subtitle': 'Inhalte automatisch in Ihre Sprache übersetzen',
+      'region.translate_to': 'Beiträge übersetzen in',
+      'region.reset_defaults': 'Auf Standardwerte zurücksetzen',
+      'region.coming_soon': 'DEMNÄCHST',
+
+      // Feed Preferences
+      'feed.media_section': 'Medien',
+
+      // Content Controls
+      'content.add_keyword': 'Stichwort zum Stummschalten hinzufügen',
+      'content.add': 'Hinzufügen',
+      'content.clear_reset': 'Alles löschen und zurücksetzen',
+
+      // Notification Preferences
+      'notif_prefs.quiet_hours': 'Ruhezeiten',
+      'notif_prefs.start': 'Start',
+      'notif_prefs.end': 'Ende',
+      'notif_prefs.quiet_description': 'Keine Push-Benachrichtigungen während der Ruhezeiten.',
+      'notif_prefs.test_sent': 'Testbenachrichtigung gesendet',
+
+      // Community
+      'community.load_failed': 'Fehler beim Laden der Community-Details',
+      'community.posts_failed': 'Fehler beim Laden der Community-Beiträge',
+      'community.user': 'Benutzer',
+
+      // Conversation Search
+      'convsearch.search_chats': 'Chats suchen...',
+      'convsearch.search_communities': 'Communities suchen...',
+      'convsearch.tabs_chats': 'Chats',
+      'convsearch.tabs_communities': 'Communities',
+      'convsearch.start_typing': 'Beginnen Sie mit der Eingabe, um Ihre Chats zu durchsuchen',
+      'convsearch.no_match': 'Keine Chats entsprechen Ihrer Suche',
+
+      // Insights
+      'insights.title': 'Einblicke',
+      'insights.last_7_days': 'Letzte 7 Tage',
+      'insights.top_location': 'Top-Standort',
+      'insights.by_views': 'Nach Ansichten',
+      'insights.weekly': 'Wöchentlich',
+
+      // Monetization Page
+      'monetization.eligible': 'Sie sind berechtigt',
+      'monetization.review': 'Berechtigung wird geprüft',
+      'monetization.eligible_desc': 'Großartig! Sie erfüllen die aktuellen Anforderungen zur Monetarisierung Ihrer Inhalte.',
+      'monetization.review_desc': 'Wir prüfen Ihr Konto. Sie werden benachrichtigt, sobald Sie berechtigt sind.',
+      'monetization.earnings_summary': 'Einnahmenzusammenfassung',
+
+      // Video Scroll
+      'video.like_failed': 'Gefällt mir fehlgeschlagen',
+      'video.unlike_failed': 'Gefällt mir entfernen fehlgeschlagen',
+
+      // Other User Profile
+      'other.posts_failed': 'Fehler beim Laden der Beiträge',
+      'other.user': 'Benutzer',
+
+      // Story Viewer
+      'story.no_stories': 'Keine Stories zum Anzeigen',
+      'story.connect': 'Verbinden',
+      'story.music': 'Musik',
+      'story.comment_hint': 'Geben Sie Ihren Kommentar ein...',
+
+
+      // App Branding
+      'app.name': 'NEXUM',
+
+
+      // Activity Page
+      'activity.interactions': 'Interaktionen',
+      'activity.removed_archived': 'Entfernte und archivierte Inhalte',
+      'activity.how_you_use': 'Wie Sie Communi verwenden',
+      'activity.info_shared': 'Informationen, die Sie geteilt haben',
+
+
+      // Drafts Page
+      'drafts.no_posts': 'Noch keine Beitragsentwürfe',
+      'drafts.no_podcasts': 'Noch keine Podcast-Entwürfe',
+      'drafts.untitled': 'Ohne Titel',
+      'drafts.delete_confirm': 'Diese Aktion kann nicht rückgängig gemacht werden.',
+      'drafts.delete_button': 'Löschen',
+
+
+      // Payout Setup Success
+      'payout_success.title': 'Auszahlungseinrichtung abgeschlossen',
+      'payout_success.subtitle': 'Sie können jetzt Auszahlungen auf Ihr verbundenes Konto erhalten.',
+      'payout_success.back': 'Zurück zur Monetarisierung',
+
+
+      // Payout Setup
+      'payout.title': 'Auszahlung einrichten',
+      'payout.step_country': 'Land',
+      'payout.step_account_type': 'Kontotyp',
+      'payout.step_personal': 'Persönliche Daten',
+      'payout.step_method': 'Auszahlungsmethode',
+      'payout.step_tax': 'Steuer & Verifizierung',
+      'payout.step_review': 'Überprüfen und einreichen',
+      'payout.individual': 'Einzelperson',
+      'payout.business': 'Unternehmen',
+      'payout.full_name': 'Vollständiger Name',
+      'payout.date_birth': 'Geburtsdatum (JJJJ-MM-TT)',
+      'payout.address': 'Adresse',
+      'payout.iban': 'IBAN / Kontonummer',
+      'payout.confirm_tax': 'Ich bestätige, dass Steuerinformationen eingereicht werden',
+      'payout.confirm_kyc': 'Ich werde die KYC-Verifizierung bei Bedarf abschließen',
+      'payout.agree_terms': 'Mit der Übermittlung stimmen Sie den Auszahlungsbedingungen zu.',
+      'payout.payout_provider': 'Auszahlungsanbieter',
+      'payout.account': 'Konto',
+      'payout.country_canada': 'Kanada',
+      'payout.country_us': 'Vereinigte Staaten',
+      'payout.country_france': 'Frankreich',
+      'payout.country_germany': 'Deutschland',
+      'payout.country_uk': 'Vereinigtes Königreich',
+      'payout.stripe': 'Stripe',
+      'payout.bank_transfer': 'Banküberweisung',
+      'payout.review_country': 'Land',
+      'payout.review_account_type': 'Kontotyp',
+      'payout.review_full_name': 'Vollständiger Name',
+
+
+      // Premium Subscription
+      'premium.title': 'Premium',
+      'premium.nexum_premium': 'Nexum Premium',
+      'premium.subtitle': 'Erweiterte Tools freischalten und Ihre Erfahrung verbessern',
+      'premium.what_you_get': 'Was Sie erhalten',
+      'premium.choose_plan': 'Wählen Sie Ihren Plan',
+      'premium.monthly': 'Monatlich',
+      'premium.yearly': 'Jährlich',
+      'premium.yearly_save': '20% sparen',
+      'premium.subscribe': 'Abonnieren',
+      'premium.manage_subscription': 'Abonnement verwalten',
+      'premium.billing_history': 'Abrechnungsverlauf',
+      'premium.manage_badge': 'Profilabzeichen verwalten',
+      'premium.cancel_subscription': 'Abonnement kündigen',
+
+
+      // Status Selection
+      'status.title': 'Status',
+      'status.question': 'Was wird Ihr Status auf Nexum sein',
+      'status.entrepreneur': 'Unternehmer',
+      'status.investor': 'Investor',
+      'status.saving': 'Speichern...',
+      'status.next': 'Weiter',
+      'status.save_failed': 'Status konnte nicht gespeichert werden. Versuchen Sie es erneut.',
+      'status.default_user': 'Benutzer',
+
+      // Image Swipe
+      'image.save_to_photos': 'In Fotos speichern',
+      'image.share': 'Teilen',
+      'image.report': 'Melden',
+      'image.delete': 'Löschen',
+      'image.saved': 'Bild in Fotos gespeichert',
+      'image.share_functionality': 'Freigabefunktion',
+      'image.reported': 'Bild gemeldet',
+      'image.delete_title': 'Bild löschen',
+      'image.delete_confirm': 'Sind Sie sicher, dass Sie dieses Bild löschen möchten?',
+      'image.cancel': 'Abbrechen',
+      'image.deleted': 'Bild gelöscht',
+
+
+
+      // Profile Bio
+      'profile_bio.title': 'Bio',
+      'profile_bio.heading': 'Erzählen Sie uns über sich',
+      'profile_bio.subtitle': 'Schreiben Sie eine kurze Bio, die beschreibt, wer Sie sind und was Sie tun',
+      'profile_bio.hint': 'Wellness-Enthusiast 💪 Liebhaber eines sauberen Lebens, achtsamer Gewohnheiten und gesunder Vibes ✨🌱\n\nErzählen Sie Ihre Geschichte, teilen Sie Ihre Leidenschaften oder beschreiben Sie, was Sie einzigartig macht...',
+      'profile_bio.skip': 'Überspringen',
+      'profile_bio.next': 'Weiter',
+      'profile_bio.saving': 'Speichern...',
+
+      // Account Center
+      'account_center.title': 'Kontocenter',
+      'account_center.confirm_password': 'Passwort bestätigen',
+      'account_center.enter_password': 'Geben Sie Ihr aktuelles Passwort ein',
+      'account_center.change_password': 'Passwort ändern',
+      'account_center.change_password_subtitle': 'Passwort aktualisieren',
+      'account_center.change_email': 'E-Mail ändern',
+      'account_center.change_email_subtitle': 'E-Mail-Adresse aktualisieren',
+      'account_center.verify_kyc': 'KYC verifizieren',
+      'account_center.verify_kyc_subtitle': 'Identität verifizieren',
+      'account_center.change_phone': 'Telefonnummer ändern',
+      'account_center.change_phone_subtitle': 'Telefonnummer hinzufügen oder aktualisieren',
+      'account_center.download_data': 'Ihre Daten herunterladen',
+      'account_center.ads_prefs': 'Werbeeinstellungen',
+      'account_center.deactivate': 'Konto deaktivieren',
+      'account_center.delete': 'Konto löschen',
+      'account_center.delete_subtitle': 'Ihr Konto dauerhaft löschen',
+      'account_center.coming_soon': 'Demnächst',
+      'account_center.delete_failed': 'Konto löschen fehlgeschlagen',
+      'account_center.user': 'Benutzer',
+
+      // Profile Photo
+      'profile_photo.title': 'Profilfoto',
+      'profile_photo.take_photo': 'Foto aufnehmen',
+      'profile_photo.choose_gallery': 'Aus Galerie wählen',
+      'profile_photo.permission_denied': 'Berechtigung verweigert. Bitte erlauben Sie den Zugriff.',
+      'profile_photo.upload_success': 'Foto hochgeladen',
+      'profile_photo.upload_failed': 'Upload fehlgeschlagen',
+
+      // Profile Cover
+      'profile_cover.title': 'Titelbild',
+      'profile_cover.take_photo': 'Foto aufnehmen',
+      'profile_cover.choose_gallery': 'Aus Galerie wählen',
+      'profile_cover.permission_denied': 'Berechtigung verweigert. Bitte erlauben Sie den Zugriff.',
+      'profile_cover.upload_success': 'Titelbild hochgeladen',
+      'profile_cover.upload_failed': 'Upload fehlgeschlagen',
+
+      // Conversation Search
+      'conversation_search.title': 'Gespräche suchen',
+      'conversation_search.hint': 'Suchen...',
+      'conversation_search.no_results': 'Keine Gespräche gefunden',
+
+      // Profile Flow Start
+      'profile_flow.title': 'Profil-Einrichtung',
+      'profile_flow.heading': 'Vervollständigen Sie Ihr Profil',
+      'profile_flow.subtitle': 'Helfen Sie anderen, sich mit Ihnen zu verbinden, indem Sie Ihr Profil in wenigen Schritten vervollständigen.',
+      'profile_flow.step1_title': 'Persönliche Informationen',
+      'profile_flow.step1_desc': 'Fügen Sie Ihren Namen und Benutzernamen hinzu',
+      'profile_flow.step2_title': 'Geburtstag',
+      'profile_flow.step2_desc': 'Sagen Sie uns, wann Sie geboren wurden',
+      'profile_flow.step3_title': 'Geschlecht',
+      'profile_flow.step3_desc': 'Wählen Sie Ihre Geschlechtsidentität',
+      'profile_flow.step4_title': 'Standort',
+      'profile_flow.step4_desc': 'Teilen Sie Ihre Adressdaten',
+      'profile_flow.step5_title': 'Profilfoto',
+      'profile_flow.step5_desc': 'Fügen Sie ein Profilfoto hinzu (optional)',
+      'profile_flow.step6_title': 'Titelbild',
+      'profile_flow.step6_desc': 'Fügen Sie ein Titelbild hinzu (optional)',
+      'profile_flow.estimated_time': 'Geschätzte Zeit',
+      'profile_flow.time_to_complete': '3-5 Minuten zum Abschluss',
+      'profile_flow.start_button': 'Profil-Einrichtung starten',
+
+      // Interest Selection
+      'interests.title': 'Wählen Sie Ihre Interessen',
+      'interests.subtitle': 'Wählen Sie Themen aus, die Sie interessieren, um Ihren Feed zu personalisieren',
+      'interests.search': 'Interessen suchen...',
+      'interests.selected': 'ausgewählt',
+      'interests.continue': 'Weiter',
+      'interests.skip': 'Vorerst überspringen',
+
+      // Profile Experience
+      'experience.title': 'Berufserfahrung',
+      'experience.subtitle': 'Listen Sie Ihre Berufserfahrungen, Positionen oder Rollen auf',
+      'experience.add': 'Erfahrung hinzufügen',
+      'experience.company': 'Unternehmen',
+      'experience.position': 'Position',
+      'experience.start_date': 'Startdatum',
+      'experience.end_date': 'Enddatum',
+      'experience.current': 'Ich arbeite derzeit hier',
+      'experience.description': 'Beschreibung',
+      'experience.save': 'Erfahrung speichern',
+      'experience.cancel': 'Abbrechen',
+      'experience.delete': 'Erfahrung löschen',
+      'experience.job_title_label': 'Berufsbezeichnung/Position',
+      'experience.company_label': 'Unternehmen/Organisation (Optional)',
+
+      // Monetization Analytics
+      'monetization.title': 'Monetarisierung und Analysen',
+      'monetization.earnings': 'Gesamteinnahmen',
+      'monetization.views': 'Gesamtansichten',
+      'monetization.engagement': 'Engagement-Rate',
+      'monetization.coming_soon': 'Demnächst',
     },
   };
 }

@@ -1,11 +1,10 @@
-// File: lib/kyc_status_page.dart
-// Lines: 1-350
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
-import 'core/kyc_api.dart';
-import 'core/profile_api.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'repositories/firebase/firebase_kyc_repository.dart';
+import 'repositories/interfaces/kyc_repository.dart';
 
 class KycStatusPage extends StatefulWidget {
   const KycStatusPage({super.key});
@@ -15,9 +14,8 @@ class KycStatusPage extends StatefulWidget {
 }
 
 class _KycStatusPageState extends State<KycStatusPage> {
-  Map<String, dynamic>? _kyc;
+  KycModel? _kyc;
   bool _loading = true;
-  String _accountDisplay = '-';
 
   @override
   void initState() {
@@ -27,50 +25,30 @@ class _KycStatusPageState extends State<KycStatusPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final res = await KycApi().getMine();
-    if (res['ok'] == true) {
-      final data = res['data'];
-      if (mounted) _kyc = data == null ? null : Map<String, dynamic>.from(data);
+    final kycRepo = FirebaseKycRepository();
+    final kyc = await kycRepo.getMyKyc();
+    if (mounted) {
+      setState(() {
+        _kyc = kyc;
+        _loading = false;
+      });
     }
-    await _loadAccountDisplay();
-    if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _loadAccountDisplay() async {
-    try {
-      final profApi = ProfileApi();
-      final profRes = await profApi.me();
-      final body = Map<String, dynamic>.from(profRes);
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final fullName = (data['full_name'] ?? '').toString();
-      if (fullName.isNotEmpty) {
-        _accountDisplay = fullName;
-        return;
-      }
-    } catch (_) {}
-    try {
-      final u = fb.FirebaseAuth.instance.currentUser;
-      if (u != null) {
-        _accountDisplay = (u.email ?? '-').toString();
-      }
-    } catch (_) {}
+  String _statusText(KycModel? kyc) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    final s = kyc?.status ?? 'pending';
+    if (s == 'approved') return lang.t('kyc_status.approved');
+    if (s == 'rejected') return lang.t('kyc_status.rejected');
+    return lang.t('kyc_status.pending');
   }
 
-  String _statusText(Map<String, dynamic>? kyc) {
-    final s = (kyc?['status'] ?? 'pending').toString();
-    if (s == 'approved') return 'Approved';
-    if (s == 'rejected') return 'Rejected';
-    return 'Pending';
-  }
-
-  Color _statusColor(Map<String, dynamic>? kyc) {
-    final s = (kyc?['status'] ?? 'pending').toString();
+  Color _statusColor(KycModel? kyc) {
+    final s = kyc?.status ?? 'pending';
     if (s == 'approved') return const Color(0xFF22C55E);
     if (s == 'rejected') return const Color(0xFFEF4444);
     return const Color(0xFFBFAE01);
   }
-
-  String _fmt(dynamic v) => (v == null || (v is String && v.isEmpty)) ? '-' : v.toString();
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +76,7 @@ class _KycStatusPageState extends State<KycStatusPage> {
                 children: [
                   const SizedBox(height: 50),
                   Text(
-                    'NEXUM',
+                    Provider.of<LanguageProvider>(context, listen: false).t('app.name'),
                     style: GoogleFonts.inika(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -128,12 +106,12 @@ class _KycStatusPageState extends State<KycStatusPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             IconButton(
-                              tooltip: 'Back',
+                              tooltip: Provider.of<LanguageProvider>(context, listen: false).t('kyc_status.back'),
                               onPressed: () => Navigator.pop(context),
                               icon: Icon(Icons.arrow_back, color: isDarkMode ? Colors.white : Colors.black),
                             ),
                             Text(
-                              'KYC Status',
+                              Provider.of<LanguageProvider>(context, listen: false).t('kyc_status.title'),
                               style: GoogleFonts.inter(
                                 fontSize: 34,
                                 fontWeight: FontWeight.w600,
@@ -141,7 +119,7 @@ class _KycStatusPageState extends State<KycStatusPage> {
                               ),
                             ),
                             IconButton(
-                              tooltip: 'Refresh',
+                              tooltip: Provider.of<LanguageProvider>(context, listen: false).t('kyc_status.refresh'),
                               onPressed: _loading ? null : _load,
                               icon: Icon(Icons.refresh, color: isDarkMode ? Colors.white : Colors.black),
                             ),
@@ -155,7 +133,7 @@ class _KycStatusPageState extends State<KycStatusPage> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
-                            status == 'Pending' ? 'Pending — answer within 24h' : status,
+                            status == Provider.of<LanguageProvider>(context, listen: false).t('kyc_status.pending') ? Provider.of<LanguageProvider>(context, listen: false).t('kyc_status.pending_answer') : status,
                             style: GoogleFonts.inter(
                               color: statusColor,
                               fontWeight: FontWeight.w600,
@@ -169,12 +147,7 @@ class _KycStatusPageState extends State<KycStatusPage> {
                             child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2)),
                           )
                         else
-                          _buildDataTable(isDarkMode),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Note: Approval or rejection will be decided by an administrator.',
-                          style: GoogleFonts.inter(color: const Color(0xFF666666), fontSize: 12),
-                        ),
+                          _buildStatusMessage(isDarkMode),
                       ],
                     ),
                   ),
@@ -188,82 +161,110 @@ class _KycStatusPageState extends State<KycStatusPage> {
     );
   }
 
-  Widget _buildDataTable(bool isDarkMode) {
-    final files = _kyc?['uploaded_file_names'];
-    final filesText = files == null
-        ? '-'
-        : (files is List ? files.map((e) => e.toString()).join(', ') : files.toString());
-
-    final columns = <DataColumn>[
-      DataColumn(label: _colLabel('Account')),
-      DataColumn(label: _colLabel('Document Type')),
-      DataColumn(label: _colLabel('Document Number')),
-      DataColumn(label: _colLabel('Issue Place')),
-      DataColumn(label: _colLabel('Issue Date')),
-      DataColumn(label: _colLabel('Expiry Date')),
-      DataColumn(label: _colLabel('Country')),
-      DataColumn(label: _colLabel('City of Birth')),
-      DataColumn(label: _colLabel('Address')),
-      DataColumn(label: _colLabel('Uploaded File Names')),
-      DataColumn(label: _colLabel('Front URL')),
-      DataColumn(label: _colLabel('Back URL')),
-      DataColumn(label: _colLabel('Selfie URL')),
-      DataColumn(label: _colLabel('Status')),
-      DataColumn(label: _colLabel('Approved')),
-      DataColumn(label: _colLabel('Rejected')),
-      DataColumn(label: _colLabel('Reviewed By')),
-      DataColumn(label: _colLabel('Reviewed At')),
-      DataColumn(label: _colLabel('Created At')),
-      DataColumn(label: _colLabel('Updated At')),
-    ];
-
-    final cells = <DataCell>[
-      DataCell(_cellText(_accountDisplay)),
-      DataCell(_cellText(_fmt(_kyc?['document_type']))),
-      DataCell(_cellText(_fmt(_kyc?['document_number']))),
-      DataCell(_cellText(_fmt(_kyc?['issue_place']))),
-      DataCell(_cellText(_fmt(_kyc?['issue_date']))),
-      DataCell(_cellText(_fmt(_kyc?['expiry_date']))),
-      DataCell(_cellText(_fmt(_kyc?['country']))),
-      DataCell(_cellText(_fmt(_kyc?['city_of_birth']))),
-      DataCell(_cellText(_fmt(_kyc?['address']))),
-      DataCell(_cellText(filesText)),
-      DataCell(_cellText(_fmt(_kyc?['front_url']))),
-      DataCell(_cellText(_fmt(_kyc?['back_url']))),
-      DataCell(_cellText(_fmt(_kyc?['selfie_url']))),
-      DataCell(_cellText(_fmt(_kyc?['status']))),
-      DataCell(_cellText(_fmt(_kyc?['is_approved']))),
-      DataCell(_cellText(_fmt(_kyc?['is_rejected']))),
-      DataCell(_cellText(_fmt(_kyc?['reviewed_by']))),
-      DataCell(_cellText(_fmt(_kyc?['reviewed_at']))),
-      DataCell(_cellText(_fmt(_kyc?['created_at']))),
-      DataCell(_cellText(_fmt(_kyc?['updated_at']))),
-    ];
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingTextStyle: GoogleFonts.inter(
-          fontWeight: FontWeight.w600,
-          color: isDarkMode ? Colors.white : Colors.black,
-        ),
-        dataTextStyle: GoogleFonts.inter(
-          color: isDarkMode ? Colors.white : Colors.black,
-          fontSize: 13,
-        ),
-        columns: columns,
-        rows: [DataRow(cells: cells)],
+  Widget _buildStatusMessage(bool isDarkMode) {
+    final status = _kyc?.status ?? 'pending';
+    
+    // Icon and color based on status
+    IconData icon;
+    Color iconColor;
+    String title;
+    String message;
+    
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    
+    if (status == 'approved') {
+      icon = Icons.check_circle;
+      iconColor = const Color(0xFF22C55E);
+      title = lang.t('kyc_status.approved_title');
+      message = lang.t('kyc_status.approved_msg');
+    } else if (status == 'rejected') {
+      icon = Icons.cancel;
+      iconColor = const Color(0xFFEF4444);
+      title = lang.t('kyc_status.rejected_title');
+      message = lang.t('kyc_status.rejected_msg');
+    } else {
+      icon = Icons.schedule;
+      iconColor = const Color(0xFFBFAE01);
+      title = lang.t('kyc_status.pending_title');
+      message = lang.t('kyc_status.pending_msg');
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+      child: Column(
+        children: [
+          // Icon
+          Icon(
+            icon,
+            size: 80,
+            color: iconColor,
+          ),
+          const SizedBox(height: 24),
+          
+          // Title
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: isDarkMode ? Colors.white : Colors.black,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          
+          // Message
+          Text(
+            message,
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              height: 1.6,
+              color: const Color(0xFF666666),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          
+          // Additional info
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDarkMode 
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDarkMode 
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 20,
+                  color: const Color(0xFF666666),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    status == 'pending'
+                        ? Provider.of<LanguageProvider>(context, listen: false).t('kyc_status.email_pending')
+                        : status == 'approved'
+                        ? Provider.of<LanguageProvider>(context, listen: false).t('kyc_status.email_approved')
+                        : Provider.of<LanguageProvider>(context, listen: false).t('kyc_status.email_rejected'),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: const Color(0xFF666666),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
-
-  Widget _colLabel(String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(text),
-      );
-
-  Widget _cellText(String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(text),
-      );
 }

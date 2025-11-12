@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../repositories/firebase/firebase_auth_repository.dart';
 import '../repositories/firebase/firebase_user_repository.dart';
 import '../repositories/firebase/firebase_notification_repository.dart';
+import '../repositories/interfaces/user_repository.dart';
 import 'package:firebase_messaging/firebase_messaging.dart' as fm;
 
 class AuthService extends ChangeNotifier {
@@ -52,16 +54,29 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> _setupMessaging() async {
+    // Skip messaging setup on web - FCM requires platform-specific configuration
+    if (kIsWeb) {
+      debugPrint('📱 Messaging setup skipped on web platform');
+      return;
+    }
+    
     final fu = _fbAuth.currentUser;
     if (fu == null) return;
-    final settings = await fm.FirebaseMessaging.instance.requestPermission();
-    if (settings.authorizationStatus == fm.AuthorizationStatus.denied) return;
-    final token = await fm.FirebaseMessaging.instance.getToken();
-    if (token != null && token.isNotEmpty) {
-      await _fbUsers.updateFCMToken(token);
-      await _fbNotifs.subscribeTopic('direct:user:${fu.uid}');
-      await _fbNotifs.subscribeTopic('feed:new-post');
-      await _fbNotifs.subscribeTopic('system:announcements');
+    
+    try {
+      await fm.FirebaseMessaging.instance.setAutoInitEnabled(true);
+      final settings = await fm.FirebaseMessaging.instance.requestPermission();
+      if (settings.authorizationStatus == fm.AuthorizationStatus.denied) return;
+
+      final token = await fm.FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _fbUsers.updateFCMToken(token);
+        await _fbNotifs.subscribeTopic('direct:user:${fu.uid}');
+        await _fbNotifs.subscribeTopic('feed:new-post');
+        await _fbNotifs.subscribeTopic('system:announcements');
+      }
+    } catch (e) {
+      debugPrint('Messaging setup error: $e');
     }
   }
 
@@ -69,26 +84,65 @@ class AuthService extends ChangeNotifier {
   Future<void> refreshUser() async {
     try {
       final fu = _fbAuth.currentUser;
-      if (fu != null) {
-        _userId = fu.uid;
-        _userEmail = fu.email;
-        final prof = await _fbUsers.getCurrentUserProfile();
-        if (prof != null) {
-          final first = (prof.firstName ?? '').trim();
-          final last = (prof.lastName ?? '').trim();
-          final dn = (prof.displayName ?? '').trim();
-          _userName = [first, last].where((s) => s.isNotEmpty).join(' ');
-          if (_userName == null || _userName!.isEmpty) {
-            _userName = dn.isNotEmpty ? dn : (_userEmail ?? 'User');
+      debugPrint('🔍 refreshUser: currentUser=${fu?.uid ?? "NULL"}');
+      debugPrint('🔍 refreshUser: email=${fu?.email ?? "NULL"}');
+      
+      if (fu == null) {
+        debugPrint('❌ No authenticated user, skipping profile fetch');
+        notifyListeners();
+        return;
+      }
+
+      // Ensure auth token is available before Firestore query
+      try {
+        final fbUser = fb.FirebaseAuth.instance.currentUser;
+        if (fbUser != null) {
+          final token = await fbUser.getIdToken(true); // Force refresh to ensure token is ready
+          debugPrint('✅ Auth token refreshed: ${token != null && token.isNotEmpty}');
+        }
+      } catch (e) {
+        debugPrint('⚠️  Token refresh failed: $e');
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      _userId = fu.uid;
+      _userEmail = fu.email;
+      debugPrint('🔍 Attempting to fetch profile for uid: ${fu.uid}');
+      
+      // Retry logic for profile fetch (handles timing issues)
+      UserProfile? prof;
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          debugPrint('📥 Fetch attempt ${attempt + 1}/3...');
+          prof = await _fbUsers.getCurrentUserProfile();
+          if (prof != null) {
+            debugPrint('✅ Profile fetched successfully');
+            break;
+          } else {
+            debugPrint('⚠️  Profile returned null (document may not exist)');
           }
-          _avatarUrl = prof.avatarUrl ?? _avatarUrl;
-          await _setupMessaging();
-          notifyListeners();
-          return;
+        } catch (e) {
+          debugPrint('❌ Attempt ${attempt + 1} failed: $e');
+          if (attempt == 2) {
+            debugPrint('🚨 CRITICAL: Profile fetch failed after 3 attempts: $e');
+            debugPrint('🔍 Check: 1) Firestore rules deployed? 2) User document exists? 3) Auth token valid?');
+          } else {
+            await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
+          }
         }
       }
+      
+      if (prof != null) {
+        final first = (prof.firstName ?? '').trim();
+        final last = (prof.lastName ?? '').trim();
+        final dn = (prof.displayName ?? '').trim();
+        final fullName = [first, last].where((s) => s.isNotEmpty).join(' ');
+        _userName = fullName.isNotEmpty ? fullName : (dn.isNotEmpty ? dn : (_userEmail ?? 'User'));
+        _avatarUrl = prof.avatarUrl ?? _avatarUrl;
+        await _setupMessaging();
+      }
     } catch (e) {
-      debugPrint('AuthService.refreshUser firebase error: $e');
+      debugPrint('AuthService.refreshUser critical error: $e');
     }
 
     notifyListeners();

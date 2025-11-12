@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class ContentControlsPage extends StatefulWidget {
   const ContentControlsPage({super.key});
@@ -26,6 +28,7 @@ class _ContentControlsPageState extends State<ContentControlsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final background = isDark
         ? const Color(0xFF0C0C0C)
@@ -43,7 +46,7 @@ class _ContentControlsPageState extends State<ContentControlsPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Content Controls',
+          lang.t('content_controls.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -60,38 +63,38 @@ class _ContentControlsPageState extends State<ContentControlsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Safety'),
+                _sectionTitle(lang.t('content_controls.safety')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Safe Mode',
+                  title: lang.t('content_controls.safe_mode'),
                   subtitle:
-                      'Enable additional restrictions for a safer experience',
+                      lang.t('content_controls.safe_mode_subtitle'),
                   value: _safeMode,
                   onChanged: (v) => setState(() => _safeMode = v),
                 ),
                 _switchTile(
-                  title: 'Hide Sensitive Content',
+                  title: lang.t('content_controls.hide_sensitive'),
                   subtitle:
-                      'Posts that may contain sensitive or mature content will be hidden',
+                      lang.t('content_controls.hide_sensitive_subtitle'),
                   value: _hideSensitive,
                   onChanged: (v) => setState(() => _hideSensitive = v),
                 ),
                 _switchTile(
-                  title: 'Blur Sensitive Media Thumbnails',
+                  title: lang.t('content_controls.blur_media'),
                   subtitle:
-                      'Media previews that may be sensitive will be blurred',
+                      lang.t('content_controls.blur_media_subtitle'),
                   value: _blurSensitiveMedia,
                   onChanged: (v) => setState(() => _blurSensitiveMedia = v),
                 ),
                 _switchTile(
-                  title: 'Filter Profanity',
-                  subtitle: 'Automatically filter common profane words',
+                  title: lang.t('content_controls.filter_profanity'),
+                  subtitle: lang.t('content_controls.filter_profanity_subtitle'),
                   value: _filterProfanity,
                   onChanged: (v) => setState(() => _filterProfanity = v),
                 ),
                 _switchTile(
-                  title: 'Hide Spoilers',
-                  subtitle: 'Spoiler-tagged content will be hidden',
+                  title: lang.t('content_controls.hide_spoilers'),
+                  subtitle: lang.t('content_controls.hide_spoilers_subtitle'),
                   value: _hideSpoilers,
                   onChanged: (v) => setState(() => _hideSpoilers = v),
                 ),
@@ -104,10 +107,10 @@ class _ContentControlsPageState extends State<ContentControlsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Muted Keywords'),
+                _sectionTitle(lang.t('content_controls.muted_keywords')),
                 const SizedBox(height: 6),
                 Text(
-                  'You will not see posts or comments containing these keywords. Applies to your Home feed and comments threads.',
+                  lang.t('content_controls.muted_keywords_subtitle'),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: const Color(0xFF666666),
@@ -136,9 +139,9 @@ class _ContentControlsPageState extends State<ContentControlsPage> {
                     Expanded(
                       child: TextField(
                         controller: _keywordCtrl,
-                        decoration: const InputDecoration(
-                          hintText: 'Add a keyword to mute',
-                          border: OutlineInputBorder(
+                        decoration: InputDecoration(
+                          hintText: Provider.of<LanguageProvider>(context, listen: false).t('content.add_keyword'),
+                          border: const OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(20)),
                           ),
                         ),
@@ -157,7 +160,7 @@ class _ContentControlsPageState extends State<ContentControlsPage> {
                         ),
                       ),
                       child: Text(
-                        'Add',
+                        Provider.of<LanguageProvider>(context, listen: false).t('content.add'),
                         style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -177,7 +180,7 @@ class _ContentControlsPageState extends State<ContentControlsPage> {
               ),
             ),
             child: Text(
-              'Clear all & reset',
+              Provider.of<LanguageProvider>(context, listen: false).t('content.clear_reset'),
               style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
           ),

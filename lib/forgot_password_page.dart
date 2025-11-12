@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'password_reset_sent_page.dart';
-import 'package:provider/provider.dart';
 import 'repositories/interfaces/auth_repository.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
@@ -75,7 +76,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       children: [
                         // Forgot Password Headline
                         Text(
-                          'Forgot Password?',
+                          Provider.of<LanguageProvider>(context, listen: false).t('forgot.title'),
                           style: GoogleFonts.inter(
                             fontSize: 34,
                             fontWeight: FontWeight.w600,
@@ -99,7 +100,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
-                            hintText: 'Email',
+                            hintText: Provider.of<LanguageProvider>(context, listen: false).t('forgot.email_hint'),
                             hintStyle: GoogleFonts.inter(
                               color: const Color(0xFF666666),
                             ),
@@ -145,7 +146,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                               if (email.isEmpty) {
                                 ScaffoldMessenger.of(navContext).showSnackBar(
                                   SnackBar(
-                                    content: Text('Enter your email', style: GoogleFonts.inter()),
+                                    content: Text(Provider.of<LanguageProvider>(context, listen: false).t('forgot.enter_email'), style: GoogleFonts.inter()),
                                     backgroundColor: Colors.red,
                                   ),
                                 );

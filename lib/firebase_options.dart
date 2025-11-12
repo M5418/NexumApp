@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1076134014363',
     projectId: 'nexum-backend',
     authDomain: 'nexum-backend.firebaseapp.com',
-    storageBucket: 'nexum-backend.firebasestorage.app',
+    storageBucket: 'nexum-backend.appspot.com',
     measurementId: 'G-V652ZVGT9R',
   );
 
@@ -61,15 +61,15 @@ class DefaultFirebaseOptions {
     appId: '1:1076134014363:android:b3873fda113f6e44a7853e',
     messagingSenderId: '1076134014363',
     projectId: 'nexum-backend',
-    storageBucket: 'nexum-backend.firebasestorage.app',
+    storageBucket: 'nexum-backend.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCcw1k2J7ZFx_lV59wow7biKB53m6_c7UU',
-    appId: '1:1076134014363:ios:737c65d23b09e9aca7853e',
+    appId: '1:1076134014363:ios:342d10b845570a00a7853e',
     messagingSenderId: '1076134014363',
     projectId: 'nexum-backend',
-    storageBucket: 'nexum-backend.firebasestorage.app',
-    iosBundleId: 'com.nexum-connects',
+    storageBucket: 'nexum-backend.appspot.com',
+    iosBundleId: 'com.nexumconnects.ios',
   );
 }

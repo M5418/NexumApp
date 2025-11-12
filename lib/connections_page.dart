@@ -22,6 +22,7 @@ import 'repositories/interfaces/podcast_repository.dart';
 import 'core/profile_api.dart';
 
 import 'theme_provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'dart:convert';
 import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
@@ -385,7 +386,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                 children: [
                   _TopNavItem(
                     icon: Icons.home_outlined,
-                    label: 'Home',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.home'),
                     onTap: () {
                       if (Navigator.of(context).canPop()) {
                         Navigator.of(context).pop();
@@ -394,13 +395,13 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                   ),
                   _TopNavItem(
                     icon: Icons.people_outline,
-                    label: 'Connections',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.connections'),
                     selected: true,
                     onTap: () {},
                   ),
                   _TopNavItem(
                     icon: Icons.chat_bubble_outline,
-                    label: 'Conversations',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.conversations'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -416,7 +417,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                   ),
                   _TopNavItem(
                     icon: Icons.person_outline,
-                    label: 'My Profil',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.profile'),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -454,7 +455,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('People',
+            Text(Provider.of<LanguageProvider>(context).t('connections.people'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -522,7 +523,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         ),
         child: Center(
           child: Text(
-            'Select a usersss',
+            Provider.of<LanguageProvider>(context, listen: false).t('connections.select_user'),
             style: GoogleFonts.inter(
               fontSize: 16,
               color: isDark ? Colors.white70 : Colors.black54,
@@ -918,7 +919,7 @@ class _UserGridTile extends StatelessWidget {
                           const Icon(Icons.check_circle,
                               size: 14, color: Color(0xFF4CAF50)),
                           const SizedBox(width: 4),
-                          Text('Connected',
+                          Text(Provider.of<LanguageProvider>(context).t('connections.connected'),
                               style: GoogleFonts.inter(fontSize: 11)),
                         ],
                       ),
@@ -1163,6 +1164,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       final models = await repo.getUserPosts(uid: widget.user.id, limit: 50);
       final posts = models.map((m) => Post(
         id: m.id,
+        authorId: m.authorId,
         userName: widget.user.fullName,
         userAvatarUrl: widget.user.avatarUrl,
         createdAt: m.createdAt,
@@ -1235,6 +1237,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       final models = await repo.getUserPosts(uid: widget.user.id, limit: 50);
       final results = models.map((m) => Post(
         id: m.id,
+        authorId: m.authorId,
         userName: widget.user.fullName,
         userAvatarUrl: widget.user.avatarUrl,
         createdAt: m.createdAt,
@@ -1383,7 +1386,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
             Navigator.pop(ctx);
             ScaffoldMessenger.of(ctx).showSnackBar(
               SnackBar(
-                  content: Text('Invitation sent to ${widget.user.fullName}')),
+                  content: Text('${Provider.of<LanguageProvider>(ctx, listen: false).t('connections.invitation_sent')} ${widget.user.fullName}')),
             );
           },
         ),
@@ -1582,7 +1585,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                                     setState(() => _isConnected = !next);
                                     if (!ctx.mounted) return;
                                     ScaffoldMessenger.of(ctx).showSnackBar(
-                                      SnackBar(content: Text('Failed to ${next ? 'connect' : 'disconnect'}')),
+                                      SnackBar(content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t(next ? 'connections.connect_failed' : 'connections.disconnect_failed'))),
                                     );
                                   }
                                 },
@@ -1669,7 +1672,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                               color:
                                   isDark ? Colors.grey[300] : Colors.black87),
                           const SizedBox(width: 8),
-                          Text('Professional Experiences',
+                          Text(Provider.of<LanguageProvider>(context).t('connections.professional_experiences'),
                               style: GoogleFonts.inter(
                                   fontSize: 16, fontWeight: FontWeight.w600)),
                         ],
@@ -1685,7 +1688,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                           ),
                         )
                       else if (_experiences.isEmpty)
-                        Text('No professional experiences to display',
+                        Text(Provider.of<LanguageProvider>(context).t('connections.no_experiences'),
                             style: GoogleFonts.inter(
                                 fontSize: 14,
                                 color: isDark
@@ -1732,7 +1735,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                               color:
                                   isDark ? Colors.grey[300] : Colors.black87),
                           const SizedBox(width: 8),
-                          Text('Trainings',
+                          Text(Provider.of<LanguageProvider>(context).t('connections.trainings'),
                               style: GoogleFonts.inter(
                                   fontSize: 16, fontWeight: FontWeight.w600)),
                         ],
@@ -1748,7 +1751,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                           ),
                         )
                       else if (_trainings.isEmpty)
-                        Text('No trainings to display',
+                        Text(Provider.of<LanguageProvider>(context).t('connections.no_trainings'),
                             style: GoogleFonts.inter(
                                 fontSize: 14,
                                 color: isDark
@@ -1795,7 +1798,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                               color:
                                   isDark ? Colors.grey[300] : Colors.black87),
                           const SizedBox(width: 8),
-                          Text('Interest',
+                          Text(Provider.of<LanguageProvider>(context).t('connections.interests'),
                               style: GoogleFonts.inter(
                                   fontSize: 16, fontWeight: FontWeight.w600)),
                         ],
@@ -1811,7 +1814,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                           ),
                         )
                       else if (_interests.isEmpty)
-                        Text('No interests to display',
+                        Text(Provider.of<LanguageProvider>(context).t('connections.no_interests'),
                             style: GoogleFonts.inter(
                                 fontSize: 14,
                                 color: isDark
@@ -1891,11 +1894,11 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                   GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
               unselectedLabelStyle:
                   GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400),
-              tabs: const [
-                Tab(text: 'Activity'),
-                Tab(text: 'Posts'),
-                Tab(text: 'Podcasts'),
-                Tab(text: 'Media'),
+              tabs: [
+                Tab(text: Provider.of<LanguageProvider>(context).t('connections.activity')),
+                Tab(text: Provider.of<LanguageProvider>(context).t('connections.posts')),
+                Tab(text: Provider.of<LanguageProvider>(context).t('connections.podcasts')),
+                Tab(text: Provider.of<LanguageProvider>(context).t('connections.media')),
               ],
             ),
           ),
@@ -1924,7 +1927,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       return Center(child: Text(_errorActivity!));
     }
     if (_activityPosts.isEmpty) {
-      return const Center(child: Text('No activity found'));
+      return Center(child: Text(Provider.of<LanguageProvider>(context).t('connections.no_activity')));
     }
     return ListView.builder(
       primary: false,
@@ -1951,7 +1954,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       return Center(child: Text(_errorPosts!));
     }
     if (_userPosts.isEmpty) {
-      return const Center(child: Text('No posts found'));
+      return Center(child: Text(Provider.of<LanguageProvider>(context).t('connections.no_posts')));
     }
     return ListView.builder(
       primary: false,
@@ -1978,7 +1981,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       return Center(child: Text(_errorPodcasts!));
     }
     if (_podcasts.isEmpty) {
-      return const Center(child: Text('No podcasts found'));
+      return Center(child: Text(Provider.of<LanguageProvider>(context).t('connections.no_podcasts')));
     }
     return ListView.builder(
       primary: false,
@@ -2065,7 +2068,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_mediaImageUrls.isEmpty) {
-      return const Center(child: Text('No media found'));
+      return Center(child: Text(Provider.of<LanguageProvider>(context).t('connections.no_media')));
     }
     return GridView.count(
       primary: false,

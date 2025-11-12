@@ -89,12 +89,19 @@ class FirebaseMessageRepository implements MessageRepository {
 
   @override
   Future<List<MessageRecordModel>> list(String conversationId, {int limit = 50}) async {
-    final snap = await _conv(conversationId)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .get();
-    final list = snap.docs.map(_fromDoc).toList();
-    return list.reversed.toList();
+    try {
+      final snap = await _conv(conversationId)
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+      final list = snap.docs.map(_fromDoc).toList();
+      print('✅ Messages fetched: ${list.length} messages for conversation $conversationId');
+      return list.reversed.toList();
+    } catch (e) {
+      print('❌ Messages.list error for $conversationId: $e');
+      print('🔍 Check: 1) Firestore rules for conversations/{id}/messages 2) Auth status');
+      rethrow;
+    }
   }
 
   @override

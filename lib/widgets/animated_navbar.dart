@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:provider/provider.dart';
+import '../core/i18n/language_provider.dart';
 
 class AnimatedNavbar extends StatelessWidget {
   final int selectedIndex;
@@ -17,6 +19,7 @@ class AnimatedNavbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark =
         isDarkMode ?? Theme.of(context).brightness == Brightness.dark;
+    final lang = context.watch<LanguageProvider>();
 
     return Container(
       decoration: BoxDecoration(
@@ -38,12 +41,12 @@ class AnimatedNavbar extends StatelessWidget {
             duration: const Duration(milliseconds: 400),
             tabBackgroundColor: const Color(0xFFBFAE01).withValues(alpha: 0.1),
             color: const Color(0xFF666666),
-            tabs: const [
-              GButton(icon: Icons.home_outlined, text: 'Home'),
-              GButton(icon: Icons.people_outline, text: 'Connections'),
-              GButton(icon: Icons.add_circle_outline, text: '', iconSize: 28),
-              GButton(icon: Icons.chat_bubble_outline, text: 'Conversations'),
-              GButton(icon: Icons.person_outline, text: 'Profile'),
+            tabs: [
+              GButton(icon: Icons.home_outlined, text: lang.t('nav.home')),
+              GButton(icon: Icons.people_outline, text: lang.t('nav.connections')),
+              const GButton(icon: Icons.add_circle_outline, text: '', iconSize: 28),
+              GButton(icon: Icons.chat_bubble_outline, text: lang.t('nav.conversations')),
+              GButton(icon: Icons.person_outline, text: lang.t('nav.profile')),
             ],
             selectedIndex: selectedIndex,
             onTabChange: onTabChange,

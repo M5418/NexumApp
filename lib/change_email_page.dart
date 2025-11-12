@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/auth_repository.dart';
 import 'core/profile_api.dart';
 
@@ -29,12 +30,12 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
     final pwd = _passwordController.text.trim();
 
     if (newEmail.isEmpty || pwd.isEmpty) {
-      _showSnack('Please fill in all fields');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_email.email_required'));
       return;
     }
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     if (!emailRegex.hasMatch(newEmail)) {
-      _showSnack('Enter a valid email');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_email.invalid_email'));
       return;
     }
 
@@ -47,10 +48,10 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
         await ProfileApi().update({'email': newEmail});
       } catch (_) {}
       if (!mounted) return;
-      _showSnack('Email updated successfully');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_email.success'));
       Navigator.pop(context);
     } catch (e) {
-      _showSnack('Failed to update email');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_email.failed'));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -64,6 +65,7 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -85,7 +87,7 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
                 children: [
                   const SizedBox(height: 50),
                   Text(
-                    'NEXUM',
+                    lang.t('app.name'),
                     style: GoogleFonts.inika(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -112,7 +114,7 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          'Change Email',
+                          lang.t('change_email.title'),
                           style: GoogleFonts.inter(
                             fontSize: 34,
                             fontWeight: FontWeight.w600,
@@ -121,7 +123,7 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Enter your new email and your current password to confirm',
+                          lang.t('change_email.subtitle'),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
                             fontSize: 14,
@@ -133,14 +135,14 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
                         TextField(
                           controller: _newEmailController,
                           keyboardType: TextInputType.emailAddress,
-                          decoration: _decoration(isDarkMode, 'New email'),
+                          decoration: _decoration(isDarkMode, lang.t('change_email.new_email')),
                           style: GoogleFonts.inter(color: isDarkMode ? Colors.white : Colors.black),
                         ),
                         const SizedBox(height: 16),
                         TextField(
                           controller: _passwordController,
                           obscureText: true,
-                          decoration: _decoration(isDarkMode, 'Current password'),
+                          decoration: _decoration(isDarkMode, lang.t('change_email.current_password')),
                           style: GoogleFonts.inter(color: isDarkMode ? Colors.white : Colors.black),
                         ),
                         const SizedBox(height: 32),
@@ -161,7 +163,7 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
                                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                                   )
                                 : Text(
-                                    'Request Change',
+                                    lang.t('change_email.submit'),
                                     style: GoogleFonts.inter(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -174,7 +176,7 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
                         GestureDetector(
                           onTap: () => Navigator.pop(context),
                           child: Text(
-                            'Back to Account Center',
+                            lang.t('change_email.back'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               color: const Color(0xFFBFAE01),

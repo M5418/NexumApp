@@ -2,19 +2,25 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:math';
 import 'package:firebase_storage/firebase_storage.dart' as fs;
+import 'package:firebase_auth/firebase_auth.dart';
 
 class FilesApi {
 
   Future<Map<String, String>> uploadFile(File file) async {
     final ext = _extensionOf(file.path);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    
+    if (uid == null) {
+      throw Exception('User not authenticated');
+    }
 
-    // 1) presign
+    // 1) Generate unique file name with user ID
     final rand = Random();
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     final r = List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
-    final key = 'uploads/${DateTime.now().microsecondsSinceEpoch}-$r.$ext';
+    final key = 'uploads/$uid/${DateTime.now().microsecondsSinceEpoch}-$r.$ext';
 
-    // 2) upload to S3 via presigned URL
+    // 2) Upload to Firebase Storage
     final ref = fs.FirebaseStorage.instance.ref(key);
     await ref.putFile(
       file,
@@ -22,30 +28,30 @@ class FilesApi {
     );
     final bestUrl = await ref.getDownloadURL();
 
-    // 3) confirm (non-blocking)
-    try {} catch (_) {}
-
     return {'key': key, 'url': bestUrl};
   }
 
   // Web-friendly: upload raw bytes (e.g., from FilePicker on web)
   Future<Map<String, String>> uploadBytes(Uint8List bytes, {required String ext}) async {
-    // 1) presign
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    
+    if (uid == null) {
+      throw Exception('User not authenticated');
+    }
+
+    // 1) Generate unique file name with user ID
     final rand = Random();
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     final r = List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
-    final key = 'uploads/${DateTime.now().microsecondsSinceEpoch}-$r.$ext';
+    final key = 'uploads/$uid/${DateTime.now().microsecondsSinceEpoch}-$r.$ext';
 
-    // 2) upload bytes
+    // 2) Upload bytes
     final ref = fs.FirebaseStorage.instance.ref(key);
     await ref.putData(
       bytes,
       fs.SettableMetadata(contentType: _contentTypeForExt(ext)),
     );
     final bestUrl = await ref.getDownloadURL();
-
-    // 3) confirm (non-blocking)
-    try {} catch (_) {}
 
     return {'key': key, 'url': bestUrl};
   }

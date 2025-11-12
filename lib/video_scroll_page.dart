@@ -5,7 +5,10 @@ import 'package:dio/dio.dart';
 
 import 'models/post.dart';
 import 'models/comment.dart';
-import 'core/posts_api.dart';
+import 'repositories/models/post_model.dart';
+import 'repositories/firebase/firebase_post_repository.dart';
+import 'repositories/firebase/firebase_comment_repository.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'widgets/custom_video_player.dart';
 import 'widgets/reaction_picker.dart';
@@ -30,6 +33,10 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
   List<Post> _videoPosts = [];
   String? _currentUserId;
+
+  final FirebasePostRepository _postRepo = FirebasePostRepository();
+  final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
+  final FirebaseUserRepository _userRepo = FirebaseUserRepository();
 
   @override
   void initState() {
@@ -64,10 +71,9 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
   Future<void> _loadVideoPosts() async {
     try {
-      // Fetch feed and keep only video posts
-      final posts = await PostsApi().listFeed(limit: 50, offset: 0);
-      final onlyVideos =
-          posts.where((p) => p.mediaType == MediaType.video).toList();
+      final models = await _postRepo.getFeed(limit: 50);
+      final posts = await _mapModelsToPosts(models);
+      final onlyVideos = posts.where((p) => p.mediaType == MediaType.video).toList();
       if (!mounted) return;
       setState(() {
         _videoPosts = onlyVideos;
@@ -81,6 +87,73 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         ),
       );
     }
+  }
+
+  Future<List<Post>> _mapModelsToPosts(List<PostModel> models) async {
+    final out = <Post>[];
+    for (final m in models) {
+      out.add(await _toPost(m));
+    }
+    return out;
+  }
+
+  Future<Post> _toPost(PostModel m) async {
+    final author = await _userRepo.getUserProfile(m.authorId);
+    final uid = _currentUserId;
+    bool isBookmarked = false;
+    bool isLiked = false;
+    if (uid != null && uid.isNotEmpty) {
+      isBookmarked = await _postRepo.hasUserBookmarkedPost(postId: m.id, uid: uid);
+      isLiked = await _postRepo.hasUserLikedPost(postId: m.id, uid: uid);
+    }
+    MediaType mediaType;
+    String? videoUrl;
+    if (m.mediaUrls.isEmpty) {
+      mediaType = MediaType.none;
+      videoUrl = null;
+    } else {
+      final hasVideo = m.mediaUrls.any((u) {
+        final l = u.toLowerCase();
+        return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+      });
+      if (hasVideo) {
+        mediaType = MediaType.video;
+        videoUrl = m.mediaUrls.firstWhere(
+          (u) {
+            final l = u.toLowerCase();
+            return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+          },
+          orElse: () => m.mediaUrls.first,
+        );
+      } else {
+        mediaType = (m.mediaUrls.length == 1) ? MediaType.image : MediaType.images;
+        videoUrl = null;
+      }
+    }
+    int clamp(int v) => v < 0 ? 0 : v;
+    return Post(
+      id: m.id,
+      authorId: m.authorId,
+      userName: author?.displayName ?? author?.username ?? author?.email ?? 'User',
+      userAvatarUrl: author?.avatarUrl ?? '',
+      createdAt: m.createdAt,
+      text: m.text,
+      mediaType: mediaType,
+      imageUrls: m.mediaUrls,
+      videoUrl: videoUrl,
+      counts: PostCounts(
+        likes: clamp(m.summary.likes),
+        comments: clamp(m.summary.comments),
+        shares: clamp(m.summary.shares),
+        reposts: clamp(m.summary.reposts),
+        bookmarks: clamp(m.summary.bookmarks),
+      ),
+      userReaction: isLiked ? ReactionType.like : null,
+      isBookmarked: isBookmarked,
+      isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
+      repostedBy: null,
+      originalPostId: m.repostOf,
+    );
   }
 
   String _toError(Object e) {
@@ -141,7 +214,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         _videoPosts[postIndex] = optimistic;
       });
       try {
-        await PostsApi().like(original.id);
+        await _postRepo.likePost(original.id);
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -174,7 +247,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         _videoPosts[postIndex] = optimistic;
       });
       try {
-        await PostsApi().unlike(original.id);
+        await _postRepo.unlikePost(original.id);
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -219,7 +292,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         _videoPosts[idx] = optimistic;
       });
       try {
-        await PostsApi().like(post.id);
+        await _postRepo.likePost(post.id);
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -262,7 +335,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         _videoPosts[idx] = optimistic;
       });
       try {
-        await PostsApi().unlike(post.id);
+        await _postRepo.unlikePost(post.id);
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -305,9 +378,9 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
     try {
       if (willBookmark) {
-        await PostsApi().bookmark(postId);
+        await _postRepo.bookmarkPost(postId);
       } else {
-        await PostsApi().unbookmark(postId);
+        await _postRepo.unbookmarkPost(postId);
       }
     } catch (e) {
       if (!mounted) return;
@@ -762,7 +835,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
               icon,
               color: isActive
                   ? const Color(0xFFBFAE01)
-                  : (isDark ? Colors.white : Colors.black),
+                  : const Color(0xFF666666),
               size: 24,
             ),
           ),
@@ -786,7 +859,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
   List<Comment> comments = [];
   try {
-    comments = await PostsApi().listComments(postId);
+    comments = await _loadCommentsForPost(postId);
   } catch (e) {
     if (!ctx.mounted) return;
     ScaffoldMessenger.of(ctx).showSnackBar(
@@ -807,7 +880,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     isDarkMode: isDark,
     onAddComment: (text) async {
       try {
-        await PostsApi().addComment(postId, content: text);
+        await _commentRepo.createComment(postId: postId, text: text);
 
         // Optimistically increment comments count on the post
         final idx = _findPostIndex(postId);
@@ -844,7 +917,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     },
     onReplyToComment: (commentId, replyText) async {
       try {
-        await PostsApi().addComment(postId, content: replyText, parentCommentId: commentId);
+        await _commentRepo.createComment(postId: postId, text: replyText, parentCommentId: commentId);
         if (!ctx.mounted) return;
         ScaffoldMessenger.of(ctx).showSnackBar(
           SnackBar(
@@ -864,6 +937,28 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     },
   );
 }
+
+  Future<List<Comment>> _loadCommentsForPost(String postId) async {
+    final list = await _commentRepo.getComments(postId: postId, limit: 200);
+    final uids = list.map((m) => m.authorId).toSet().toList();
+    final profiles = await _userRepo.getUsers(uids);
+    final byId = {for (final p in profiles) p.uid: p};
+    return list.map((m) {
+      final u = byId[m.authorId];
+      return Comment(
+        id: m.id,
+        userId: m.authorId,
+        userName: (u?.displayName ?? u?.username ?? 'User'),
+        userAvatarUrl: (u?.avatarUrl ?? ''),
+        text: m.text,
+        createdAt: m.createdAt,
+        likesCount: m.likesCount,
+        isLikedByUser: false,
+        replies: const [],
+        parentCommentId: m.parentCommentId,
+      );
+    }).toList();
+  }
 
   String _formatTimeAgo(DateTime dateTime) {
     final now = DateTime.now();

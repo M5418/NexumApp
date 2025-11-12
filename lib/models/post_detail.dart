@@ -3,6 +3,7 @@ import 'comment.dart';
 
 class PostDetail {
   final String id;
+  final String authorId;
   final String authorName;
   final String authorAvatarUrl;
   final DateTime createdAt;
@@ -17,6 +18,7 @@ class PostDetail {
 
   PostDetail({
     required this.id,
+    required this.authorId,
     required this.authorName,
     required this.authorAvatarUrl,
     required this.createdAt,

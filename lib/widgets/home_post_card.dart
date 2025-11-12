@@ -4,9 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:readmore/readmore.dart';
 import '../models/post.dart';
 import '../other_user_profile_page.dart';
-import 'auto_play_video.dart';
+import 'package:provider/provider.dart';
 import 'reaction_picker.dart';
+import '../repositories/firebase/firebase_translate_repository.dart';
+import '../core/i18n/language_provider.dart';
 import '../core/time_utils.dart';
+import 'auto_play_video.dart';
 
 class HomePostCard extends StatefulWidget {
   final Post post;
@@ -34,13 +37,67 @@ class HomePostCard extends StatefulWidget {
 
 class _HomePostCardState extends State<HomePostCard> {
   bool _showTranslation = false;
+  String? _translatedText;
+  String? _lastUgcCode;
 
-  void _toggleTranslation() {
-    setState(() {
-      _showTranslation = !_showTranslation;
-    });
+  Future<void> _translateCurrentText(String target) async {
+    final text = widget.post.text.trim();
+    if (text.isEmpty) return;
+    try {
+      final repo = FirebaseTranslateRepository();
+      final translated = await repo.translateText(text, target);
+      if (!mounted) return;
+      setState(() {
+        _translatedText = translated;
+      });
+    } catch (_) {}
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final code = Provider.of<LanguageProvider>(context).ugcTargetCode;
+    if (code != _lastUgcCode) {
+      _lastUgcCode = code;
+      if (_showTranslation) {
+        _translatedText = null;
+        _translateCurrentText(code);
+      }
+    }
+  }
+
+  Future<void> _toggleTranslation() async {
+    final text = widget.post.text.trim();
+    if (!_showTranslation && text.isNotEmpty) {
+      if (_translatedText == null) {
+        try {
+          final target = context.read<LanguageProvider>().ugcTargetCode;
+          final repo = FirebaseTranslateRepository();
+          final translated = await repo.translateText(text, target);
+          if (!mounted) return;
+          setState(() {
+            _translatedText = translated;
+            _lastUgcCode = target;
+          });
+        } catch (_) {}
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _showTranslation = !_showTranslation;
+      });
+    }
+  }
+
+  // Returns original post ID for reposts, otherwise current post ID
+  String _effectivePostId() {
+    if (widget.post.isRepost &&
+        (widget.post.originalPostId != null &&
+            widget.post.originalPostId!.isNotEmpty)) {
+      return widget.post.originalPostId!;
+    }
+    return widget.post.id;
+  }
 
   IconData _getReactionIcon(ReactionType? reaction) {
     switch (reaction) {
@@ -216,7 +273,7 @@ class _HomePostCardState extends State<HomePostCard> {
           if (widget.post.text.isNotEmpty) ...[
             ReadMoreText(
               _showTranslation
-                  ? 'Translated: ${widget.post.text}'
+                  ? (_translatedText ?? widget.post.text)
                   : widget.post.text,
               trimMode: TrimMode.Length,
               trimLength: 300,
@@ -236,17 +293,19 @@ class _HomePostCardState extends State<HomePostCard> {
               ),
             ),
             const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _toggleTranslation,
-              child: Text(
-                _showTranslation ? 'Show Original' : 'Translate',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: const Color(0xFFBFAE01),
-                  fontWeight: FontWeight.w500,
+            // Only show translate button if translation is enabled in settings
+            if (context.watch<LanguageProvider>().postTranslationEnabled)
+              GestureDetector(
+                onTap: _toggleTranslation,
+                child: Text(
+                  _showTranslation ? 'Show Original' : 'Translate',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: const Color(0xFFBFAE01),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: 16),
           ],
 
@@ -362,12 +421,12 @@ class _HomePostCardState extends State<HomePostCard> {
                   onTap: () {
                     if (widget.post.userReaction != null) {
                       widget.onReactionChanged?.call(
-                        widget.post.id,
+                        _effectivePostId(),
                         widget.post.userReaction!,
                       );
                     } else {
                       widget.onReactionChanged?.call(
-                        widget.post.id,
+                        _effectivePostId(),
                         ReactionType.like,
                       );
                     }
@@ -410,7 +469,7 @@ class _HomePostCardState extends State<HomePostCard> {
 
               // Comment button
               GestureDetector(
-                onTap: () => widget.onComment?.call(widget.post.id),
+                onTap: () => widget.onComment?.call(_effectivePostId()),
                 child: Row(
                   children: [
                     const Icon(
@@ -434,7 +493,7 @@ class _HomePostCardState extends State<HomePostCard> {
 
               // Share button
               GestureDetector(
-                onTap: () => widget.onShare?.call(widget.post.id),
+                onTap: () => widget.onShare?.call(_effectivePostId()),
                 child: Row(
                   children: [
                     const Icon(
@@ -458,7 +517,7 @@ class _HomePostCardState extends State<HomePostCard> {
 
               // Repost button
               GestureDetector(
-                onTap: () => widget.onRepost?.call(widget.post.id),
+                onTap: () => widget.onRepost?.call(_effectivePostId()),
                 child: Row(
                   children: [
                     const Icon(
@@ -482,7 +541,7 @@ class _HomePostCardState extends State<HomePostCard> {
 
               // Bookmark button
               GestureDetector(
-                onTap: () => widget.onBookmarkToggle?.call(widget.post.id),
+                onTap: () => widget.onBookmarkToggle?.call(_effectivePostId()),
                 child: Row(
                   children: [
                     Icon(
@@ -602,7 +661,13 @@ class HomeReactionPickerManager {
                 child: ReactionPicker(
                   currentReaction: post.userReaction,
                   onReactionSelected: (reaction) {
-                    onReactionChanged(post.id, reaction);
+                    // Use original post ID for reposts, otherwise current post ID
+                    final effectiveId = (post.isRepost && 
+                        post.originalPostId != null && 
+                        post.originalPostId!.isNotEmpty) 
+                        ? post.originalPostId! 
+                        : post.id;
+                    onReactionChanged(effectiveId, reaction);
                     hideReactions();
                   },
                 ),

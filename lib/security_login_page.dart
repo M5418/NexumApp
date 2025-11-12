@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'core/i18n/language_provider.dart';
 
 class SecurityLoginPage extends StatefulWidget {
   const SecurityLoginPage({super.key});
@@ -22,6 +24,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final background = isDark
         ? const Color(0xFF0C0C0C)
@@ -39,7 +42,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Security & Login',
+          lang.t('security.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -56,18 +59,18 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Alerts & 2FA'),
+                _sectionTitle(lang.t('security.alerts_2fa')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Login Alerts',
+                  title: lang.t('security.login_alerts'),
                   subtitle:
-                      'Get notified when a new device logs in to your account',
+                      Provider.of<LanguageProvider>(context, listen: false).t('security.notification_subtitle'),
                   value: _loginAlerts,
                   onChanged: (v) => setState(() => _loginAlerts = v),
                 ),
                 _switchTile(
-                  title: 'Two-Factor Authentication',
-                  subtitle: 'Use an authenticator app to secure your logins',
+                  title: lang.t('security.two_factor'),
+                  subtitle: Provider.of<LanguageProvider>(context, listen: false).t('security.subtitle'),
                   value: _twoFactor,
                   onChanged: (v) => setState(() => _twoFactor = v),
                 ),
@@ -77,18 +80,18 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
                     child: ListTile(
                       leading: const Icon(Icons.qr_code),
                       title: Text(
-                        'Set up authenticator app',
+                        Provider.of<LanguageProvider>(context, listen: false).t('security.setup_authenticator'),
                         style: GoogleFonts.inter(fontWeight: FontWeight.w500),
                       ),
                       subtitle: Text(
-                        'Scan a QR code in your OTP app',
+                        Provider.of<LanguageProvider>(context, listen: false).t('security.scan_qr'),
                         style: GoogleFonts.inter(
                           color: const Color(0xFF666666),
                           fontSize: 12,
                         ),
                       ),
                       onTap: () =>
-                          _showSnack('Authenticator setup (placeholder)'),
+                          _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('security.authenticator_placeholder')),
                     ),
                   ),
               ],
@@ -100,7 +103,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Remembered Devices'),
+                _sectionTitle(lang.t('security.remembered_devices')),
                 const SizedBox(height: 8),
                 ..._rememberedDevices.map(
                   (d) => ListTile(
@@ -113,7 +116,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
                       onPressed: () =>
                           setState(() => _rememberedDevices.remove(d)),
                       child: Text(
-                        'Remove',
+                        Provider.of<LanguageProvider>(context, listen: false).t('security.remove'),
                         style: GoogleFonts.inter(
                           color: const Color(0xFFBFAE01),
                           fontWeight: FontWeight.w600,
@@ -126,7 +129,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
-                      'No remembered devices',
+                      Provider.of<LanguageProvider>(context, listen: false).t('security.no_devices'),
                       style: GoogleFonts.inter(color: const Color(0xFF666666)),
                     ),
                   ),
@@ -139,7 +142,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Active Sessions'),
+                _sectionTitle(lang.t('security.active_sessions')),
                 const SizedBox(height: 8),
                 ..._activeSessions.map(
                   (s) => ListTile(
@@ -152,7 +155,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
                       onPressed: () =>
                           setState(() => _activeSessions.remove(s)),
                       child: Text(
-                        'Sign out',
+                        Provider.of<LanguageProvider>(context, listen: false).t('security.sign_out'),
                         style: GoogleFonts.inter(
                           color: const Color(0xFFBFAE01),
                           fontWeight: FontWeight.w600,
@@ -165,7 +168,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
-                      'No active sessions',
+                      lang.t('security.no_active_sessions'),
                       style: GoogleFonts.inter(color: const Color(0xFF666666)),
                     ),
                   ),
@@ -175,7 +178,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
                   child: OutlinedButton(
                     onPressed: () {
                       setState(() => _activeSessions.clear());
-                      _showSnack('Signed out of all sessions');
+                      _showSnack(lang.t('security.signed_out_all_sessions'));
                     },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFBFAE01),
@@ -188,7 +191,7 @@ class _SecurityLoginPageState extends State<SecurityLoginPage> {
                       ),
                     ),
                     child: Text(
-                      'Sign out all',
+                      Provider.of<LanguageProvider>(context, listen: false).t('security.sign_out_all'),
                       style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                     ),
                   ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/auth_repository.dart';
 
 class ChangePasswordPage extends StatefulWidget {
@@ -71,6 +72,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -119,7 +121,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          'Change Password',
+                          lang.t('change_password.title'),
                           style: GoogleFonts.inter(
                             fontSize: 34,
                             fontWeight: FontWeight.w600,
@@ -128,7 +130,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Enter your current password and your new password',
+                          lang.t('change_password.subtitle'),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
                             fontSize: 14,
@@ -142,14 +144,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         TextField(
                           controller: _currentController,
                           obscureText: !_showCurrent,
-                          decoration: _decoration(isDarkMode, 'Current password').copyWith(
+                          decoration: _decoration(isDarkMode, lang.t('change_password.current')).copyWith(
                             suffixIcon: IconButton(
                               onPressed: () => setState(() => _showCurrent = !_showCurrent),
                               icon: Icon(
                                 _showCurrent ? Icons.visibility_off : Icons.visibility,
                                 color: isDarkMode ? Colors.white : Colors.black,
                               ),
-                              tooltip: _showCurrent ? 'Hide password' : 'Show password',
+                              tooltip: _showCurrent ? lang.t('change_password.hide_password') : lang.t('change_password.show_password'),
                             ),
                           ),
                           style: GoogleFonts.inter(color: isDarkMode ? Colors.white : Colors.black),
@@ -160,14 +162,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         TextField(
                           controller: _newController,
                           obscureText: !_showNew,
-                          decoration: _decoration(isDarkMode, 'New password').copyWith(
+                          decoration: _decoration(isDarkMode, lang.t('change_password.new')).copyWith(
                             suffixIcon: IconButton(
                               onPressed: () => setState(() => _showNew = !_showNew),
                               icon: Icon(
                                 _showNew ? Icons.visibility_off : Icons.visibility,
                                 color: isDarkMode ? Colors.white : Colors.black,
                               ),
-                              tooltip: _showNew ? 'Hide password' : 'Show password',
+                              tooltip: _showNew ? lang.t('change_password.hide_password') : lang.t('change_password.show_password'),
                             ),
                           ),
                           style: GoogleFonts.inter(color: isDarkMode ? Colors.white : Colors.black),
@@ -178,14 +180,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         TextField(
                           controller: _confirmController,
                           obscureText: !_showConfirm,
-                          decoration: _decoration(isDarkMode, 'Confirm new password').copyWith(
+                          decoration: _decoration(isDarkMode, lang.t('change_password.confirm')).copyWith(
                             suffixIcon: IconButton(
                               onPressed: () => setState(() => _showConfirm = !_showConfirm),
                               icon: Icon(
                                 _showConfirm ? Icons.visibility_off : Icons.visibility,
                                 color: isDarkMode ? Colors.white : Colors.black,
                               ),
-                              tooltip: _showConfirm ? 'Hide password' : 'Show password',
+                              tooltip: Provider.of<LanguageProvider>(context, listen: false).t(_showConfirm ? 'common.hide_password' : 'common.show_password'),
                             ),
                           ),
                           style: GoogleFonts.inter(color: isDarkMode ? Colors.white : Colors.black),
@@ -204,7 +206,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                             child: _submitting
                                 ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                                 : Text(
-                                    'Request Change',
+                                    lang.t('change_password.submit'),
                                     style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
                                   ),
                           ),
@@ -213,7 +215,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         GestureDetector(
                           onTap: () => Navigator.pop(context),
                           child: Text(
-                            'Back to Account Center',
+                            lang.t('change_password.back'),
                             style: GoogleFonts.inter(fontSize: 16, color: const Color(0xFFBFAE01), fontWeight: FontWeight.w500),
                           ),
                         ),

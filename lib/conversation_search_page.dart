@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import 'widgets/segmented_tabs.dart';
 import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/conversation_repository.dart';
 import 'repositories/interfaces/community_repository.dart';
 import 'chat_page.dart';
@@ -220,8 +221,8 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
                                 isDense: true,
                                 border: InputBorder.none,
                                 hintText: _selectedTabIndex == 0
-                                    ? 'Search chats...'
-                                    : 'Search communities...',
+                                    ? Provider.of<LanguageProvider>(context, listen: false).t('convsearch.search_chats')
+                                    : Provider.of<LanguageProvider>(context, listen: false).t('convsearch.search_communities'),
                                 hintStyle: GoogleFonts.inter(
                                   color: const Color(0xFF666666),
                                 ),
@@ -260,7 +261,7 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: SegmentedTabs(
-              tabs: const ['Chats', 'Communities'],
+              tabs: [Provider.of<LanguageProvider>(context, listen: false).t('convsearch.tabs_chats'), Provider.of<LanguageProvider>(context, listen: false).t('convsearch.tabs_communities')],
               selectedIndex: _selectedTabIndex,
               onTabSelected: (i) => setState(() => _selectedTabIndex = i),
             ),
@@ -281,10 +282,10 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
         return _errorBox(_errorConversations!);
       }
       if (_controller.text.isEmpty) {
-        return _hint('Start typing to search your chats');
+        return _hint(Provider.of<LanguageProvider>(context, listen: false).t('convsearch.start_typing'));
       }
       if (_convResults.isEmpty) {
-        return _hint('No chats match your search');
+        return _hint(Provider.of<LanguageProvider>(context, listen: false).t('convsearch.no_match'));
       }
       return RefreshIndicator(
         color: const Color(0xFFBFAE01),

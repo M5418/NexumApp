@@ -15,6 +15,7 @@ import 'services/auth_service.dart';
 import 'app_wrapper.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'core/i18n/language_provider.dart';
+import 'theme_provider.dart';
 
 class SettingsPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -81,8 +82,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = widget.isDarkMode ?? theme.brightness == Brightness.dark;
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
     final lang = context.watch<LanguageProvider>();
 
     final isDesktop = context.isDesktop || context.isLargeDesktop;
@@ -109,7 +109,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(width: 8),
             Text(
-              'NEXUM',
+              lang.t('app.name'),
               style: GoogleFonts.inika(
                 fontSize: 22,
                 fontWeight: FontWeight.w600,

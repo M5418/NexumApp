@@ -5,6 +5,8 @@ import 'books_home_page.dart' show Book;
 import 'book_read_page.dart';
 import 'book_play_page.dart';
 import '../repositories/interfaces/book_repository.dart';
+import '../repositories/interfaces/bookmark_repository.dart';
+import '../repositories/models/bookmark_model.dart';
 
 class BookDetailsPage extends StatefulWidget {
   final Book book;
@@ -58,8 +60,16 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
     final newFavorite = !widget.book.meFavorite;
     try {
       final bookRepo = context.read<BookRepository>();
+      final bookmarkRepo = context.read<BookmarkRepository>();
       if (newFavorite) {
         await bookRepo.bookmarkBook(widget.book.id);
+        // Save to bookmarks collection
+        await bookmarkRepo.bookmarkBook(
+          bookId: widget.book.id,
+          title: widget.book.title,
+          coverUrl: widget.book.coverUrl,
+          authorName: widget.book.author,
+        );
         if (!mounted) return;
         setState(() {
           book.meFavorite = true;
@@ -67,6 +77,8 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
         });
       } else {
         await bookRepo.unbookmarkBook(widget.book.id);
+        // Remove from bookmarks collection
+        await bookmarkRepo.removeBookmarkByItem(widget.book.id, BookmarkType.book);
         if (!mounted) return;
         setState(() {
           book.meFavorite = false;

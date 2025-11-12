@@ -7,7 +7,8 @@ import 'package:dio/dio.dart';
 import 'models/post.dart';
 import 'repositories/interfaces/community_repository.dart';
 import 'repositories/interfaces/post_repository.dart';
-import 'core/posts_api.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/models/post_model.dart';
 import 'community_post_page.dart';
 import 'theme_provider.dart';
 import 'widgets/post_card.dart';
@@ -44,14 +45,13 @@ class _CommunityPageState extends State<CommunityPage> {
 
   late CommunityRepository _commRepo;
   late PostRepository _postRepo;
-  late PostsApi _postsApi;
+  final FirebaseUserRepository _userRepo = FirebaseUserRepository();
 
   @override
   void initState() {
     super.initState();
     _commRepo = context.read<CommunityRepository>();
     _postRepo = context.read<PostRepository>();
-    _postsApi = PostsApi();
     _loadAll();
   }
 
@@ -99,8 +99,9 @@ class _CommunityPageState extends State<CommunityPage> {
     });
 
     try {
-      final list = await _postsApi.listCommunityPosts(
-          communityId: widget.communityId, limit: 100, offset: 0);
+      final models = await _postRepo.getCommunityPosts(
+          communityId: widget.communityId, limit: 100);
+      final list = await _mapModelsToPosts(models);
       if (!mounted) return;
       setState(() {
         _posts = list;
@@ -151,6 +152,65 @@ class _CommunityPageState extends State<CommunityPage> {
         });
       }
     }
+  }
+
+  Future<Post> _toPost(PostModel m) async {
+    final author = await _userRepo.getUserProfile(m.authorId);
+    MediaType mediaType;
+    String? videoUrl;
+    if (m.mediaUrls.isEmpty) {
+      mediaType = MediaType.none;
+      videoUrl = null;
+    } else {
+      final hasVideo = m.mediaUrls.any((u) {
+        final l = u.toLowerCase();
+        return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+      });
+      if (hasVideo) {
+        mediaType = MediaType.video;
+        videoUrl = m.mediaUrls.firstWhere(
+          (u) {
+            final l = u.toLowerCase();
+            return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+          },
+          orElse: () => m.mediaUrls.first,
+        );
+      } else {
+        mediaType = (m.mediaUrls.length == 1) ? MediaType.image : MediaType.images;
+        videoUrl = null;
+      }
+    }
+    return Post(
+      id: m.id,
+      authorId: m.authorId,
+      userName: author?.displayName ?? author?.username ?? author?.email ?? 'User',
+      userAvatarUrl: author?.avatarUrl ?? '',
+      createdAt: m.createdAt,
+      text: m.text,
+      mediaType: mediaType,
+      imageUrls: m.mediaUrls,
+      videoUrl: videoUrl,
+      counts: PostCounts(
+        likes: m.summary.likes,
+        comments: m.summary.comments,
+        shares: m.summary.shares,
+        reposts: m.summary.reposts,
+        bookmarks: m.summary.bookmarks,
+      ),
+      userReaction: null,
+      isBookmarked: false,
+      isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
+      repostedBy: null,
+      originalPostId: m.repostOf,
+    );
+  }
+
+  Future<List<Post>> _mapModelsToPosts(List<PostModel> models) async {
+    final out = <Post>[];
+    for (final m in models) {
+      out.add(await _toPost(m));
+    }
+    return out;
   }
 
   String _toError(Object e) {
@@ -278,6 +338,7 @@ class _CommunityPageState extends State<CommunityPage> {
       // Build a new Post to null-out userReaction
       final optimistic = Post(
         id: original.id,
+        authorId: original.authorId,
         userName: original.userName,
         userAvatarUrl: original.userAvatarUrl,
         createdAt: original.createdAt,

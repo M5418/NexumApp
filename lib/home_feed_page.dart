@@ -15,8 +15,14 @@ import 'create_post_page.dart';
 import 'conversations_page.dart';
 import 'profile_page.dart';
 import 'post_page.dart';
-import 'core/posts_api.dart';
+// removed PostsApi usage
+import 'repositories/firebase/firebase_post_repository.dart';
+import 'repositories/firebase/firebase_comment_repository.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/models/post_model.dart';
 import 'repositories/interfaces/story_repository.dart';
+import 'repositories/interfaces/bookmark_repository.dart';
+import 'repositories/models/bookmark_model.dart';
 import 'models/post.dart';
 import 'models/comment.dart';
 import 'theme_provider.dart';
@@ -32,11 +38,13 @@ import 'mentorship/mentorship_home_page.dart';
 import 'video_scroll_page.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:firebase_storage/firebase_storage.dart' as fs;
 import 'repositories/firebase/firebase_notification_repository.dart';
+import 'repositories/interfaces/block_repository.dart';
 import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
-import 'core/users_api.dart'; // Suggested users (right column)
 import 'responsive/responsive_breakpoints.dart';
+import 'core/i18n/language_provider.dart';
 
 class HomeFeedPage extends StatefulWidget {
   const HomeFeedPage({super.key});
@@ -66,12 +74,20 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   bool _prefShowSuggested = true;
   bool _prefPrioritizeInterests = true;
   List<String> _myInterests = [];
+  
+  // Blocked users list
+  Set<String> _blockedUserIds = {};
+
+  final FirebasePostRepository _postRepo = FirebasePostRepository();
+  final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
+  final FirebaseUserRepository _userRepo = FirebaseUserRepository();
 
   @override
   void initState() {
     super.initState();
     () async {
       await _loadCurrentUserId();
+      await _loadBlockedUsers();
       await _loadFeedPrefs(); // load prefs before posts
       await _loadData();
       await _loadUnreadCount();
@@ -128,6 +144,19 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       setState(() {
         _currentUserId = null;
       });
+    }
+  }
+
+  Future<void> _loadBlockedUsers() async {
+    try {
+      final blockRepo = context.read<BlockRepository>();
+      final blockedUsers = await blockRepo.getBlockedUsers();
+      if (!mounted) return;
+      setState(() {
+        _blockedUserIds = blockedUsers.map((u) => u.blockedUid).toSet();
+      });
+    } catch (e) {
+      // Ignore error, defaults to empty set
     }
   }
 
@@ -201,9 +230,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     await _loadFeedPrefs();
 
     try {
-      posts = await PostsApi().listFeed(limit: 20, offset: 0);
+      final models = await _postRepo.getFeed(limit: 20);
+      posts = await _mapModelsToPosts(models);
       posts = await _hydrateReposts(posts);
-      // Apply filters based on preferences
       posts = _applyFeedFilters(posts);
     } catch (e) {
       errMsg = 'Posts failed: ${_toError(e)}';
@@ -252,13 +281,19 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   Future<void> _loadSuggestedUsers() async {
     try {
-      final list = await UsersApi().list();
+      final userRepo = FirebaseUserRepository();
+      final models = await userRepo.getSuggestedUsers(limit: 12);
       if (!mounted) return;
       setState(() {
-        _suggestedUsers = list
-            .where((u) => (u['id']?.toString() ?? '') != (_currentUserId ?? ''))
-            .take(12)
-            .map((e) => Map<String, dynamic>.from(e))
+        _suggestedUsers = models
+            .where((u) => u.uid != (_currentUserId ?? ''))
+            .map((u) => {
+              'id': u.uid,
+              'name': u.displayName ?? u.username ?? 'User',
+              'username': u.username,
+              'profile_photo_url': u.avatarUrl,
+              'bio': u.bio,
+            })
             .toList();
       });
     } catch (_) {
@@ -269,7 +304,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   // Fetch original posts for repost items when the backend didn't hydrate them.
   Future<List<Post>> _hydrateReposts(List<Post> posts) async {
     if (posts.isEmpty) return posts;
-    final api = PostsApi();
     final result = List<Post>.from(posts);
 
     final futures = <Future<void>>[];
@@ -280,9 +314,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       if (ogId == null || ogId.isEmpty) continue;
 
       futures.add(() async {
-        final og = await api.getPost(ogId);
-        if (og == null) return;
+        final m = await _postRepo.getPost(ogId);
+        if (m == null) return;
+        final og = await _toPost(m);
+        // Merge original post content but keep the repost metadata (repostedBy, etc.)
         final merged = p.copyWith(
+          authorId: og.authorId,  // Use original author's ID
           userName: og.userName,
           userAvatarUrl: og.userAvatarUrl,
           text: og.text,
@@ -290,6 +327,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           imageUrls: og.imageUrls,
           videoUrl: og.videoUrl,
           counts: og.counts,
+          // Keep repostedBy from the original repost entry (p.repostedBy)
         );
         result[i] = merged;
       }());
@@ -302,6 +340,130 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
 
     return result;
+  }
+
+  // Normalize storage URLs so UI can load images reliably
+  Future<String> _normalizeUrl(String u) async {
+    final s = u.trim();
+    if (s.isEmpty) return s;
+    // Auto-upgrade insecure http to https when possible
+    if (s.startsWith('http://')) {
+      final https = 'https://${s.substring('http://'.length)}';
+      return https;
+    }
+    // For firebase storage http URLs, resolve to a fresh tokened download URL
+    if (s.startsWith('https://') &&
+        (s.contains('firebasestorage.googleapis.com') ||
+         s.contains('firebasestorage.app') ||
+         s.contains('storage.googleapis.com'))) {
+      try {
+        return await fs.FirebaseStorage.instance.refFromURL(s).getDownloadURL();
+      } catch (_) {
+        // fallthrough
+      }
+      return s;
+    }
+    if (s.startsWith('http')) return s;
+    try {
+      if (s.startsWith('gs://')) {
+        return await fs.FirebaseStorage.instance.refFromURL(s).getDownloadURL();
+      }
+      // Treat as storage path like "uploads/uid/file.jpg"
+      return await fs.FirebaseStorage.instance.ref(s).getDownloadURL();
+    } catch (_) {
+      return s;
+    }
+  }
+
+  Future<List<String>> _normalizeUrls(List<String> urls) async {
+    final out = <String>[];
+    for (final u in urls) {
+      final n = await _normalizeUrl(u);
+      if (n.isNotEmpty) out.add(n);
+    }
+    return out;
+  }
+
+  Future<Post> _toPost(PostModel m) async {
+    final author = await _userRepo.getUserProfile(m.authorId);
+    final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+    bool isBookmarked = false;
+    bool isLiked = false;
+    if (uid != null) {
+      isBookmarked = await _postRepo.hasUserBookmarkedPost(postId: m.id, uid: uid);
+      isLiked = await _postRepo.hasUserLikedPost(postId: m.id, uid: uid);
+    }
+    
+    // If this is a repost, get the reposter's info (the author of this repost entry)
+    RepostedBy? repostedBy;
+    if (m.repostOf != null && m.repostOf!.isNotEmpty) {
+      repostedBy = RepostedBy(
+        userId: m.authorId,
+        userName: author?.displayName ?? author?.username ?? 'User',
+        userAvatarUrl: author?.avatarUrl ?? '',
+        actionType: 'reposted this',
+      );
+    }
+    // Normalize media URLs to ensure they are valid HTTP links
+    final normUrls = await _normalizeUrls(m.mediaUrls);
+
+    MediaType mediaType;
+    String? videoUrl;
+    if (normUrls.isEmpty) {
+      mediaType = MediaType.none;
+      videoUrl = null;
+    } else {
+      final hasVideo = normUrls.any((u) {
+        final l = u.toLowerCase();
+        return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+      });
+      if (hasVideo) {
+        mediaType = MediaType.video;
+        videoUrl = normUrls.firstWhere(
+          (u) {
+            final l = u.toLowerCase();
+            return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+          },
+          orElse: () => normUrls.first,
+        );
+      } else {
+        mediaType = (normUrls.length == 1) ? MediaType.image : MediaType.images;
+        videoUrl = null;
+      }
+    }
+    int clamp(int v) => v < 0 ? 0 : v;
+    final avatarUrl = await _normalizeUrl(author?.avatarUrl ?? '');
+    return Post(
+      id: m.id,
+      authorId: m.authorId,
+      userName: author?.displayName ?? author?.username ?? author?.email ?? 'User',
+      userAvatarUrl: avatarUrl,
+      createdAt: m.createdAt,
+      text: m.text,
+      mediaType: mediaType,
+      imageUrls: normUrls,
+      videoUrl: videoUrl,
+      counts: PostCounts(
+        likes: clamp(m.summary.likes),
+        comments: clamp(m.summary.comments),
+        shares: clamp(m.summary.shares),
+        reposts: clamp(m.summary.reposts),
+        bookmarks: clamp(m.summary.bookmarks),
+      ),
+      userReaction: isLiked ? ReactionType.like : null,
+      isBookmarked: isBookmarked,
+      isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
+      repostedBy: repostedBy,
+      originalPostId: m.repostOf,
+    );
+  }
+
+  Future<List<Post>> _mapModelsToPosts(List<PostModel> models) async {
+    final out = <Post>[];
+    for (final m in models) {
+      out.add(await _toPost(m));
+    }
+    return out;
   }
 
   String _toError(Object e) {
@@ -342,6 +504,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final datasetHasTags = items.any((p) => _extractTags(p.text).isNotEmpty);
 
     return items.where((p) {
+      // Filter out blocked users
+      if (_blockedUserIds.contains(p.authorId)) return false;
+      
       // Repost visibility
       if (!_prefShowReposts && p.isRepost) return false;
 
@@ -460,9 +625,22 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
     try {
       if (willBookmark) {
-        await PostsApi().bookmark(originalId);
+        await _postRepo.bookmarkPost(originalId);
+        // Save to bookmarks collection
+        if (!mounted) return;
+        final bookmarkRepo = context.read<BookmarkRepository>();
+        await bookmarkRepo.bookmarkPost(
+          postId: originalId,
+          title: base.text.length > 100 ? base.text.substring(0, 100) : base.text,
+          authorName: base.userName,
+          coverUrl: base.imageUrls.isNotEmpty ? base.imageUrls.first : null,
+        );
       } else {
-        await PostsApi().unbookmark(originalId);
+        await _postRepo.unbookmarkPost(originalId);
+        // Remove from bookmarks collection
+        if (!mounted) return;
+        final bookmarkRepo = context.read<BookmarkRepository>();
+        await bookmarkRepo.removeBookmarkByItem(originalId, BookmarkType.post);
       }
       // Emit for PostPage listeners
       PostEvents.emit(PostUpdateEvent(
@@ -478,7 +656,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Bookmark failed: ${_toError(e)}',
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.bookmark_failed')}: ${_toError(e)}',
               style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
@@ -508,7 +686,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             counts: updatedCounts, userReaction: reaction);
       });
       try {
-        await PostsApi().like(originalId);
+        await _postRepo.likePost(originalId);
         PostEvents.emit(PostUpdateEvent(
           originalPostId: originalId,
           counts: updatedCounts,
@@ -523,7 +701,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
-                Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
+                Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.like_failed')}: ${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -546,7 +724,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       });
 
       try {
-        await PostsApi().unlike(originalId);
+        await _postRepo.unlikePost(originalId);
         PostEvents.emit(PostUpdateEvent(
           originalPostId: originalId,
           counts: updatedCounts,
@@ -560,7 +738,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Unlike failed: ${_toError(e)}',
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.unlike_failed')}: ${_toError(e)}',
                 style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
@@ -581,7 +759,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       onStories: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Stories', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('messages.shared_stories'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF4CAF50),
           ),
         );
@@ -590,7 +768,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
-                Text('Link copied to clipboard', style: GoogleFonts.inter()),
+                Text(Provider.of<LanguageProvider>(context, listen: false).t('messages.link_copied'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF9E9E9E),
           ),
         );
@@ -598,7 +776,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       onTelegram: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Telegram', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('messages.shared_telegram'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF0088CC),
           ),
         );
@@ -606,7 +784,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       onFacebook: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Facebook', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('messages.shared_facebook'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF1877F2),
           ),
         );
@@ -614,7 +792,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       onMore: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('More share options', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('messages.more_share'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF666666),
           ),
         );
@@ -634,16 +812,38 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     );
   }
 
+  Future<List<Comment>> _loadCommentsForPost(String postId) async {
+    final list = await _commentRepo.getComments(postId: postId, limit: 200);
+    final uids = list.map((m) => m.authorId).toSet().toList();
+    final profiles = await _userRepo.getUsers(uids);
+    final byId = {for (final p in profiles) p.uid: p};
+    return list.map((m) {
+      final u = byId[m.authorId];
+      return Comment(
+        id: m.id,
+        userId: m.authorId,
+        userName: (u?.displayName ?? u?.username ?? 'User'),
+        userAvatarUrl: (u?.avatarUrl ?? ''),
+        text: m.text,
+        createdAt: m.createdAt,
+        likesCount: m.likesCount,
+        isLikedByUser: false,
+        replies: const [],
+        parentCommentId: m.parentCommentId,
+      );
+    }).toList();
+  }
+
   Future<void> _openCommentsSheet(String originalId) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     List<Comment> comments = [];
     try {
-      comments = await PostsApi().listComments(originalId);
+      comments = await _loadCommentsForPost(originalId);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Load comments failed: ${_toError(e)}',
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.load_comments_failed')}: ${_toError(e)}',
               style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
@@ -660,7 +860,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       isDarkMode: isDark,
       onAddComment: (text) async {
         try {
-          await PostsApi().addComment(originalId, content: text);
+          await _commentRepo.createComment(postId: originalId, text: text);
 
           final base = _baseForOriginal(originalId);
           if (base != null) {
@@ -685,7 +885,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Comment posted!', style: GoogleFonts.inter()),
+              content: Text(Provider.of<LanguageProvider>(context, listen: false).t('messages.comment_posted'), style: GoogleFonts.inter()),
               backgroundColor: const Color(0xFF4CAF50),
             ),
           );
@@ -693,7 +893,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Post comment failed: ${_toError(e)}',
+              content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.post_comment_failed')}: ${_toError(e)}',
                   style: GoogleFonts.inter()),
               backgroundColor: Colors.red,
             ),
@@ -702,8 +902,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       },
       onReplyToComment: (commentId, replyText) async {
         try {
-          await PostsApi().addComment(originalId,
-              content: replyText, parentCommentId: commentId);
+          await _commentRepo.createComment(
+              postId: originalId, text: replyText, parentCommentId: commentId);
 
           // Count reply as part of comments for the action row
           final base = _baseForOriginal(originalId);
@@ -729,7 +929,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Reply posted!', style: GoogleFonts.inter()),
+              content: Text(Provider.of<LanguageProvider>(context, listen: false).t('messages.reply_posted'), style: GoogleFonts.inter()),
               backgroundColor: const Color(0xFF4CAF50),
             ),
           );
@@ -737,7 +937,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Reply failed: ${_toError(e)}',
+              content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.reply_failed')}: ${_toError(e)}',
                   style: GoogleFonts.inter()),
               backgroundColor: Colors.red,
             ),
@@ -752,33 +952,37 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   void _onRepost(String originalId) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Repost this?',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-        content: Text('Are you sure you want to repost this?',
-            style: GoogleFonts.inter()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel', style: GoogleFonts.inter()),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Repost',
-                style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        final lang = Provider.of<LanguageProvider>(ctx, listen: false);
+        return AlertDialog(
+          title: Text(lang.t('dialogs.repost.title'),
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          content: Text(lang.t('dialogs.repost.message'),
+              style: GoogleFonts.inter()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(lang.t('common.cancel'), style: GoogleFonts.inter()),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(lang.t('post.repost'),
+                  style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
+            ),
+          ],
+        );
+      },
     );
     if (confirm != true) return;
 
     try {
-      await PostsApi().repost(originalId);
+      await _postRepo.repostPost(originalId);
       if (!mounted) return;
+      final lang = Provider.of<LanguageProvider>(context, listen: false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-              Text('Post reposted successfully', style: GoogleFonts.inter()),
+              Text(lang.t('messages.repost_success'), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
@@ -800,19 +1004,19 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         final remove = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text('Remove repost?',
+            title: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('dialogs.unrepost.title'),
                 style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            content: Text('You already reposted this. Remove your repost?',
+            content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('dialogs.unrepost.message'),
                 style: GoogleFonts.inter()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: Text('Cancel', style: GoogleFonts.inter()),
+                child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.cancel'), style: GoogleFonts.inter()),
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
                 child:
-                    Text('Remove', style: GoogleFonts.inter(color: Colors.red)),
+                    Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.remove'), style: GoogleFonts.inter(color: Colors.red)),
               ),
             ],
           ),
@@ -820,11 +1024,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         if (!mounted) return;
         if (remove == true) {
           try {
-            await PostsApi().unrepost(originalId);
+            await _postRepo.unrepostPost(originalId);
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Repost removed', style: GoogleFonts.inter()),
+                content: Text(Provider.of<LanguageProvider>(context, listen: false).t('messages.unrepost_success'), style: GoogleFonts.inter()),
                 backgroundColor: const Color(0xFF9E9E9E),
               ),
             );
@@ -833,7 +1037,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to remove repost: ${_toError(e2)}',
+                content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.remove_repost_failed')}: ${_toError(e2)}',
                     style: GoogleFonts.inter()),
                 backgroundColor: Colors.red,
               ),
@@ -844,7 +1048,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Repost failed: $msg', style: GoogleFonts.inter()),
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.repost_failed')}: $msg', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -854,7 +1058,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-              Text('Repost failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.repost_failed')}: ${_toError(e)}', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -1001,10 +1205,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
               child: FloatingActionButton(
                 heroTag: 'createPostFabWeb',
                 onPressed: () async {
-                  final created = await CreatePostPage.showPopup<bool>(context);
-                  if (created == true) {
-                    await _loadData();
-                  }
+                  await CreatePostPage.showPopup<bool>(context);
+                  // Refresh feed instantly after posting
+                  await _loadData();
                 },
                 backgroundColor: const Color(0xFFBFAE01),
                 foregroundColor: Colors.black,
@@ -1111,25 +1314,25 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                 children: [
                   _TopNavItem(
                     icon: Icons.home_outlined,
-                    label: 'Home',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.home'),
                     selected: _desktopSectionIndex == 0,
                     onTap: () => setState(() => _desktopSectionIndex = 0),
                   ),
                   _TopNavItem(
                     icon: Icons.people_outline,
-                    label: 'Connections',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.connections'),
                     selected: _desktopSectionIndex == 1,
                     onTap: () => setState(() => _desktopSectionIndex = 1),
                   ),
                   _TopNavItem(
                     icon: Icons.chat_bubble_outline,
-                    label: 'Conversations',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.conversations'),
                     selected: _desktopSectionIndex == 2,
                     onTap: () => setState(() => _desktopSectionIndex = 2),
                   ),
                   _TopNavItem(
                     icon: Icons.person_outline,
-                    label: 'My Profil',
+                    label: Provider.of<LanguageProvider>(context, listen: false).t('nav.profile'),
                     selected: _desktopSectionIndex == 3,
                     onTap: () => setState(() => _desktopSectionIndex = 3),
                   ),
@@ -1183,7 +1386,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Stories',
+            Text(Provider.of<LanguageProvider>(context).t('common.stories'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -1439,7 +1642,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                     );
                   },
                   child:
-                      Text('See more', style: GoogleFonts.inter(fontSize: 13)),
+                      Text(Provider.of<LanguageProvider>(context).t('common.see_more'), style: GoogleFonts.inter(fontSize: 13)),
                 ),
               ],
             ),
@@ -1540,21 +1743,23 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     bool isDark,
     Color backgroundColor,
   ) {
-    return NotificationListener<ScrollNotification>(
-      onNotification: (ScrollNotification notification) {
-        if (notification is ScrollStartNotification) {
-          // Hide reaction picker when scrolling starts
-          ReactionPickerManager.hideReactions();
-        }
-        return false;
-      },
-      child: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      color: const Color(0xFFBFAE01),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification notification) {
+          if (notification is ScrollStartNotification) {
+            // Hide reaction picker when scrolling starts
+            ReactionPickerManager.hideReactions();
+          }
+          return false;
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          slivers: [
           // App bar + stories as a scrollable sliver
           SliverToBoxAdapter(
             child: Container(
-              height: 180,
               decoration: BoxDecoration(
                 color: isDark ? Colors.black : Colors.white,
                 borderRadius: const BorderRadius.vertical(
@@ -1562,6 +1767,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                 ),
               ),
               child: SafeArea(
+                bottom: false,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1821,6 +2027,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

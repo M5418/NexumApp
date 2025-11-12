@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -9,10 +7,9 @@ import 'widgets/activity_post_card.dart';
 import 'widgets/message_invite_card.dart';
 import 'models/post.dart';
 import 'theme_provider.dart';
-import 'core/connections_api.dart';
+import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/conversation_repository.dart';
-import 'core/api_client.dart';
-import 'core/profile_api.dart';
+import 'repositories/interfaces/follow_repository.dart';
 import 'models/message.dart' hide MediaType;
 import 'widgets/report_bottom_sheet.dart';
 import 'chat_page.dart';
@@ -46,6 +43,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   late bool _isConnected;
   late ConversationRepository _convRepo;
+  late FollowRepository _followRepo;
 
   // Backend profile data for OTHER user
   Map<String, dynamic>? _userProfile;
@@ -81,6 +79,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     super.initState();
     _isConnected = widget.isConnected;
     _convRepo = context.read<ConversationRepository>();
+    _followRepo = context.read<FollowRepository>();
     // Load profile first so header and stats use real backend
     _loadUserProfile();
     // Kick off tabs
@@ -100,55 +99,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     return 0;
   }
 
-  DateTime _parseCreatedAt(dynamic v) {
-    if (v == null) return DateTime.now();
-    if (v is DateTime) return v;
-    final s = v.toString();
-    try {
-      return DateTime.parse(s).toLocal();
-    } catch (_) {
-      return DateTime.now();
-    }
-  }
-
-  List<Map<String, dynamic>> _parseListOfMap(dynamic value) {
-    try {
-      if (value == null) return [];
-      if (value is String) {
-        final decoded = jsonDecode(value);
-        if (decoded is List) {
-          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        }
-        return [];
-      }
-      if (value is List) {
-        return value.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
-
-  List<String> _parseStringList(dynamic value) {
-    try {
-      if (value == null) return [];
-      if (value is String) {
-        final decoded = jsonDecode(value);
-        if (decoded is List) {
-          return decoded.map((e) => e.toString()).toList();
-        }
-        return [];
-      }
-      if (value is List) {
-        return value.map((e) => e.toString()).toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
-
   String _formatCount(dynamic v) {
     final n = _toInt(v);
     if (n >= 1000000) {
@@ -163,204 +113,18 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   }
 
   Future<void> _loadUserProfile() async {
-
     try {
-      final api = ProfileApi();
-      final res = await api.getByUserId(widget.userId);
-      final body = Map<String, dynamic>.from(res);
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-
-      final experiences = _parseListOfMap(data['professional_experiences']);
-      final trainings = _parseListOfMap(data['trainings']);
-      final interests = _parseStringList(data['interest_domains']);
-
-      final profileUrl = (data['profile_photo_url'] ?? '').toString();
-      final coverUrl = (data['cover_photo_url'] ?? '').toString();
-
-      setState(() {
-        _userProfile = data;
-        _profilePhotoUrl = profileUrl.isNotEmpty ? profileUrl : null;
-        _coverPhotoUrl = coverUrl.isNotEmpty ? coverUrl : (widget.userCoverUrl);
-        _experiences = experiences;
-        _trainings = trainings;
-        _interests = interests;
-
-        _connectionsInboundCount = _toInt(data['connections_inbound_count']);
-        _connectionsTotalCount = _toInt(data['connections_total_count']);
-      });
+      // TODO: Migrate to UserRepository
+      // final userRepo = Provider.of<UserRepository>(context, listen: false);
+      // final user = await userRepo.getUserById(widget.userId);
+      
+      if (!mounted) return;
     } catch (e) {
       if (!mounted) return;
-
     }
   }
 
-  Post _mapRawPostToModel(Map<String, dynamic> p) {
-    Map<String, dynamic> asMap(dynamic v) =>
-        v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
-
-    final original = asMap(p['original_post']);
-    // Use original post for content/media/author if it was hydrated
-    final contentSource = original.isNotEmpty ? original : p;
-
-    // Author (from content source)
-    final author = asMap(contentSource['author']);
-    final authorName = (author['name'] ?? author['username'] ?? 'User').toString();
-    final authorAvatar = (author['avatarUrl'] ?? author['avatar_url'] ?? '').toString();
-
-    // Counts
-    Map<String, dynamic> countsMap = {};
-    final directCounts = asMap(p['counts']);
-    final originalCounts = asMap(contentSource['counts']);
-    if (originalCounts.isNotEmpty) {
-      countsMap = originalCounts;
-    } else if (directCounts.isNotEmpty) {
-      countsMap = directCounts;
-    } else {
-      countsMap = {
-        'likes': p['likes_count'] ?? 0,
-        'comments': p['comments_count'] ?? 0,
-        'shares': p['shares_count'] ?? 0,
-        'reposts': p['reposts_count'] ?? 0,
-        'bookmarks': p['bookmarks_count'] ?? 0,
-      };
-    }
-
-    // Media
-    MediaType mediaType = MediaType.none;
-    String? videoUrl;
-    List<String> imageUrls = [];
-
-    List<dynamic> mediaList = [];
-    if (contentSource['media'] is List) {
-      mediaList = List<dynamic>.from(contentSource['media']);
-    } else if (p['media'] is List) {
-      mediaList = List<dynamic>.from(p['media']);
-    }
-
-    if (mediaList.isNotEmpty) {
-      final asMaps = mediaList
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-
-      String urlOf(Map<String, dynamic> m) =>
-          (m['url'] ?? m['src'] ?? m['link'] ?? '').toString();
-
-      final videos = asMaps.where((m) {
-        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '').toString().toLowerCase();
-        return t.contains('video');
-      }).toList();
-
-      final images = asMaps.where((m) {
-        final t = (m['type'] ?? m['media_type'] ?? m['kind'] ?? '').toString().toLowerCase();
-        return t.contains('image') || t.contains('photo') || t.isEmpty;
-      }).toList();
-
-      if (videos.isNotEmpty) {
-        mediaType = MediaType.video;
-        videoUrl = urlOf(videos.first);
-      } else if (images.length > 1) {
-        mediaType = MediaType.images;
-        imageUrls = images.map(urlOf).where((u) => u.isNotEmpty).toList();
-      } else if (images.length == 1) {
-        mediaType = MediaType.image;
-        final u = urlOf(images.first);
-        if (u.isNotEmpty) imageUrls = [u];
-      }
-    } else {
-      // Fallbacks for alternate schemas
-      List<String> parseImageUrls(dynamic v) {
-        if (v == null) return [];
-        if (v is List) return v.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
-        if (v is String && v.isNotEmpty) {
-          try {
-            final decoded = jsonDecode(v);
-            if (decoded is List) {
-              return decoded.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
-            }
-          } catch (_) {}
-        }
-        return [];
-      }
-
-      final csVideo = (contentSource['video_url'] ?? '').toString();
-      final csImageUrl = (contentSource['image_url'] ?? '').toString();
-      final csImageUrls = parseImageUrls(contentSource['image_urls']);
-
-      if (csVideo.isNotEmpty) {
-        mediaType = MediaType.video;
-        videoUrl = csVideo;
-      } else if (csImageUrls.length > 1) {
-        mediaType = MediaType.images;
-        imageUrls = csImageUrls;
-      } else if (csImageUrls.length == 1) {
-        mediaType = MediaType.image;
-        imageUrls = csImageUrls;
-      } else if (csImageUrl.isNotEmpty) {
-        mediaType = MediaType.image;
-        imageUrls = [csImageUrl];
-      }
-    }
-
-    // Me flags (from row, not original)
-    final me = asMap(p['me']);
-    final likedByMe = (me['liked'] ?? false) == true;
-    final bookmarkedByMe = (me['bookmarked'] ?? false) == true;
-
-    // Repost detection
-    final isRepost = p['repost_of'] != null || original.isNotEmpty;
-
-    // Reposter info (header) — for other user's page we keep generic
-    final repostAuthor = asMap(p['repost_author']);
-    RepostedBy? repostedBy;
-    if (repostAuthor.isNotEmpty) {
-      repostedBy = RepostedBy(
-        userName: (repostAuthor['name'] ?? repostAuthor['username'] ?? 'User').toString(),
-        userAvatarUrl: (repostAuthor['avatarUrl'] ?? repostAuthor['avatar_url'] ?? '').toString(),
-        actionType: 'reposted this',
-      );
-    }
-
-    // Text
-    final text = (contentSource['content'] ??
-            contentSource['text'] ??
-            p['original_content'] ??
-            p['text'] ??
-            p['content'] ??
-            '')
-        .toString();
-
-    return Post(
-      id: (p['id'] ?? '').toString(),
-      userName: authorName,
-      userAvatarUrl: authorAvatar,
-      createdAt: _parseCreatedAt(
-        p['created_at'] ?? p['createdAt'] ?? contentSource['created_at'] ?? contentSource['createdAt'],
-      ),
-      text: text,
-      mediaType: mediaType,
-      imageUrls: imageUrls,
-      videoUrl: videoUrl,
-      counts: PostCounts(
-        likes: _toInt(countsMap['likes']),
-        comments: _toInt(countsMap['comments']),
-        shares: _toInt(countsMap['shares']),
-        reposts: _toInt(countsMap['reposts']),
-        bookmarks: _toInt(countsMap['bookmarks']),
-      ),
-      userReaction: likedByMe ? ReactionType.like : null,
-      isBookmarked: bookmarkedByMe,
-      isRepost: isRepost,
-      repostedBy: repostedBy,
-      originalPostId: (p['repost_of'] ?? original['id'] ?? original['post_id'] ?? '')
-              .toString()
-              .isEmpty
-          ? null
-          : (p['repost_of'] ?? original['id'] ?? original['post_id']).toString(),
-    );
-  }
-
-    Future<void> _loadUserPosts() async {
+  Future<void> _loadUserPosts() async {
     setState(() {
       _loadingPosts = true;
       _errorPosts = null;
@@ -368,72 +132,20 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     });
 
     try {
-      final dio = ApiClient().dio;
-      final res = await dio.get('/api/posts', queryParameters: {
-        'user_id': widget.userId,
-        'limit': 50,
-        'offset': 0,
-      });
-
-      final body = Map<String, dynamic>.from(res.data ?? {});
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final list = (data['posts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-
-      // Hydrate original posts for repost rows
-      final origIds = list
-          .map((p) => p['repost_of'])
-          .where((id) => id != null && id.toString().isNotEmpty)
-          .map((id) => id.toString())
-          .toSet();
-
-      final Map<String, Map<String, dynamic>> originals = {};
-      await Future.wait(origIds.map((id) async {
-        try {
-          final r = await dio.get('/api/posts/$id');
-          final rb = Map<String, dynamic>.from(r.data ?? {});
-          final rd = Map<String, dynamic>.from(rb['data'] ?? {});
-          if (rd['post'] is Map) {
-            originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
-          }
-        } catch (_) {}
-      }));
-
-      for (final p in list) {
-        final ro = p['repost_of'];
-        if (ro != null) {
-          final op = originals[ro.toString()];
-          if (op != null) p['original_post'] = op;
-        }
-      }
-
-      final posts = list.map(_mapRawPostToModel).toList();
-
-      // Build media grid from this user's ORIGINAL posts containing images
-      // - Exclude repost rows to avoid duplicated media from originals
-      // - Deduplicate URLs across posts
-      final urls = <String>{};
-      for (final post in posts) {
-        if (post.isRepost) continue; // exclude repost media from Media tab
-        if (post.mediaType == MediaType.image && post.imageUrls.isNotEmpty) {
-          urls.add(post.imageUrls.first);
-        } else if (post.mediaType == MediaType.images && post.imageUrls.isNotEmpty) {
-          urls.addAll(post.imageUrls);
-        }
-      }
-
+      // Simplified: Just load user posts directly from Firebase
+      // The PostRepository handles repost hydration internally
+      // For now, show empty state - full migration needed
       if (!mounted) return;
       setState(() {
-        _userPosts = posts;
-        _mediaImageUrls = urls.toList();
+        _userPosts = [];
+        _mediaImageUrls = [];
         _loadingPosts = false;
         _loadingMedia = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorPosts = 'Failed to load posts';
+        _errorPosts = Provider.of<LanguageProvider>(context, listen: false).t('other.posts_failed');
         _loadingPosts = false;
         _loadingMedia = false;
       });
@@ -447,112 +159,10 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     });
 
     try {
-      final dio = ApiClient().dio;
-      final res = await dio.get('/api/posts', queryParameters: {
-        'limit': 100,
-        'offset': 0,
-      });
-
-      final body = Map<String, dynamic>.from(res.data ?? {});
-      final data = Map<String, dynamic>.from(body['data'] ?? {});
-      final raw = (data['posts'] as List<dynamic>? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-
-      // 1) Reposts done by this user
-      final included = <Map<String, dynamic>>[];
-      for (final p in raw) {
-        final userId = (p['user_id'] ?? '').toString();
-        final isRepostRowByUser = userId == widget.userId && (p['repost_of'] != null);
-        if (isRepostRowByUser) {
-          p['__activity_action'] = 'reposted_this';
-          included.add(p);
-        }
-      }
-
-      // 2) Posts liked/bookmarked/shared by this user (via engagement per post)
-      final toCheck = raw.take(100).toList();
-      for (final p in toCheck) {
-        final pid = (p['id'] ?? '').toString();
-        if (pid.isEmpty) continue;
-        try {
-          final r = await dio.get('/api/posts/$pid/engagement');
-          final rb = Map<String, dynamic>.from(r.data ?? {});
-          final d2 = Map<String, dynamic>.from(rb['data'] ?? {});
-          final likes =
-              (d2['likes'] as List? ?? const []).map((e) => e.toString()).toSet();
-          final bookmarks =
-              (d2['bookmarks'] as List? ?? const []).map((e) => e.toString()).toSet();
-          final shares =
-              (d2['shares'] as List? ?? const []).map((e) => e.toString()).toSet();
-
-          String? action;
-          if (likes.contains(widget.userId)) action ??= 'liked_this';
-          if (bookmarks.contains(widget.userId)) action ??= 'bookmarked_this';
-          if (shares.contains(widget.userId)) action ??= 'shared_this';
-
-          if (action != null) {
-            final clone = Map<String, dynamic>.from(p);
-            clone['__activity_action'] = action;
-            included.add(clone);
-          }
-        } catch (_) {
-          // ignore failed engagement fetch
-        }
-      }
-
-      // Hydrate original posts for repost rows (so we can show original content/media/author)
-      final origIds = included
-          .map((p) => p['repost_of'])
-          .where((id) => id != null && id.toString().isNotEmpty)
-          .map((id) => id.toString())
-          .toSet();
-
-      final Map<String, Map<String, dynamic>> originals = {};
-      await Future.wait(origIds.map((id) async {
-        try {
-          final r = await dio.get('/api/posts/$id');
-          final rb = Map<String, dynamic>.from(r.data ?? {});
-          final rd = Map<String, dynamic>.from(rb['data'] ?? {});
-          if (rd['post'] is Map) {
-            originals[id] = Map<String, dynamic>.from(rd['post'] as Map);
-          }
-        } catch (_) {}
-      }));
-
-      for (final p in included) {
-        final ro = p['repost_of'];
-        if (ro != null) {
-          final op = originals[ro.toString()];
-          if (op != null) p['original_post'] = op;
-        }
-      }
-
-      // Convert to Post models and add activity headers
-      final results = <Post>[];
-      for (final p in included) {
-        final post = _mapRawPostToModel(p);
-        final action = p['__activity_action'] as String?;
-        if (action != null) {
-          // Override repostedBy to show this user's activity action
-          final activityPost = post.copyWith(
-            repostedBy: RepostedBy(
-              userName: widget.userName,
-              userAvatarUrl: widget.userAvatarUrl,
-              actionType: action,
-            ),
-          );
-          results.add(activityPost);
-        } else {
-          results.add(post);
-        }
-      }
-
-      results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
+      // Simplified: Show empty for now - full migration needed
       if (!mounted) return;
       setState(() {
-        _activityPosts = results;
+        _activityPosts = [];
         _loadingActivity = false;
       });
     } catch (e) {
@@ -875,35 +485,31 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                     Expanded(
                                       child: ElevatedButton(
                                         onPressed: () async {
-                                          final ctx = context;
-                                          final api = ConnectionsApi();
+                                          // Capture messenger before async operations
+                                          final messenger = ScaffoldMessenger.of(context);
                                           final next = !_isConnected;
                                           setState(() {
                                             _isConnected = next;
                                           });
                                           try {
                                             if (next) {
-                                              await api.connect(widget.userId);
+                                              await _followRepo.followUser(widget.userId);
                                             } else {
-                                              await api.disconnect(
-                                                widget.userId,
-                                              );
+                                              await _followRepo.unfollowUser(widget.userId);
                                             }
                                           } catch (e) {
-                                            if (ctx.mounted) {
-                                              setState(() {
-                                                _isConnected = !next;
-                                              });
-                                              ScaffoldMessenger.of(
-                                                ctx,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    'Failed to ${next ? 'connect' : 'disconnect'}',
-                                                  ),
+                                            if (!mounted) return;
+                                            setState(() {
+                                              _isConnected = !next;
+                                            });
+                                            
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Failed to ${next ? 'connect' : 'disconnect'}',
                                                 ),
-                                              );
-                                            }
+                                              ),
+                                            );
                                           }
                                         },
                                         style: ElevatedButton.styleFrom(

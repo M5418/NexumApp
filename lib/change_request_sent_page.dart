@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class ChangeRequestSentPage extends StatelessWidget {
   final String email;
@@ -38,7 +40,7 @@ class ChangeRequestSentPage extends StatelessWidget {
                 children: [
                   const SizedBox(height: 50),
                   Text(
-                    'NEXUM',
+                    Provider.of<LanguageProvider>(context, listen: false).t('app.name'),
                     style: GoogleFonts.inika(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class InsightsPage extends StatefulWidget {
@@ -49,7 +51,7 @@ class _InsightsPageState extends State<InsightsPage>
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Insights',
+          Provider.of<LanguageProvider>(context, listen: false).t('insights.title'),
           style: GoogleFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -77,10 +79,10 @@ class _InsightsPageState extends State<InsightsPage>
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
-              tabs: const [
-                Tab(text: 'Weekly'),
-                Tab(text: 'Monthly'),
-                Tab(text: 'Yearly'),
+              tabs: [
+                Tab(text: Provider.of<LanguageProvider>(context, listen: false).t('insights.weekly')),
+                const Tab(text: 'Monthly'),
+                const Tab(text: 'Yearly'),
               ],
             ),
           ),
@@ -269,7 +271,7 @@ class _InsightsPageState extends State<InsightsPage>
               ),
               _buildDropdown(
                 _selectedActivityFilter,
-                ['Last 7 days', 'Last 30 days', 'Last 90 days'],
+                [Provider.of<LanguageProvider>(context, listen: false).t('insights.last_7_days'), 'Last 30 days', 'Last 90 days'],
                 (value) {
                   setState(() => _selectedActivityFilter = value!);
                 },
@@ -324,7 +326,7 @@ class _InsightsPageState extends State<InsightsPage>
               ),
               _buildDropdown(
                 _selectedLocationFilter,
-                ['Top Location', 'All Locations'],
+                [Provider.of<LanguageProvider>(context, listen: false).t('insights.top_location'), 'All Locations'],
                 (value) {
                   setState(() => _selectedLocationFilter = value!);
                 },
@@ -594,7 +596,7 @@ class _InsightsPageState extends State<InsightsPage>
               ),
               _buildDropdown(
                 _selectedPostFilter,
-                ['By Views', 'By Likes', 'By Comments'],
+                [Provider.of<LanguageProvider>(context, listen: false).t('insights.by_views'), 'By Likes', 'By Comments'],
                 (value) {
                   setState(() => _selectedPostFilter = value!);
                 },

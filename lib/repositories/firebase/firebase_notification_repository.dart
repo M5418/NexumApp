@@ -59,9 +59,11 @@ class FirebaseNotificationRepository implements NotificationRepository {
   Future<int> getUnreadCount() async {
     final u = _auth.currentUser;
     if (u == null) return 0;
-    final agg = await _col(u.uid).where('isRead', isEqualTo: false).count().get();
-    final c = agg.count;
-    return c is int ? c : (c ?? 0);
+    final snap = await _col(u.uid)
+        .where('isRead', isEqualTo: false)
+        .limit(500)
+        .get();
+    return snap.size;
   }
 
   @override
@@ -75,7 +77,10 @@ class FirebaseNotificationRepository implements NotificationRepository {
   Future<void> markAllAsRead() async {
     final u = _auth.currentUser;
     if (u == null) return;
-    final snap = await _col(u.uid).where('isRead', isEqualTo: false).limit(500).get();
+    final snap = await _col(u.uid)
+        .where('isRead', isEqualTo: false)
+        .limit(500)
+        .get();
     final batch = _db.batch();
     for (final d in snap.docs) {
       batch.update(d.reference, {'isRead': true});
@@ -91,12 +96,32 @@ class FirebaseNotificationRepository implements NotificationRepository {
   }
 
   @override
-  Future<void> createNotification({required String userId, required NotificationType type, required String title, required String body, String? refId, Map<String, dynamic>? data}) async {
+  Future<void> createNotification({required String userId, required NotificationType type, required String title, required String body, String? fromUserId, String? refId, Map<String, dynamic>? data}) async {
+    // Check if the recipient has muted the sender
+    if (fromUserId != null && fromUserId.isNotEmpty) {
+      try {
+        // Check if userId has muted fromUserId
+        final snapshot = await _db.collection('mutes')
+            .where('mutedByUid', isEqualTo: userId)
+            .where('mutedUid', isEqualTo: fromUserId)
+            .limit(1)
+            .get();
+        
+        if (snapshot.docs.isNotEmpty) {
+          // User has muted the sender, don't create notification
+          return;
+        }
+      } catch (e) {
+        // If mute check fails, proceed with notification creation
+      }
+    }
+    
     await _db.collection('users').doc(userId).collection('notifications').add({
       'userId': userId,
       'type': type.toString().split('.').last,
       'title': title,
       'body': body,
+      'fromUserId': fromUserId,
       'refId': refId,
       'data': data,
       'isRead': false,
@@ -105,10 +130,37 @@ class FirebaseNotificationRepository implements NotificationRepository {
   }
 
   @override
-  Stream<List<NotificationModel>> notificationsStream({int limit = 50}) {
+  Stream<List<NotificationModel>> notificationsStream({int limit = 50}) async* {
     final u = _auth.currentUser;
-    if (u == null) return const Stream.empty();
-    return _col(u.uid).orderBy('createdAt', descending: true).limit(limit).snapshots().map((s) => s.docs.map(_fromDoc).toList());
+    if (u == null) {
+      yield [];
+      return;
+    }
+    
+    // Get blocked users once
+    Set<String> blockedUserIds = {};
+    try {
+      final blockSnapshot = await _db.collection('blocks')
+          .where('blockedByUid', isEqualTo: u.uid)
+          .get();
+      blockedUserIds = blockSnapshot.docs
+          .map((doc) => (doc.data()['blockedUid'] as String?) ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
+    } catch (e) {
+      // Ignore error, proceed without filtering
+    }
+    
+    await for (final snapshot in _col(u.uid).orderBy('createdAt', descending: true).limit(limit).snapshots()) {
+      final notifications = snapshot.docs.map(_fromDoc).toList();
+      // Filter out notifications from blocked users
+      final filtered = notifications.where((notif) {
+        final fromId = notif.data?['fromUserId'] as String?;
+        if (fromId == null || fromId.isEmpty) return true;
+        return !blockedUserIds.contains(fromId);
+      }).toList();
+      yield filtered;
+    }
   }
 
   @override

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'core/i18n/language_provider.dart';
+import 'widgets/country_selector.dart';
 
 class LanguageRegionPage extends StatefulWidget {
   const LanguageRegionPage({super.key});
@@ -12,18 +13,7 @@ class LanguageRegionPage extends StatefulWidget {
 }
 
 class _LanguageRegionPageState extends State<LanguageRegionPage> {
-  final List<String> _regions = [
-    'United States',
-    'Canada',
-    'France',
-    'Germany',
-    'United Kingdom',
-    'Côte d’Ivoire',
-  ];
-
   String _selectedRegion = 'Canada';
-  bool _autoTranslateUI = true;   // UI auto-translate (keep as a local toggle for now)
-  bool _autoTranslateUGC = true;  // user-generated content translation
   bool _use24hTime = true;
 
   @override
@@ -77,13 +67,13 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Region Settings'),
+                _sectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('region.settings')),
                 const SizedBox(height: 8),
-                _regionDropdown(),
+                _regionSelector(),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Use 24-hour time',
-                  subtitle: 'Switch between 24-hour and 12-hour time formats',
+                  title: Provider.of<LanguageProvider>(context, listen: false).t('region.24hour'),
+                  subtitle: Provider.of<LanguageProvider>(context, listen: false).t('region.24hour_subtitle'),
                   value: _use24hTime,
                   onChanged: (v) => setState(() => _use24hTime = v),
                 ),
@@ -92,28 +82,28 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
           ),
           const SizedBox(height: 16),
 
-          // Translation toggles (local state)
+          // Translation settings
           _buildCard(
             color: cardColor,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Translation'),
-                const SizedBox(height: 8),
-                _ugcTargetDropdown(lang),
+                _sectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('region.translation')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Auto-translate UI',
-                  subtitle: 'Match the app interface to your device language',
-                  value: _autoTranslateUI,
-                  onChanged: (v) => setState(() => _autoTranslateUI = v),
+                  title: 'Enable Post Translation',
+                  subtitle: 'Show translate button on posts and comments',
+                  value: lang.postTranslationEnabled,
+                  onChanged: (v) => lang.setPostTranslationEnabled(v),
                 ),
-                _switchTile(
+                if (lang.postTranslationEnabled) ...[
+                  const SizedBox(height: 12),
+                  _ugcTargetDropdown(lang),
+                ],
+                const SizedBox(height: 8),
+                _comingSoonTile(
                   title: 'Auto-translate posts & comments',
-                  subtitle:
-                      'Translate user-generated content to your display language',
-                  value: _autoTranslateUGC,
-                  onChanged: (v) => setState(() => _autoTranslateUGC = v),
+                  subtitle: 'Automatically translate content to your language',
                 ),
               ],
             ),
@@ -130,7 +120,7 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
               ),
             ),
             child: Text(
-              'Reset to defaults',
+              Provider.of<LanguageProvider>(context, listen: false).t('region.reset_defaults'),
               style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
           ),
@@ -174,14 +164,73 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
                 ),
               )
               .toList(),
-          onChanged: (v) {
-            if (v != null) context.read<LanguageProvider>().setLocale(v);
+          onChanged: (v) async {
+            if (v != null && v != lang.code) {
+              // Show loading dialog
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (BuildContext dialogContext) {
+                  return PopScope(
+                    canPop: false,
+                    child: Dialog(
+                      backgroundColor: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF1E1E1E)
+                          : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              lang.t('settings.language_applying'),
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              lang.t('settings.language_refresh'),
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: const Color(0xFF666666),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+
+              // Change language
+              context.read<LanguageProvider>().setLocale(v);
+
+              // Wait 5 seconds
+              await Future.delayed(const Duration(seconds: 5));
+
+              // Close dialog
+              if (mounted) {
+                Navigator.of(context, rootNavigator: true).pop();
+              }
+            }
           },
         ),
       ),
     );
   }
-    // Target language for translating posts/comments (Provider-backed)
+
+  // Target language for translating posts/comments (Provider-backed)
   Widget _ugcTargetDropdown(LanguageProvider lang) {
     final codes = LanguageProvider.supportedCodes;
 
@@ -231,13 +280,54 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
     );
   }
 
-  // Region dropdown (kept local)
-  Widget _regionDropdown() {
-    return _dropdown<String>(
-      label: 'Region',
-      value: _selectedRegion,
-      items: _regions,
-      onChanged: (v) => setState(() => _selectedRegion = v ?? _selectedRegion),
+  // Region selector with search (comprehensive country list)
+  Widget _regionSelector() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Region', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => CountrySelector(
+                initialCountry: _selectedRegion,
+                isDarkMode: isDark,
+                onCountrySelected: (country) {
+                  setState(() => _selectedRegion = country);
+                },
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _selectedRegion,
+                  style: GoogleFonts.inter(color: textColor),
+                ),
+                Icon(
+                  Icons.arrow_drop_down,
+                  color: textColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -265,44 +355,6 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
         style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
       );
 
-  Widget _dropdown<T>({
-    required String label,
-    required T value,
-    required List<T> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            border: Border.all(color: const Color(0xFFE0E0E0)),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<T>(
-              value: value,
-              isExpanded: true,
-              items: items
-                  .map(
-                    (e) => DropdownMenuItem<T>(
-                      value: e,
-                      child: Text('$e', style: GoogleFonts.inter()),
-                    ),
-                  )
-                  .toList(),
-              onChanged: onChanged,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _switchTile({
     required String title,
     required String subtitle,
@@ -322,13 +374,54 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
     );
   }
 
+  Widget _comingSoonTile({
+    required String title,
+    required String subtitle,
+  }) {
+    return Opacity(
+      opacity: 0.5,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFBFAE01).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                Provider.of<LanguageProvider>(context, listen: false).t('region.coming_soon'),
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFBFAE01),
+                ),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Text(
+          subtitle,
+          style: GoogleFonts.inter(color: const Color(0xFF666666), fontSize: 12),
+        ),
+      ),
+    );
+  }
+
   void _resetDefaults() {
     // Reset provider language to English, keep other toggles to sensible defaults
-    context.read<LanguageProvider>().setLocale('en');
+    final lang = context.read<LanguageProvider>();
+    lang.setLocale('en');
+    lang.setPostTranslationEnabled(false);
     setState(() {
       _selectedRegion = 'Canada';
-      _autoTranslateUI = true;
-      _autoTranslateUGC = true;
       _use24hTime = true;
     });
   }

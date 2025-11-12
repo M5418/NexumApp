@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'profile_training_page.dart';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
@@ -21,11 +24,62 @@ class ProfileExperiencePage extends StatefulWidget {
 class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
   final List<Map<String, TextEditingController>> _experienceControllers = [];
   bool _isSaving = false;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _addExperience(); // Start with one experience field
+    _loadExistingData();
+  }
+
+  Future<void> _loadExistingData() async {
+    try {
+      final res = await ProfileApi().me();
+      final body = Map<String, dynamic>.from(res);
+      final data = Map<String, dynamic>.from(body['data'] ?? {});
+      final experiences = _parseListOfMap(data['professional_experiences']);
+
+      if (!mounted) return;
+      setState(() {
+        if (experiences.isEmpty) {
+          _addExperience(); // Start with one empty field
+        } else {
+          // Load existing experiences
+          for (final exp in experiences) {
+            _experienceControllers.add({
+              'title': TextEditingController(text: (exp['title'] ?? '').toString()),
+              'subtitle': TextEditingController(text: (exp['subtitle'] ?? '').toString()),
+            });
+          }
+        }
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _addExperience(); // Fallback to empty field on error
+        _loading = false;
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> _parseListOfMap(dynamic value) {
+    try {
+      if (value == null) return [];
+      if (value is String) {
+        final decoded = jsonDecode(value);
+        if (decoded is List) {
+          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+        return [];
+      }
+      if (value is List) {
+        return value.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
@@ -113,7 +167,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save experiences. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('common.save_failed'),
             style: GoogleFonts.inter(),
           ),
           backgroundColor: Colors.red,
@@ -126,7 +180,16 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    if (_loading) {
+      return Scaffold(
+        backgroundColor:
+            isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     if (context.isMobile) {
       // MOBILE: flat background, no gradient
@@ -144,7 +207,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
             children: [
               const SizedBox(height: 32),
               Text(
-                'Professional Experience',
+                lang.t('experience.title'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -153,7 +216,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'List your work experiences, positions, or roles',
+                lang.t('experience.subtitle'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w400,
@@ -172,6 +235,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                       child: _ExperienceItemCard(
                         index: index,
                         isDarkMode: isDarkMode,
+                        lang: lang,
                         titleController:
                             _experienceControllers[index]['title']!,
                         subtitleController:
@@ -190,7 +254,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                   onPressed: _addExperience,
                   icon: const Icon(Icons.add, color: Color(0xFFBFAE01)),
                   label: Text(
-                    'Add Experience',
+                    lang.t('experience.add'),
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       color: const Color(0xFFBFAE01),
@@ -224,7 +288,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                           ),
                         )
                       : Text(
-                          'Continue',
+                          lang.t('interests.continue'),
                           style: GoogleFonts.inter(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -312,6 +376,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                                     child: _ExperienceItemCard(
                                       index: index,
                                       isDarkMode: isDarkMode,
+                                      lang: lang,
                                       titleController:
                                           _experienceControllers[index]['title']!,
                                       subtitleController:
@@ -446,6 +511,7 @@ class _MobileAppBar extends StatelessWidget {
 class _ExperienceItemCard extends StatelessWidget {
   final int index;
   final bool isDarkMode;
+  final LanguageProvider lang;
   final TextEditingController titleController;
   final TextEditingController subtitleController;
   final bool canRemove;
@@ -454,6 +520,7 @@ class _ExperienceItemCard extends StatelessWidget {
   const _ExperienceItemCard({
     required this.index,
     required this.isDarkMode,
+    required this.lang,
     required this.titleController,
     required this.subtitleController,
     required this.canRemove,
@@ -479,7 +546,7 @@ class _ExperienceItemCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Experience ${index + 1}',
+                  '${lang.t('experience.title')} ${index + 1}',
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -506,12 +573,12 @@ class _ExperienceItemCard extends StatelessWidget {
               color: isDarkMode ? Colors.white : Colors.black,
             ),
             decoration: InputDecoration(
-              labelText: 'Job Title/Position',
+              labelText: lang.t('experience.job_title_label'),
               labelStyle: GoogleFonts.inter(
                 fontSize: 14,
                 color: const Color(0xFF666666),
               ),
-              hintText: 'e.g., Software Engineer',
+              hintText: lang.t('experience.position'),
               hintStyle: GoogleFonts.inter(
                 fontSize: 14,
                 color: const Color(0xFF999999),
@@ -541,12 +608,12 @@ class _ExperienceItemCard extends StatelessWidget {
               color: isDarkMode ? Colors.white : Colors.black,
             ),
             decoration: InputDecoration(
-              labelText: 'Company/Organization (Optional)',
+              labelText: lang.t('experience.company_label'),
               labelStyle: GoogleFonts.inter(
                 fontSize: 14,
                 color: const Color(0xFF666666),
               ),
-              hintText: 'e.g., Google Inc.',
+              hintText: lang.t('experience.company'),
               hintStyle: GoogleFonts.inter(
                 fontSize: 14,
                 color: const Color(0xFF999999),

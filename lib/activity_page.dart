@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class ActivityPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -31,7 +33,7 @@ class _ActivityPageState extends State<ActivityPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Activity',
+          Provider.of<LanguageProvider>(context).t('activity.title'),
           style: GoogleFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -65,7 +67,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Interactions',
+                      context.read<LanguageProvider>().t('activity.interactions'),
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -75,7 +77,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.favorite_border,
-                    title: 'Likes',
+                    title: context.read<LanguageProvider>().t('activity.likes'),
                     onTap: () {
                       // Navigate to likes
                     },
@@ -83,7 +85,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.chat_bubble_outline,
-                    title: 'Comments',
+                    title: context.read<LanguageProvider>().t('activity.comments'),
                     onTap: () {
                       // Navigate to comments
                     },
@@ -91,7 +93,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.repeat,
-                    title: 'Repost',
+                    title: context.read<LanguageProvider>().t('activity.reposts'),
                     onTap: () {
                       // Navigate to reposts
                     },
@@ -124,7 +126,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Removed & Archived Content',
+                      context.read<LanguageProvider>().t('activity.removed_archived'),
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -134,7 +136,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.delete_outline,
-                    title: 'Recently deleted',
+                    title: context.read<LanguageProvider>().t('activity.recently_deleted'),
                     onTap: () {
                       // Navigate to recently deleted
                     },
@@ -142,7 +144,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.archive_outlined,
-                    title: 'Archived',
+                    title: context.read<LanguageProvider>().t('activity.archived'),
                     onTap: () {
                       // Navigate to archived content
                     },
@@ -175,7 +177,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'How You Use Communi',
+                      context.read<LanguageProvider>().t('activity.how_you_use'),
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -185,7 +187,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.history,
-                    title: 'Account History',
+                    title: context.read<LanguageProvider>().t('activity.account_history'),
                     onTap: () {
                       // Navigate to account history
                     },
@@ -193,7 +195,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.search,
-                    title: 'Recent Searches',
+                    title: context.read<LanguageProvider>().t('activity.recent_searches'),
                     onTap: () {
                       // Navigate to recent searches
                     },
@@ -226,7 +228,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Information you shared',
+                      context.read<LanguageProvider>().t('activity.info_shared'),
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -236,7 +238,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.swap_horiz,
-                    title: 'Transfer your information',
+                    title: context.read<LanguageProvider>().t('activity.transfer_info'),
                     onTap: () {
                       // Navigate to transfer information
                     },
@@ -244,7 +246,7 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
                   _buildActivityItem(
                     icon: Icons.download_outlined,
-                    title: 'Download your information',
+                    title: context.read<LanguageProvider>().t('activity.download_info'),
                     onTap: () {
                       // Navigate to download information
                     },

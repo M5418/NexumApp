@@ -3,25 +3,31 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'widgets/circle_icon_button.dart';
 import 'widgets/media_thumb.dart';
 import 'widgets/tag_chip.dart';
-import 'core/posts_api.dart';
-import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/community_repository.dart';
+import 'repositories/interfaces/draft_repository.dart';
+import 'repositories/models/draft_model.dart';
 import 'core/files_api.dart';
 import 'repositories/firebase/firebase_follow_repository.dart';
+import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../responsive/responsive_breakpoints.dart';
 
 class CreatePostPage extends StatefulWidget {
-  const CreatePostPage({super.key});
-  static Future<T?> showPopup<T>(BuildContext context) {
+  final DraftModel? draft;
+  
+  const CreatePostPage({super.key, this.draft});
+  
+  static Future<T?> showPopup<T>(BuildContext context, {DraftModel? draft}) {
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Create Post',
+      barrierLabel: Provider.of<LanguageProvider>(context, listen: false).t('create_post.create_post'),
       barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (_, __, ___) {
@@ -32,7 +38,7 @@ class CreatePostPage extends StatefulWidget {
               color: Colors.transparent,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: const CreatePostPage(),
+                child: CreatePostPage(draft: draft),
               ),
             ),
           ),
@@ -65,9 +71,43 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final int _maxCommunities = 3;
 
   bool _posting = false;
+  bool _isEditingDraft = false;
+  String? _draftId;
+
+  final FirebasePostRepository _postRepo = FirebasePostRepository();
 
   // Body is REQUIRED, title optional. Media can be attached but not sufficient without body.
   bool get _canPost => (!_posting) && _bodyController.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.draft != null) {
+      _loadDraft(widget.draft!);
+    }
+  }
+
+  void _loadDraft(DraftModel draft) {
+    _isEditingDraft = true;
+    _draftId = draft.id;
+    _titleController.text = draft.title;
+    _bodyController.text = draft.body;
+    
+    // Load media items
+    for (final url in draft.mediaUrls) {
+      _mediaItems.add(MediaItem(
+        type: MediaType.image,
+        path: url,
+      ));
+    }
+    
+    // Load tagged users
+    if (draft.taggedUsers != null) {
+      _taggedUsers.addAll(draft.taggedUsers!);
+    }
+    
+    setState(() {});
+  }
 
   @override
   void dispose() {
@@ -139,7 +179,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           Expanded(
             child: Center(
               child: Text(
-                'Create Post',
+                Provider.of<LanguageProvider>(context, listen: false).t('create_post.create_post'),
                 style: GoogleFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -207,7 +247,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         color: isDark ? Colors.white : Colors.black,
       ),
       decoration: InputDecoration(
-        hintText: 'Title',
+        hintText: Provider.of<LanguageProvider>(context).t('create_post.title_hint'),
         hintStyle: GoogleFonts.inter(
           fontSize: 16,
           color: const Color(0xFF666666),
@@ -230,7 +270,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
             color: isDark ? Colors.white : Colors.black,
           ),
           decoration: InputDecoration(
-            hintText: "What's on your mind today?",
+            hintText: Provider.of<LanguageProvider>(context).t('create_post.whats_on_mind'),
             hintStyle: GoogleFonts.inter(
               fontSize: 16,
               color: const Color(0xFF666666),
@@ -361,7 +401,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Community',
+                  Provider.of<LanguageProvider>(context, listen: false).t('create_post.community'),
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: const Color(0xFF666666),
@@ -474,7 +514,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 ),
                 child: Center(
                   child: Text(
-                    'Save as Draft',
+                    Provider.of<LanguageProvider>(context, listen: false).t('create_post.save_as_draft'),
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -516,7 +556,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           ),
                         )
                       : Text(
-                          'Post',
+                          Provider.of<LanguageProvider>(context).t('create_post.post_button'),
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
@@ -644,7 +684,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 onChanged: applyQuery,
                                 decoration: InputDecoration(
                                   isDense: true,
-                                  hintText: 'Search connections...',
+                                  hintText: Provider.of<LanguageProvider>(context).t('create_post.search_connections'),
                                   hintStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF666666),
@@ -841,8 +881,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unexpected error occurred.'),
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_post.unexpected_error')),
           backgroundColor: Colors.red,
         ),
       );
@@ -884,8 +924,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unexpected error occurred.'),
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.unexpected_error')),
           backgroundColor: Colors.red,
         ),
       );
@@ -995,7 +1035,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 onChanged: applyQuery,
                                 decoration: InputDecoration(
                                   isDense: true,
-                                  hintText: 'Search community...',
+                                  hintText: Provider.of<LanguageProvider>(context).t('create_post.search_community'),
                                   hintStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF666666),
@@ -1192,13 +1232,71 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  void _saveDraft() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Saved to drafts', style: GoogleFonts.inter()),
-        backgroundColor: const Color(0xFFBFAE01),
-      ),
-    );
+  Future<void> _saveDraft() async {
+    final body = _bodyController.text.trim();
+    if (body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_post.write_something'), style: GoogleFonts.inter()),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final draftRepo = context.read<DraftRepository>();
+      
+      // Upload media first if any
+      final mediaUrls = <String>[];
+      for (final item in _mediaItems) {
+        if (item.xfile != null) {
+          final uploaded = await _uploadXFile(item.xfile!, item.type);
+          mediaUrls.add(uploaded['url'] ?? '');
+        } else if (item.path != null && item.path!.startsWith('http')) {
+          // Already uploaded (editing existing draft)
+          mediaUrls.add(item.path!);
+        }
+      }
+
+      if (_isEditingDraft && _draftId != null) {
+        // Update existing draft
+        await draftRepo.updatePostDraft(
+          draftId: _draftId!,
+          title: _titleController.text.trim(),
+          body: body,
+          mediaUrls: mediaUrls.isNotEmpty ? mediaUrls : null,
+          taggedUsers: _taggedUsers.isNotEmpty ? _taggedUsers : null,
+          communities: _selectedCommunities.map((c) => c.id).toList(),
+        );
+      } else {
+        // Create new draft
+        await draftRepo.savePostDraft(
+          title: _titleController.text.trim(),
+          body: body,
+          mediaUrls: mediaUrls.isNotEmpty ? mediaUrls : null,
+          taggedUsers: _taggedUsers.isNotEmpty ? _taggedUsers : null,
+          communities: _selectedCommunities.map((c) => c.id).toList(),
+        );
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_post.saved_to_drafts'), style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('create_post.save_draft_failed')}: $e', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _publishPost() async {
@@ -1225,20 +1323,20 @@ class _CreatePostPageState extends State<CreatePostPage> {
           final isDark = Theme.of(ctx).brightness == Brightness.dark;
           return AlertDialog(
             backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-            title: Text('Post to Community?',
+            title: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('create_post.post_to_community'),
                 style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
             content: Text(
-              "This post will be published in the community \"${community.name}\" and will not appear in your home feed.",
+              '${Provider.of<LanguageProvider>(ctx, listen: false).t('create_post.community_post_notice')} "${community.name}"',
               style: GoogleFonts.inter(),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: Text('Cancel', style: GoogleFonts.inter()),
+                child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('common.cancel'), style: GoogleFonts.inter()),
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text('Post',
+                child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('create_post.post_button'),
                     style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
               ),
             ],
@@ -1276,25 +1374,37 @@ class _CreatePostPageState extends State<CreatePostPage> {
         body,
       ].where((e) => e.isNotEmpty).join('\n\n');
 
-      // For now, route all posts to global feed (Firebase Posts)
-      await PostsApi().create(
-        content: content,
-        media: mediaPayload.isEmpty ? null : mediaPayload,
-      );
+      // Create post in Firebase (global feed)
+      final mediaUrls = mediaPayload.map((m) => (m['url'] ?? '').toString()).where((u) => u.isNotEmpty).toList();
+      final postId = await _postRepo.createPost(text: content, mediaUrls: mediaUrls);
+
+      // Delete draft if editing an existing one
+      if (_isEditingDraft && _draftId != null) {
+        try {
+          if (!mounted) return;
+          final draftRepo = context.read<DraftRepository>();
+          await draftRepo.deleteDraft(_draftId!);
+        } catch (e) {
+          // Non-critical error, continue
+        }
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Posted', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_post.posted'), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
-      Navigator.pop(context, true);
+      // Navigate to the newly created post detail page
+      Navigator.pop(context);
+      if (!mounted) return;
+      Navigator.pushNamed(context, '/post', arguments: {'postId': postId});
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to publish post', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_post.publish_failed'), style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );

@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'core/i18n/language_provider.dart';
 import 'package:video_player/video_player.dart';
 
 import 'widgets/share_bottom_sheet.dart';
@@ -506,7 +508,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
           : _frames.isEmpty
               ? Center(
                   child: Text(
-                    'No stories to show',
+                    Provider.of<LanguageProvider>(context, listen: false).t('story.no_stories'),
                     style: GoogleFonts.inter(color: Colors.white),
                   ),
                 )
@@ -728,7 +730,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                 ),
               ),
               Text(
-                'Connect',
+                Provider.of<LanguageProvider>(context, listen: false).t('story.connect'),
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: Colors.white.withValues(alpha: 179),
@@ -752,7 +754,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                 const Icon(Icons.music_note, size: 16, color: Colors.black),
                 const SizedBox(width: 6),
                 Text(
-                  f.item.audioTitle ?? 'Music',
+                  f.item.audioTitle ?? Provider.of<LanguageProvider>(context, listen: false).t('story.music'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
@@ -898,7 +900,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                 cursorColor: const Color(0xFFBFAE01),
                 decoration: InputDecoration(
                   border: InputBorder.none,
-                  hintText: 'Type your comment...',
+                  hintText: Provider.of<LanguageProvider>(context, listen: false).t('story.comment_hint'),
                   hintStyle: GoogleFonts.inter(
                     color: const Color(0xFF666666),
                     fontSize: 14,

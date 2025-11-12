@@ -47,10 +47,20 @@ class _MessageBubbleState extends State<MessageBubble>
   ];
 
   // Responsive max bubble width
+  // Mobile (<600px): 65% of screen width
+  // Desktop/Large (>=1024px): 35% of screen width
   double _bubbleContentWidth(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
-    // <= 600px: mobile/narrow
-    return w <= 600 ? 180 : 220;
+    if (w < 600) {
+      // Mobile: 65% of screen width
+      return w * 0.65;
+    } else if (w >= 1024) {
+      // Desktop/Large: 35% of screen width
+      return w * 0.35;
+    } else {
+      // Tablet: 50% of screen width
+      return w * 0.50;
+    }
   }
 
   @override

@@ -1093,8 +1093,6 @@ class _EditProfilPageState extends State<EditProfilPage> {
     }
 
     if (!mounted) return;
-    if (selected != null) {
-      setState(() => _interests = selected!);
+    setState(() => _interests = selected!);
     }
-  }
 }

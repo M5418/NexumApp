@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'home_feed_page.dart';
-import 'core/users_api.dart';
-import 'core/connections_api.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
+
+import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/firebase/firebase_follow_repository.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'home_feed_page.dart';
 
 class ConnectFriendsPage extends StatefulWidget {
   final String firstName;
@@ -30,11 +33,22 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
   Future<void> _loadUsers() async {
     debugPrint('🔍 ConnectFriendsPage: Starting to load users...');
     try {
-      final users = await UsersApi().list();
-      debugPrint('🔍 ConnectFriendsPage: Received ${users.length} users from API');
+      final userRepo = FirebaseUserRepository();
+      final followRepo = FirebaseFollowRepository();
+      
+      // Get suggested users
+      final userModels = await userRepo.getSuggestedUsers(limit: 50);
+      final users = userModels.map((u) => {
+        'id': u.uid,
+        'name': u.displayName ?? u.username ?? 'User',
+        'username': u.username,
+        'profile_photo_url': u.avatarUrl,
+        'bio': u.bio,
+      }).toList();
 
-      final status = await ConnectionsApi().status();
-      debugPrint('🔍 ConnectFriendsPage: Connection status - Outbound: ${status.outbound.length}, Inbound: ${status.inbound.length}');
+      // Fetch current connections
+      final connectionsStatus = await followRepo.getConnectionsStatus();
+      final outbound = connectionsStatus.outbound;
 
       if (mounted) {
         setState(() {
@@ -42,7 +56,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
           _connectionStatus.clear();
           for (final u in users) {
             final id = u['id'] as String;
-            final isConnected = status.outbound.contains(id);
+            final isConnected = outbound.contains(id);
             _connectionStatus[id] = isConnected;
             debugPrint('🔍 ConnectFriendsPage: User ${u['name']} (ID: $id) - Connected: $isConnected');
           }
@@ -63,11 +77,11 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to load friends: ${e.toString()}'),
+                content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('connect_friends.load_failed')}: ${e.toString()}'),
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 5),
                 action: SnackBarAction(
-                  label: 'Retry',
+                  label: Provider.of<LanguageProvider>(context, listen: false).t('common.retry'),
                   textColor: Colors.white,
                   onPressed: () => _loadUsers(),
                 ),
@@ -80,16 +94,17 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
   }
 
   Future<void> _toggleConnection(String userId) async {
-    final api = ConnectionsApi();
-    final next = !(_connectionStatus[userId] ?? false);
+    final followRepo = FirebaseFollowRepository();
+    final connected = _connectionStatus[userId] ?? false;
+    final next = !connected;
     setState(() {
       _connectionStatus[userId] = next;
     });
     try {
       if (next) {
-        await api.connect(userId);
+        await followRepo.followUser(userId);
       } else {
-        await api.disconnect(userId);
+        await followRepo.unfollowUser(userId);
       }
     } catch (e) {
       setState(() {
@@ -98,7 +113,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to ${next ? 'connect' : 'disconnect'}'),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('connect_friends.action_failed')),
           ),
         );
       }
@@ -126,17 +141,17 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (context.isMobile) {
       // MOBILE: original full-screen layout
       return Scaffold(
-        backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+        backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(100.0),
           child: Container(
             decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+              color: isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(25),
                 bottomRight: Radius.circular(25),
@@ -160,7 +175,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                         IconButton(
                           icon: Icon(
                             Icons.arrow_back,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                            color: isDark ? Colors.white : Colors.black,
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
@@ -169,7 +184,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                            color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
                       ],
@@ -184,7 +199,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: _contentBody(context, isDarkMode),
+            child: _contentBody(context, isDark),
           ),
         ),
       );
@@ -192,7 +207,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
 
     // DESKTOP/TABLET/LARGE DESKTOP: centered popup card
     return Scaffold(
-      backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
+      backgroundColor: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -200,7 +215,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Material(
-                color: isDarkMode ? const Color(0xFF000000) : Colors.white,
+                color: isDark ? const Color(0xFF000000) : Colors.white,
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
@@ -209,7 +224,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                       Row(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.close, color: isDarkMode ? Colors.white : Colors.black),
+                            icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.black),
                             onPressed: () => Navigator.pop(context),
                           ),
                           const SizedBox(width: 8),
@@ -218,7 +233,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: isDarkMode ? Colors.white : Colors.black,
+                              color: isDark ? Colors.white : Colors.black,
                             ),
                           ),
                         ],
@@ -230,7 +245,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                          child: _contentBody(context, isDarkMode, desktop: true),
+                          child: _contentBody(context, isDark, desktop: true),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -267,7 +282,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
     );
   }
 
-  Widget _contentBody(BuildContext context, bool isDarkMode, {bool desktop = false}) {
+  Widget _contentBody(BuildContext context, bool isDark, {bool desktop = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -323,7 +338,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                                   style: GoogleFonts.inter(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
-                                    color: isDarkMode ? Colors.white : Colors.black,
+                                    color: isDark ? Colors.white : Colors.black,
                                   ),
                                 ),
                                 const SizedBox(height: 2),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class PremiumSubscriptionPage extends StatelessWidget {
   const PremiumSubscriptionPage({super.key});
@@ -20,7 +22,7 @@ class PremiumSubscriptionPage extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Premium',
+          Provider.of<LanguageProvider>(context, listen: false).t('premium.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -89,7 +91,7 @@ class _PremiumSubscriptionViewState extends State<PremiumSubscriptionView> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Nexum Premium',
+                  Provider.of<LanguageProvider>(context, listen: false).t('premium.nexum_premium'),
                   style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -99,7 +101,7 @@ class _PremiumSubscriptionViewState extends State<PremiumSubscriptionView> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Unlock advanced tools and elevate your experience',
+              Provider.of<LanguageProvider>(context, listen: false).t('premium.subtitle'),
               style: GoogleFonts.inter(
                 color: const Color(0xFF666666),
                 fontSize: 12,
@@ -126,7 +128,7 @@ class _PremiumSubscriptionViewState extends State<PremiumSubscriptionView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'What you get',
+              Provider.of<LanguageProvider>(context, listen: false).t('premium.what_you_get'),
               style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
@@ -173,7 +175,7 @@ class _PremiumSubscriptionViewState extends State<PremiumSubscriptionView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Choose your plan',
+              Provider.of<LanguageProvider>(context, listen: false).t('premium.choose_plan'),
               style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
@@ -189,7 +191,7 @@ class _PremiumSubscriptionViewState extends State<PremiumSubscriptionView> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Column(
                     children: [
-                      Text('Monthly', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                      Text(Provider.of<LanguageProvider>(context, listen: false).t('premium.monthly'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
                       Text(
                         '\$7.99',
                         style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
@@ -201,9 +203,9 @@ class _PremiumSubscriptionViewState extends State<PremiumSubscriptionView> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Column(
                     children: [
-                      Text('Yearly', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                      Text(Provider.of<LanguageProvider>(context, listen: false).t('premium.yearly'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
                       Text(
-                        'Save 20% · \$76.99',
+                        '${Provider.of<LanguageProvider>(context, listen: false).t('premium.yearly_save')} · \$76.99',
                         style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
                       ),
                     ],
@@ -220,7 +222,7 @@ class _PremiumSubscriptionViewState extends State<PremiumSubscriptionView> {
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               ),
-              child: Text('Subscribe', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+              child: Text(Provider.of<LanguageProvider>(context, listen: false).t('premium.subscribe'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -242,26 +244,26 @@ class _PremiumSubscriptionViewState extends State<PremiumSubscriptionView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Manage subscription', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(Provider.of<LanguageProvider>(context, listen: false).t('premium.manage_subscription'), style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.receipt_long_outlined),
-              title: Text('Billing history', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+              title: Text(Provider.of<LanguageProvider>(context, listen: false).t('premium.billing_history'), style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
               onTap: () => _snack('Open billing history'),
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.person_outline),
-              title: Text('Manage profile badge', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+              title: Text(Provider.of<LanguageProvider>(context, listen: false).t('premium.manage_badge'), style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
               onTap: () => _snack('Manage badge'),
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.cancel_outlined),
-              title: Text('Cancel subscription', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+              title: Text(Provider.of<LanguageProvider>(context, listen: false).t('premium.cancel_subscription'), style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
               onTap: () => _snack('Cancel subscription (placeholder)'),
             ),

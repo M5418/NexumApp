@@ -54,28 +54,38 @@ class FirebasePodcastRepository implements PodcastRepository {
     bool? isPublished,
     bool mine = false,
   }) async {
-    Query<Map<String, dynamic>> q = _podcasts;
-    
-    if (mine) {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) return [];
-      q = q.where('authorId', isEqualTo: uid);
-    } else if (authorId != null) {
-      q = q.where('authorId', isEqualTo: authorId);
+    try {
+      Query<Map<String, dynamic>> q = _podcasts;
+      
+      if (mine) {
+        final uid = _auth.currentUser?.uid;
+        if (uid == null) {
+          print('⚠️  Podcasts.listPodcasts: No authenticated user for mine=true');
+          return [];
+        }
+        q = q.where('authorId', isEqualTo: uid);
+      } else if (authorId != null) {
+        q = q.where('authorId', isEqualTo: authorId);
+      }
+      
+      if (category != null) {
+        q = q.where('category', isEqualTo: category);
+      }
+      
+      if (isPublished != null) {
+        q = q.where('isPublished', isEqualTo: isPublished);
+      }
+      
+      q = q.orderBy('createdAt', descending: true).limit(limit);
+      
+      final snap = await q.get();
+      print('✅ Podcasts fetched: ${snap.docs.length} items (page $page, limit $limit)');
+      return snap.docs.map(_podcastFromDoc).toList();
+    } catch (e) {
+      print('❌ Podcasts.listPodcasts error: $e');
+      print('🔍 Check: 1) Firestore rules for podcasts 2) Composite indexes');
+      rethrow;
     }
-    
-    if (category != null) {
-      q = q.where('category', isEqualTo: category);
-    }
-    
-    if (isPublished != null) {
-      q = q.where('isPublished', isEqualTo: isPublished);
-    }
-    
-    q = q.orderBy('createdAt', descending: true).limit(limit);
-    
-    final snap = await q.get();
-    return snap.docs.map(_podcastFromDoc).toList();
   }
 
   @override
@@ -320,30 +330,48 @@ class FirebasePodcastRepository implements PodcastRepository {
 
   @override
   Future<List<PodcastModel>> getBookmarkedPodcasts() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return [];
-    
-    final snap = await _podcasts
-        .where('bookmarks', arrayContains: uid)
-        .orderBy('updatedAt', descending: true)
-        .limit(50)
-        .get();
-    
-    return snap.docs.map(_podcastFromDoc).toList();
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid == null) {
+        print('⚠️  Podcasts.getBookmarkedPodcasts: No authenticated user');
+        return [];
+      }
+      
+      final snap = await _podcasts
+          .where('bookmarks', arrayContains: uid)
+          .orderBy('updatedAt', descending: true)
+          .limit(50)
+          .get();
+      
+      print('✅ Bookmarked podcasts fetched: ${snap.docs.length} items');
+      return snap.docs.map(_podcastFromDoc).toList();
+    } catch (e) {
+      print('❌ Podcasts.getBookmarkedPodcasts error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<List<PodcastModel>> getSubscribedPodcasts() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return [];
-    
-    final snap = await _podcasts
-        .where('subscriptions', arrayContains: uid)
-        .orderBy('updatedAt', descending: true)
-        .limit(100)
-        .get();
-    
-    return snap.docs.map(_podcastFromDoc).toList();
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid == null) {
+        print('⚠️  Podcasts.getSubscribedPodcasts: No authenticated user');
+        return [];
+      }
+      
+      final snap = await _podcasts
+          .where('subscriptions', arrayContains: uid)
+          .orderBy('updatedAt', descending: true)
+          .limit(100)
+          .get();
+      
+      print('✅ Subscribed podcasts fetched: ${snap.docs.length} items');
+      return snap.docs.map(_podcastFromDoc).toList();
+    } catch (e) {
+      print('❌ Podcasts.getSubscribedPodcasts error: $e');
+      rethrow;
+    }
   }
 
   @override

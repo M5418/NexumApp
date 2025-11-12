@@ -58,41 +58,48 @@ class FirebaseBookRepository implements BookRepository {
     bool? isPublished,
     bool mine = false,
   }) async {
-    Query<Map<String, dynamic>> q = _books;
-    
-    if (mine) {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) return [];
-      q = q.where('authorId', isEqualTo: uid);
-    } else if (authorId != null) {
-      q = q.where('authorId', isEqualTo: authorId);
+    try {
+      Query<Map<String, dynamic>> q = _books;
+      
+      if (mine) {
+        final uid = _auth.currentUser?.uid;
+        if (uid == null) {
+          print('⚠️  Books.listBooks: No authenticated user for mine=true');
+          return [];
+        }
+        q = q.where('authorId', isEqualTo: uid);
+      } else if (authorId != null) {
+        q = q.where('authorId', isEqualTo: authorId);
+      }
+      
+      if (category != null) {
+        q = q.where('category', isEqualTo: category);
+      }
+      
+      if (isPublished != null) {
+        q = q.where('isPublished', isEqualTo: isPublished);
+      }
+      
+      if (query != null && query.isNotEmpty) {
+        q = q.where('titleLower', isGreaterThanOrEqualTo: query.toLowerCase())
+             .where('titleLower', isLessThan: '${query.toLowerCase()}\uf8ff');
+      }
+      
+      final offset = (page - 1) * limit;
+      if (offset > 0) {
+        // Note: Firestore doesn't have offset, so we use limit for now
+      }
+      
+      q = q.orderBy('createdAt', descending: true).limit(limit);
+      
+      final snap = await q.get();
+      print('✅ Books fetched: ${snap.docs.length} items (page $page, limit $limit)');
+      return snap.docs.map(_bookFromDoc).toList();
+    } catch (e) {
+      print('❌ Books.listBooks error: $e');
+      print('🔍 Check: 1) Firestore rules for books 2) Composite indexes 3) Auth status');
+      rethrow;
     }
-    
-    if (category != null) {
-      q = q.where('category', isEqualTo: category);
-    }
-    
-    if (isPublished != null) {
-      q = q.where('isPublished', isEqualTo: isPublished);
-    }
-    
-    if (query != null && query.isNotEmpty) {
-      // For search, we'll use a simple title search
-      q = q.where('titleLower', isGreaterThanOrEqualTo: query.toLowerCase())
-           .where('titleLower', isLessThan: '${query.toLowerCase()}\uf8ff');
-    }
-    
-    // Apply pagination
-    final offset = (page - 1) * limit;
-    if (offset > 0) {
-      // Note: Firestore doesn't have offset, so we use limit for now
-      // In production, use cursor-based pagination with startAfter
-    }
-    
-    q = q.orderBy('createdAt', descending: true).limit(limit);
-    
-    final snap = await q.get();
-    return snap.docs.map(_bookFromDoc).toList();
   }
 
   @override
@@ -372,30 +379,48 @@ class FirebaseBookRepository implements BookRepository {
 
   @override
   Future<List<BookModel>> getBookmarkedBooks() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return [];
-    
-    final snap = await _books
-        .where('bookmarks', arrayContains: uid)
-        .orderBy('updatedAt', descending: true)
-        .limit(50)
-        .get();
-    
-    return snap.docs.map(_bookFromDoc).toList();
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid == null) {
+        print('⚠️  Books.getBookmarkedBooks: No authenticated user');
+        return [];
+      }
+      
+      final snap = await _books
+          .where('bookmarks', arrayContains: uid)
+          .orderBy('updatedAt', descending: true)
+          .limit(50)
+          .get();
+      
+      print('✅ Bookmarked books fetched: ${snap.docs.length} items');
+      return snap.docs.map(_bookFromDoc).toList();
+    } catch (e) {
+      print('❌ Books.getBookmarkedBooks error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<List<BookModel>> getPurchasedBooks() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return [];
-    
-    final snap = await _books
-        .where('purchases', arrayContains: uid)
-        .orderBy('updatedAt', descending: true)
-        .limit(100)
-        .get();
-    
-    return snap.docs.map(_bookFromDoc).toList();
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid == null) {
+        print('⚠️  Books.getPurchasedBooks: No authenticated user');
+        return [];
+      }
+      
+      final snap = await _books
+          .where('purchases', arrayContains: uid)
+          .orderBy('updatedAt', descending: true)
+          .limit(100)
+          .get();
+      
+      print('✅ Purchased books fetched: ${snap.docs.length} items');
+      return snap.docs.map(_bookFromDoc).toList();
+    } catch (e) {
+      print('❌ Books.getPurchasedBooks error: $e');
+      rethrow;
+    }
   }
 
   @override

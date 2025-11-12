@@ -298,6 +298,8 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         _replyTo = null;
       });
       _toBottom();
+      // Force instant refresh
+      await _load();
     } catch (e) {
       if (mounted) _snack('Failed to send: $e');
     }
@@ -306,12 +308,8 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   Future<void> _handleVoice() async {
     try {
       if (!_recording) {
-        final path = await _audio.startRecording();
-        if (path != null) {
-          setState(() => _recording = true);
-        } else {
-          _snack('Failed to start recording');
-        }
+        await _audio.startRecording();
+        setState(() => _recording = true);
       } else {
         final r = await _audio.stopRecording();
         setState(() => _recording = false);
@@ -346,9 +344,12 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
           _replyTo = null;
         });
         _toBottom();
+        // Force instant refresh
+        await _load();
       }
     } catch (e) {
-      if (mounted) _snack('Recording error: $e');
+      setState(() => _recording = false);
+      if (mounted) _snack('$e');
     }
   }
 
@@ -412,6 +413,8 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
       });
       _toBottom();
       _hideSnack();
+      // Force instant refresh
+      await _load();
     } catch (e) {
       _hideSnack();
       _snack('Failed to send files: $e');
@@ -505,6 +508,8 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
       });
       _toBottom();
       _hideSnack();
+      // Force instant refresh
+      await _load();
     } catch (e) {
       _hideSnack();
       _snack('Failed to send media: $e');

@@ -25,6 +25,7 @@ abstract class NotificationRepository {
     required NotificationType type,
     required String title,
     required String body,
+    String? fromUserId,
     String? refId,
     Map<String, dynamic>? data,
   });

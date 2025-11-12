@@ -9,7 +9,10 @@ abstract class UserRepository {
   Future<UserProfile?> getCurrentUserProfile();
   
   // Create/update user profile
-  Future<void> updateUserProfile(UserProfile profile);
+  Future<void> updateUserProfile(String uid, Map<String, dynamic> data);
+  
+  // Get suggested users
+  Future<List<UserProfile>> getSuggestedUsers({int limit = 12});
   
   // Upload profile photo
   Future<String> uploadProfilePhoto({
@@ -51,6 +54,7 @@ class UserProfile {
   final String? firstName;
   final String? lastName;
   final String? email;
+  final String? status;
   final String? bio;
   final String? avatarUrl;
   final String? coverUrl;
@@ -71,6 +75,7 @@ class UserProfile {
     this.firstName,
     this.lastName,
     this.email,
+    this.status,
     this.bio,
     this.avatarUrl,
     this.coverUrl,
@@ -93,6 +98,7 @@ class UserProfile {
       'firstName': firstName,
       'lastName': lastName,
       'email': email,
+      'status': status,
       'bio': bio,
       'avatarUrl': avatarUrl,
       'coverUrl': coverUrl,

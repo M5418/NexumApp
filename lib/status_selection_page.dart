@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'profile_experience_page.dart';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
@@ -11,7 +13,7 @@ class StatusSelectionPage extends StatefulWidget {
 
   const StatusSelectionPage({
     super.key,
-    this.firstName = 'User',
+    this.firstName = '',  // Will use translation for default
     this.lastName = '',
     this.hasProfilePhoto = false,
   });
@@ -52,7 +54,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save status. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('status.save_failed'),
             style: GoogleFonts.inter(),
           ),
         ),
@@ -103,7 +105,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                           onPressed: () => Navigator.pop(context),
                         ),
                         Text(
-                          'Status',
+                          Provider.of<LanguageProvider>(context, listen: false).t('status.title'),
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -129,7 +131,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
 
                 // Question Text
                 Text(
-                  'What will be your status your Nexum',
+                  Provider.of<LanguageProvider>(context, listen: false).t('status.question'),
                   style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -143,7 +145,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                   children: [
                     Expanded(
                       child: _buildStatusOption(
-                        'Entrepreneur',
+                        Provider.of<LanguageProvider>(context, listen: false).t('status.entrepreneur'),
                         _selectedStatus == 'Entrepreneur',
                         isDarkMode,
                       ),
@@ -151,7 +153,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: _buildStatusOption(
-                        'Investor',
+                        Provider.of<LanguageProvider>(context, listen: false).t('status.investor'),
                         _selectedStatus == 'Investor',
                         isDarkMode,
                       ),
@@ -179,7 +181,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                       ),
                     ),
                     child: Text(
-                      _isSaving ? 'Saving...' : 'Next',
+                      _isSaving ? Provider.of<LanguageProvider>(context, listen: false).t('status.saving') : Provider.of<LanguageProvider>(context, listen: false).t('status.next'),
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -219,7 +221,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Status',
+                            Provider.of<LanguageProvider>(context, listen: false).t('status.title'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -241,7 +243,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                               children: [
                                 const SizedBox(height: 8),
                                 Text(
-                                  'What will be your status your Nexum',
+                                  Provider.of<LanguageProvider>(context, listen: false).t('status.question'),
                                   textAlign: TextAlign.center,
                                   style: GoogleFonts.inter(
                                     fontSize: 20,
@@ -254,7 +256,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                                   children: [
                                     Expanded(
                                       child: _buildStatusOption(
-                                        'Entrepreneur',
+                                        Provider.of<LanguageProvider>(context, listen: false).t('status.entrepreneur'),
                                         _selectedStatus == 'Entrepreneur',
                                         isDarkMode,
                                       ),
@@ -262,7 +264,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                                     const SizedBox(width: 16),
                                     Expanded(
                                       child: _buildStatusOption(
-                                        'Investor',
+                                        Provider.of<LanguageProvider>(context, listen: false).t('status.investor'),
                                         _selectedStatus == 'Investor',
                                         isDarkMode,
                                       ),
@@ -291,7 +293,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                             ),
                           ),
                           child: Text(
-                            _isSaving ? 'Saving...' : 'Next',
+                            _isSaving ? Provider.of<LanguageProvider>(context, listen: false).t('status.saving') : Provider.of<LanguageProvider>(context, listen: false).t('status.next'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,

@@ -5,6 +5,7 @@ class SampleData {
     return [
       Post(
         id: '1',
+        authorId: 'sample_user_1',
         userName: 'Alex Helena',
         userAvatarUrl:
             'https://images.unsplash.com/photo-1494790108755-2616b612b47c?w=150&h=150&fit=crop&crop=face',
@@ -26,6 +27,7 @@ class SampleData {
       ),
       Post(
         id: '2',
+        authorId: 'sample_user_2',
         userName: 'Valerie Azar',
         userAvatarUrl:
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
@@ -49,6 +51,7 @@ class SampleData {
       ),
       Post(
         id: '3',
+        authorId: 'sample_user_2',
         userName: 'Valerie Azar',
         userAvatarUrl:
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
@@ -75,6 +78,7 @@ class SampleData {
       ),
       Post(
         id: '4',
+        authorId: 'sample_user_3',
         userName: 'Harry Mills',
         userAvatarUrl:
             'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
@@ -98,6 +102,7 @@ class SampleData {
       ),
       Post(
         id: '5',
+        authorId: 'sample_user_4',
         userName: 'Lola Gibson',
         userAvatarUrl:
             'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
@@ -123,6 +128,7 @@ class SampleData {
       ),
       Post(
         id: '6',
+        authorId: 'sample_user_5',
         userName: 'Vania Peter',
         userAvatarUrl:
             'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',

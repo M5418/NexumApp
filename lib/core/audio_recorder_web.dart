@@ -21,15 +21,22 @@ class AudioRecorder {
 
   Future<bool> hasPermission() async {
     try {
-      // Request mic stream to trigger browser permission prompt
+      debugPrint('🎤 Requesting microphone permission (Web)...');
+      
+      // Request mic stream - this triggers browser permission prompt
       _mediaStream = await html.window.navigator.mediaDevices?.getUserMedia({
         'audio': true,
       });
+      
       final ok = _mediaStream != null;
-      debugPrint('Web mic permission: $ok');
-      if (!ok) return false;
+      if (!ok) {
+        debugPrint('❌ Web mic permission denied or unavailable');
+        return false;
+      }
 
-      // Immediately stop tracks; they’ll be reacquired at startRecording
+      debugPrint('✅ Web mic permission granted');
+      
+      // Immediately stop tracks; they'll be reacquired at startRecording
       for (final t in _mediaStream!.getTracks()) {
         t.stop();
       }
@@ -43,9 +50,14 @@ class AudioRecorder {
 
   Future<String?> startRecording() async {
     try {
+      // Check if MediaDevices API is available
+      if (html.window.navigator.mediaDevices == null) {
+        throw Exception('MediaDevices API not available. Recording requires HTTPS or localhost.');
+      }
+
       final permitted = await hasPermission();
       if (!permitted) {
-        throw Exception('Microphone permission denied by browser');
+        throw Exception('Microphone permission denied. Please allow microphone access in your browser.');
       }
 
       // Acquire a fresh audio stream
@@ -53,7 +65,7 @@ class AudioRecorder {
         'audio': true,
       });
       if (_mediaStream == null) {
-        throw Exception('Failed to acquire media stream');
+        throw Exception('Failed to acquire media stream from browser');
       }
 
       // Prefer opus in webm
@@ -61,6 +73,8 @@ class AudioRecorder {
       final mime = html.MediaRecorder.isTypeSupported(mimeOpus)
           ? mimeOpus
           : 'audio/webm';
+
+      debugPrint('✅ Web recording using MIME: $mime');
 
       _chunks.clear();
       _lastBytes = null;
@@ -82,6 +96,7 @@ class AudioRecorder {
           final data = (de as dynamic).data as html.Blob?;
           if (data != null) {
             _chunks.add(data);
+            debugPrint('🔊 Web received audio chunk: ${data.size} bytes');
           }
         } catch (err) {
           debugPrint('⚠️ Web dataavailable parse error: $err');
@@ -89,20 +104,25 @@ class AudioRecorder {
       }
       _recorder!.addEventListener('dataavailable', onDataHandler);
 
-      _recorder!.start();
+      // Request chunks every 1 second to ensure dataavailable fires reliably
+      _recorder!.start(1000);
       await startCompleter.future;
 
       _startTime = DateTime.now();
+      debugPrint('✅ AudioRecorder(Web): Recording started successfully');
       return 'web'; // placeholder
     } catch (e) {
       debugPrint('❌ AudioRecorder(Web): Failed to start recording: $e');
-      return null;
+      _cleanup();
+      rethrow;
     }
   }
 
   Future<VoiceRecordingResult?> stopRecording() async {
     try {
-      if (_recorder == null) return null;
+      if (_recorder == null) {
+        throw Exception('No active recording to stop');
+      }
 
       // Wait for 'stop' event
       final stopped = Completer<void>();
@@ -115,8 +135,22 @@ class AudioRecorder {
       _recorder!.stop();
       await stopped.future;
 
+      if (_chunks.isEmpty) {
+        _cleanup();
+        throw Exception('No audio data recorded');
+      }
+
+      debugPrint('🔊 Web collected ${_chunks.length} audio chunks');
+
       // Build a single Blob from chunks
       final blob = html.Blob(_chunks, 'audio/webm');
+
+      if (blob.size == 0) {
+        _cleanup();
+        throw Exception('Recorded audio is empty');
+      }
+
+      debugPrint('🔊 Web blob size: ${blob.size} bytes');
 
       // Convert Blob -> bytes
       final reader = html.FileReader();
@@ -152,6 +186,11 @@ class AudioRecorder {
         throw StateError('Unexpected FileReader.result type: ${result.runtimeType}');
       }
 
+      if (bytes.isEmpty) {
+        _cleanup();
+        throw Exception('Converted audio bytes are empty');
+      }
+
       _lastBytes = bytes;
 
       final duration = _startTime != null
@@ -160,7 +199,7 @@ class AudioRecorder {
 
       _cleanup();
 
-      if (bytes.isEmpty) return null;
+      debugPrint('✅ AudioRecorder(Web): Recording stopped successfully (${duration.inSeconds}s, ${bytes.length} bytes)');
 
       return VoiceRecordingResult(
         filePath: null,
@@ -171,7 +210,7 @@ class AudioRecorder {
     } catch (e) {
       debugPrint('❌ AudioRecorder(Web): Failed to stop recording: $e');
       _cleanup();
-      return null;
+      rethrow;
     }
   }
 

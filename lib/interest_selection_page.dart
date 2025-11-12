@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'connect_friends_page.dart';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/community_interest_sync_service.dart';
 
 class InterestSelectionPage extends StatefulWidget {
   final List<String>? initialSelected;
@@ -527,9 +530,14 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
     if (_selectedInterests.isEmpty) return;
     setState(() => _isSaving = true);
     try {
+      // Save interests to user profile
       await ProfileApi().update({
         'interest_domains': _selectedInterests.toList(),
       });
+      
+      // Sync interests with community memberships
+      await CommunityInterestSyncService().syncUserInterests(_selectedInterests.toList());
+      
       if (!mounted) return;
 
       final next = ConnectFriendsPage(
@@ -547,7 +555,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save interests. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('common.save_failed'),
             style: GoogleFonts.inter(),
           ),
         ),
@@ -567,6 +575,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return PopScope(
@@ -577,11 +586,11 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
           Navigator.pop(context, _selectedInterests.toList());
         }
       },
-      child: context.isMobile ? _buildMobile(context, isDarkMode) : _buildDesktop(context, isDarkMode),
+      child: context.isMobile ? _buildMobile(context, isDarkMode, lang) : _buildDesktop(context, isDarkMode, lang),
     );
   }
 
-  Widget _buildMobile(BuildContext context, bool isDarkMode) {
+  Widget _buildMobile(BuildContext context, bool isDarkMode, LanguageProvider lang) {
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       appBar: PreferredSize(
@@ -645,13 +654,13 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
-          child: _contentBody(context, isDarkMode, gridColumns: 3),
+          child: _contentBody(context, isDarkMode, lang, gridColumns: 3),
         ),
       ),
     );
   }
 
-  Widget _buildDesktop(BuildContext context, bool isDarkMode) {
+  Widget _buildDesktop(BuildContext context, bool isDarkMode, LanguageProvider lang) {
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
       body: SafeArea(
@@ -681,7 +690,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Interests',
+                            lang.t('interests.title'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -696,7 +705,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
                       const SizedBox(height: 16),
                       Expanded(
                         child: SingleChildScrollView(
-                          child: _contentBody(context, isDarkMode, gridColumns: 5),
+                          child: _contentBody(context, isDarkMode, lang, gridColumns: 5),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -719,7 +728,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
                               ),
                             ),
                             child: Text(
-                              _isSaving ? 'Saving...' : 'Continue',
+                              _isSaving ? lang.t('profile_bio.saving') : lang.t('interests.continue'),
                               style: GoogleFonts.inter(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -738,7 +747,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
     );
   }
 
-  Widget _contentBody(BuildContext context, bool isDarkMode, {required int gridColumns}) {
+  Widget _contentBody(BuildContext context, bool isDarkMode, LanguageProvider lang, {required int gridColumns}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -746,7 +755,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
 
         // Title and Description
         Text(
-          'Select Your Interest',
+          lang.t('interests.title'),
           style: GoogleFonts.inter(
             fontSize: context.isMobile ? 18 : 20,
             fontWeight: FontWeight.w600,
@@ -755,7 +764,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Select more interests to refine your experience.\nUp to ${_selectedInterests.length}/$_maxInterests',
+          '${lang.t('interests.subtitle')}\n${_selectedInterests.length}/$_maxInterests ${lang.t('interests.selected')}',
           style: GoogleFonts.inter(
             fontSize: context.isMobile ? 14 : 15,
             color: const Color(0xFF999999),
@@ -859,7 +868,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
                 ),
               ),
               child: Text(
-                _isSaving ? 'Saving...' : 'Continue',
+                _isSaving ? lang.t('profile_bio.saving') : lang.t('interests.continue'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,

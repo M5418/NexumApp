@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'profile_name_page.dart';
 import 'responsive/responsive_breakpoints.dart';
 
@@ -8,6 +10,7 @@ class ProfileFlowStart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     if (context.isMobile) {
@@ -22,7 +25,7 @@ class ProfileFlowStart extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
           ),
           title: Text(
-            'Profile Setup',
+            lang.t('profile_flow.title'),
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -45,7 +48,7 @@ class ProfileFlowStart extends StatelessWidget {
               children: [
                 const SizedBox(height: 24),
                 Text(
-                  'Complete Your Profile',
+                  lang.t('profile_flow.heading'),
                   style: GoogleFonts.inter(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -54,7 +57,7 @@ class ProfileFlowStart extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Help others connect with you by completing your profile in just a few steps.',
+                  lang.t('profile_flow.subtitle'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     color: const Color(0xFF666666),
@@ -68,8 +71,8 @@ class ProfileFlowStart extends StatelessWidget {
                         _buildProgressStep(
                           context,
                           stepNumber: 1,
-                          title: 'Personal Information',
-                          description: 'Add your name and username',
+                          title: lang.t('profile_flow.step1_title'),
+                          description: lang.t('profile_flow.step1_desc'),
                           icon: Icons.person_outline,
                           isDarkMode: isDarkMode,
                         ),
@@ -77,8 +80,8 @@ class ProfileFlowStart extends StatelessWidget {
                         _buildProgressStep(
                           context,
                           stepNumber: 2,
-                          title: 'Birthday',
-                          description: 'Tell us when you were born',
+                          title: lang.t('profile_flow.step2_title'),
+                          description: lang.t('profile_flow.step2_desc'),
                           icon: Icons.cake_outlined,
                           isDarkMode: isDarkMode,
                         ),
@@ -86,8 +89,8 @@ class ProfileFlowStart extends StatelessWidget {
                         _buildProgressStep(
                           context,
                           stepNumber: 3,
-                          title: 'Gender',
-                          description: 'Select your gender identity',
+                          title: lang.t('profile_flow.step3_title'),
+                          description: lang.t('profile_flow.step3_desc'),
                           icon: Icons.people_outline,
                           isDarkMode: isDarkMode,
                         ),
@@ -95,8 +98,8 @@ class ProfileFlowStart extends StatelessWidget {
                         _buildProgressStep(
                           context,
                           stepNumber: 4,
-                          title: 'Location',
-                          description: 'Share your address details',
+                          title: lang.t('profile_flow.step4_title'),
+                          description: lang.t('profile_flow.step4_desc'),
                           icon: Icons.location_on_outlined,
                           isDarkMode: isDarkMode,
                         ),
@@ -104,8 +107,8 @@ class ProfileFlowStart extends StatelessWidget {
                         _buildProgressStep(
                           context,
                           stepNumber: 5,
-                          title: 'Profile Photo',
-                          description: 'Add a profile picture (optional)',
+                          title: lang.t('profile_flow.step5_title'),
+                          description: lang.t('profile_flow.step5_desc'),
                           icon: Icons.photo_camera_outlined,
                           isDarkMode: isDarkMode,
                         ),
@@ -113,8 +116,8 @@ class ProfileFlowStart extends StatelessWidget {
                         _buildProgressStep(
                           context,
                           stepNumber: 6,
-                          title: 'Cover Photo',
-                          description: 'Add a cover image (optional)',
+                          title: lang.t('profile_flow.step6_title'),
+                          description: lang.t('profile_flow.step6_desc'),
                           icon: Icons.image_outlined,
                           isDarkMode: isDarkMode,
                         ),
@@ -139,7 +142,7 @@ class ProfileFlowStart extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Estimated Time',
+                                      lang.t('profile_flow.estimated_time'),
                                       style: GoogleFonts.inter(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
@@ -147,7 +150,7 @@ class ProfileFlowStart extends StatelessWidget {
                                       ),
                                     ),
                                     Text(
-                                      '3-5 minutes to complete',
+                                      lang.t('profile_flow.time_to_complete'),
                                       style: GoogleFonts.inter(
                                         fontSize: 14,
                                         color: const Color(0xFF666666),
@@ -181,7 +184,7 @@ class ProfileFlowStart extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                     ),
                     child: Text(
-                      'Start Profile Setup',
+                      lang.t('profile_flow.start_button'),
                       style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -257,7 +260,7 @@ class ProfileFlowStart extends StatelessWidget {
                               _buildProgressStep(
                                 context,
                                 stepNumber: 1,
-                                title: 'Personal Information',
+                                title: lang.t('common.personal_information'),
                                 description: 'Add your name and username',
                                 icon: Icons.person_outline,
                                 isDarkMode: isDarkMode,
@@ -266,7 +269,7 @@ class ProfileFlowStart extends StatelessWidget {
                               _buildProgressStep(
                                 context,
                                 stepNumber: 2,
-                                title: 'Birthday',
+                                title: lang.t('common.birthday'),
                                 description: 'Tell us when you were born',
                                 icon: Icons.cake_outlined,
                                 isDarkMode: isDarkMode,
@@ -275,7 +278,7 @@ class ProfileFlowStart extends StatelessWidget {
                               _buildProgressStep(
                                 context,
                                 stepNumber: 3,
-                                title: 'Gender',
+                                title: lang.t('common.gender'),
                                 description: 'Select your gender identity',
                                 icon: Icons.people_outline,
                                 isDarkMode: isDarkMode,
@@ -284,7 +287,7 @@ class ProfileFlowStart extends StatelessWidget {
                               _buildProgressStep(
                                 context,
                                 stepNumber: 4,
-                                title: 'Location',
+                                title: lang.t('common.location'),
                                 description: 'Share your address details',
                                 icon: Icons.location_on_outlined,
                                 isDarkMode: isDarkMode,
@@ -293,7 +296,7 @@ class ProfileFlowStart extends StatelessWidget {
                               _buildProgressStep(
                                 context,
                                 stepNumber: 5,
-                                title: 'Profile Photo',
+                                title: lang.t('common.profile_photo'),
                                 description: 'Add a profile picture (optional)',
                                 icon: Icons.photo_camera_outlined,
                                 isDarkMode: isDarkMode,
@@ -302,7 +305,7 @@ class ProfileFlowStart extends StatelessWidget {
                               _buildProgressStep(
                                 context,
                                 stepNumber: 6,
-                                title: 'Cover Photo',
+                                title: lang.t('profile.cover_photo'),
                                 description: 'Add a cover image (optional)',
                                 icon: Icons.image_outlined,
                                 isDarkMode: isDarkMode,

@@ -37,27 +37,80 @@ class FirebaseCommunityRepository implements CommunityRepository {
 
   @override
   Future<List<CommunityModel>> listAll({int limit = 100}) async {
-    final q = await _communities.orderBy('createdAt', descending: true).limit(limit).get();
-    return q.docs.map(_fromDoc).toList();
+    try {
+      final q = await _communities.orderBy('createdAt', descending: true).limit(limit).get();
+      print('✅ Communities.listAll fetched: ${q.docs.length} communities');
+      return q.docs.map(_fromDoc).toList();
+    } catch (e) {
+      print('❌ Communities.listAll error: $e');
+      print('🔍 Check: 1) Firestore rules for communities 2) Network connectivity');
+      rethrow;
+    }
   }
 
   @override
   Future<List<CommunityModel>> listMine({int limit = 100}) async {
-    final u = _auth.currentUser;
-    if (u == null) return [];
-    // Find all membership docs for this user
-    final mems = await _db.collectionGroup('members').where(FieldPath.documentId, isEqualTo: u.uid).limit(500).get();
-    final ids = <String>{};
-    for (final m in mems.docs) {
-      final parent = m.reference.parent.parent; // communities/{id}
-      if (parent != null) ids.add(parent.id);
+    try {
+      final u = _auth.currentUser;
+      if (u == null) {
+        print('⚠️  Communities.listMine: No authenticated user');
+        return [];
+      }
+      
+      print('🔍 Communities.listMine: Authenticated as ${u.uid}');
+      print('🔍 Querying collectionGroup("members").where("userId", "==", "${u.uid}")');
+      
+      final ids = <String>{};
+      final q1 = await _db
+          .collectionGroup('members')
+          .where('userId', isEqualTo: u.uid)
+          .limit(500)
+          .get();
+      
+      print('🔍 Query 1 (userId field) returned: ${q1.docs.length} docs');
+
+      var docs = q1.docs;
+      if (docs.isEmpty) {
+        print('🔍 Trying fallback query with "uid" field...');
+        final q2 = await _db
+            .collectionGroup('members')
+            .where('uid', isEqualTo: u.uid)
+            .limit(500)
+            .get();
+        print('🔍 Query 2 (uid field) returned: ${q2.docs.length} docs');
+        docs = q2.docs;
+      }
+
+      for (final m in docs) {
+        final parent = m.reference.parent.parent;
+        if (parent != null) ids.add(parent.id);
+      }
+
+      if (ids.isEmpty) {
+        print('🔍 No members found via collectionGroup, trying direct lookup...');
+        final all = await _communities.limit(200).get();
+        print('🔍 Found ${all.docs.length} total communities to check');
+        for (final c in all.docs) {
+          final exists = await c.reference.collection('members').doc(u.uid).get();
+          if (exists.exists) {
+            print('🔍 Found membership in community: ${c.id}');
+            ids.add(c.id);
+          }
+        }
+      }
+
+      final results = <CommunityModel>[];
+      for (final chunk in _chunk(ids.toList(), 10)) {
+        final snap = await _communities.where(FieldPath.documentId, whereIn: chunk).get();
+        results.addAll(snap.docs.map(_fromDoc));
+      }
+      print('✅ Communities.listMine fetched: ${results.length} communities');
+      return results;
+    } catch (e) {
+      print('❌ Communities.listMine error: $e');
+      print('🔍 Check: 1) Firestore rules for communities/members 2) Auth status');
+      rethrow;
     }
-    final results = <CommunityModel>[];
-    for (final chunk in _chunk(ids.toList(), 10)) {
-      final snap = await _communities.where(FieldPath.documentId, whereIn: chunk).get();
-      results.addAll(snap.docs.map(_fromDoc));
-    }
-    return results;
   }
 
   Iterable<List<String>> _chunk(List<String> arr, int size) sync* {
@@ -76,7 +129,13 @@ class FirebaseCommunityRepository implements CommunityRepository {
 
   @override
   Future<List<CommunityMemberModel>> members(String communityId, {int limit = 200}) async {
-    final q = await _communities.doc(communityId).collection('members').limit(limit).get();
-    return q.docs.map(_memberFrom).toList();
+    try {
+      final q = await _communities.doc(communityId).collection('members').limit(limit).get();
+      print('✅ Community members fetched: ${q.docs.length} members for $communityId');
+      return q.docs.map(_memberFrom).toList();
+    } catch (e) {
+      print('❌ Communities.members error for $communityId: $e');
+      rethrow;
+    }
   }
 }

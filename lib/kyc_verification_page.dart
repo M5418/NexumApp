@@ -1,12 +1,14 @@
-// File: lib/kyc_verification_page.dart
-// Lines: 1-430
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'core/kyc_api.dart';
+import 'package:provider/provider.dart';
+import 'repositories/firebase/firebase_kyc_repository.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
 import 'kyc_status_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'core/files_api.dart';
-import 'core/profile_api.dart';
+import 'data/countries.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'core/i18n/language_provider.dart';
 
 enum DocumentType { passport, nationalId, drivingLicense }
 
@@ -19,10 +21,8 @@ class KycVerificationPage extends StatefulWidget {
 
 class _KycVerificationPageState extends State<KycVerificationPage> {
   DocumentType? _selectedDocumentType;
-  String _selectedResidenceCountry = 'Select Country';
-  String _selectedIssuingCountry = 'Select Country';
-  bool _showResidenceDropdown = false;
-  bool _showIssuingDropdown = false;
+  CountryData? _selectedResidenceCountry;
+  CountryData? _selectedIssuingCountry;
 
   // Document upload states
   bool _frontDocumentUploaded = false;
@@ -34,28 +34,74 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
   String? _backUrl;
   String? _selfieUrl;
 
-  // New input controllers
+  // Input controllers
   final _documentNumberController = TextEditingController();
-  final _expiryDateController = TextEditingController(); // YYYY-MM-DD
+  final _expiryDateController = TextEditingController();
 
   bool _submitting = false;
+  bool _loadingUserData = true;
 
-  final List<Map<String, String>> _countries = [
-    {'name': 'United States', 'flag': '🇺🇸', 'code': 'US'},
-    {'name': 'Canada', 'flag': '🇨🇦', 'code': 'CA'},
-    {'name': 'United Kingdom', 'flag': '🇬🇧', 'code': 'GB'},
-    {'name': 'France', 'flag': '🇫🇷', 'code': 'FR'},
-    {'name': 'Germany', 'flag': '🇩🇪', 'code': 'DE'},
-    {'name': 'Australia', 'flag': '🇦🇺', 'code': 'AU'},
-    {'name': 'Japan', 'flag': '🇯🇵', 'code': 'JP'},
-    {'name': 'South Korea', 'flag': '🇰🇷', 'code': 'KR'},
-    {'name': 'Brazil', 'flag': '🇧🇷', 'code': 'BR'},
-    {'name': 'Mexico', 'flag': '🇲🇽', 'code': 'MX'},
-  ];
+  // User data fetched from profile
+  String? _fullName;
+  String? _address;
+  String? _cityOfBirth;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    setState(() => _loadingUserData = true);
+    try {
+      final user = fb.FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final userRepo = context.read<FirebaseUserRepository>();
+      final userDoc = await userRepo.getUserProfile(user.uid);
+      
+      if (userDoc != null && mounted) {
+        setState(() {
+          _fullName = '${userDoc.firstName ?? ''} ${userDoc.lastName ?? ''}'.trim();
+          _address = userDoc.bio; // Using bio as address placeholder
+          _cityOfBirth = userDoc.bio; // Using bio as cityOfBirth placeholder
+        });
+      }
+    } catch (e) {
+      // Ignore error
+    } finally {
+      if (mounted) setState(() => _loadingUserData = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _documentNumberController.dispose();
+    _expiryDateController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    if (_loadingUserData) {
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFFFFFFF), Color(0xFF0C0C0C)],
+            ),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       body: Container(
@@ -77,7 +123,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                   const SizedBox(height: 50),
                   // NEXUM Title
                   Text(
-                    'NEXUM',
+                    Provider.of<LanguageProvider>(context, listen: false).t('app.name'),
                     style: GoogleFonts.inika(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -108,7 +154,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                       children: [
                         // KYC Verification Headline
                         Text(
-                          'Identity Verification',
+                          Provider.of<LanguageProvider>(context, listen: false).t('kyc.title'),
                           style: GoogleFonts.inter(
                             fontSize: 34,
                             fontWeight: FontWeight.w600,
@@ -118,7 +164,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                         const SizedBox(height: 16),
                         // Subtext
                         Text(
-                          'Please provide your identification documents to verify your identity',
+                          Provider.of<LanguageProvider>(context, listen: false).t('kyc.subtitle'),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
                             fontSize: 14,
@@ -129,59 +175,43 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                         const SizedBox(height: 32),
 
                         // Document Type Selection
-                        _buildSectionTitle('Document Type', isDarkMode),
+                        _buildSectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('kyc.document_type'), isDarkMode),
                         const SizedBox(height: 16),
                         _buildDocumentTypeSelector(isDarkMode),
                         const SizedBox(height: 24),
 
                         // Country of Residence
-                        _buildSectionTitle('Country of Residence', isDarkMode),
+                        _buildSectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('kyc.country_residence'), isDarkMode),
                         const SizedBox(height: 16),
-                        _buildCountrySelector(
+                        _buildCountryButton(
                           _selectedResidenceCountry,
-                          _showResidenceDropdown,
-                          (value) => setState(() {
-                            _showResidenceDropdown = value;
-                            _showIssuingDropdown = false;
-                          }),
-                          (country) => setState(() {
-                            _selectedResidenceCountry = country;
-                            _showResidenceDropdown = false;
-                          }),
+                          () => _selectCountry(true),
                           isDarkMode,
                         ),
                         const SizedBox(height: 24),
 
                         // Document Issuing Country
                         _buildSectionTitle(
-                          'Document Issuing Country',
+                          Provider.of<LanguageProvider>(context, listen: false).t('kyc.document_issuing'),
                           isDarkMode,
                         ),
                         const SizedBox(height: 16),
-                        _buildCountrySelector(
+                        _buildCountryButton(
                           _selectedIssuingCountry,
-                          _showIssuingDropdown,
-                          (value) => setState(() {
-                            _showIssuingDropdown = value;
-                            _showResidenceDropdown = false;
-                          }),
-                          (country) => setState(() {
-                            _selectedIssuingCountry = country;
-                            _showIssuingDropdown = false;
-                          }),
+                          () => _selectCountry(false),
                           isDarkMode,
                         ),
                         const SizedBox(height: 24),
 
                         // New fields (keep design language)
-                        _textField(isDarkMode, _documentNumberController, 'Document number'),
+                        _textField(isDarkMode, _documentNumberController, Provider.of<LanguageProvider>(context, listen: false).t('kyc.document_number')),
                         const SizedBox(height: 16),
-                        _textField(isDarkMode, _expiryDateController, 'Expiry date (YYYY-MM-DD)'),
+                        _textField(isDarkMode, _expiryDateController, Provider.of<LanguageProvider>(context, listen: false).t('kyc.expiry_date')),
                         const SizedBox(height: 32),
 
                         // Document Upload Section
                         if (_selectedDocumentType != null) ...[
-                          _buildSectionTitle('Upload Documents', isDarkMode),
+                          _buildSectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('kyc.upload_documents'), isDarkMode),
                           const SizedBox(height: 16),
                           _buildDocumentUploadSection(isDarkMode),
                           const SizedBox(height: 32),
@@ -205,7 +235,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                               elevation: 0,
                             ),
                             child: Text(
-                              'Submit for Verification',
+                              Provider.of<LanguageProvider>(context, listen: false).t('kyc.submit'),
                               style: GoogleFonts.inter(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -223,7 +253,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                               Navigator.pop(context);
                             },
                             child: Text(
-                              'Back to Account Center',
+                              Provider.of<LanguageProvider>(context, listen: false).t('kyc.back'),
                               style: GoogleFonts.inter(
                                 fontSize: 16,
                                 color: const Color(0xFFBFAE01),
@@ -288,24 +318,24 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
       children: [
         _buildDocumentOption(
           DocumentType.passport,
-          'Passport',
-          'International travel document',
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.passport'),
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.passport_desc'),
           Icons.book,
           isDarkMode,
         ),
         const SizedBox(height: 12),
         _buildDocumentOption(
           DocumentType.nationalId,
-          'National ID',
-          'Government-issued ID card',
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.national_id'),
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.national_id_desc'),
           Icons.credit_card,
           isDarkMode,
         ),
         const SizedBox(height: 12),
         _buildDocumentOption(
           DocumentType.drivingLicense,
-          'Driving License',
-          'Valid driver\'s license',
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.driving_license'),
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.driving_license_desc'),
           Icons.directions_car,
           isDarkMode,
         ),
@@ -395,120 +425,41 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
     );
   }
 
-  Widget _buildCountrySelector(
-    String selectedCountry,
-    bool showDropdown,
-    Function(bool) onToggle,
-    Function(String) onSelect,
+  Widget _buildCountryButton(
+    CountryData? selectedCountry,
+    VoidCallback onTap,
     bool isDarkMode,
   ) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: () => onToggle(!showDropdown),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: isDarkMode ? Colors.white : Colors.black,
-                width: 1.5,
-              ),
-              borderRadius: BorderRadius.circular(25),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    if (selectedCountry != 'Select Country')
-                      Text(
-                        _countries.firstWhere(
-                          (country) => country['name'] == selectedCountry,
-                          orElse: () => {'flag': '🌍'},
-                        )['flag']!,
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                    if (selectedCountry != 'Select Country')
-                      const SizedBox(width: 8),
-                    Text(
-                      selectedCountry,
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: selectedCountry == 'Select Country'
-                            ? const Color(0xFF666666)
-                            : (isDarkMode ? Colors.white : Colors.black),
-                      ),
-                    ),
-                  ],
-                ),
-                Icon(
-                  showDropdown
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  color: isDarkMode ? Colors.white : Colors.black,
-                ),
-              ],
-            ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: isDarkMode ? Colors.white : Colors.black,
+            width: 1.5,
           ),
+          borderRadius: BorderRadius.circular(25),
         ),
-        if (showDropdown) ...[
-          const SizedBox(height: 8),
-          Container(
-            constraints: const BoxConstraints(maxHeight: 200),
-            decoration: BoxDecoration(
-              color: isDarkMode
-                  ? const Color(0xFF0C0C0C)
-                  : const Color(0xFFF1F4F8),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDarkMode ? Colors.white : Colors.black,
-                width: 1,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              selectedCountry?.name ?? Provider.of<LanguageProvider>(context, listen: false).t('kyc.select_country'),
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: selectedCountry == null
+                    ? const Color(0xFF666666)
+                    : (isDarkMode ? Colors.white : Colors.black),
               ),
             ),
-            child: SingleChildScrollView(
-              child: Column(
-                children: _countries.map((country) {
-                  return GestureDetector(
-                    onTap: () => onSelect(country['name']!),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: _countries.last == country
-                                ? Colors.transparent
-                                : (isDarkMode ? Colors.white : Colors.black),
-                            width: 0.5,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            country['flag']!,
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            country['name']!,
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              color: isDarkMode ? Colors.white : Colors.black,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+            Icon(
+              Icons.search,
+              color: isDarkMode ? Colors.white : Colors.black,
             ),
-          ),
-        ],
-      ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -517,8 +468,8 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
       children: [
         // Front of document
         _buildUploadBox(
-          'Front of ${_getDocumentName()}',
-          'Upload a clear photo of the front',
+          '${Provider.of<LanguageProvider>(context, listen: false).t('kyc.front_doc')} ${_getDocumentName()}',
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.upload_front'),
           _frontDocumentUploaded,
           () => _handleUploadTap('front'),
           isDarkMode,
@@ -528,8 +479,8 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
         // Back of document (only for National ID and Driving License)
         if (_selectedDocumentType != DocumentType.passport) ...[
           _buildUploadBox(
-            'Back of ${_getDocumentName()}',
-            'Upload a clear photo of the back',
+            '${Provider.of<LanguageProvider>(context, listen: false).t('kyc.back_doc')} ${_getDocumentName()}',
+            Provider.of<LanguageProvider>(context, listen: false).t('kyc.upload_back'),
             _backDocumentUploaded,
             () => _handleUploadTap('back'),
             isDarkMode,
@@ -539,8 +490,8 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
 
         // Selfie
         _buildUploadBox(
-          'Selfie with Document',
-          'Take a selfie holding your document',
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.selfie'),
+          Provider.of<LanguageProvider>(context, listen: false).t('kyc.upload_selfie'),
           _selfieUploaded,
           () => _handleUploadTap('selfie'),
           isDarkMode,
@@ -596,7 +547,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              isUploaded ? 'Uploaded successfully' : subtitle,
+              isUploaded ? Provider.of<LanguageProvider>(context, listen: false).t('kyc.uploaded') : subtitle,
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
@@ -610,28 +561,28 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
   }
 
   String _getDocumentName() {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
     switch (_selectedDocumentType) {
       case DocumentType.passport:
-        return 'Passport';
+        return lang.t('kyc.passport');
       case DocumentType.nationalId:
-        return 'National ID';
+        return lang.t('kyc.national_id');
       case DocumentType.drivingLicense:
-        return 'Driving License';
+        return lang.t('kyc.driving_license');
       default:
-        return 'Document';
+        return lang.t('kyc.document_type');
     }
   }
 
   bool _canSubmit() {
     if (_selectedDocumentType == null ||
-        _selectedResidenceCountry == 'Select Country' ||
-        _selectedIssuingCountry == 'Select Country' ||
+        _selectedResidenceCountry == null ||
+        _selectedIssuingCountry == null ||
         !_frontDocumentUploaded ||
-        !_selfieUploaded) {
+        !_selfieUploaded ||
+        _documentNumberController.text.trim().isEmpty) {
       return false;
     }
-    // Require document number
-    if (_documentNumberController.text.trim().isEmpty) return false;
 
     // For National ID and Driving License, back photo is also required
     if (_selectedDocumentType != DocumentType.passport &&
@@ -640,6 +591,23 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
     }
 
     return true;
+  }
+
+  Future<void> _selectCountry(bool isResidence) async {
+    final selected = await showDialog<CountryData>(
+      context: context,
+      builder: (context) => const CountrySearchDialog(),
+    );
+
+    if (selected != null && mounted) {
+      setState(() {
+        if (isResidence) {
+          _selectedResidenceCountry = selected;
+        } else {
+          _selectedIssuingCountry = selected;
+        }
+      });
+    }
   }
 
   void _showSnack(String text) {
@@ -695,6 +663,20 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
   Future<void> _submit() async {
     if (!_canSubmit()) return;
 
+    // Validate required user data
+    if (_fullName == null || _fullName!.isEmpty) {
+      _showSnack('Full name not found. Please update your profile.');
+      return;
+    }
+    if (_address == null || _address!.isEmpty) {
+      _showSnack('Address not found. Please update your profile bio.');
+      return;
+    }
+    if (_cityOfBirth == null || _cityOfBirth!.isEmpty) {
+      _showSnack('City of birth not found. Please update your profile.');
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       // Map selected type to a string value
@@ -711,48 +693,140 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
         }
       }();
 
-      // Derive simple file name markers based on toggles
-      final List<String> files = [];
-      if (_frontDocumentUploaded) files.add('front');
-      if (_selectedDocumentType != DocumentType.passport && _backDocumentUploaded) files.add('back');
-      if (_selfieUploaded) files.add('selfie');
+      // Get current user ID
+      final user = fb.FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _showSnack('Please sign in first');
+        return;
+      }
 
-      // Get user's full name from profile (no UI change)
-      String? fullName;
-      try {
-        final prof = await ProfileApi().me();
-        final body = Map<String, dynamic>.from(prof);
-        final data = Map<String, dynamic>.from(body['data'] ?? {});
-        final fn = (data['full_name'] ?? '').toString();
-        if (fn.isNotEmpty) fullName = fn;
-      } catch (_) {}
-
-      final res = await KycApi().submit(
-        fullName: fullName,
+      final kycRepo = FirebaseKycRepository();
+      await kycRepo.submitKyc(
+        userId: user.uid,
+        fullName: _fullName!,
         documentType: docType,
         documentNumber: _documentNumberController.text.trim(),
-        issuePlace: _selectedIssuingCountry != 'Select Country' ? _selectedIssuingCountry : null,
+        issueCountry: _selectedIssuingCountry!.name,
         expiryDate: _expiryDateController.text.trim().isEmpty ? null : _expiryDateController.text.trim(),
-        country: _selectedResidenceCountry != 'Select Country' ? _selectedResidenceCountry : null,
-        uploadedFileNames: files.isEmpty ? null : files,
+        countryOfResidence: _selectedResidenceCountry!.name,
+        address: _address!,
+        cityOfBirth: _cityOfBirth!,
         frontUrl: _frontUrl,
         backUrl: _backUrl,
-        selfieUrl: _selfieUrl,
+        selfieUrl: _selfieUrl!,
       );
 
-      if (res['ok'] == true) {
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const KycStatusPage()),
-        );
-      } else {
-        _showSnack((res['error'] ?? 'submit_failed').toString());
-      }
-    } catch (_) {
-      _showSnack('Network error');
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const KycStatusPage()),
+      );
+    } catch (e) {
+      _showSnack('Submission failed: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+}
+
+class CountrySearchDialog extends StatefulWidget {
+  const CountrySearchDialog({super.key});
+
+  @override
+  State<CountrySearchDialog> createState() => _CountrySearchDialogState();
+}
+
+class _CountrySearchDialogState extends State<CountrySearchDialog> {
+  final _searchController = TextEditingController();
+  List<CountryData> _filteredCountries = allCountries;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterCountries(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredCountries = allCountries;
+      } else {
+        _filteredCountries = allCountries
+            .where((country) =>
+                country.name.toLowerCase().contains(query.toLowerCase()) ||
+                country.code.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Dialog(
+      backgroundColor: isDark ? const Color(0xFF000000) : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Select Country',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _searchController,
+              onChanged: _filterCountries,
+              decoration: InputDecoration(
+                hintText: 'Search countries...',
+                hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFFBFAE01)),
+                filled: true,
+                fillColor: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              style: GoogleFonts.inter(),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _filteredCountries.length,
+                itemBuilder: (context, index) {
+                  final country = _filteredCountries[index];
+                  return ListTile(
+                    title: Text(
+                      country.name,
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: Text(
+                      country.code,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF666666),
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(context, country),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

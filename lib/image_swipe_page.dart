@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'core/i18n/language_provider.dart';
 
 class ImageSwipePage extends StatefulWidget {
   final List<String> mediaUrls;
@@ -63,19 +65,19 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              _buildActionItem(Icons.download, 'Save to Photos', () {
+              _buildActionItem(Icons.download, Provider.of<LanguageProvider>(context, listen: false).t('image.save_to_photos'), () {
                 Navigator.pop(context);
                 _saveImage();
               }),
-              _buildActionItem(Icons.share, 'Share', () {
+              _buildActionItem(Icons.share, Provider.of<LanguageProvider>(context, listen: false).t('image.share'), () {
                 Navigator.pop(context);
                 _shareImage();
               }),
-              _buildActionItem(Icons.report, 'Report', () {
+              _buildActionItem(Icons.report, Provider.of<LanguageProvider>(context, listen: false).t('image.report'), () {
                 Navigator.pop(context);
                 _reportImage();
               }),
-              _buildActionItem(Icons.delete, 'Delete', () {
+              _buildActionItem(Icons.delete, Provider.of<LanguageProvider>(context, listen: false).t('image.delete'), () {
                 Navigator.pop(context);
                 _deleteImage();
               }, isDestructive: true),
@@ -110,7 +112,7 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
   void _saveImage() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Image saved to Photos', style: GoogleFonts.inter()),
+        content: Text(Provider.of<LanguageProvider>(context, listen: false).t('image.saved'), style: GoogleFonts.inter()),
         backgroundColor: Colors.green,
       ),
     );
@@ -119,7 +121,7 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
   void _shareImage() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Share functionality', style: GoogleFonts.inter()),
+        content: Text(Provider.of<LanguageProvider>(context, listen: false).t('image.share_functionality'), style: GoogleFonts.inter()),
         backgroundColor: Colors.blue,
       ),
     );
@@ -128,7 +130,7 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
   void _reportImage() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Image reported', style: GoogleFonts.inter()),
+        content: Text(Provider.of<LanguageProvider>(context, listen: false).t('image.reported'), style: GoogleFonts.inter()),
         backgroundColor: Colors.orange,
       ),
     );
@@ -138,27 +140,27 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Image', style: GoogleFonts.inter()),
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('image.delete_title'), style: GoogleFonts.inter()),
         content: Text(
-          'Are you sure you want to delete this image?',
+          Provider.of<LanguageProvider>(context, listen: false).t('image.delete_confirm'),
           style: GoogleFonts.inter(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: GoogleFonts.inter()),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('image.cancel'), style: GoogleFonts.inter()),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Image deleted', style: GoogleFonts.inter()),
+                  content: Text(Provider.of<LanguageProvider>(context, listen: false).t('image.deleted'), style: GoogleFonts.inter()),
                   backgroundColor: Colors.red,
                 ),
               );
             },
-            child: Text('Delete', style: GoogleFonts.inter(color: Colors.red)),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('image.delete'), style: GoogleFonts.inter(color: Colors.red)),
           ),
         ],
       ),

@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
+import 'package:firebase_storage/firebase_storage.dart' as fs;
+
+import 'dart:async';
 
 import 'models/post_detail.dart';
 import 'models/comment.dart';
 import 'models/post.dart';
 
-import 'core/posts_api.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'widgets/media_carousel.dart';
@@ -16,11 +18,19 @@ import 'widgets/comment_thread.dart';
 import 'widgets/animated_navbar.dart';
 import 'widgets/post_options_menu.dart';
 import 'widgets/share_bottom_sheet.dart';
-import 'widgets/comment_bottom_sheet.dart';
 import 'core/time_utils.dart';
 import 'package:provider/provider.dart';
 import 'core/i18n/language_provider.dart';
-import 'core/translate_api.dart';
+import 'repositories/interfaces/block_repository.dart';
+import 'repositories/interfaces/mute_repository.dart';
+import 'repositories/firebase/firebase_translate_repository.dart';
+import 'repositories/firebase/firebase_post_repository.dart';
+import 'repositories/firebase/firebase_comment_repository.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/models/post_model.dart';
+import 'repositories/interfaces/comment_repository.dart';
+import 'repositories/interfaces/bookmark_repository.dart';
+import 'repositories/models/bookmark_model.dart';
 
 class PostPage extends StatefulWidget {
   final Post? post;
@@ -40,6 +50,11 @@ class _PostPageState extends State<PostPage> {
 
   PostDetail? _post;
 
+  final FirebasePostRepository _postRepo = FirebasePostRepository();
+  final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
+  final FirebaseUserRepository _userRepo = FirebaseUserRepository();
+  StreamSubscription<PostModel?>? _postSub;
+  StreamSubscription<List<CommentModel>>? _commentsSub;
   bool _isLiked = false;
   bool _isBookmarked = false;
 
@@ -76,6 +91,8 @@ class _PostPageState extends State<PostPage> {
 
   @override
   void dispose() {
+    _postSub?.cancel();
+    _commentsSub?.cancel();
     _commentController.dispose();
     _commentFocusNode.dispose();
     super.dispose();
@@ -85,9 +102,15 @@ class _PostPageState extends State<PostPage> {
     await _loadCurrentUserId();
     if (widget.post != null) {
       _applyPost(widget.post!);
+      _subscribeToPost(widget.post!.id);
+      _subscribeToComments(widget.post!.id);
       await _loadComments();
     } else {
       await _loadPostById();
+      if (widget.postId != null) {
+        _subscribeToPost(widget.postId!);
+        _subscribeToComments(widget.postId!);
+      }
       if (_post != null) {
         await _loadComments();
       }
@@ -102,6 +125,68 @@ class _PostPageState extends State<PostPage> {
     return p == TargetPlatform.windows ||
         p == TargetPlatform.macOS ||
         p == TargetPlatform.linux;
+  }
+
+  MediaType _mediaTypeFor(List<String> mediaUrls) {
+    if (mediaUrls.isEmpty) return MediaType.none;
+    final hasVideo = mediaUrls.any((u) {
+      final l = u.toLowerCase();
+      return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+    });
+    if (hasVideo) return MediaType.video;
+    return mediaUrls.length > 1 ? MediaType.images : MediaType.image;
+  }
+
+  String? _videoUrlFromMedia(List<String> mediaUrls) {
+    for (final u in mediaUrls) {
+      final l = u.toLowerCase();
+      if (l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm')) {
+        return u;
+      }
+    }
+    return null;
+  }
+
+  // Normalize storage URLs so UI can load images reliably
+  Future<String> _normalizeUrl(String u) async {
+    final s = u.trim();
+    if (s.isEmpty) return s;
+    // Auto-upgrade insecure http to https when possible
+    if (s.startsWith('http://')) {
+      final https = 'https://${s.substring('http://'.length)}';
+      return https;
+    }
+    // For firebase storage http URLs, resolve to a fresh tokened download URL
+    if (s.startsWith('https://') &&
+        (s.contains('firebasestorage.googleapis.com') ||
+         s.contains('firebasestorage.app') ||
+         s.contains('storage.googleapis.com'))) {
+      try {
+        return await fs.FirebaseStorage.instance.refFromURL(s).getDownloadURL();
+      } catch (_) {
+        // fallthrough
+      }
+      return s;
+    }
+    if (s.startsWith('http')) return s;
+    try {
+      if (s.startsWith('gs://')) {
+        return await fs.FirebaseStorage.instance.refFromURL(s).getDownloadURL();
+      }
+      // Treat as storage path like "uploads/uid/file.jpg"
+      return await fs.FirebaseStorage.instance.ref(s).getDownloadURL();
+    } catch (_) {
+      return s;
+    }
+  }
+
+  Future<List<String>> _normalizeUrls(List<String> urls) async {
+    final out = <String>[];
+    for (final u in urls) {
+      final n = await _normalizeUrl(u);
+      if (n.isNotEmpty) out.add(n);
+    }
+    return out;
   }
 
   Future<void> _loadCurrentUserId() async {
@@ -122,6 +207,7 @@ class _PostPageState extends State<PostPage> {
   void _applyPost(Post p) {
     final detail = PostDetail(
       id: p.id,
+      authorId: '', // Post model doesn't have authorId, will be fetched
       authorName: p.userName,
       authorAvatarUrl: p.userAvatarUrl,
       createdAt: p.createdAt,
@@ -147,18 +233,49 @@ class _PostPageState extends State<PostPage> {
       _loadingPost = true;
     });
     try {
-      final posts = await PostsApi().listFeed(limit: 50, offset: 0);
-      final found = posts.firstWhere(
-        (p) => p.id == widget.postId,
-        orElse: () =>
-            posts.isNotEmpty ? posts.first : throw Exception('Post not found'),
+      final model = await _postRepo.getPost(widget.postId!);
+      if (model == null) throw Exception('Post not found');
+      final author = await _userRepo.getUserProfile(model.authorId);
+      bool liked = false;
+      bool isBookmarked = false;
+      if (_currentUserId != null) {
+        liked = await _postRepo.hasUserLikedPost(postId: model.id, uid: _currentUserId!);
+        isBookmarked = await _postRepo.hasUserBookmarkedPost(postId: model.id, uid: _currentUserId!);
+      }
+      final normUrls = await _normalizeUrls(model.mediaUrls);
+      final avatarUrl = await _normalizeUrl(author?.avatarUrl ?? '');
+      final detail = PostDetail(
+        id: model.id,
+        authorId: model.authorId,
+        authorName: author?.displayName ?? author?.username ?? 'User',
+        authorAvatarUrl: avatarUrl,
+        createdAt: model.createdAt,
+        text: model.text,
+        mediaType: _mediaTypeFor(normUrls),
+        imageUrls: normUrls,
+        videoUrl: _videoUrlFromMedia(normUrls),
+        counts: PostCounts(
+          likes: model.summary.likes,
+          comments: model.summary.comments,
+          shares: model.summary.shares,
+          reposts: model.summary.reposts,
+          bookmarks: model.summary.bookmarks,
+        ),
+        userReaction: liked ? ReactionType.like : null,
+        isBookmarked: isBookmarked,
+        comments: const [],
       );
-      _applyPost(found);
+      if (!mounted) return;
+      setState(() {
+        _post = detail;
+        _isLiked = liked;
+        _isBookmarked = isBookmarked;
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Load post failed: ${_toError(e)}',
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('post.load_failed')}: ${_toError(e)}',
               style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
@@ -173,22 +290,111 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
+  void _subscribeToPost(String id) {
+    _postSub?.cancel();
+    _postSub = _postRepo.postStream(id).listen((model) async {
+      if (!mounted) return;
+      if (model == null) return;
+      String name = _post?.authorName ?? '';
+      String avatar = _post?.authorAvatarUrl ?? '';
+      if (name.isEmpty || avatar.isEmpty) {
+        final a = await _userRepo.getUserProfile(model.authorId);
+        if (!mounted) return;
+        name = a?.displayName ?? a?.username ?? 'User';
+        avatar = a?.avatarUrl ?? '';
+      }
+      final normUrls = await _normalizeUrls(model.mediaUrls);
+      final avatarUrl2 = await _normalizeUrl(avatar);
+      final detail = PostDetail(
+        id: model.id,
+        authorId: model.authorId,
+        authorName: name,
+        authorAvatarUrl: avatarUrl2,
+        createdAt: model.createdAt,
+        text: model.text,
+        mediaType: _mediaTypeFor(normUrls),
+        imageUrls: normUrls,
+        videoUrl: _videoUrlFromMedia(normUrls),
+        counts: PostCounts(
+          likes: model.summary.likes,
+          comments: model.summary.comments,
+          shares: model.summary.shares,
+          reposts: model.summary.reposts,
+          bookmarks: model.summary.bookmarks,
+        ),
+        userReaction: _isLiked ? ReactionType.like : null,
+        isBookmarked: _isBookmarked,
+        comments: _post?.comments ?? const [],
+      );
+      if (!mounted) return;
+      setState(() {
+        _post = detail;
+      });
+    });
+  }
+
+  void _subscribeToComments(String id) {
+    _commentsSub?.cancel();
+    _commentsSub = _commentRepo.commentsStream(postId: id, limit: 100).listen((list) async {
+      final uids = list.map((m) => m.authorId).toSet().toList();
+      final profiles = await _userRepo.getUsers(uids);
+      final byId = {for (final p in profiles) p.uid: p};
+      final comments = list.map((m) {
+        final u = byId[m.authorId];
+        return Comment(
+          id: m.id,
+          userId: m.authorId,
+          userName: (u?.displayName ?? u?.username ?? 'User'),
+          userAvatarUrl: (u?.avatarUrl ?? ''),
+          text: m.text,
+          createdAt: m.createdAt,
+          likesCount: m.likesCount,
+          isLikedByUser: false,
+          replies: const [],
+          parentCommentId: m.parentCommentId,
+        );
+      }).toList();
+      if (!mounted) return;
+      setState(() {
+        _comments = comments;
+      });
+    });
+  }
+
   Future<void> _loadComments() async {
     if (_post == null) return;
     setState(() {
       _loadingComments = true;
     });
     try {
-      final list = await PostsApi().listComments(_post!.id);
+      final list = await _commentRepo.getComments(postId: _post!.id, limit: 100);
+      final uids = list.map((m) => m.authorId).toSet().toList();
+      final profiles = await _userRepo.getUsers(uids);
+      final byId = {for (final p in profiles) p.uid: p};
+      final comments = list.map((m) {
+        final u = byId[m.authorId];
+        return Comment(
+          id: m.id,
+          userId: m.authorId,
+          userName: (u?.displayName ?? u?.username ?? 'User'),
+          userAvatarUrl: (u?.avatarUrl ?? ''),
+          text: m.text,
+          createdAt: m.createdAt,
+          likesCount: m.likesCount,
+          isLikedByUser: false,
+          replies: const [],
+          parentCommentId: m.parentCommentId,
+        );
+      }).toList();
       if (!mounted) return;
       setState(() {
-        _comments = list;
+        _comments = comments;
       });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Load comments failed: ${_toError(e)}',
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('post.load_comments_failed')}: ${_toError(e)}',
               style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
@@ -207,10 +413,11 @@ class _PostPageState extends State<PostPage> {
     final text = _post!.text.trim();
     if (text.isEmpty) return;
     try {
-      final out = await TranslateApi().translateTexts([text], target);
+      final repo = FirebaseTranslateRepository();
+      final translated = await repo.translateText(text, target);
       if (!mounted) return;
       setState(() {
-        _translatedText = out.isNotEmpty ? out.first : text;
+        _translatedText = translated;
       });
     } catch (_) {}
   }
@@ -221,10 +428,11 @@ class _PostPageState extends State<PostPage> {
     if (!_showTranslation && _translatedText == null && text.isNotEmpty) {
       try {
         final target = context.read<LanguageProvider>().ugcTargetCode;
-        final out = await TranslateApi().translateTexts([text], target);
+        final repo = FirebaseTranslateRepository();
+        final translated = await repo.translateText(text, target);
         if (!mounted) return;
         setState(() {
-          _translatedText = out.isNotEmpty ? out.first : text;
+          _translatedText = translated;
           _lastUgcCode = target;
         });
       } catch (_) {}
@@ -238,22 +446,153 @@ class _PostPageState extends State<PostPage> {
 
   void _showPostOptions() {
     if (_post == null) return;
+    final isOwnPost = _currentUserId != null && _post!.authorId == _currentUserId;
     PostOptionsMenu.show(
       context,
       authorName: _post!.authorName,
       postId: _post!.id,
+      authorId: _post!.authorId,
+      isOwnPost: isOwnPost,
       onReport: () {},
-      onMute: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('${_post!.authorName} muted', style: GoogleFonts.inter()),
-            backgroundColor: const Color(0xFF666666),
-          ),
-        );
-      },
+      onMute: () => _handleMute(),
+      onBlock: () => _handleBlock(),
+      onDelete: isOwnPost ? _deletePost : null,
       position: const Offset(16, 120),
     );
+  }
+
+  Future<void> _handleMute() async {
+    if (_post == null || _post!.authorId.isEmpty) return;
+    
+    try {
+      final muteRepo = context.read<MuteRepository>();
+      await muteRepo.muteUser(
+        mutedUid: _post!.authorId,
+        mutedUsername: _post!.authorName,
+        mutedAvatarUrl: _post!.authorAvatarUrl,
+      );
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_post!.authorName} ${Provider.of<LanguageProvider>(context, listen: false).t('post.user_muted')}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.mute_failed'), style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleBlock() async {
+    if (_post == null || _post!.authorId.isEmpty) return;
+    
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${Provider.of<LanguageProvider>(context, listen: false).t('post.block_title')} ${_post!.authorName}?', style: GoogleFonts.inter()),
+        content: Text(
+          Provider.of<LanguageProvider>(context, listen: false).t('post.block_message'),
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.cancel'), style: GoogleFonts.inter()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.block_title'), style: GoogleFonts.inter(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final blockRepo = context.read<BlockRepository>();
+      await blockRepo.blockUser(
+        blockedUid: _post!.authorId,
+        blockedUsername: _post!.authorName,
+        blockedAvatarUrl: _post!.authorAvatarUrl,
+      );
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_post!.authorName} ${Provider.of<LanguageProvider>(context, listen: false).t('post.user_blocked')}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.block_failed'), style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deletePost() async {
+    if (_post == null) return;
+    
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.delete_post_title'), style: GoogleFonts.inter()),
+        content: Text(
+          Provider.of<LanguageProvider>(context, listen: false).t('post.delete_post_message'),
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.cancel'), style: GoogleFonts.inter()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.delete'), style: GoogleFonts.inter(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _postRepo.deletePost(_post!.id);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.delete_success'), style: GoogleFonts.inter()),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('post.delete_failed')}: ${_toError(e)}', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   String _toError(Object e) {
@@ -287,6 +626,7 @@ class _PostPageState extends State<PostPage> {
     );
     final updated = PostDetail(
       id: original.id,
+      authorId: original.authorId,
       authorName: original.authorName,
       authorAvatarUrl: original.authorAvatarUrl,
       createdAt: original.createdAt,
@@ -307,9 +647,9 @@ class _PostPageState extends State<PostPage> {
 
     try {
       if (wasLiked) {
-        await PostsApi().unlike(postId);
+        await _postRepo.unlikePost(postId);
       } else {
-        await PostsApi().like(postId);
+        await _postRepo.likePost(postId);
       }
     } catch (e) {
       if (!mounted) return;
@@ -345,6 +685,7 @@ class _PostPageState extends State<PostPage> {
     );
     final updated = PostDetail(
       id: original.id,
+      authorId: original.authorId,
       authorName: original.authorName,
       authorAvatarUrl: original.authorAvatarUrl,
       createdAt: original.createdAt,
@@ -365,9 +706,22 @@ class _PostPageState extends State<PostPage> {
 
     try {
       if (willBookmark) {
-        await PostsApi().bookmark(postId);
+        await _postRepo.bookmarkPost(postId);
+        // Save to bookmarks collection
+        if (!mounted) return;
+        final bookmarkRepo = context.read<BookmarkRepository>();
+        await bookmarkRepo.bookmarkPost(
+          postId: postId,
+          title: original.text.length > 100 ? original.text.substring(0, 100) : original.text,
+          authorName: original.authorName,
+          coverUrl: original.imageUrls.isNotEmpty ? original.imageUrls.first : null,
+        );
       } else {
-        await PostsApi().unbookmark(postId);
+        await _postRepo.unbookmarkPost(postId);
+        // Remove from bookmarks collection
+        if (!mounted) return;
+        final bookmarkRepo = context.read<BookmarkRepository>();
+        await bookmarkRepo.removeBookmarkByItem(postId, BookmarkType.post);
       }
     } catch (e) {
       if (!mounted) return;
@@ -377,7 +731,7 @@ class _PostPageState extends State<PostPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Bookmark failed: ${_toError(e)}',
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('post.bookmark_failed')}: ${_toError(e)}',
               style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
@@ -391,7 +745,7 @@ class _PostPageState extends State<PostPage> {
       onStories: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Stories', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.shared_stories'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF4CAF50),
           ),
         );
@@ -400,7 +754,7 @@ class _PostPageState extends State<PostPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
-                Text('Link copied to clipboard', style: GoogleFonts.inter()),
+                Text(Provider.of<LanguageProvider>(context, listen: false).t('common.link_copied'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF9E9E9E),
           ),
         );
@@ -408,7 +762,7 @@ class _PostPageState extends State<PostPage> {
       onTelegram: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Telegram', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.shared_telegram'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF0088CC),
           ),
         );
@@ -416,7 +770,7 @@ class _PostPageState extends State<PostPage> {
       onFacebook: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Facebook', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.shared_facebook'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF1877F2),
           ),
         );
@@ -424,7 +778,7 @@ class _PostPageState extends State<PostPage> {
       onMore: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('More share options', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.more_share'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF666666),
           ),
         );
@@ -444,102 +798,7 @@ class _PostPageState extends State<PostPage> {
     );
   }
 
-  Future<void> _openCommentsSheet() async {
-    if (_post == null) return;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    List<Comment> comments = [];
-    try {
-      comments = await PostsApi().listComments(_post!.id);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Load comments failed: ${_toError(e)}',
-              style: GoogleFonts.inter()),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-
-    if (!mounted) return;
-
-    CommentBottomSheet.show(
-      context,
-      postId: _post!.id,
-      comments: comments,
-      currentUserId: _currentUserId ?? '',
-      isDarkMode: isDark,
-      onAddComment: (text) async {
-        try {
-          await PostsApi().addComment(_post!.id, content: text);
-          final original = _post!;
-          final updatedCounts = PostCounts(
-            likes: original.counts.likes,
-            comments: original.counts.comments + 1,
-            shares: original.counts.shares,
-            reposts: original.counts.reposts,
-            bookmarks: original.counts.bookmarks,
-          );
-          setState(() {
-            _post = PostDetail(
-              id: original.id,
-              authorName: original.authorName,
-              authorAvatarUrl: original.authorAvatarUrl,
-              createdAt: original.createdAt,
-              text: original.text,
-              mediaType: original.mediaType,
-              imageUrls: original.imageUrls,
-              videoUrl: original.videoUrl,
-              counts: updatedCounts,
-              userReaction: original.userReaction,
-              isBookmarked: original.isBookmarked,
-              comments: original.comments,
-            );
-          });
-          await _loadComments();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Comment posted!', style: GoogleFonts.inter()),
-              backgroundColor: const Color(0xFF4CAF50),
-            ),
-          );
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Post comment failed: ${_toError(e)}',
-                  style: GoogleFonts.inter()),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
-      onReplyToComment: (commentId, replyText) async {
-        try {
-          await PostsApi().addComment(_post!.id,
-              content: replyText, parentCommentId: commentId);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Reply posted!', style: GoogleFonts.inter()),
-              backgroundColor: const Color(0xFF4CAF50),
-            ),
-          );
-          await _loadComments();
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Reply failed: ${_toError(e)}',
-                  style: GoogleFonts.inter()),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
-    );
-  }
+  // Comment bottom sheet removed - comments are displayed inline on the page
     Future<void> _replyToCommentDesktop(String commentId) async {
     if (_post == null) return;
     final controller = TextEditingController();
@@ -550,14 +809,14 @@ class _PostPageState extends State<PostPage> {
       builder: (_) {
         return AlertDialog(
           backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-          title: Text('Reply', style: GoogleFonts.inter()),
+          title: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.reply_title'), style: GoogleFonts.inter()),
           content: TextField(
             controller: controller,
             autofocus: true,
             maxLines: 4,
             style: GoogleFonts.inter(),
             decoration: InputDecoration(
-              hintText: 'Write your reply...',
+              hintText: Provider.of<LanguageProvider>(context, listen: false).t('post.reply_hint'),
               hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
               border: const OutlineInputBorder(),
             ),
@@ -565,11 +824,11 @@ class _PostPageState extends State<PostPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: GoogleFonts.inter()),
+              child: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.cancel'), style: GoogleFonts.inter()),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: Text('Send',
+              child: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.send'),
                   style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
             ),
           ],
@@ -579,13 +838,13 @@ class _PostPageState extends State<PostPage> {
 
     if (reply == null || reply.isEmpty) return;
     try {
-      await PostsApi()
-          .addComment(_post!.id, content: reply, parentCommentId: commentId);
+      await _commentRepo.createComment(
+          postId: _post!.id, text: reply, parentCommentId: commentId);
       await _loadComments();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Reply posted!', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.reply_posted'), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
@@ -607,7 +866,7 @@ class _PostPageState extends State<PostPage> {
     if (text.isEmpty) return;
 
     try {
-      await PostsApi().addComment(_post!.id, content: text);
+      await _commentRepo.createComment(postId: _post!.id, text: text);
       _commentController.clear();
       _commentFocusNode.unfocus();
 
@@ -622,6 +881,7 @@ class _PostPageState extends State<PostPage> {
       setState(() {
         _post = PostDetail(
           id: original.id,
+          authorId: original.authorId,
           authorName: original.authorName,
           authorAvatarUrl: original.authorAvatarUrl,
           createdAt: original.createdAt,
@@ -640,7 +900,7 @@ class _PostPageState extends State<PostPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Comment posted!', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.comment_posted'), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
@@ -648,7 +908,7 @@ class _PostPageState extends State<PostPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to post comment: ${_toError(e)}',
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('post.comment_failed')}: ${_toError(e)}',
               style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
@@ -741,61 +1001,63 @@ class _PostPageState extends State<PostPage> {
   }
 
   Widget _buildMobileBody(bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 5),
-      child: Column(
-        children: [
-          _buildPostCard(isDark, showPreviewComments: true),
-          Container(
-            margin: const EdgeInsets.all(10),
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.black : Colors.white,
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _commentController,
-                    focusNode: _commentFocusNode,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Write a comment...',
-                      hintStyle: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: const Color(0xFF666666),
-                      ),
-                    ),
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: _submitComment,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.send,
-                      size: 20,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: _buildPostCard(isDark, showPreviewComments: true),
           ),
-        ],
-      ),
+        ),
+        Container(
+          margin: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black : Colors.white,
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commentController,
+                  focusNode: _commentFocusNode,
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    hintText: Provider.of<LanguageProvider>(context, listen: false).t('common.write_comment'),
+                    hintStyle: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: const Color(0xFF666666),
+                    ),
+                  ),
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: _submitComment,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Colors.black,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.send,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -827,7 +1089,7 @@ class _PostPageState extends State<PostPage> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: Row(
                       children: [
-                        Text('Comments',
+                        Text(Provider.of<LanguageProvider>(context, listen: false).t('post.comments'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -897,7 +1159,7 @@ class _PostPageState extends State<PostPage> {
                                 focusNode: _commentFocusNode,
                                 decoration: InputDecoration(
                                   border: InputBorder.none,
-                                  hintText: 'Write a comment...',
+                                  hintText: Provider.of<LanguageProvider>(context, listen: false).t('common.write_comment'),
                                   hintStyle: GoogleFonts.inter(
                                     fontSize: 14,
                                     color: const Color(0xFF666666),
@@ -1002,17 +1264,19 @@ class _PostPageState extends State<PostPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _toggleTranslation,
-                child: Text(
-                  _showTranslation ? 'Show Original' : 'Translate',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: const Color(0xFFBFAE01),
-                    fontWeight: FontWeight.w500,
+              // Only show translate button if translation is enabled in settings
+              if (context.watch<LanguageProvider>().postTranslationEnabled)
+                GestureDetector(
+                  onTap: _toggleTranslation,
+                  child: Text(
+                    _showTranslation ? 'Show Original' : 'Translate',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: const Color(0xFFBFAE01),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 20),
             ],
             if (_post!.mediaType != MediaType.none) ...[
@@ -1060,11 +1324,10 @@ class _PostPageState extends State<PostPage> {
                   ),
                 ),
                 const SizedBox(width: 20),
-                GestureDetector(
-                  onTap: _openCommentsSheet,
-                  child: Row(
-                    children: [
-                      const Icon(
+                // Comment count (no tap action - comments shown below)
+                Row(
+                  children: [
+                    const Icon(
                         Icons.chat_bubble_outline,
                         size: 20,
                         color: Color(0xFF666666),
@@ -1079,7 +1342,6 @@ class _PostPageState extends State<PostPage> {
                       ),
                     ],
                   ),
-                ),
                 const SizedBox(width: 20),
                 GestureDetector(
                   onTap: _showShareOptions,
@@ -1169,35 +1431,13 @@ class _PostPageState extends State<PostPage> {
                       comment: comment,
                       isFirstReply: false,
                       onReply: (commentId) {
-                        _openCommentsSheet();
+                        // Comments are displayed inline, no bottom sheet needed
                       },
                       onLike: (_) {},
                     ),
                   ),
                 ),
-                Center(
-                  child: GestureDetector(
-                    onTap: _openCommentsSheet,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F5F5),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'View all commentairoauiueiwr',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF666666),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                // Comments are displayed inline, no "View all" button needed
               ],
             ],
           ],
