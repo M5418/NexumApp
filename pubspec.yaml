@@ -36,8 +36,10 @@ dependencies:
   cached_network_image: ^3.4.1
   readmore: ^3.0.0
   video_player: ^2.10.0
+  video_thumbnail: ^0.5.3
   image_picker: ^1.2.0
   permission_handler: ^12.0.1
+  device_info_plus: ^12.2.0
   dio: ^5.9.0
   file_picker: ^10.3.3
   audioplayers: ^6.5.1
@@ -76,6 +78,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -122,3 +125,19 @@ flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/icon/NexumIcon.png"
+
+flutter_native_splash:
+  # Splash screen configuration for iOS and Android
+  color: "#FFFFFF"  # Background color (white)
+  image: assets/splash/nexumsplashimage.png
+  
+  # iOS-specific settings
+  ios: true
+  ios_content_mode: center
+  
+  # Android-specific settings
+  android: true
+  android_gravity: center
+  
+  # Web settings (optional)
+  web: false

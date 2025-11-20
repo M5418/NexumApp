@@ -64,7 +64,6 @@ class FirebaseBookRepository implements BookRepository {
       if (mine) {
         final uid = _auth.currentUser?.uid;
         if (uid == null) {
-          print('⚠️  Books.listBooks: No authenticated user for mine=true');
           return [];
         }
         q = q.where('authorId', isEqualTo: uid);
@@ -93,11 +92,8 @@ class FirebaseBookRepository implements BookRepository {
       q = q.orderBy('createdAt', descending: true).limit(limit);
       
       final snap = await q.get();
-      print('✅ Books fetched: ${snap.docs.length} items (page $page, limit $limit)');
       return snap.docs.map(_bookFromDoc).toList();
     } catch (e) {
-      print('❌ Books.listBooks error: $e');
-      print('🔍 Check: 1) Firestore rules for books 2) Composite indexes 3) Auth status');
       rethrow;
     }
   }
@@ -382,7 +378,6 @@ class FirebaseBookRepository implements BookRepository {
     try {
       final uid = _auth.currentUser?.uid;
       if (uid == null) {
-        print('⚠️  Books.getBookmarkedBooks: No authenticated user');
         return [];
       }
       
@@ -392,10 +387,8 @@ class FirebaseBookRepository implements BookRepository {
           .limit(50)
           .get();
       
-      print('✅ Bookmarked books fetched: ${snap.docs.length} items');
       return snap.docs.map(_bookFromDoc).toList();
     } catch (e) {
-      print('❌ Books.getBookmarkedBooks error: $e');
       rethrow;
     }
   }
@@ -405,7 +398,6 @@ class FirebaseBookRepository implements BookRepository {
     try {
       final uid = _auth.currentUser?.uid;
       if (uid == null) {
-        print('⚠️  Books.getPurchasedBooks: No authenticated user');
         return [];
       }
       
@@ -415,10 +407,8 @@ class FirebaseBookRepository implements BookRepository {
           .limit(100)
           .get();
       
-      print('✅ Purchased books fetched: ${snap.docs.length} items');
       return snap.docs.map(_bookFromDoc).toList();
     } catch (e) {
-      print('❌ Books.getPurchasedBooks error: $e');
       rethrow;
     }
   }

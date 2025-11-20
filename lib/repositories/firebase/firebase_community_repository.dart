@@ -9,18 +9,18 @@ class FirebaseCommunityRepository implements CommunityRepository {
 
   CollectionReference<Map<String, dynamic>> get _communities => _db.collection('communities');
 
-  CommunityModel _fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
-    final m = d.data() ?? {};
+  CommunityModel _fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
     return CommunityModel(
-      id: d.id,
-      name: (m['name'] ?? '').toString(),
-      avatarUrl: (m['avatarUrl'] ?? '').toString(),
-      bio: (m['bio'] ?? '').toString(),
-      coverUrl: (m['coverUrl'] ?? '').toString().isEmpty ? null : m['coverUrl'].toString(),
-      friendsInCommon: (m['friendsInCommon'] ?? '+0').toString(),
-      unreadPosts: (m['unreadPosts'] is num) ? (m['unreadPosts'] as num).toInt() : 0,
-      postsCount: (m['postsCount'] is num) ? (m['postsCount'] as num).toInt() : 0,
-      memberCount: (m['memberCount'] is num) ? (m['memberCount'] as num).toInt() : 0,
+      id: doc.id,
+      name: (data?['name'] ?? '').toString(),
+      avatarUrl: (data?['avatarUrl'] ?? '').toString(),
+      bio: (data?['bio'] ?? '').toString(),
+      coverUrl: (data?['coverUrl'] ?? '').toString().isEmpty ? null : data?['coverUrl'].toString(),
+      friendsInCommon: (data?['friendsInCommon'] ?? '+0').toString(),
+      unreadPosts: (data?['unreadPosts'] is num) ? (data?['unreadPosts'] as num).toInt() : 0,
+      postsCount: (data?['postsCount'] is num) ? (data?['postsCount'] as num).toInt() : 0,
+      memberCount: (data?['memberCount'] is num) ? (data?['memberCount'] as num).toInt() : 0,
     );
   }
 
@@ -39,11 +39,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
   Future<List<CommunityModel>> listAll({int limit = 100}) async {
     try {
       final q = await _communities.orderBy('createdAt', descending: true).limit(limit).get();
-      print('✅ Communities.listAll fetched: ${q.docs.length} communities');
       return q.docs.map(_fromDoc).toList();
     } catch (e) {
-      print('❌ Communities.listAll error: $e');
-      print('🔍 Check: 1) Firestore rules for communities 2) Network connectivity');
       rethrow;
     }
   }
@@ -53,12 +50,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
     try {
       final u = _auth.currentUser;
       if (u == null) {
-        print('⚠️  Communities.listMine: No authenticated user');
         return [];
       }
-      
-      print('🔍 Communities.listMine: Authenticated as ${u.uid}');
-      print('🔍 Querying collectionGroup("members").where("userId", "==", "${u.uid}")');
       
       final ids = <String>{};
       final q1 = await _db
@@ -66,18 +59,15 @@ class FirebaseCommunityRepository implements CommunityRepository {
           .where('userId', isEqualTo: u.uid)
           .limit(500)
           .get();
-      
-      print('🔍 Query 1 (userId field) returned: ${q1.docs.length} docs');
 
       var docs = q1.docs;
+
       if (docs.isEmpty) {
-        print('🔍 Trying fallback query with "uid" field...');
         final q2 = await _db
             .collectionGroup('members')
             .where('uid', isEqualTo: u.uid)
             .limit(500)
             .get();
-        print('🔍 Query 2 (uid field) returned: ${q2.docs.length} docs');
         docs = q2.docs;
       }
 
@@ -87,13 +77,10 @@ class FirebaseCommunityRepository implements CommunityRepository {
       }
 
       if (ids.isEmpty) {
-        print('🔍 No members found via collectionGroup, trying direct lookup...');
         final all = await _communities.limit(200).get();
-        print('🔍 Found ${all.docs.length} total communities to check');
         for (final c in all.docs) {
           final exists = await c.reference.collection('members').doc(u.uid).get();
           if (exists.exists) {
-            print('🔍 Found membership in community: ${c.id}');
             ids.add(c.id);
           }
         }
@@ -104,11 +91,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
         final snap = await _communities.where(FieldPath.documentId, whereIn: chunk).get();
         results.addAll(snap.docs.map(_fromDoc));
       }
-      print('✅ Communities.listMine fetched: ${results.length} communities');
       return results;
     } catch (e) {
-      print('❌ Communities.listMine error: $e');
-      print('🔍 Check: 1) Firestore rules for communities/members 2) Auth status');
       rethrow;
     }
   }
@@ -131,10 +115,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
   Future<List<CommunityMemberModel>> members(String communityId, {int limit = 200}) async {
     try {
       final q = await _communities.doc(communityId).collection('members').limit(limit).get();
-      print('✅ Community members fetched: ${q.docs.length} members for $communityId');
       return q.docs.map(_memberFrom).toList();
     } catch (e) {
-      print('❌ Communities.members error for $communityId: $e');
       rethrow;
     }
   }

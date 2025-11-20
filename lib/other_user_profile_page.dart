@@ -9,7 +9,10 @@ import 'models/post.dart';
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/conversation_repository.dart';
-import 'repositories/interfaces/follow_repository.dart';
+import 'repositories/interfaces/user_repository.dart';
+import 'repositories/firebase/firebase_post_repository.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
+import 'providers/follow_state.dart';
 import 'models/message.dart' hide MediaType;
 import 'widgets/report_bottom_sheet.dart';
 import 'chat_page.dart';
@@ -41,21 +44,19 @@ class OtherUserProfilePage extends StatefulWidget {
 
 class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
-  late bool _isConnected;
   late ConversationRepository _convRepo;
-  late FollowRepository _followRepo;
 
   // Backend profile data for OTHER user
   Map<String, dynamic>? _userProfile;
   String? _profilePhotoUrl;
-  String _coverPhotoUrl = '';
+  final String _coverPhotoUrl = '';
 
-  int _connectionsInboundCount = 0;   // inbound to this user
-  int _connectionsTotalCount = 0;
+  final int _connectionsInboundCount = 0;   // inbound to this user
+  final int _connectionsTotalCount = 0;
 
-  List<Map<String, dynamic>> _experiences = [];
-  List<Map<String, dynamic>> _trainings = [];
-  List<String> _interests = [];
+  final List<Map<String, dynamic>> _experiences = [];
+  final List<Map<String, dynamic>> _trainings = [];
+  final List<String> _interests = [];
 
 
   // Data: Activity (their engagements), Posts (created by other user), Media (images from posts), Podcasts
@@ -77,9 +78,13 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   @override
   void initState() {
     super.initState();
-    _isConnected = widget.isConnected;
     _convRepo = context.read<ConversationRepository>();
-    _followRepo = context.read<FollowRepository>();
+    // Ensure FollowState is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<FollowState>().initialize();
+      }
+    });
     // Load profile first so header and stats use real backend
     _loadUserProfile();
     // Kick off tabs
@@ -114,11 +119,45 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
 
   Future<void> _loadUserProfile() async {
     try {
-      // TODO: Migrate to UserRepository
-      // final userRepo = Provider.of<UserRepository>(context, listen: false);
-      // final user = await userRepo.getUserById(widget.userId);
-      
+      final userRepo = Provider.of<UserRepository>(context, listen: false);
+      final user = await userRepo.getUserProfile(widget.userId);
       if (!mounted) return;
+      if (user == null) {
+        setState(() {
+          _userProfile = null;
+          _profilePhotoUrl = null;
+          _experiences.clear();
+          _trainings.clear();
+          _interests.clear();
+        });
+        return;
+      }
+
+      // Build a map compatible with existing UI expectations
+      final map = user.toMap();
+      final hasDisplay = (user.displayName ?? '').toString().trim().isNotEmpty;
+      final first = (user.firstName ?? '').toString().trim();
+      final last = (user.lastName ?? '').toString().trim();
+      final fullName = hasDisplay
+          ? user.displayName!.trim()
+          : [first, last].where((s) => s.isNotEmpty).join(' ').trim();
+
+      setState(() {
+        _userProfile = {
+          ...map,
+          'full_name': fullName,
+        };
+        _profilePhotoUrl = user.avatarUrl;
+        _experiences
+          ..clear()
+          ..addAll(user.professionalExperiences ?? const []);
+        _trainings
+          ..clear()
+          ..addAll(user.trainings ?? const []);
+        _interests
+          ..clear()
+          ..addAll(user.interestDomains ?? const []);
+      });
     } catch (e) {
       if (!mounted) return;
     }
@@ -159,10 +198,77 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     });
 
     try {
-      // Simplified: Show empty for now - full migration needed
+      final postRepo = FirebasePostRepository();
+      final userRepo = FirebaseUserRepository();
+      // Fetch this user's reposts
+      final reposts = await postRepo.getUserReposts(uid: widget.userId, limit: 50);
+
+      final posts = <Post>[];
+      for (final model in reposts) {
+        final ogId = model.repostOf;
+        if (ogId == null || ogId.isEmpty) continue;
+        final original = await postRepo.getPost(ogId);
+        if (original == null) continue;
+        final origAuthor = await userRepo.getUserProfile(original.authorId);
+
+        final origFirst = (origAuthor?.firstName ?? '').trim();
+        final origLast = (origAuthor?.lastName ?? '').trim();
+        final origName = (origFirst.isNotEmpty || origLast.isNotEmpty)
+            ? '$origFirst $origLast'.trim()
+            : (origAuthor?.displayName ?? origAuthor?.username ?? 'User');
+
+        // Determine media type from original mediaUrls
+        MediaType mediaType = MediaType.none;
+        List<String> images = const [];
+        String? videoUrl;
+        if (original.mediaUrls.isNotEmpty) {
+          final urls = original.mediaUrls.map((u) => u.toLowerCase()).toList();
+          final hasVideo = urls.any((u) => u.endsWith('.mp4') || u.endsWith('.mov') || u.endsWith('.webm'));
+          if (hasVideo) {
+            mediaType = MediaType.video;
+            videoUrl = original.mediaUrls.first;
+          } else if (original.mediaUrls.length > 1) {
+            mediaType = MediaType.images;
+            images = original.mediaUrls;
+          } else {
+            mediaType = MediaType.image;
+            images = original.mediaUrls;
+          }
+        }
+
+        posts.add(
+          Post(
+            id: model.id,
+            authorId: original.authorId,
+            userName: origName,
+            userAvatarUrl: origAuthor?.avatarUrl ?? '',
+            createdAt: model.createdAt,
+            text: original.text,
+            mediaType: mediaType,
+            imageUrls: images,
+            videoUrl: videoUrl,
+            counts: PostCounts(
+              likes: original.summary.likes,
+              comments: original.summary.comments,
+              shares: original.summary.shares,
+              reposts: original.summary.reposts,
+              bookmarks: original.summary.bookmarks,
+            ),
+            userReaction: null,
+            isBookmarked: false,
+            isRepost: true,
+            repostedBy: RepostedBy(
+              userName: widget.userName,
+              userAvatarUrl: widget.userAvatarUrl,
+            ),
+            originalPostId: ogId,
+          ),
+        );
+      }
+
       if (!mounted) return;
       setState(() {
-        _activityPosts = [];
+        _activityPosts = posts;
         _loadingActivity = false;
       });
     } catch (e) {
@@ -256,7 +362,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
           onInvitationSent: (invitation) {
             Navigator.pop(ctx);
             ScaffoldMessenger.of(ctx).showSnackBar(
-              SnackBar(content: Text('Invitation sent to ${widget.userName}')),
+              SnackBar(content: Text('${Provider.of<LanguageProvider>(ctx, listen: false).t('profile.invitation_sent')} ${widget.userName}')),
             );
           },
         ),
@@ -413,12 +519,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                   children: [
                                     _buildStatColumn(
                                       _formatCount(_connectionsTotalCount),
-                                      'Connections',
+                                      Provider.of<LanguageProvider>(context).t('profile.connections'),
                                     ),
                                     const SizedBox(width: 40),
                                     _buildStatColumn(
                                       _formatCount(_connectionsInboundCount),
-                                      'Connected',
+                                      Provider.of<LanguageProvider>(context).t('profile.connected'),
                                     ),
                                   ],
                                 ),
@@ -487,36 +593,22 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                         onPressed: () async {
                                           // Capture messenger before async operations
                                           final messenger = ScaffoldMessenger.of(context);
-                                          final next = !_isConnected;
-                                          setState(() {
-                                            _isConnected = next;
-                                          });
                                           try {
-                                            if (next) {
-                                              await _followRepo.followUser(widget.userId);
-                                            } else {
-                                              await _followRepo.unfollowUser(widget.userId);
-                                            }
+                                            await context.read<FollowState>().toggle(widget.userId);
                                           } catch (e) {
                                             if (!mounted) return;
-                                            setState(() {
-                                              _isConnected = !next;
-                                            });
-                                            
                                             messenger.showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Failed to ${next ? 'connect' : 'disconnect'}',
-                                                ),
+                                              const SnackBar(
+                                                content: Text('Failed to toggle connection'),
                                               ),
                                             );
                                           }
                                         },
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: _isConnected
+                                          backgroundColor: context.watch<FollowState>().isConnected(widget.userId)
                                               ? Colors.grey[300]
                                               : const Color(0xFFBFAE01),
-                                          foregroundColor: _isConnected
+                                          foregroundColor: context.watch<FollowState>().isConnected(widget.userId)
                                               ? Colors.black87
                                               : Colors.black,
                                           padding: const EdgeInsets.symmetric(
@@ -529,11 +621,11 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                           ),
                                         ),
                                         child: Text(
-                                          _isConnected
-                                              ? 'Disconnect'
-                                              : (widget.theyConnectToYou
-                                                  ? 'Connect Back'
-                                                  : 'Connect'),
+                                          context.watch<FollowState>().isConnected(widget.userId)
+                                              ? Provider.of<LanguageProvider>(context).t('connections.disconnect')
+                                              : ((widget.theyConnectToYou || context.watch<FollowState>().theyConnectToYou(widget.userId))
+                                                  ? Provider.of<LanguageProvider>(context).t('connections.connect_back')
+                                                  : Provider.of<LanguageProvider>(context).t('connections.connect')),
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w500,
@@ -561,7 +653,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                           ),
                                         ),
                                         child: Text(
-                                          'Message',
+                                          Provider.of<LanguageProvider>(context).t('profile.message'),
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w500,
@@ -910,11 +1002,11 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
               ),
-              tabs: const [
-                Tab(text: 'Activity'),
-                Tab(text: 'Posts'),
-                Tab(text: 'Podcasts'),
-                Tab(text: 'Media'),
+              tabs: [
+                Tab(text: Provider.of<LanguageProvider>(context).t('profile.tabs.activity')),
+                Tab(text: Provider.of<LanguageProvider>(context).t('profile.tabs.posts')),
+                Tab(text: Provider.of<LanguageProvider>(context).t('profile.tabs.podcasts')),
+                Tab(text: Provider.of<LanguageProvider>(context).t('profile.tabs.media')),
               ],
             ),
           ),
@@ -943,30 +1035,40 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       return Center(child: Text(_errorActivity!));
     }
     if (_activityPosts.isEmpty) {
-      return const Center(child: Text('No activity found'));
+      return Center(child: Text(Provider.of<LanguageProvider>(context).t('profile.no_activity')));
     }
     return ListView.builder(
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
       itemCount: _activityPosts.length,
       itemBuilder: (context, index) {
-        return ActivityPostCard(
-          post: _activityPosts[index],
-          onReactionChanged: (postId, reaction) {
-            // Handle reaction change
+        final post = _activityPosts[index];
+        return GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/post',
+              arguments: {'postId': post.id},
+            );
           },
-          onBookmarkToggle: (postId) {
-            // Handle bookmark toggle
-          },
-          onShare: (postId) {
-            // Handle share
-          },
-          onComment: (postId) {
-            // Handle comment
-          },
-          onRepost: (postId) {
-            // Handle repost
-          },
+          child: ActivityPostCard(
+            post: post,
+            onReactionChanged: (postId, reaction) {
+              // Handle reaction change
+            },
+            onBookmarkToggle: (postId) {
+              // Handle bookmark toggle
+            },
+            onShare: (postId) {
+              // Handle share
+            },
+            onComment: (postId) {
+              // Handle comment
+            },
+            onRepost: (postId) {
+              // Handle repost
+            },
+          ),
         );
       },
     );
@@ -980,30 +1082,40 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       return Center(child: Text(_errorPosts!));
     }
     if (_userPosts.isEmpty) {
-      return const Center(child: Text('No posts found'));
+      return Center(child: Text(Provider.of<LanguageProvider>(context).t('profile.no_posts')));
     }
     return ListView.builder(
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
       itemCount: _userPosts.length,
       itemBuilder: (context, index) {
-        return HomePostCard(
-          post: _userPosts[index],
-          onReactionChanged: (postId, reaction) {
-            // Handle reaction change
+        final post = _userPosts[index];
+        return GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/post',
+              arguments: {'postId': post.id},
+            );
           },
-          onBookmarkToggle: (postId) {
-            // Handle bookmark toggle
-          },
-          onShare: (postId) {
-            // Handle share
-          },
-          onComment: (postId) {
-            // Handle comment
-          },
-          onRepost: (postId) {
-            // Handle repost
-          },
+          child: HomePostCard(
+            post: post,
+            onReactionChanged: (postId, reaction) {
+              // Handle reaction change
+            },
+            onBookmarkToggle: (postId) {
+              // Handle bookmark toggle
+            },
+            onShare: (postId) {
+              // Handle share
+            },
+            onComment: (postId) {
+              // Handle comment
+            },
+            onRepost: (postId) {
+              // Handle repost
+            },
+          ),
         );
       },
     );
@@ -1017,7 +1129,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       return Center(child: Text(_errorPodcasts!));
     }
     if (_podcasts.isEmpty) {
-      return const Center(child: Text('No podcasts found'));
+      return Center(child: Text(Provider.of<LanguageProvider>(context).t('profile.no_podcasts')));
     }
     return ListView.builder(
       primary: false,
@@ -1112,7 +1224,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_mediaImageUrls.isEmpty) {
-      return const Center(child: Text('No media found'));
+      return Center(child: Text(Provider.of<LanguageProvider>(context).t('profile.no_media')));
     }
     return GridView.count(
       primary: false,

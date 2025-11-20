@@ -13,13 +13,14 @@ import 'conversations_page.dart';
 import 'profile_page.dart';
 
 import 'repositories/firebase/firebase_user_repository.dart';
-import 'repositories/firebase/firebase_follow_repository.dart';
 import 'repositories/firebase/firebase_notification_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/interfaces/conversation_repository.dart';
 import 'repositories/interfaces/podcast_repository.dart';
+import 'repositories/interfaces/follow_repository.dart';
 import 'core/profile_api.dart';
+import 'providers/follow_state.dart';
 
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
@@ -129,11 +130,31 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         return;
       }
 
-      final followRepo = FirebaseFollowRepository();
+      final followRepo = context.read<FollowRepository>();
       final userRepo = FirebaseUserRepository();
 
-      final followers = await followRepo.getFollowers(userId: currentUid, limit: 500);
-      final following = await followRepo.getFollowing(userId: currentUid, limit: 500);
+      // Fetch ALL followers and following via pagination to avoid missing users
+      const pageSize = 500;
+      final followers = <dynamic>[];
+      final following = <dynamic>[];
+
+      FollowModel? lastFollower;
+      while (true) {
+        final page = await followRepo.getFollowers(userId: currentUid, limit: pageSize, lastFollow: lastFollower);
+        if (page.isEmpty) break;
+        followers.addAll(page);
+        lastFollower = page.last;
+        if (page.length < pageSize) break;
+      }
+
+      FollowModel? lastFollowing;
+      while (true) {
+        final page = await followRepo.getFollowing(userId: currentUid, limit: pageSize, lastFollow: lastFollowing);
+        if (page.isEmpty) break;
+        following.addAll(page);
+        lastFollowing = page.last;
+        if (page.length < pageSize) break;
+      }
 
       final inboundIds = followers.map((f) => f.followerId).toSet();
       final outboundIds = following.map((f) => f.followedId).toSet();
@@ -149,6 +170,9 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       }
 
       final profiles = await userRepo.getUsers(allIds.toList());
+      final returnedIds = profiles.map((p) => p.uid).toSet();
+      final missingIds = allIds.difference(returnedIds);
+
       final mapped = profiles.map((p) {
         final id = p.uid;
         final name = (p.displayName ?? '').trim();
@@ -170,7 +194,17 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
           isConnected: outboundIds.contains(id),
           theyConnectToYou: inboundIds.contains(id),
         );
-      }).toList();
+      }).toList()
+      ..addAll(missingIds.map((id) => User(
+            id: id,
+            fullName: 'User',
+            username: '@user',
+            bio: '',
+            avatarUrl: '',
+            coverUrl: '',
+            isConnected: outboundIds.contains(id),
+            theyConnectToYou: inboundIds.contains(id),
+          )));
 
       if (!mounted) return;
       setState(() {
@@ -482,16 +516,25 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                             crossAxisCount: 2,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
-                            childAspectRatio: 160 / 180,
+                            childAspectRatio: 155 / 260,
                           ),
                           itemCount: users.length,
                           itemBuilder: (context, index) {
                             final u = users[index];
-                            final selected = u.id == _selectedUserId;
-                            return _UserGridTile(
-                              user: u,
-                              isDark: isDark,
-                              selected: selected,
+                            return ConnectionCard(
+                              userId: u.id,
+                              coverUrl: u.coverUrl,
+                              avatarUrl: u.avatarUrl,
+                              fullName: u.fullName,
+                              username: u.username,
+                              bio: u.bio,
+                              initialConnectionStatus: u.isConnected,
+                              theyConnectToYou: u.theyConnectToYou,
+                              onMessage: () {
+                                setState(() {
+                                  activeInviteUser = u;
+                                });
+                              },
                               onTap: () => _selectUser(u),
                             );
                           },
@@ -780,159 +823,7 @@ class _TopNavItem extends StatelessWidget {
 }
 
 // Compact user tile for the left grid on desktop
-class _UserGridTile extends StatelessWidget {
-  final User user;
-  final bool isDark;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _UserGridTile({
-    required this.user,
-    required this.isDark,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cardColor = isDark ? Colors.black : Colors.white;
-    final borderColor = selected
-        ? const Color(0xFFBFAE01)
-        : (isDark ? const Color(0xFF1F1F1F) : const Color(0xFFEAEAEA));
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor, width: selected ? 2 : 1),
-          boxShadow: [
-            if (!isDark)
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Cover
-            Container(
-              height: 56,
-              decoration: BoxDecoration(
-                image: (user.coverUrl.isNotEmpty)
-                    ? DecorationImage(
-                        image: NetworkImage(user.coverUrl), fit: BoxFit.cover)
-                    : null,
-                color: user.coverUrl.isEmpty
-                    ? (isDark
-                        ? const Color(0xFF0E0E0E)
-                        : const Color(0xFFEDEDED))
-                    : null,
-              ),
-            ),
-            // Avatar overlap
-            Transform.translate(
-              offset: const Offset(0, -18),
-              child: Align(
-                alignment: Alignment.center,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: cardColor, width: 3),
-                  ),
-                  child: CircleAvatar(
-                    backgroundColor:
-                        isDark ? const Color(0xFF1F1F1F) : Colors.white,
-                    backgroundImage: user.avatarUrl.isNotEmpty
-                        ? NetworkImage(user.avatarUrl)
-                        : null,
-                    child: user.avatarUrl.isEmpty
-                        ? Text(
-                            (user.fullName.isNotEmpty ? user.fullName[0] : 'U')
-                                .toUpperCase(),
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-            ),
-            // Name, username, connection chip
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: Column(
-                children: [
-                  Text(
-                    user.fullName,
-                    style: GoogleFonts.inter(
-                        fontSize: 13, fontWeight: FontWeight.w700),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (user.username.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        user.username,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: const Color(0xFF666666),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  const SizedBox(height: 6),
-                  if (user.isConnected)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF1F1F1F)
-                            : const Color(0xFFF3F3F3),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: isDark
-                              ? const Color(0xFF2A2A2A)
-                              : const Color(0xFFE0E0E0),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.check_circle,
-                              size: 14, color: Color(0xFF4CAF50)),
-                          const SizedBox(width: 4),
-                          Text(Provider.of<LanguageProvider>(context).t('connections.connected'),
-                              style: GoogleFonts.inter(fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// Removed _UserGridTile in favor of reusing ConnectionCard for parity across mobile and desktop
 
 class _RightProfilePanel extends StatefulWidget {
   final User user;
@@ -950,8 +841,6 @@ class _RightProfilePanel extends StatefulWidget {
 class _RightProfilePanelState extends State<_RightProfilePanel> {
   late ConversationRepository _convRepo;
 
-  // Connection state
-  late bool _isConnected;
 
   // Backend profile data for selected user
   Map<String, dynamic>? _userProfile;
@@ -987,7 +876,6 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
   void initState() {
     super.initState();
     _convRepo = context.read<ConversationRepository>();
-    _isConnected = widget.user.isConnected;
     _loadUserProfile();
     _loadUserPosts();
     _loadActivity();
@@ -998,9 +886,6 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
   void didUpdateWidget(covariant _RightProfilePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user.id != widget.user.id) {
-      // Reset view state
-      _isConnected = widget.user.isConnected;
-
       _userProfile = null;
       _profilePhotoUrl = null;
       _coverPhotoUrl = '';
@@ -1571,29 +1456,20 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                               child: ElevatedButton(
                                 onPressed: () async {
                                   final ctx = context;
-                                  final next = !_isConnected;
-                                  setState(() => _isConnected = next);
                                   try {
-                                    final repo = FirebaseFollowRepository();
-                                    if (next) {
-                                      await repo.followUser(widget.user.id);
-                                    } else {
-                                      await repo.unfollowUser(widget.user.id);
-                                    }
+                                    await ctx.read<FollowState>().toggle(widget.user.id);
                                   } catch (_) {
-                                    if (!mounted) return;
-                                    setState(() => _isConnected = !next);
                                     if (!ctx.mounted) return;
                                     ScaffoldMessenger.of(ctx).showSnackBar(
-                                      SnackBar(content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t(next ? 'connections.connect_failed' : 'connections.disconnect_failed'))),
+                                      SnackBar(content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('connections.action_failed'))),
                                     );
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: _isConnected
+                                  backgroundColor: context.watch<FollowState>().isConnected(widget.user.id)
                                       ? Colors.grey[300]
                                       : const Color(0xFFBFAE01),
-                                  foregroundColor: _isConnected
+                                  foregroundColor: context.watch<FollowState>().isConnected(widget.user.id)
                                       ? Colors.black87
                                       : Colors.black,
                                   padding:
@@ -1602,11 +1478,11 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                                       borderRadius: BorderRadius.circular(25)),
                                 ),
                                 child: Text(
-                                  _isConnected
-                                      ? 'Disconnect'
-                                      : (widget.user.theyConnectToYou
-                                          ? 'Connect Back'
-                                          : 'Connect'),
+                                  context.watch<FollowState>().isConnected(widget.user.id)
+                                      ? Provider.of<LanguageProvider>(context).t('connections.disconnect')
+                                      : ((widget.user.theyConnectToYou || context.watch<FollowState>().theyConnectToYou(widget.user.id))
+                                          ? Provider.of<LanguageProvider>(context).t('connections.connect_back')
+                                          : Provider.of<LanguageProvider>(context).t('connections.connect')),
                                   style: GoogleFonts.inter(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500),

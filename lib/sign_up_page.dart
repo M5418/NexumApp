@@ -6,6 +6,7 @@ import 'sign_in_page.dart';
 import 'profile_flow_start.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/i18n/language_provider.dart';
+import 'core/i18n/translations.dart';
 import 'repositories/interfaces/auth_repository.dart';
 import 'repositories/interfaces/user_repository.dart';
 
@@ -44,7 +45,8 @@ class _SignUpPageState extends State<SignUpPage> {
     final currentName =
         LanguageProvider.displayNames[currentCode] ?? currentCode.toUpperCase();
 
-    final allCodes = LanguageProvider.supportedCodes;
+    // Use activeCodes to show only EN + FR (PT/ES/DE hidden for now)
+    final allCodes = Translations.activeCodes;
 
     return Scaffold(
       body: Container(

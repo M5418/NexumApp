@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart' as fs;
 import '../interfaces/storage_repository.dart';
 
 class FirebaseStorageRepository implements StorageRepository {
-  final fs.FirebaseStorage _storage = fs.FirebaseStorage.instance;
+  final fs.FirebaseStorage _storage = fs.FirebaseStorage.instanceFor(
+    bucket: Firebase.app().options.storageBucket,
+  );
   final StreamController<double> _progress = StreamController<double>.broadcast();
 
   @override
@@ -111,6 +114,7 @@ class FirebaseStorageRepository implements StorageRepository {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     final r = List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
     final base = prefix != null && prefix.isNotEmpty ? '$prefix-' : '';
-    return '$uid/$base$ts-$r.$extension';
+    // Enforce uploads/{uid}/... to satisfy storage.rules
+    return 'uploads/$uid/$base$ts-$r.$extension';
   }
 }

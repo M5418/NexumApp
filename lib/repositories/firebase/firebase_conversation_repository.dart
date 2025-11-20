@@ -73,7 +73,7 @@ class FirebaseConversationRepository implements ConversationRepository {
     try {
       final u = _auth.currentUser;
       if (u == null) {
-        print('⚠️  Conversations.list: No authenticated user');
+        
         return [];
       }
       
@@ -87,11 +87,10 @@ class FirebaseConversationRepository implements ConversationRepository {
       for (final d in q.docs) {
         items.add(_fromDoc(d, u.uid));
       }
-      print('✅ Conversations fetched: ${items.length} conversations');
       return items;
     } catch (e) {
-      print('❌ Conversations.list error: $e');
-      print('🔍 Check: 1) Firestore rules for conversations 2) Auth status 3) Composite index');
+      
+      
       rethrow;
     }
   }

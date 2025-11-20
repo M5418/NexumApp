@@ -221,11 +221,11 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
             color: card,
             child: Row(
               children: [
-                _kpi('Revenue', '\$${totalEarnings.toStringAsFixed(2)}'),
+                _kpi(Provider.of<LanguageProvider>(context, listen: false).t('monetization.revenue'), '\$${totalEarnings.toStringAsFixed(2)}'),
                 const SizedBox(width: 12),
-                _kpi('CPM', '\$${cpm.toStringAsFixed(2)}'),
+                _kpi(Provider.of<LanguageProvider>(context, listen: false).t('monetization.cpm'), '\$${cpm.toStringAsFixed(2)}'),
                 const SizedBox(width: 12),
-                _kpi('Engagement', totalEngagement.toString()),
+                _kpi(Provider.of<LanguageProvider>(context, listen: false).t('monetization.engagement'), totalEngagement.toString()),
               ],
             ),
           ),
@@ -237,7 +237,7 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Revenue trend',
+                  Provider.of<LanguageProvider>(context, listen: false).t('monetization.revenue_trend'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -371,9 +371,9 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
           spacing: 8,
           runSpacing: 6,
           children: [
-            _pill('Earnings', '\$${e.earnings.toStringAsFixed(2)}'),
-            _pill('Views', e.impressions.toString()),
-            _pill('Engagement', engagement.toString()),
+            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.earnings'), '\$${e.earnings.toStringAsFixed(2)}'),
+            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.views'), e.impressions.toString()),
+            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.engagement'), engagement.toString()),
           ],
         ),
       ),

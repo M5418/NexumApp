@@ -18,6 +18,8 @@ import 'widgets/auto_play_video.dart';
 import 'widgets/post_options_menu.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/comment_bottom_sheet.dart';
+import 'other_user_profile_page.dart';
+import 'profile_page.dart';
 import 'core/time_utils.dart';
 import 'repositories/firebase/firebase_translate_repository.dart';
 import 'core/i18n/language_provider.dart';
@@ -596,10 +598,17 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     final byId = {for (final p in profiles) p.uid: p};
     return list.map((m) {
       final u = byId[m.authorId];
+      // Build full name for comment author
+      final commentFirstName = u?.firstName?.trim() ?? '';
+      final commentLastName = u?.lastName?.trim() ?? '';
+      final commentFullName = (commentFirstName.isNotEmpty || commentLastName.isNotEmpty)
+          ? '$commentFirstName $commentLastName'.trim()
+          : (u?.displayName ?? u?.username ?? 'User');
+      
       return Comment(
         id: m.id,
         userId: m.authorId,
-        userName: (u?.displayName ?? u?.username ?? 'User'),
+        userName: commentFullName,
         userAvatarUrl: (u?.avatarUrl ?? ''),
         text: m.text,
         createdAt: m.createdAt,
@@ -785,42 +794,88 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                   // Author info
                                   Row(
                                     children: [
-                                      Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          image: DecorationImage(
-                                            image: NetworkImage(
-                                                _post!.authorAvatarUrl),
-                                            fit: BoxFit.cover,
+                                      GestureDetector(
+                                        onTap: () {
+                                          final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                                          if (currentUserId == _post!.authorId) {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (context) => const ProfilePage()),
+                                            );
+                                          } else {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => OtherUserProfilePage(
+                                                  userId: _post!.authorId,
+                                                  userName: _post!.authorName,
+                                                  userAvatarUrl: _post!.authorAvatarUrl,
+                                                  userBio: '',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        child: Container(
+                                          width: 50,
+                                          height: 50,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            image: DecorationImage(
+                                              image: NetworkImage(
+                                                  _post!.authorAvatarUrl),
+                                              fit: BoxFit.cover,
+                                            ),
                                           ),
                                         ),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _post!.authorName,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                                color: isDark
-                                                    ? Colors.white
-                                                    : Colors.black,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                                            if (currentUserId == _post!.authorId) {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(builder: (context) => const ProfilePage()),
+                                              );
+                                            } else {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => OtherUserProfilePage(
+                                                    userId: _post!.authorId,
+                                                    userName: _post!.authorName,
+                                                    userAvatarUrl: _post!.authorAvatarUrl,
+                                                    userBio: '',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                _post!.authorName,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : Colors.black,
+                                                ),
                                               ),
-                                            ),
-                                            Text(
-                                              TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
-                                              style: GoogleFonts.inter(
-                                                fontSize: 13,
-                                                color: const Color(0xFF666666),
+                                              Text(
+                                                TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13,
+                                                  color: const Color(0xFF666666),
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ],

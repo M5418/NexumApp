@@ -5,8 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'core/i18n/language_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'core/i18n/language_provider.dart';
+import 'other_user_profile_page.dart';
+import 'profile_page.dart';
+import 'repositories/interfaces/story_repository.dart';
 
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/report_bottom_sheet.dart';
@@ -191,67 +195,65 @@ class _StoryViewerPageState extends State<StoryViewerPage>
 
   Future<void> _initFromBackend() async {
     try {
-      // Placeholder: fetch stories will be handled elsewhere
+      final repo = context.read<StoryRepository>();
       final users = <StoryUser>[];
-      // Original code would process responses here
-      // Commented out since responses is empty
-      /*
-      for (final resp in responses) {
-        final u = resp.user;
+      for (final ring in widget.rings) {
+        final userId = (ring['userId'] ?? '').toString();
+        if (userId.isEmpty) continue;
+        final models = await repo.getUserStories(userId);
+        if (models.isEmpty) continue;
         final items = <StoryItem>[];
         final ids = <String?>[];
-        for (final it in resp.items) {
-          switch (it.mediaType) {
+        for (final s in models) {
+          switch (s.mediaType) {
             case 'image':
               items.add(StoryItem.image(
-                imageUrl: it.mediaUrl,
-                audioUrl: it.audioUrl,
-                audioTitle: it.audioTitle,
-                liked: it.liked,
-                likesCount: it.likesCount,
-                commentsCount: it.commentsCount,
+                imageUrl: s.mediaUrl,
+                audioUrl: s.audioUrl,
+                audioTitle: s.audioTitle,
+                liked: s.liked,
+                likesCount: s.likesCount,
+                commentsCount: s.commentsCount,
               ));
-              ids.add(it.id);
+              ids.add(s.id);
               break;
             case 'video':
               items.add(StoryItem.video(
-                videoUrl: it.mediaUrl,
-                liked: it.liked,
-                likesCount: it.likesCount,
-                commentsCount: it.commentsCount,
+                videoUrl: s.mediaUrl,
+                liked: s.liked,
+                likesCount: s.likesCount,
+                commentsCount: s.commentsCount,
               ));
-              ids.add(it.id);
+              ids.add(s.id);
               break;
             case 'text':
               Color? bg;
-              if (it.backgroundColor != null) {
-                bg = _parseHexColor(it.backgroundColor!);
-              }
+              final hex = s.backgroundColor?.toString();
+              if (hex != null && hex.isNotEmpty) bg = _parseHexColor(hex);
               items.add(StoryItem.text(
-                text: it.textContent,
+                text: s.textContent,
                 backgroundColor: bg,
-                liked: it.liked,
-                likesCount: it.likesCount,
-                commentsCount: it.commentsCount,
+                liked: s.liked,
+                likesCount: s.likesCount,
+                commentsCount: s.commentsCount,
               ));
-              ids.add(it.id);
+              ids.add(s.id);
               break;
             default:
-              break;
+              // Fallback treat as image
+              items.add(StoryItem.image(imageUrl: s.mediaUrl));
+              ids.add(s.id);
           }
         }
-        users.add(
-          StoryUser(
-            userId: u.id,
-            name: u.name,
-            handle: '@${u.username}',
-            avatarUrl: u.avatarUrl, // no forced fallback
-            items: items,
-            itemIds: ids,
-          ),
-        );
+        users.add(StoryUser(
+          userId: userId,
+          name: (ring['label'] ?? '').toString(),
+          handle: '@',
+          avatarUrl: (ring['imageUrl'] ?? '').toString(),
+          items: items,
+          itemIds: ids,
+        ));
       }
-      */
 
       _users = users;
       _frames = _flattenFrames(_users);
@@ -355,6 +357,9 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   }
 
   Future<void> _startPlaybackForFrame(_StoryFrame frame) async {
+    // Capture repository before async gap
+    final storyRepo = context.read<StoryRepository>();
+    
     _disposePlayers();
     if (frame.item.type == StoryMediaType.video) {
       final url = frame.item.videoUrl;
@@ -379,7 +384,9 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     // Mark as viewed
     final sid = frame.storyId;
     if (sid != null) {
-      // Placeholder: mark viewed will be handled elsewhere
+      try {
+        await storyRepo.viewStory(sid);
+      } catch (_) {}
     }
     _startProgressForFrame(frame);
   }
@@ -680,7 +687,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     }
   }
 
-   Widget _header() {
+  Widget _header() {
     final f = _frames[_currentIndex];
     return Row(
       children: [
@@ -699,44 +706,90 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         ),
         const SizedBox(width: 8),
         // Avatar
-        Container(
-          width: 36,
-          height: 36,
-          clipBehavior: Clip.antiAlias,
-          decoration: const BoxDecoration(shape: BoxShape.circle),
-          child: (f.user.avatarUrl != null && f.user.avatarUrl!.isNotEmpty)
-              ? CachedNetworkImage(
-                  imageUrl: f.user.avatarUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (c, u) =>
-                      Container(color: const Color(0xFF666666).withValues(alpha: 51)),
-                  errorWidget: (c, u, e) =>
-                      const Icon(Icons.person, color: Colors.white, size: 18),
-                )
-              : const Icon(Icons.person, color: Colors.white, size: 18),
+        GestureDetector(
+          onTap: () {
+            final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+            if (currentUserId == f.user.userId) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfilePage()),
+              );
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OtherUserProfilePage(
+                    userId: f.user.userId,
+                    userName: f.user.name,
+                    userAvatarUrl: f.user.avatarUrl ?? '',
+                    userBio: '',
+                  ),
+                ),
+              );
+            }
+          },
+          child: Container(
+            width: 36,
+            height: 36,
+            clipBehavior: Clip.antiAlias,
+            decoration: const BoxDecoration(shape: BoxShape.circle),
+            child: (f.user.avatarUrl != null && f.user.avatarUrl!.isNotEmpty)
+                ? CachedNetworkImage(
+                    imageUrl: f.user.avatarUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (c, u) =>
+                        Container(color: const Color(0xFF666666).withValues(alpha: 51)),
+                    errorWidget: (c, u, e) =>
+                        const Icon(Icons.person, color: Colors.white, size: 18),
+                  )
+                : const Icon(Icons.person, color: Colors.white, size: 18),
+          ),
         ),
         const SizedBox(width: 8),
         // Full name and subline
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                f.user.name, // Full name
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+          child: GestureDetector(
+            onTap: () {
+              final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+              if (currentUserId == f.user.userId) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OtherUserProfilePage(
+                      userId: f.user.userId,
+                      userName: f.user.name,
+                      userAvatarUrl: f.user.avatarUrl ?? '',
+                      userBio: '',
+                    ),
+                  ),
+                );
+              }
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  f.user.name, // Full name
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              Text(
-                Provider.of<LanguageProvider>(context, listen: false).t('story.connect'),
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: Colors.white.withValues(alpha: 179),
+                Text(
+                  Provider.of<LanguageProvider>(context, listen: false).t('story.connect'),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 179),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         // Music chip when image story has audio
@@ -873,8 +926,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       final sid = _frames[_currentIndex].storyId;
       if (sid == null) return;
       try {
-        // Placeholder: reply will be handled elsewhere
-        await Future.delayed(const Duration(milliseconds: 200));
+        await context.read<StoryRepository>().replyToStory(storyId: sid, message: text);
         _commentController.clear();
         _snack('Reply sent', const Color(0xFFBFAE01));
       } catch (e) {
@@ -946,9 +998,11 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             final sid = _frames.isNotEmpty ? _frames[_currentIndex].storyId : null;
             if (sid == null) return;
             try {
-              // Uses StoriesApi.likeStory (void). Toggle UI state locally.
-              // Placeholder: like will be handled elsewhere
-              await Future.delayed(const Duration(milliseconds: 200));
+              if (_liked) {
+                await context.read<StoryRepository>().unlikeStory(sid);
+              } else {
+                await context.read<StoryRepository>().likeStory(sid);
+              }
               if (!mounted) return;
               setState(() {
                 _liked = !_liked;
@@ -972,5 +1026,15 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         ),
       ],
     );
+  }
+
+  Color _parseHexColor(String input) {
+    var hex = input.trim();
+    if (hex.startsWith('#')) hex = hex.substring(1);
+    if (hex.length == 6) {
+      hex = 'FF$hex';
+    }
+    final value = int.tryParse(hex, radix: 16) ?? 0xFFFF0000;
+    return Color(value);
   }
 }

@@ -39,6 +39,10 @@ class _HomePostCardState extends State<HomePostCard> {
   bool _showTranslation = false;
   String? _translatedText;
   String? _lastUgcCode;
+  
+  // Local state for likes (like comments do)
+  late bool _isLiked;
+  late int _likeCount;
 
   Future<void> _translateCurrentText(String target) async {
     final text = widget.post.text.trim();
@@ -51,6 +55,14 @@ class _HomePostCardState extends State<HomePostCard> {
         _translatedText = translated;
       });
     } catch (_) {}
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize local state from widget props (like comments do)
+    _isLiked = widget.post.userReaction != null;
+    _likeCount = widget.post.counts.likes.clamp(0, 999999);
   }
 
   @override
@@ -97,25 +109,6 @@ class _HomePostCardState extends State<HomePostCard> {
       return widget.post.originalPostId!;
     }
     return widget.post.id;
-  }
-
-  IconData _getReactionIcon(ReactionType? reaction) {
-    switch (reaction) {
-      case ReactionType.diamond:
-        return Icons.workspace_premium;
-      case ReactionType.like:
-        return Icons.thumb_up_alt;
-      case ReactionType.heart:
-        return Icons.favorite;
-      case ReactionType.wow:
-        return Icons.emoji_emotions;
-      default:
-        return Icons.thumb_up_alt_outlined;
-    }
-  }
-
-  Color _getReactionColor(ReactionType? reaction) {
-    return reaction != null ? const Color(0xFFBFAE01) : const Color(0xFF666666);
   }
 
   Color _getTextColor() {
@@ -419,17 +412,21 @@ class _HomePostCardState extends State<HomePostCard> {
               Builder(
                 builder: (likeButtonContext) => GestureDetector(
                   onTap: () {
-                    if (widget.post.userReaction != null) {
-                      widget.onReactionChanged?.call(
-                        _effectivePostId(),
-                        widget.post.userReaction!,
-                      );
-                    } else {
-                      widget.onReactionChanged?.call(
-                        _effectivePostId(),
-                        ReactionType.like,
-                      );
-                    }
+                    // Optimistic update (like comments do)
+                    setState(() {
+                      _isLiked = !_isLiked;
+                      if (_isLiked) {
+                        _likeCount++;
+                      } else {
+                        _likeCount = (_likeCount - 1).clamp(0, 999999);
+                      }
+                    });
+                    
+                    // Call backend
+                    widget.onReactionChanged?.call(
+                      _effectivePostId(),
+                      _isLiked ? ReactionType.like : ReactionType.like, // Toggle
+                    );
                   },
                   onLongPress: () {
                     final RenderBox renderBox =
@@ -448,13 +445,13 @@ class _HomePostCardState extends State<HomePostCard> {
                   child: Row(
                     children: [
                       Icon(
-                        _getReactionIcon(widget.post.userReaction),
+                        _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
                         size: 20,
-                        color: _getReactionColor(widget.post.userReaction),
+                        color: _isLiked ? const Color(0xFFBFAE01) : const Color(0xFF666666),
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        widget.post.counts.likes.toString(),
+                        _likeCount.toString(),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: _getTextColor(),

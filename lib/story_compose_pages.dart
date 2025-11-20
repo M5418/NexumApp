@@ -4,11 +4,13 @@ import 'dart:io' show File, Directory; // Only used on non-web platforms
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 
 import 'core/files_api.dart';
+import 'repositories/interfaces/story_repository.dart';
 
 enum StoryComposeType { image, video, text, mixed }
 
@@ -58,6 +60,11 @@ class StoryComposerPopup {
         return const MixedMediaStoryComposerPage();
     }
   }
+}
+
+String _colorToHex(Color c) {
+  final rgb = (c.toARGB32() & 0x00FFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+  return '#$rgb';
 }
 
 // Bottom sheet to pick the composer type
@@ -473,78 +480,93 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
       );
 
       final filesApi = FilesApi();
-      // Placeholder: stories will be handled elsewhere
-      final payload = <Map<String, dynamic>>[];
+      final storyRepo = context.read<StoryRepository>();
+      int ok = 0;
+      Object? lastErr;
 
       for (final it in _items) {
-        if (it.isVideo) {
-          if (kIsWeb) {
-            final bytes = await it.file.readAsBytes();
-            final mime = it.file.mimeType ?? 'video/mp4';
-            final ext = mime.contains('webm')
-                ? 'webm'
-                : (mime.contains('ogg') ? 'ogg' : 'mp4');
-            final up = await _uploadBytesWeb(bytes, ext: ext, mime: mime);
-            payload.add({'media_type': 'video', 'media_url': up['url'], 'privacy': 'public'});
-          } else {
-            final up = await filesApi.uploadFile(File(it.file.path));
-            payload.add({'media_type': 'video', 'media_url': up['url'], 'privacy': 'public'});
-          }
-        } else {
-          if (kIsWeb) {
-            final bytes = it.editedImageBytes ?? it.imageBytes ?? await it.file.readAsBytes();
-            final mime = it.file.mimeType ?? 'image/jpeg';
-            final ext = mime.contains('png')
-                ? 'png'
-                : (mime.contains('webp') ? 'webp' : 'jpg');
-            final up = await _uploadBytesWeb(bytes, ext: ext, mime: mime);
-
-            String? audioUrl;
-            String? audioTitle;
-            if (_selectedTrack != null) {
-              // Replace with real music URL when available
-              audioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-              audioTitle = _selectedTrack!.title;
-            }
-
-            payload.add({
-              'media_type': 'image',
-              'media_url': up['url'],
-              if (audioUrl != null) 'audio_url': audioUrl,
-              if (audioTitle != null) 'audio_title': audioTitle,
-              'privacy': 'public',
-            });
-          } else {
-            if (it.editedImageBytes != null) {
-              final f = await _tmpWrite(it.editedImageBytes!, ext: 'jpg');
-              final up = await filesApi.uploadFile(f);
-              payload.add({'media_type': 'image', 'media_url': up['url'], 'privacy': 'public'});
+        try {
+          if (it.isVideo) {
+            if (kIsWeb) {
+              final bytes = await it.file.readAsBytes();
+              final mime = it.file.mimeType ?? 'video/mp4';
+              final ext = mime.contains('webm')
+                  ? 'webm'
+                  : (mime.contains('ogg') ? 'ogg' : 'mp4');
+              final up = await _uploadBytesWeb(bytes, ext: ext, mime: mime);
+              await storyRepo.createStory(
+                mediaType: 'video',
+                mediaUrl: up['url'],
+                durationSec: (it.videoDuration?.inSeconds ?? 30).clamp(1, 60),
+              );
             } else {
               final up = await filesApi.uploadFile(File(it.file.path));
-              payload.add({'media_type': 'image', 'media_url': up['url'], 'privacy': 'public'});
+              await storyRepo.createStory(
+                mediaType: 'video',
+                mediaUrl: up['url'],
+                durationSec: (it.videoDuration?.inSeconds ?? 30).clamp(1, 60),
+              );
             }
-
-            // Optional music on image
-            if (_selectedTrack != null) {
-              payload.last['audio_url'] = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-              payload.last['audio_title'] = _selectedTrack!.title;
+          } else {
+            if (kIsWeb) {
+              final bytes = it.editedImageBytes ?? it.imageBytes ?? await it.file.readAsBytes();
+              final mime = it.file.mimeType ?? 'image/jpeg';
+              final ext = mime.contains('png')
+                  ? 'png'
+                  : (mime.contains('webp') ? 'webp' : 'jpg');
+              final up = await _uploadBytesWeb(bytes, ext: ext, mime: mime);
+              await storyRepo.createStory(
+                mediaType: 'image',
+                mediaUrl: up['url'],
+                audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                audioTitle: _selectedTrack?.title,
+                durationSec: 15,
+              );
+            } else {
+              if (it.editedImageBytes != null) {
+                final f = await _tmpWrite(it.editedImageBytes!, ext: 'jpg');
+                final up = await filesApi.uploadFile(f);
+                await storyRepo.createStory(
+                  mediaType: 'image',
+                  mediaUrl: up['url'],
+                  audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                  audioTitle: _selectedTrack?.title,
+                  durationSec: 15,
+                );
+              } else {
+                final up = await filesApi.uploadFile(File(it.file.path));
+                await storyRepo.createStory(
+                  mediaType: 'image',
+                  mediaUrl: up['url'],
+                  audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                  audioTitle: _selectedTrack?.title,
+                  durationSec: 15,
+                );
+              }
             }
           }
+          ok++;
+        } catch (e) {
+          lastErr = e;
         }
       }
 
-      // Placeholder: create stories batch
-      await Future.delayed(const Duration(milliseconds: 500));
-
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Story posted!', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
-      );
-      Navigator.pop(context, true);
+      if (ok > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ok == 1 ? 'Story posted!' : '$ok stories posted!', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
+        );
+        Navigator.pop(context, true);
+      } else {
+        final msg = lastErr?.toString() ?? 'Unknown error';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to post story: $msg', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to post story', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text('Failed to post story: ${e.toString()}', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
     }
   }
@@ -940,17 +962,18 @@ class _TextStoryComposerPageState extends State<TextStoryComposerPage> {
       return;
     }
     try {
-      // Placeholder: story creation will be handled elsewhere (with background color)
-      await Future.delayed(const Duration(milliseconds: 500));
+      final storyRepo = context.read<StoryRepository>();
+      final hex = _colorToHex(_bg);
+      await storyRepo.createStory(mediaType: 'text', textContent: text, backgroundColor: hex, durationSec: 15);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Story posted!', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
       );
       Navigator.pop(context, true);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed to post story', style: GoogleFonts.inter()), backgroundColor: Colors.red));
+          .showSnackBar(SnackBar(content: Text('Failed to post story: ${e.toString()}', style: GoogleFonts.inter()), backgroundColor: Colors.red));
     }
   }
 

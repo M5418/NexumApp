@@ -293,7 +293,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                             children: [
                               const SizedBox(height: 8),
                               Text(
-                                "Tell us about yourself",
+                                lang.t('profile_bio.heading'),
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   fontSize: 24,
@@ -303,7 +303,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Write a short bio that describes who you are and what you do',
+                                lang.t('profile_bio.subtitle'),
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
@@ -401,7 +401,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                                 elevation: 0,
                               ),
                               child: Text(
-                                _isSaving ? 'Saving...' : 'Next',
+                                _isSaving ? lang.t('profile_bio.saving') : lang.t('profile_bio.next'),
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

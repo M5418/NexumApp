@@ -2,9 +2,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:math';
 import 'package:firebase_storage/firebase_storage.dart' as fs;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class FilesApi {
+  fs.FirebaseStorage get _storage => fs.FirebaseStorage.instanceFor(
+        bucket: Firebase.app().options.storageBucket,
+      );
 
   Future<Map<String, String>> uploadFile(File file) async {
     final ext = _extensionOf(file.path);
@@ -21,7 +25,7 @@ class FilesApi {
     final key = 'uploads/$uid/${DateTime.now().microsecondsSinceEpoch}-$r.$ext';
 
     // 2) Upload to Firebase Storage
-    final ref = fs.FirebaseStorage.instance.ref(key);
+    final ref = _storage.ref(key);
     await ref.putFile(
       file,
       fs.SettableMetadata(contentType: _contentTypeForExt(ext)),
@@ -46,7 +50,7 @@ class FilesApi {
     final key = 'uploads/$uid/${DateTime.now().microsecondsSinceEpoch}-$r.$ext';
 
     // 2) Upload bytes
-    final ref = fs.FirebaseStorage.instance.ref(key);
+    final ref = _storage.ref(key);
     await ref.putData(
       bytes,
       fs.SettableMetadata(contentType: _contentTypeForExt(ext)),

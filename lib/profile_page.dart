@@ -18,9 +18,11 @@ import 'premium_subscription_page.dart';
 import 'sign_in_page.dart';
 import 'core/profile_api.dart';
 import 'repositories/firebase/firebase_post_repository.dart';
+import 'core/post_events.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'repositories/firebase/firebase_kyc_repository.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart' as fb;
@@ -49,22 +51,25 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Activity: posts I engaged with (like/bookmark/share/repost), excluding my own original posts
   List<Post> _activityPosts = [];
-  bool _loadingActivity = true;
+  bool _loadingActivity = false;
   String? _errorActivity;
 
   // Posts: created by me
   List<Post> _myPosts = [];
-  bool _loadingMyPosts = true;
+  bool _loadingMyPosts = false;
   String? _errorMyPosts;
 
   // Media grid: image URLs from my posts with post IDs
   List<Map<String, String>> _mediaItems = []; // {imageUrl, postId}
-  bool _loadingMedia = true;
+  bool _loadingMedia = false;
 
   // Podcasts: created by me
   List<Map<String, dynamic>> _myPodcasts = [];
-  bool _loadingPodcasts = true;
+  bool _loadingPodcasts = false;
   String? _errorPodcasts;
+  
+  // Listen to post updates for real-time like/bookmark sync
+  StreamSubscription<PostUpdateEvent>? _postEventsSub;
 
   // Notifications badge
   int _unreadNotifications = 0;
@@ -72,12 +77,19 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    // Start with loading states as false since data hasn't been requested yet
+    _loadingMyPosts = false;
+    _loadingActivity = false;
+    _loadingMedia = false;
+    _loadingPodcasts = false;
+    
     _loadProfile();
     _loadUnreadNotifications();
   }
 
   @override
   void dispose() {
+    _postEventsSub?.cancel();
     super.dispose();
   }
 
@@ -85,20 +97,63 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final res = await ProfileApi().me();
       final data = Map<String, dynamic>.from(res['data'] ?? {});
-      final meId = (data['user_id'] ?? '').toString();
+      
+      // The ProfileApi.me() returns user ID as 'id'
+      String meId = (data['id'] ?? '').toString();
+      if (meId.isEmpty) {
+        meId = (data['user_id'] ?? '').toString();
+      }
+      if (meId.isEmpty) {
+        meId = (data['uid'] ?? '').toString();
+      }
+      
+      // Fallback: Get directly from FirebaseAuth
+      if (meId.isEmpty) {
+        final fbAuth = fb.FirebaseAuth.instance;
+        final currentUser = fbAuth.currentUser;
+        if (currentUser != null) {
+          meId = currentUser.uid;
+          debugPrint('📋 Using FirebaseAuth UID as fallback: $meId');
+        }
+      }
+      
+      debugPrint('📋 Profile loaded. User ID: $meId');
+      debugPrint('📋 Profile data keys: ${data.keys.toList()}');
+      
       if (!mounted) return;
       setState(() {
         _profile = data;
         _myUserId = meId.isNotEmpty ? meId : null;
         _loadingProfile = false;
       });
-      if (_myUserId != null) {
+      if (_myUserId != null && _myUserId!.isNotEmpty) {
+        debugPrint('📋 Loading all tabs for user: $_myUserId');
         _loadAllTabs();
+      } else {
+        // No user ID, make sure all loading states are false
+        if (mounted) {
+          setState(() {
+            _loadingMyPosts = false;
+            _loadingActivity = false;
+            _loadingMedia = false;
+            _loadingPodcasts = false;
+            _errorMyPosts = 'User not authenticated';
+            _errorActivity = 'User not authenticated';
+            _errorPodcasts = 'User not authenticated';
+          });
+        }
       }
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loadingProfile = false;
+        _loadingMyPosts = false;
+        _loadingActivity = false;
+        _loadingMedia = false;
+        _loadingPodcasts = false;
+        _errorMyPosts = 'Failed to load profile';
+        _errorActivity = 'Failed to load profile';
+        _errorPodcasts = 'Failed to load profile';
       });
     }
   }
@@ -198,11 +253,20 @@ class _ProfilePageState extends State<ProfilePage> {
     final contentSource = original.isNotEmpty ? original : p;
 
     // Author (from content source)
+    // Try both 'author' and 'user' fields
     final author = asMap(contentSource['author']);
-    final authorId = (author['id'] ?? author['uid'] ?? author['user_id'] ?? contentSource['author_id'] ?? p['author_id'] ?? p['user_id'] ?? '').toString();
-    final authorName = (author['name'] ?? author['username'] ?? 'User')
-        .toString();
-    final authorAvatar = (author['avatarUrl'] ?? author['avatar_url'] ?? '')
+    final user = asMap(contentSource['user']);
+    final authorData = author.isNotEmpty ? author : user;
+    
+    final authorId = (authorData['id'] ?? authorData['uid'] ?? authorData['user_id'] ?? contentSource['author_id'] ?? p['author_id'] ?? p['user_id'] ?? '').toString();
+    
+    // Build full name from firstName and lastName, fallback to name or username
+    final authorFirstName = (authorData['firstName'] ?? authorData['first_name'] ?? '').toString().trim();
+    final authorLastName = (authorData['lastName'] ?? authorData['last_name'] ?? '').toString().trim();
+    final authorName = (authorFirstName.isNotEmpty || authorLastName.isNotEmpty)
+        ? '$authorFirstName $authorLastName'.trim()
+        : (authorData['name'] ?? authorData['displayName'] ?? authorData['username'] ?? 'User').toString();
+    final authorAvatar = (authorData['avatarUrl'] ?? authorData['avatar_url'] ?? authorData['profile_photo_url'] ?? '')
         .toString();
 
     // Counts
@@ -327,9 +391,15 @@ class _ProfilePageState extends State<ProfilePage> {
           (p['user_id'] != null) &&
           p['repost_of'] != null &&
           p['user_id'].toString() == _myUserId;
+      // Build full name for reposter
+      final repostFirstName = (repostAuthor['firstName'] ?? repostAuthor['first_name'] ?? '').toString().trim();
+      final repostLastName = (repostAuthor['lastName'] ?? repostAuthor['last_name'] ?? '').toString().trim();
+      final repostName = (repostFirstName.isNotEmpty || repostLastName.isNotEmpty)
+          ? '$repostFirstName $repostLastName'.trim()
+          : (repostAuthor['name'] ?? repostAuthor['displayName'] ?? repostAuthor['username'] ?? 'User').toString();
+      
       repostedBy = RepostedBy(
-        userName: (repostAuthor['name'] ?? repostAuthor['username'] ?? 'User')
-            .toString(),
+        userName: repostName,
         userAvatarUrl:
             (repostAuthor['avatarUrl'] ?? repostAuthor['avatar_url'] ?? '')
                 .toString(),
@@ -384,18 +454,45 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadAllTabs() async {
-    _loadMyPosts();
-    _loadActivity();
-    _loadMyPodcasts();
+    // Load tabs sequentially to avoid too many simultaneous setState calls
+    if (!mounted) return;
+    await _loadMyPosts();
+    if (!mounted) return;
+    await _loadActivity();
+    if (!mounted) return;
+    await _loadMyPodcasts();
   }
 
   Future<void> _loadMyPosts() async {
-    if (_myUserId == null || _myUserId!.isEmpty) return;
+    if (_myUserId == null || _myUserId!.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _loadingMyPosts = false;
+          _loadingMedia = false;
+          _errorMyPosts = 'No user ID available';
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _loadingMyPosts = true;
+        _loadingMedia = true;
+        _errorMyPosts = null;
+      });
+    }
 
     try {
+      debugPrint('📝 Loading posts for user: $_myUserId');
+      
       final postRepo = FirebasePostRepository();
       final userRepo = FirebaseUserRepository();
       final postModels = await postRepo.getUserPosts(uid: _myUserId!, limit: 50);
+      
+      debugPrint('📝 Found ${postModels.length} posts');
+      
+      if (!mounted) return;
 
       final newItems = <Map<String, dynamic>>[];
       final originals = <String, Map<String, dynamic>>{};
@@ -405,24 +502,59 @@ class _ProfilePageState extends State<ProfilePage> {
         final author = await userRepo.getUserProfile(model.authorId);
         final isRepost = model.repostOf != null && model.repostOf!.isNotEmpty;
         
+        // Check backend for like/bookmark status
+        bool isLiked = false;
+        bool isBookmarked = false;
+        if (_myUserId != null) {
+          isLiked = await postRepo.hasUserLikedPost(postId: model.id, uid: _myUserId!);
+          isBookmarked = await postRepo.hasUserBookmarkedPost(postId: model.id, uid: _myUserId!);
+        }
+        
+        // Convert mediaUrls list to media array with proper structure
+        final mediaArray = model.mediaUrls.map((url) {
+          // Determine if it's an image or video based on extension
+          final lowercaseUrl = url.toLowerCase();
+          final isVideo = lowercaseUrl.contains('.mp4') || 
+                         lowercaseUrl.contains('.mov') || 
+                         lowercaseUrl.contains('.avi') ||
+                         lowercaseUrl.contains('video');
+          
+          return {
+            'url': url,
+            'type': isVideo ? 'video' : 'image',
+          };
+        }).toList();
+        
+        // Build full name from firstName and lastName
+        final firstName = author?.firstName?.trim() ?? '';
+        final lastName = author?.lastName?.trim() ?? '';
+        final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
+            ? '$firstName $lastName'.trim()
+            : (author?.displayName ?? author?.username ?? 'User');
+        
+        
         final mp = {
           'id': model.id,
           'user_id': model.authorId,
           'user': {
-            'name': author?.displayName ?? author?.username ?? 'User',
+            'name': fullName,
             'profile_photo_url': author?.avatarUrl ?? '',
           },
           'text': model.text,
-          'media': model.mediaUrls,
+          'media': mediaArray,
           'created_at': model.createdAt.toIso8601String(),
           'is_repost': isRepost,
           'original_post_id': model.repostOf,
           'counts': {
-            'likes': model.summary.likes,
-            'comments': model.summary.comments,
-            'shares': model.summary.shares,
-            'reposts': model.summary.reposts,
-            'bookmarks': model.summary.bookmarks,
+            'likes': model.summary.likes.clamp(0, 999999),
+            'comments': model.summary.comments.clamp(0, 999999),
+            'shares': model.summary.shares.clamp(0, 999999),
+            'reposts': model.summary.reposts.clamp(0, 999999),
+            'bookmarks': model.summary.bookmarks.clamp(0, 999999),
+          },
+          'me': {
+            'liked': isLiked,
+            'bookmarked': isBookmarked,
           },
         };
         newItems.add(mp);
@@ -432,11 +564,18 @@ class _ProfilePageState extends State<ProfilePage> {
           final original = await postRepo.getPost(model.repostOf!);
           if (original != null) {
             final origAuthor = await userRepo.getUserProfile(original.authorId);
+            // Build full name for original author
+            final origFirstName = origAuthor?.firstName?.trim() ?? '';
+            final origLastName = origAuthor?.lastName?.trim() ?? '';
+            final origFullName = (origFirstName.isNotEmpty || origLastName.isNotEmpty)
+                ? '$origFirstName $origLastName'.trim()
+                : (origAuthor?.displayName ?? origAuthor?.username ?? 'User');
+            
             originals[model.repostOf!] = {
               'id': original.id,
               'user_id': original.authorId,
               'user': {
-                'name': origAuthor?.displayName ?? origAuthor?.username ?? 'User',
+                'name': origFullName,
                 'profile_photo_url': origAuthor?.avatarUrl ?? '',
               },
               'text': original.text,
@@ -456,31 +595,52 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       final posts = newItems.map(_mapRawPostToModel).toList();
+      
+      debugPrint('📝 Mapped ${posts.length} posts to Post models');
 
-      // Build media grid only from my posts containing images
+      // Build media grid: one thumbnail per post that has media
+      // For multi-image posts, show only the first image
       final mediaItems = <Map<String, String>>[];
       for (final post in posts) {
-        if (post.mediaType == MediaType.image && post.imageUrls.isNotEmpty) {
+        debugPrint('📝 Post ${post.id}: mediaType=${post.mediaType}, imageUrls=${post.imageUrls.length}');
+        
+        // Include all posts with images (single or multiple)
+        if ((post.mediaType == MediaType.image || post.mediaType == MediaType.images) && 
+            post.imageUrls.isNotEmpty) {
+          // Always use the first image as thumbnail
           mediaItems.add({'imageUrl': post.imageUrls.first, 'postId': post.id});
-        } else if (post.mediaType == MediaType.images &&
-            post.imageUrls.length > 1) {
-          for (final url in post.imageUrls) {
-            mediaItems.add({'imageUrl': url, 'postId': post.id});
-          }
+          debugPrint('   ✅ Added media thumbnail: ${post.imageUrls.first}');
+        } else if (post.mediaType == MediaType.video && post.videoUrl != null && post.videoUrl!.isNotEmpty) {
+          // For videos, we could use a video icon or thumbnail
+          // For now, skip videos as they need special handling
+          debugPrint('   ⚠️ Skipped - video post (needs thumbnail)');
+        } else {
+          debugPrint('   ⚠️ Skipped - no media');
         }
       }
 
+      debugPrint('📝 Built ${mediaItems.length} media items from ${posts.length} posts');
+      
       if (!mounted) return;
+      
+      debugPrint('📝 Setting state with ${posts.length} posts');
+      
       setState(() {
         _myPosts = posts;
         _mediaItems = mediaItems;
         _loadingMyPosts = false;
         _loadingMedia = false;
       });
-    } catch (e) {
+      
+      debugPrint('📝 State set. Loading = $_loadingMyPosts, Posts = ${_myPosts.length}');
+    } catch (e, stack) {
+      debugPrint('❌ Error in _loadMyPosts: $e');
+      debugPrint('Stack trace: $stack');
+      
       if (!mounted) return;
+      
       setState(() {
-        _errorMyPosts = 'Failed to load your posts';
+        _errorMyPosts = 'Failed to load posts: $e';
         _loadingMyPosts = false;
         _loadingMedia = false;
       });
@@ -488,11 +648,22 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadActivity() async {
-    if (_myUserId == null) return;
-    setState(() {
-      _loadingActivity = true;
-      _errorActivity = null;
-    });
+    if (_myUserId == null || _myUserId!.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _loadingActivity = false;
+          _errorActivity = 'No user ID available';
+        });
+      }
+      return;
+    }
+    
+    if (mounted) {
+      setState(() {
+        _loadingActivity = true;
+        _errorActivity = null;
+      });
+    }
 
     try {
       final postRepo = FirebasePostRepository();
@@ -500,8 +671,13 @@ class _ProfilePageState extends State<ProfilePage> {
       
       // Get liked posts, bookmarked posts, and reposts for activity
       final likedPosts = await postRepo.getPostsLikedByUser(uid: _myUserId!, limit: 50);
+      if (!mounted) return;
+      
       final bookmarkedPosts = await postRepo.getPostsBookmarkedByUser(uid: _myUserId!, limit: 50);
+      if (!mounted) return;
+      
       final reposts = await postRepo.getUserReposts(uid: _myUserId!, limit: 50);
+      if (!mounted) return;
       
       // Combine all activity posts
       final allActivityModels = [...likedPosts, ...bookmarkedPosts, ...reposts];
@@ -522,11 +698,26 @@ class _ProfilePageState extends State<ProfilePage> {
         final repostId = model.repostOf;
         final isRepost = repostId != null && repostId.isNotEmpty;
         
+        // Check backend for like/bookmark status
+        bool isLiked = false;
+        bool isBookmarked = false;
+        if (_myUserId != null) {
+          isLiked = await postRepo.hasUserLikedPost(postId: model.id, uid: _myUserId!);
+          isBookmarked = await postRepo.hasUserBookmarkedPost(postId: model.id, uid: _myUserId!);
+        }
+        
+        // Build full name from firstName and lastName
+        final activityFirstName = author?.firstName?.trim() ?? '';
+        final activityLastName = author?.lastName?.trim() ?? '';
+        final activityFullName = (activityFirstName.isNotEmpty || activityLastName.isNotEmpty)
+            ? '$activityFirstName $activityLastName'.trim()
+            : (author?.displayName ?? author?.username ?? 'User');
+        
         final mp = {
           'id': model.id,
           'user_id': model.authorId,
           'user': {
-            'name': author?.displayName ?? author?.username ?? 'User',
+            'name': activityFullName,
             'profile_photo_url': author?.avatarUrl ?? '',
           },
           'text': model.text,
@@ -535,18 +726,28 @@ class _ProfilePageState extends State<ProfilePage> {
           'is_repost': isRepost,
           'repost_of': repostId,
           'counts': {
-            'likes': model.summary.likes,
-            'comments': model.summary.comments,
-            'shares': model.summary.shares,
-            'reposts': model.summary.reposts,
-            'bookmarks': model.summary.bookmarks,
+            'likes': model.summary.likes.clamp(0, 999999),
+            'comments': model.summary.comments.clamp(0, 999999),
+            'shares': model.summary.shares.clamp(0, 999999),
+            'reposts': model.summary.reposts.clamp(0, 999999),
+            'bookmarks': model.summary.bookmarks.clamp(0, 999999),
+          },
+          'me': {
+            'liked': isLiked,
+            'bookmarked': isBookmarked,
           },
         };
         
         // Add repost_author for reposts to show "You reposted this"
         if (isRepost) {
+          final repostFirstName = author?.firstName?.trim() ?? '';
+          final repostLastName = author?.lastName?.trim() ?? '';
+          final repostFullName = (repostFirstName.isNotEmpty || repostLastName.isNotEmpty)
+              ? '$repostFirstName $repostLastName'.trim()
+              : (author?.displayName ?? author?.username ?? 'User');
+          
           mp['repost_author'] = {
-            'name': author?.displayName ?? author?.username ?? 'User',
+            'name': repostFullName,
             'username': author?.username ?? '',
             'avatarUrl': author?.avatarUrl ?? '',
             'avatar_url': author?.avatarUrl ?? '',
@@ -560,11 +761,18 @@ class _ProfilePageState extends State<ProfilePage> {
           final original = await postRepo.getPost(repostId);
           if (original != null) {
             final origAuthor = await userRepo.getUserProfile(original.authorId);
+            // Build full name for original author in activity
+            final actOrigFirstName = origAuthor?.firstName?.trim() ?? '';
+            final actOrigLastName = origAuthor?.lastName?.trim() ?? '';
+            final actOrigFullName = (actOrigFirstName.isNotEmpty || actOrigLastName.isNotEmpty)
+                ? '$actOrigFirstName $actOrigLastName'.trim()
+                : (origAuthor?.displayName ?? origAuthor?.username ?? 'User');
+            
             originals[repostId] = {
               'id': original.id,
               'user_id': original.authorId,
               'user': {
-                'name': origAuthor?.displayName ?? origAuthor?.username ?? 'User',
+                'name': actOrigFullName,
                 'profile_photo_url': origAuthor?.avatarUrl ?? '',
               },
               'text': original.text,
@@ -587,32 +795,49 @@ class _ProfilePageState extends State<ProfilePage> {
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       if (!mounted) return;
+      
       setState(() {
         _activityPosts = results;
         _loadingActivity = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('❌ Error in _loadActivity: $e');
+      debugPrint('Stack trace: $stack');
+      
       if (!mounted) return;
+      
       setState(() {
-        _errorActivity = 'Failed to load activity';
+        _errorActivity = 'Failed to load activity: $e';
         _loadingActivity = false;
       });
     }
   }
 
   Future<void> _loadMyPodcasts() async {
-    if (_myUserId == null || _myUserId!.isEmpty) return;
+    if (_myUserId == null || _myUserId!.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _loadingPodcasts = false;
+          _errorPodcasts = 'No user ID available';
+        });
+      }
+      return;
+    }
     
-    setState(() {
-      _loadingPodcasts = true;
-      _errorPodcasts = null;
-    });
+    if (mounted) {
+      setState(() {
+        _loadingPodcasts = true;
+        _errorPodcasts = null;
+      });
+    }
 
     try {
       final repo = context.read<PodcastRepository>();
-      final models = await repo.listPodcasts(limit: 50, authorId: _myUserId);
+      // Use mine=true to get user's own podcasts
+      final models = await repo.listPodcasts(limit: 50, mine: true);
       
       if (!mounted) return;
+      
       setState(() {
         _myPodcasts = models.map((p) => {
           'id': p.id,
@@ -622,10 +847,14 @@ class _ProfilePageState extends State<ProfilePage> {
         }).toList();
         _loadingPodcasts = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('❌ Error in _loadMyPodcasts: $e');
+      debugPrint('Stack trace: $stack');
+      
       if (!mounted) return;
+      
       setState(() {
-        _errorPodcasts = 'Failed to load your podcasts';
+        _errorPodcasts = 'Failed to load podcasts: $e';
         _loadingPodcasts = false;
       });
     }
@@ -674,7 +903,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Row(
                         children: [
                           Text(
-                            'Premium',
+                            Provider.of<LanguageProvider>(context).t('premium.title'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
@@ -963,6 +1192,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                           Expanded(
                                             child: ElevatedButton(
                                               onPressed: () async {
+                                                final messenger = ScaffoldMessenger.of(context);
                                                 final expItems = experiences
                                                     .map(
                                                       (e) => ExperienceItem(
@@ -1086,6 +1316,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 if (!mounted) return;
                                                 final r = result;
                                                 if (r == null) return;
+                                                
                                                 final api = ProfileApi();
 
                                                 try {
@@ -1131,7 +1362,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 final updates =
                                                     <String, dynamic>{};
 
-                                                final newFullName = r.fullName
+                                                final newFullName = (r.fullName ?? '')
                                                     .trim();
                                                 if (newFullName.isNotEmpty &&
                                                     newFullName !=
@@ -1156,7 +1387,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       lastName;
                                                 }
 
-                                                final newUsername = r.username
+                                                final newUsername = (r.username ?? '')
                                                     .trim();
                                                 if (newUsername.isNotEmpty &&
                                                     newUsername !=
@@ -1164,10 +1395,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   updates['username'] =
                                                       newUsername;
                                                 }
-                                                updates['bio'] = r.bio;
+                                                updates['bio'] = r.bio ?? '';
 
                                                 updates['professional_experiences'] =
-                                                    r.experiences.map((e) {
+                                                    (r.experiences ?? []).map((e) {
                                                   final m = <String, dynamic>{
                                                     'title': e.title,
                                                   };
@@ -1179,8 +1410,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   return m;
                                                 }).toList();
 
-                                                updates['trainings'] = r
-                                                    .trainings
+                                                updates['trainings'] = (r
+                                                    .trainings ?? [])
                                                     .map((t) {
                                                   final m = <String, dynamic>{
                                                     'title': t.title,
@@ -1194,15 +1425,42 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 }).toList();
 
                                                 updates['interest_domains'] =
-                                                    r.interests;
+                                                    r.interests ?? [];
 
                                                 try {
+                                                  // Sync interests with community memberships BEFORE updating profile
+                                                  // This ensures we can detect what was removed
+                                                  await CommunityInterestSyncService().syncUserInterests(
+                                                    r.interests ?? [], 
+                                                    oldInterests: interests, // Pass current interests before update
+                                                  );
+                                                  
+                                                  // Now update the profile
                                                   await api.update(updates);
-                                                  // Sync interests with community memberships
-                                                  await CommunityInterestSyncService().syncUserInterests(r.interests);
-                                                } catch (_) {}
-
-                                                await _loadProfile();
+                                                  
+                                                  // Force reload profile to show new interests
+                                                  await _loadProfile();
+                                                  
+                                                  // Trigger a rebuild of the entire widget tree
+                                                  if (mounted) {
+                                                    setState(() {
+                                                      // This forces the FutureBuilder to rebuild
+                                                    });
+                                                  }
+                                                  
+                                                  // Show success message
+                                                  if (mounted) {
+                                                    messenger.showSnackBar(
+                                                      SnackBar(
+                                                        content: Text('Interests updated! Your communities have been synced.'),
+                                                        backgroundColor: Colors.green,
+                                                        duration: Duration(seconds: 2),
+                                                      ),
+                                                    );
+                                                  }
+                                                } catch (e) {
+                                                  // Error handled silently
+                                                }
                                                                                             },
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: const Color(
@@ -2046,6 +2304,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 Expanded(
                                                   child: ElevatedButton(
                                                     onPressed: () async {
+                                                      final messenger = ScaffoldMessenger.of(context);
                                                       final expItems = experiences
                                                           .map(
                                                             (
@@ -2187,6 +2446,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       if (!mounted) return;
                                                       final r = result;
                                                       if (r == null) return;
+                                                      
                                                       final api = ProfileApi();
 
                                                       try {
@@ -2234,7 +2494,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       final updates =
                                                           <String, dynamic>{};
 
-                                                      final newFullName = r.fullName
+                                                      final newFullName = (r.fullName ?? '')
                                                           .trim();
                                                       if (newFullName.isNotEmpty &&
                                                           newFullName !=
@@ -2259,7 +2519,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                             lastName;
                                                       }
 
-                                                      final newUsername = r.username
+                                                      final newUsername = (r.username ?? '')
                                                           .trim();
                                                       if (newUsername.isNotEmpty &&
                                                           newUsername !=
@@ -2268,10 +2528,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         updates['username'] =
                                                             newUsername;
                                                       }
-                                                      updates['bio'] = r.bio;
+                                                      updates['bio'] = r.bio ?? '';
 
                                                       updates['professional_experiences'] =
-                                                          r.experiences.map((e) {
+                                                          (r.experiences ?? []).map((e) {
                                                         final m = <String, dynamic>{
                                                           'title': e.title,
                                                         };
@@ -2283,7 +2543,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         return m;
                                                       }).toList();
 
-                                                      updates['trainings'] = r.trainings.map((t) {
+                                                      updates['trainings'] = (r.trainings ?? []).map((t) {
                                                         final m = <String, dynamic>{'title': t.title};
                                                         if ((t.subtitle ?? '').trim().isNotEmpty) {
                                                           m['subtitle'] = t.subtitle;
@@ -2291,15 +2551,42 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         return m;
                                                       }).toList();
 
-                                                      updates['interest_domains'] = r.interests;
+                                                      updates['interest_domains'] = r.interests ?? [];
 
                                                       try {
+                                                        // Sync interests with community memberships BEFORE updating profile
+                                                        // This ensures we can detect what was removed
+                                                        await CommunityInterestSyncService().syncUserInterests(
+                                                          r.interests ?? [], 
+                                                          oldInterests: interests, // Pass current interests before update
+                                                        );
+                                                        
+                                                        // Now update the profile
                                                         await api.update(updates);
-                                                        // Sync interests with community memberships
-                                                        await CommunityInterestSyncService().syncUserInterests(r.interests);
-                                                      } catch (_) {}
-
-                                                      await _loadProfile();
+                                                        
+                                                        // Force reload profile to show new interests
+                                                        await _loadProfile();
+                                                        
+                                                        // Trigger a rebuild of the entire widget tree
+                                                        if (mounted) {
+                                                          setState(() {
+                                                            // This forces the FutureBuilder to rebuild
+                                                          });
+                                                        }
+                                                        
+                                                        // Show success message
+                                                        if (mounted) {
+                                                          messenger.showSnackBar(
+                                                            SnackBar(
+                                                              content: Text('Interests updated! Your communities have been synced.'),
+                                                              backgroundColor: Colors.green,
+                                                              duration: Duration(seconds: 2),
+                                                            ),
+                                                          );
+                                                        }
+                                                      } catch (e) {
+                                                        // Error handled silently
+                                                      }
                                                                                                         },
                                                     style: ElevatedButton.styleFrom(
                                                       backgroundColor:
@@ -2850,7 +3137,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     size: 22,
                   ),
                   title: Text(
-                    'Premium',
+                    Provider.of<LanguageProvider>(context).t('premium.title'),
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -3000,7 +3287,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     size: 22,
                   ),
                   title: Text(
-                    'Logout',
+                    Provider.of<LanguageProvider>(context).t('common.logout'),
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -3383,16 +3670,32 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildMediaTab() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     if (_loadingMedia) {
       return const Center(child: CircularProgressIndicator());
     }
+    
     if (_mediaItems.isEmpty) {
-      return GridView.count(
-        primary: false,
-        crossAxisCount: 3,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-        children: const [],
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              size: 64,
+              color: isDark ? Colors.white30 : Colors.black26,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No media posts yet',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: isDark ? Colors.white70 : const Color(0xFF666666),
+              ),
+            ),
+          ],
+        ),
       );
     }
     return GridView.count(

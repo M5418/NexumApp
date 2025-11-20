@@ -50,11 +50,8 @@ class FirebaseInvitationRepository implements InvitationRepository {
         final model = await _fromFirestoreWithUsers(doc);
         models.add(model);
       }
-      print('✅ Sent invitations fetched: ${models.length} items for user $userId');
       return models;
     } catch (e) {
-      print('❌ Invitations.getSentInvitations error: $e');
-      print('🔍 Check: 1) Firestore rules for invitations 2) Auth status');
       rethrow;
     }
   }
@@ -74,11 +71,8 @@ class FirebaseInvitationRepository implements InvitationRepository {
         final model = await _fromFirestoreWithUsers(doc);
         models.add(model);
       }
-      print('✅ Received invitations fetched: ${models.length} items for user $userId');
       return models;
     } catch (e) {
-      print('❌ Invitations.getReceivedInvitations error: $e');
-      print('🔍 Check: 1) Firestore rules for invitations 2) Auth status 3) Composite index');
       rethrow;
     }
   }

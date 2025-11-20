@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'models/message.dart';
 import 'widgets/message_bubble.dart';
 import 'package:file_picker/file_picker.dart';
 import 'widgets/chat_input.dart';
 import 'widgets/message_actions_sheet.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'repositories/interfaces/message_repository.dart';
 import 'repositories/interfaces/conversation_repository.dart';
 import 'repositories/interfaces/block_repository.dart';
+import 'repositories/interfaces/storage_repository.dart';
 import 'core/audio_recorder.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -18,6 +20,9 @@ import 'dart:io';
 import 'dart:async';
 import 'core/profile_api.dart';
 import 'widgets/media_preview_page.dart';
+import 'core/video_utils_stub.dart' if (dart.library.io) 'core/video_utils_io.dart';
+import 'other_user_profile_page.dart';
+import 'profile_page.dart';
 import 'core/i18n/language_provider.dart';
 
 class ChatPage extends StatefulWidget {
@@ -46,6 +51,7 @@ class _ChatPageState extends State<ChatPage> {
   late MessageRepository _msgRepo;
   late ConversationRepository _convRepo;
   late BlockRepository _blockRepo;
+  late StorageRepository _storageRepo;
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _resolvedConversationId;
   bool _isRecording = false;
@@ -74,6 +80,7 @@ void initState() {
   _msgRepo = context.read<MessageRepository>();
   _convRepo = context.read<ConversationRepository>();
   _blockRepo = context.read<BlockRepository>();
+  _storageRepo = context.read<StorageRepository>();
   _checkBlockStatus();
   _initLoad();
   _startPolling();
@@ -388,20 +395,71 @@ void dispose() {
 
   Future<void> _sendVoiceMessage(VoiceRecordingResult recording) async {
     try {
-      final audioUrl = await _audioRecorder.uploadVoiceFile(recording.filePath);
-      if (audioUrl == null) {
-        throw Exception('Failed to upload voice file');
+      // Upload to Firebase Storage
+      final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) throw Exception('User not authenticated');
+
+      String audioUrl;
+      int sizeBytes;
+      String contentType;
+
+      if (kIsWeb) {
+        // Get recorded bytes from web recorder singleton
+        final bytes = await ( _audioRecorder as dynamic ).takeRecordedBytes() as Uint8List?;
+        if (bytes == null || bytes.isEmpty) {
+          throw Exception('No recorded audio');
+        }
+        final path = _storageRepo.generateUniqueFileName(
+          uid: uid,
+          extension: 'webm',
+          prefix: 'voice_messages',
+        );
+        contentType = 'audio/webm';
+        audioUrl = await _storageRepo
+            .uploadFile(
+          path: path,
+          bytes: bytes,
+          contentType: contentType,
+        )
+            .timeout(const Duration(seconds: 20));
+        sizeBytes = bytes.length;
+      } else {
+        if (recording.filePath == null) {
+          throw Exception('Recording file path is null');
+        }
+        final file = File(recording.filePath!);
+        if (!await file.exists()) {
+          throw Exception('Recording file not found');
+        }
+        final path = _storageRepo.generateUniqueFileName(
+          uid: uid,
+          extension: 'm4a',
+          prefix: 'voice_messages',
+        );
+        contentType = 'audio/m4a';
+        audioUrl = await _storageRepo
+            .uploadFileFromPath(
+          path: path,
+          file: file,
+          contentType: contentType,
+        )
+            .timeout(const Duration(seconds: 20));
+        // Clean up temp file
+        try { await file.delete(); } catch (_) {}
+        sizeBytes = recording.fileSize;
       }
 
       final convId = await _requireConversationId();
-      final record = await _msgRepo.sendVoice(
+      final record = await _msgRepo
+          .sendVoice(
         conversationId: convId,
         otherUserId: null,
         audioUrl: audioUrl,
         durationSec: recording.duration.inSeconds,
-        fileSize: recording.fileSize,
+        fileSize: sizeBytes,
         replyToMessageId: _replyToMessage?.id,
-      );
+      )
+          .timeout(const Duration(seconds: 15));
 
       final msg = _toUiMessage(record);
       setState(() {
@@ -669,6 +727,23 @@ void dispose() {
             path.endsWith('.avi');
       }
 
+      String guessVideoContentType(String ext) {
+        switch (ext.toLowerCase()) {
+          case 'mp4':
+            return 'video/mp4';
+          case 'webm':
+            return 'video/webm';
+          case 'mov':
+            return 'video/quicktime';
+          case 'mkv':
+            return 'video/x-matroska';
+          case 'avi':
+            return 'video/x-msvideo';
+          default:
+            return 'video/mp4';
+        }
+      }
+
       for (final mediaFile in mediaFiles) {
         final nameOrPath =
             mediaFile.name.isNotEmpty ? mediaFile.name : mediaFile.path;
@@ -680,15 +755,27 @@ void dispose() {
 
         String url;
         int? fileSize;
+        String? thumbUrl;
 
         if (kIsWeb) {
           final bytes = await mediaFile.readAsBytes();
           fileSize = bytes.length;
-          url = await profileApi.uploadBytes(bytes, ext: ext);
+          final isVideo = isVideoPath(nameOrPath);
+          final ct = isVideo ? guessVideoContentType(ext) : null;
+          url = await profileApi.uploadBytes(bytes, ext: ext, contentType: ct);
         } else {
           final file = File(mediaFile.path);
           fileSize = await file.length();
           url = await profileApi.uploadFile(file);
+          final isVideo = isVideoPath(nameOrPath);
+          if (isVideo) {
+            try {
+              final thumb = await generateVideoThumbnail(file.path);
+              if (thumb != null && thumb.isNotEmpty) {
+                thumbUrl = await profileApi.uploadBytes(thumb, ext: 'jpg', contentType: 'image/jpeg');
+              }
+            } catch (_) {}
+          }
         }
 
         final isVideo = isVideoPath(nameOrPath);
@@ -698,6 +785,7 @@ void dispose() {
           'url': url,
           'fileName': mediaFile.name,
           'fileSize': fileSize,
+          if (thumbUrl != null) 'thumbnail': thumbUrl,
         });
       }
 
@@ -1029,17 +1117,53 @@ void dispose() {
           size: 20,
         ),
       ),
-      title: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: widget.otherUser.avatarUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: widget.otherUser.avatarUrl!,
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
+      title: GestureDetector(
+        onTap: () {
+          final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+          if (currentUserId == widget.otherUser.id) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfilePage()),
+            );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => OtherUserProfilePage(
+                  userId: widget.otherUser.id,
+                  userName: widget.otherUser.name,
+                  userAvatarUrl: widget.otherUser.avatarUrl ?? '',
+                  userBio: '',
+                ),
+              ),
+            );
+          }
+        },
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: widget.otherUser.avatarUrl != null
+                  ? CachedNetworkImage(
+                      imageUrl: widget.otherUser.avatarUrl!,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF666666).withValues(alpha: 51),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(
+                          Icons.person,
+                          color: Color(0xFF666666),
+                          size: 20,
+                        ),
+                      ),
+                    )
+                  : Container(
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
@@ -1052,45 +1176,32 @@ void dispose() {
                         size: 20,
                       ),
                     ),
-                  )
-                : Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF666666).withValues(alpha: 51),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Color(0xFF666666),
-                      size: 20,
-                    ),
-                  ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.otherUser.name,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
-                ),
-                Text(
-                  widget.otherUser.isOnline ? Provider.of<LanguageProvider>(context).t('chat.online') : Provider.of<LanguageProvider>(context).t('chat.last_seen'),
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFF666666),
-                  ),
-                ),
-              ],
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.otherUser.name,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  Text(
+                    widget.otherUser.isOnline ? Provider.of<LanguageProvider>(context).t('chat.online') : Provider.of<LanguageProvider>(context).t('chat.last_seen'),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color(0xFF666666),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         IconButton(

@@ -33,7 +33,7 @@ class PasswordResetSentPage extends StatelessWidget {
                   const SizedBox(height: 50),
                   // NEXUM Title
                   Text(
-                    'NEXUM',
+                    Provider.of<LanguageProvider>(context, listen: false).t('app.name'),
                     style: GoogleFonts.inika(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -97,8 +97,8 @@ class PasswordResetSentPage extends StatelessWidget {
                               color: const Color(0xFF666666),
                             ),
                             children: [
-                              const TextSpan(
-                                text: 'We\'ve sent a password reset link to\n',
+                              TextSpan(
+                                text: Provider.of<LanguageProvider>(context, listen: false).t('reset.sent_to'),
                               ),
                               TextSpan(
                                 text: email.isNotEmpty
@@ -129,7 +129,7 @@ class PasswordResetSentPage extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'What\'s next?',
+                                Provider.of<LanguageProvider>(context, listen: false).t('reset.whats_next'),
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -193,7 +193,7 @@ class PasswordResetSentPage extends StatelessWidget {
                               Navigator.pop(context);
                             },
                             child: Text(
-                              'Didn\'t receive the email? Try again',
+                              Provider.of<LanguageProvider>(context, listen: false).t('reset.try_again'),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 color: const Color(0xFFBFAE01),

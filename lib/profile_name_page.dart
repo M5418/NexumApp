@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'profile_birthday_page.dart';
 import 'core/profile_api.dart';
+import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
 
 class ProfileNamePage extends StatefulWidget {
@@ -27,6 +29,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     if (context.isMobile) {
@@ -66,7 +69,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                           onPressed: () => Navigator.pop(context),
                         ),
                         Text(
-                          'Profil details',
+                          lang.t('profile_setup.profil_details'),
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -112,10 +115,10 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                   fontSize: 16,
                   color: isDarkMode ? Colors.white : Colors.black,
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'First Name',
+                decoration: InputDecoration(
+                  labelText: lang.t('profile_name.first_name'),
                   labelStyle: TextStyle(color: Color(0xFF666666), fontSize: 16),
-                  hintText: 'Enter your first name',
+                  hintText: lang.t('profile_name.first_name_hint'),
                   hintStyle: TextStyle(color: Color(0xFF999999), fontSize: 16),
                   border: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF666666))),
                   enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF666666))),
@@ -130,10 +133,10 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                   fontSize: 16,
                   color: isDarkMode ? Colors.white : Colors.black,
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'Last Name',
+                decoration: InputDecoration(
+                  labelText: lang.t('profile_name.last_name'),
                   labelStyle: TextStyle(color: Color(0xFF666666), fontSize: 16),
-                  hintText: 'Enter your last name',
+                  hintText: lang.t('profile_name.last_name_hint'),
                   hintStyle: TextStyle(color: Color(0xFF999999), fontSize: 16),
                   border: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF666666))),
                   enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF666666))),
@@ -148,10 +151,10 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                   fontSize: 16,
                   color: isDarkMode ? Colors.white : Colors.black,
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'Username',
+                decoration: InputDecoration(
+                  labelText: lang.t('profile_name.username'),
                   labelStyle: TextStyle(color: Color(0xFF666666), fontSize: 16),
-                  hintText: 'Choose a username',
+                  hintText: lang.t('profile_name.username_hint'),
                   hintStyle: TextStyle(color: Color(0xFF999999), fontSize: 16),
                   border: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF666666))),
                   enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF666666))),
@@ -171,7 +174,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                     elevation: 0,
                   ),
                   child: Text(
-                    'Next',
+                    lang.t('profile_setup.next'),
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -211,7 +214,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Profil details',
+                            lang.t('profile_setup.profil_details'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -320,7 +323,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                           ),
                           child: Text(
-                            'Next',
+                            lang.t('profile_setup.next'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -397,7 +400,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save profile. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('profile_name.save_failed'),
             style: GoogleFonts.inter(),
           ),
         ),

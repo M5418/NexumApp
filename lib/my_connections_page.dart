@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'providers/follow_state.dart';
 import 'core/i18n/language_provider.dart';
 import 'widgets/badge_icon.dart';
 import 'widgets/segmented_tabs.dart';
@@ -78,6 +79,10 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
       }
     });
     _loadUsers();
+    // Ensure FollowState is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<FollowState>().initialize();
+    });
   }
 
   @override
@@ -332,7 +337,8 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
 
   // Inbound: users who connected to the current user
   Widget _buildInboundList(bool isDark, LanguageProvider lang) {
-    final inbound = _users.where((u) => u.theyConnectToYou).toList();
+    final follow = context.watch<FollowState>();
+    final inbound = _users.where((u) => follow.theyConnectToYou(u.id)).toList();
     return _listContainer(
       isDark: isDark,
       child: ListView.separated(
@@ -354,7 +360,8 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
 
   // Outbound: users the current user connected to
   Widget _buildOutboundList(bool isDark, LanguageProvider lang) {
-    final outbound = _users.where((u) => u.youConnectTo).toList();
+    final follow = context.watch<FollowState>();
+    final outbound = _users.where((u) => follow.isConnected(u.id)).toList();
     return _listContainer(
       isDark: isDark,
       child: ListView.separated(
@@ -468,7 +475,10 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
   }
 
   Widget _actionButton(MyConnectionUser user, bool isDark, LanguageProvider lang) {
-    if (user.youConnectTo) {
+    final follow = context.watch<FollowState>();
+    final isConnected = follow.isConnected(user.id);
+
+    if (isConnected) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
@@ -488,28 +498,13 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
 
     return GestureDetector(
       onTap: () async {
-        final repo = FirebaseFollowRepository();
-        final next = !user.youConnectTo;
-        setState(() {
-          user.youConnectTo = next;
-        });
         try {
-          if (next) {
-            await repo.followUser(user.id);
-          } else {
-            await repo.unfollowUser(user.id);
-          }
+          await context.read<FollowState>().toggle(user.id);
         } catch (e) {
-          if (mounted) {
-            setState(() {
-              user.youConnectTo = !next;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(lang.t('my_connections.action_failed')),
-              ),
-            );
-          }
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(lang.t('my_connections.action_failed'))),
+          );
         }
       },
       child: Container(
@@ -519,7 +514,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
-          (user.theyConnectToYou && !user.youConnectTo)
+          (follow.theyConnectToYou(user.id) && !isConnected)
               ? 'Connect Back'
               : 'Connect',
           style: GoogleFonts.inter(

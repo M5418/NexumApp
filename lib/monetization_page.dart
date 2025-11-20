@@ -54,7 +54,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          Provider.of<LanguageProvider>(context, listen: false).t('monetization.title'),
+          Provider.of<LanguageProvider>(context, listen: false).t('monetization.page_title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -172,11 +172,11 @@ class _MonetizationPageState extends State<MonetizationPage> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _metric('This month', '\$482.40'),
+              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.this_month'), '\$482.40'),
               const SizedBox(width: 16),
-              _metric('Pending', '\$127.10'),
+              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.pending'), '\$127.10'),
               const SizedBox(width: 16),
-              _metric('Lifetime', '\$6,921.75'),
+              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.lifetime'), '\$6,921.75'),
             ],
           ),
           const SizedBox(height: 12),
@@ -204,7 +204,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
                       ),
                     ),
                     child: Text(
-                      'View analytics',
+                      Provider.of<LanguageProvider>(context, listen: false).t('monetization.view_analytics'),
                       style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -251,10 +251,10 @@ class _MonetizationPageState extends State<MonetizationPage> {
                           }
                           if (ok == true && mounted) {
                             setState(() => _payoutMethod = 'Stripe');
-                            _snack('Payout method connected');
+                            _snack(Provider.of<LanguageProvider>(context, listen: false).t('monetization.payout_connected'));
                           }
                         }
-                      : () => _snack('Manage payout (placeholder)'),
+                      : () => _snack(Provider.of<LanguageProvider>(context, listen: false).t('monetization.manage_payout_placeholder')),
                       
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFBFAE01),
@@ -265,7 +265,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
                     ),
                   ),
                   child: Text(
-                    _payoutMethod == null ? 'Set up payout' : 'Manage payout',
+                    _payoutMethod == null ? Provider.of<LanguageProvider>(context, listen: false).t('monetization.setup_payout') : Provider.of<LanguageProvider>(context, listen: false).t('monetization.manage_payout'),
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -284,7 +284,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Monetized content',
+            Provider.of<LanguageProvider>(context, listen: false).t('monetization.monetized_content'),
             style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -292,17 +292,17 @@ class _MonetizationPageState extends State<MonetizationPage> {
           ),
           const SizedBox(height: 8),
           _switch(
-            'Enable monetization on new posts',
+            Provider.of<LanguageProvider>(context, listen: false).t('monetization.enable_new_posts'),
             _contentMonetized,
             (v) => setState(() => _contentMonetized = v),
           ),
           _switch(
-            'Enable ads on eligible content',
+            Provider.of<LanguageProvider>(context, listen: false).t('monetization.enable_ads'),
             _adsEnabled,
             (v) => setState(() => _adsEnabled = v),
           ),
           _switch(
-            'Allow sponsorship placements',
+            Provider.of<LanguageProvider>(context, listen: false).t('monetization.allow_sponsorships'),
             _sponsorshipsEnabled,
             (v) => setState(() => _sponsorshipsEnabled = v),
           ),
@@ -318,17 +318,17 @@ class _MonetizationPageState extends State<MonetizationPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Requirements',
+            Provider.of<LanguageProvider>(context, listen: false).t('monetization.requirements'),
             style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
-          _req('5,000+ followers', _reqFollowers),
-          _req('30+ posts in last 90 days', _reqPosts),
-          _req('KYC verification', _reqKyc),
-          _req('Two-factor authentication enabled', _req2FA),
+          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_followers'), _reqFollowers),
+          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_posts'), _reqPosts),
+          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_kyc'), _reqKyc),
+          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_2fa'), _req2FA),
         ],
       ),
     );
@@ -408,9 +408,9 @@ class _MonetizationPageState extends State<MonetizationPage> {
       trailing: ok
           ? const SizedBox.shrink()
           : TextButton(
-              onPressed: () => _snack('Action required: $text'),
+              onPressed: () => _snack('${Provider.of<LanguageProvider>(context, listen: false).t('monetization.action_required')}$text'),
               child: Text(
-                'Fix',
+                Provider.of<LanguageProvider>(context, listen: false).t('monetization.fix'),
                 style: GoogleFonts.inter(
                   color: const Color(0xFFBFAE01),
                   fontWeight: FontWeight.w600,

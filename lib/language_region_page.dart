@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'core/i18n/language_provider.dart';
+import 'core/i18n/translations.dart';
 import 'widgets/country_selector.dart';
 
 class LanguageRegionPage extends StatefulWidget {
@@ -13,7 +14,7 @@ class LanguageRegionPage extends StatefulWidget {
 }
 
 class _LanguageRegionPageState extends State<LanguageRegionPage> {
-  String _selectedRegion = 'Canada';
+  String _selectedRegion = 'Canada'; // Will be translated via key
   bool _use24hTime = true;
 
   @override
@@ -91,8 +92,8 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
                 _sectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('region.translation')),
                 const SizedBox(height: 8),
                 _switchTile(
-                  title: 'Enable Post Translation',
-                  subtitle: 'Show translate button on posts and comments',
+                  title: Provider.of<LanguageProvider>(context, listen: false).t('region.enable_translation'),
+                  subtitle: Provider.of<LanguageProvider>(context, listen: false).t('region.enable_translation_subtitle'),
                   value: lang.postTranslationEnabled,
                   onChanged: (v) => lang.setPostTranslationEnabled(v),
                 ),
@@ -102,8 +103,8 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
                 ],
                 const SizedBox(height: 8),
                 _comingSoonTile(
-                  title: 'Auto-translate posts & comments',
-                  subtitle: 'Automatically translate content to your language',
+                  title: Provider.of<LanguageProvider>(context, listen: false).t('region.auto_translate'),
+                  subtitle: Provider.of<LanguageProvider>(context, listen: false).t('region.auto_translate_subtitle'),
                 ),
               ],
             ),
@@ -131,7 +132,8 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
 
   // Display Language dropdown (Provider-backed)
   Widget _languageDropdown(LanguageProvider lang) {
-    final codes = LanguageProvider.supportedCodes;
+    // Use activeCodes to show only EN + FR (PT/ES/DE hidden for now)
+    final codes = Translations.activeCodes;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -237,7 +239,7 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Translate posts to'),
+        _sectionTitle(Provider.of<LanguageProvider>(context, listen: false).t('region.translate_to')),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -288,7 +290,7 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Region', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+        Text(Provider.of<LanguageProvider>(context, listen: false).t('region.region'), style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
         const SizedBox(height: 6),
         InkWell(
           onTap: () {
@@ -421,7 +423,7 @@ class _LanguageRegionPageState extends State<LanguageRegionPage> {
     lang.setLocale('en');
     lang.setPostTranslationEnabled(false);
     setState(() {
-      _selectedRegion = 'Canada';
+      _selectedRegion = Provider.of<LanguageProvider>(context, listen: false).t('region.default_region');
       _use24hTime = true;
     });
   }

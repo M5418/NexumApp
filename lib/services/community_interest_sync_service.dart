@@ -13,78 +13,72 @@ class CommunityInterestSyncService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   /// Ensure all interest-based communities exist in Firestore
-  /// Call this once on app initialization or first run
+  /// Call this ONCE on app initialization - creates ALL communities upfront
   Future<void> initializeInterestCommunities() async {
-    print('🏘️  Initializing interest-based communities...');
+    // Check if ALL expected communities exist
+    final existingCommunitiesSnapshot = await _db.collection('communities').get();
+    final existingCount = existingCommunitiesSnapshot.docs.length;
+    
+    if (existingCount >= interestDomains.length) {
+      return; // All communities already created, skip
+    }
     
     final batch = _db.batch();
-    int created = 0;
-    int existing = 0;
 
     for (final interest in interestDomains) {
       final communityId = _getCommunityIdForInterest(interest);
       final communityRef = _db.collection('communities').doc(communityId);
       
-      // Check if community already exists
-      final snapshot = await communityRef.get();
-      
-      if (!snapshot.exists) {
-        // Create community for this interest
-        batch.set(communityRef, {
-          'name': interest,
-          'bio': 'A community for $interest enthusiasts',
-          'avatarUrl': '', // You can add default avatars later
-          'coverUrl': '',
-          'interestDomain': interest, // Link back to interest
-          'memberCount': 0,
-          'postsCount': 0,
-          'unreadPosts': 0,
-          'friendsInCommon': '+0',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        created++;
-      } else {
-        existing++;
-      }
+      // Create community for this interest (set, not update - ensures it's created)
+      batch.set(communityRef, {
+        'name': interest,
+        'bio': 'A community for $interest enthusiasts. Connect with like-minded people, share ideas, and discover new content.',
+        'avatarUrl': '',
+        'coverUrl': '',
+        'interestDomain': interest,
+        'memberCount': 0,
+        'postsCount': 0,
+        'unreadPosts': 0,
+        'friendsInCommon': '+0',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true)); // Merge to avoid overwriting if exists
     }
 
-    if (created > 0) {
-      await batch.commit();
-      print('✅ Created $created new communities');
-    }
-    
-    print('✅ Interest communities initialized: $created created, $existing existing');
+    await batch.commit();
   }
 
   /// Sync user's interests with community memberships
-  /// - Add memberships for new interests
-  /// - Remove memberships for removed interests
-  Future<void> syncUserInterests(List<String> newInterests) async {
+  /// - Add memberships for new interests (JOIN existing communities)
+  /// - Remove memberships for removed interests (LEAVE existing communities)
+  /// NOTE: This must be called BEFORE updating the user profile!
+  /// Pass both old and new interests to properly detect changes.
+  Future<void> syncUserInterests(List<String> newInterests, {List<String>? oldInterests}) async {
     final user = _auth.currentUser;
     if (user == null) {
-      print('⚠️  No authenticated user for community sync');
       return;
     }
 
-    // CRITICAL: Ensure communities exist before syncing memberships
-    await initializeInterestCommunities();
-
-    print('🔄 Syncing interests to communities for user ${user.uid}');
-    print('   New interests: ${newInterests.length} items');
-
-    // Get user's current interests from Firestore (to find what changed)
-    final userDoc = await _db.collection('users').doc(user.uid).get();
-    final currentInterests = List<String>.from(userDoc.data()?['interest_domains'] ?? []);
+    // Get current interests from parameter or fetch from Firestore
+    List<String> currentInterests = oldInterests ?? [];
     
-    print('   Current interests: ${currentInterests.length} items');
-
+    if (currentInterests.isEmpty) {
+      // Fetch from Firestore if not provided
+      final userDoc = await _db.collection('users').doc(user.uid).get();
+      final userData = userDoc.data();
+      
+      if (userData != null) {
+        if (userData.containsKey('interest_domains')) {
+          currentInterests = List<String>.from(userData['interest_domains'] ?? []);
+        } else if (userData.containsKey('interestDomains')) {
+          currentInterests = List<String>.from(userData['interestDomains'] ?? []);
+        }
+      }
+    }
+    
     // Find interests to add and remove
     final interestsToAdd = newInterests.where((i) => !currentInterests.contains(i)).toList();
     final interestsToRemove = currentInterests.where((i) => !newInterests.contains(i)).toList();
-
-    print('   To add: ${interestsToAdd.length}');
-    print('   To remove: ${interestsToRemove.length}');
 
     final batch = _db.batch();
 
@@ -112,8 +106,6 @@ class CommunityInterestSyncService {
         'memberCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      
-      print('   ➕ Adding to: $interest');
     }
 
     // Remove user from old communities
@@ -133,47 +125,31 @@ class CommunityInterestSyncService {
         'memberCount': FieldValue.increment(-1),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      
-      print('   ➖ Removing from: $interest');
     }
 
     if (interestsToAdd.isNotEmpty || interestsToRemove.isNotEmpty) {
       try {
         await batch.commit();
-        print('✅ Community memberships synced successfully');
-        
-        // Verify memberships were created
-        for (final interest in interestsToAdd) {
-          final communityId = _getCommunityIdForInterest(interest);
-          final memberDoc = await _db
-              .collection('communities')
-              .doc(communityId)
-              .collection('members')
-              .doc(user.uid)
-              .get();
-          
-          if (memberDoc.exists) {
-            print('   ✅ Verified membership: $interest');
-          } else {
-            print('   ⚠️  Membership not found after sync: $interest');
-          }
-        }
       } catch (e) {
-        print('❌ Failed to sync communities: $e');
         rethrow;
       }
-    } else {
-      print('ℹ️  No changes to community memberships');
     }
   }
 
-  /// Convert interest name to a safe community ID
+  /// Convert interest name to community ID (lowercase with hyphens)
+  /// Must handle special characters properly for Firestore document IDs
   String _getCommunityIdForInterest(String interest) {
-    // Create a consistent, URL-safe ID from the interest name
     return interest
         .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), ''); // Remove leading/trailing dashes
+        .replaceAll(' & ', '-and-')  // "Arts & Culture" → "arts-and-culture"
+        .replaceAll('&', '-and-')    // Handle standalone &
+        .replaceAll('/', '-')         // "UI/UX" → "ui-ux" (critical for Firestore!)
+        .replaceAll(' ', '-')         // Spaces to hyphens
+        .replaceAll('(', '')          // Remove parentheses
+        .replaceAll(')', '')
+        .replaceAll(',', '')          // Remove commas
+        .replaceAll("'", '')          // Remove apostrophes
+        .replaceAll(RegExp(r'-+'), '-'); // Multiple hyphens → single hyphen
   }
 
   /// Get community ID for a given interest (public helper)

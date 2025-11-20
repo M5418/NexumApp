@@ -53,7 +53,11 @@ import 'repositories/interfaces/block_repository.dart';
 import 'repositories/firebase/firebase_block_repository.dart';
 import 'repositories/interfaces/mute_repository.dart';
 import 'repositories/firebase/firebase_mute_repository.dart';
+import 'repositories/interfaces/analytics_repository.dart';
+import 'repositories/firebase/firebase_analytics_repository.dart';
 import 'services/community_interest_sync_service.dart';
+import 'fix_communities.dart';
+import 'providers/follow_state.dart';
 
 // Firebase App Check reCAPTCHA Enterprise site key
 // Pass via --dart-define when running:
@@ -85,30 +89,111 @@ Future<void> main() async {
   // Sanity check (dev only)
   _sanityLogFirebase();
   
-  // Initialize interest-based communities (one-time setup, safe to call multiple times)
-  CommunityInterestSyncService().initializeInterestCommunities().catchError((e) {
-    debugPrint('Community initialization error (non-critical): $e');
-  });
+  // App Check Configuration - SAFE VERSION WITH FALLBACKS
+  // IMPORTANT: App Check is optional - app works without it
+  // We activate it when possible but don't require it
   
-  // App Check Configuration
-  // Firebase Console: Keep all services in Monitoring (not Enforced)
-  // Web: reCAPTCHA Enterprise only
-  // Mobile: Platform-specific providers
-  if (kIsWeb) {
-    if (kRecaptchaEnterpriseSiteKey.isNotEmpty) {
-      await FirebaseAppCheck.instance.activate(
-        webProvider: ReCaptchaEnterpriseProvider(kRecaptchaEnterpriseSiteKey),
-      );
+  bool appCheckActivated = false;
+  
+  try {
+    if (kIsWeb) {
+      // Web: Only activate when we have a reCAPTCHA key
+      if (kRecaptchaEnterpriseSiteKey.isNotEmpty) {
+        try {
+          await FirebaseAppCheck.instance.activate(
+            webProvider: ReCaptchaEnterpriseProvider(kRecaptchaEnterpriseSiteKey),
+          );
+          appCheckActivated = true;
+          debugPrint('✅ App Check activated with reCAPTCHA Enterprise (Web)');
+        } catch (e) {
+          debugPrint('⚠️ Web App Check failed (non-critical): $e');
+        }
+      } else {
+        debugPrint('ℹ️ App Check not activated on web (no reCAPTCHA key provided)');
+      }
+    } else {
+      // Mobile: Careful activation with fallbacks
+      if (kReleaseMode) {
+        // TEMPORARY: App Check disabled to test data loading
+        // If data works without this, the issue is App Check configuration
+        debugPrint('⚠️ App Check TEMPORARILY DISABLED for testing');
+        debugPrint('   Testing if data loads without App Check');
+        debugPrint('   TODO: Re-enable after confirming Firebase Console is in monitoring mode');
+        
+        // Production: Use App Attest for iOS with proper error handling
+        // try {
+        //   debugPrint('🔒 Activating App Check for production...');
+        //   
+        //   // Set a timeout to prevent hanging
+        //   await FirebaseAppCheck.instance.activate(
+        //     androidProvider: AndroidProvider.playIntegrity,
+        //     appleProvider: AppleProvider.appAttest,
+        //   ).timeout(
+        //     const Duration(seconds: 5),
+        //     onTimeout: () {
+        //       debugPrint('⚠️ App Check activation timeout - continuing without it');
+        //       return;
+        //     },
+        //   );
+        //   
+        //   appCheckActivated = true;
+        //   debugPrint('✅ App Check activated with production providers');
+        //   debugPrint('   iOS: App Attest, Android: Play Integrity');
+        //   debugPrint('   Firebase is in monitoring mode - requests will be tracked but not blocked');
+        // } catch (e) {
+        //   // App Attest might not be available on older devices or simulator
+        //   debugPrint('⚠️ Production App Check activation failed (non-critical)');
+        //   debugPrint('   Error: $e');
+        //   debugPrint('   App will continue normally - Firebase monitoring mode allows this');
+        // }
+      } else {
+        // Debug: TEMPORARILY DISABLED to avoid simulator errors
+        // Re-enable when ready to test App Check
+        debugPrint('ℹ️ App Check disabled in debug mode for testing');
+        debugPrint('   To enable: uncomment debug provider activation in main.dart');
+        
+        // Debug: Use debug providers
+        // try {
+        //   await FirebaseAppCheck.instance.activate(
+        //     androidProvider: AndroidProvider.debug,
+        //     appleProvider: AppleProvider.debug,
+        //   );
+        //   appCheckActivated = true;
+        //   debugPrint('✅ App Check activated with debug providers');
+        // } catch (e) {
+        //   debugPrint('⚠️ Debug App Check failed (non-critical): $e');
+        // }
+      }
     }
-  } else {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: kReleaseMode 
-        ? AndroidProvider.playIntegrity 
-        : AndroidProvider.debug,
-      appleProvider: kReleaseMode 
-        ? AppleProvider.appAttest 
-        : AppleProvider.debug,
-    );
+  } catch (e) {
+    // Catch-all for any unexpected errors
+    debugPrint('⚠️ App Check setup error (non-critical): $e');
+  }
+  
+  // Log final App Check status
+  debugPrint('📱 App Check Status: ${appCheckActivated ? "ACTIVE" : "INACTIVE (app will work normally)"}');
+  
+  // Initialize interest-based communities (one-time setup, safe to call multiple times)
+  // Wrap in try-catch to prevent crashes
+  try {
+    CommunityInterestSyncService().initializeInterestCommunities().catchError((e) {
+      debugPrint('Community initialization error (non-critical): $e');
+    });
+  } catch (e) {
+    debugPrint('Community service initialization failed: $e');
+  }
+  
+  // Fix all communities with missing/null names (with delay to ensure Firebase is ready)
+  // Only run in debug mode to avoid potential production issues
+  if (!kReleaseMode) {
+    Future.delayed(const Duration(seconds: 2), () {
+      debugPrint('🔥 Starting community fix...');
+      fixAllCommunities().then((_) {
+        debugPrint('✅ Community fix completed');
+      }).catchError((e) {
+        debugPrint('❌ Community fix error: $e');
+      });
+    });
   }
   
   runApp(const MyApp());
@@ -130,6 +215,10 @@ class MyApp extends StatelessWidget {
         Provider<PostRepository>(create: (_) => FirebasePostRepository()),
         Provider<CommentRepository>(create: (_) => FirebaseCommentRepository()),
         Provider<FollowRepository>(create: (_) => FirebaseFollowRepository()),
+        ChangeNotifierProxyProvider<FollowRepository, FollowState>(
+          create: (context) => FollowState(context.read<FollowRepository>()),
+          update: (context, repo, state) => state ?? FollowState(repo),
+        ),
         Provider<NotificationRepository>(create: (_) => FirebaseNotificationRepository()),
         Provider<ConversationRepository>(create: (_) => FirebaseConversationRepository()),
         Provider<MessageRepository>(create: (_) => FirebaseMessageRepository()),
@@ -147,6 +236,7 @@ class MyApp extends StatelessWidget {
         Provider<BookmarkRepository>(create: (_) => FirebaseBookmarkRepository()),
         Provider<BlockRepository>(create: (_) => FirebaseBlockRepository()),
         Provider<MuteRepository>(create: (_) => FirebaseMuteRepository()),
+        Provider<AnalyticsRepository>(create: (_) => FirebaseAnalyticsRepository()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

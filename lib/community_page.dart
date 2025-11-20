@@ -11,6 +11,7 @@ import 'repositories/firebase/firebase_user_repository.dart';
 import 'repositories/models/post_model.dart';
 import 'community_post_page.dart';
 import 'theme_provider.dart';
+import 'core/i18n/language_provider.dart';
 import 'widgets/post_card.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/segmented_tabs.dart';
@@ -78,7 +79,7 @@ class _CommunityPageState extends State<CommunityPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to load community details: ${_toError(e)}',
+            '${Provider.of<LanguageProvider>(context, listen: false).t('community.load_failed')}: ${_toError(e)}',
             style: GoogleFonts.inter(),
           ),
           backgroundColor: Colors.red,
@@ -139,7 +140,7 @@ class _CommunityPageState extends State<CommunityPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to load community posts: ${_toError(e)}',
+            '${Provider.of<LanguageProvider>(context, listen: false).t('community.posts_failed')}: ${_toError(e)}',
             style: GoogleFonts.inter(),
           ),
           backgroundColor: Colors.red,
@@ -155,6 +156,9 @@ class _CommunityPageState extends State<CommunityPage> {
   }
 
   Future<Post> _toPost(PostModel m) async {
+    // Capture fallback user text before async gap
+    final fallbackUser = mounted ? Provider.of<LanguageProvider>(context, listen: false).t('community.user') : 'User';
+    
     final author = await _userRepo.getUserProfile(m.authorId);
     MediaType mediaType;
     String? videoUrl;
@@ -180,10 +184,17 @@ class _CommunityPageState extends State<CommunityPage> {
         videoUrl = null;
       }
     }
+    // Build full name from firstName and lastName
+    final firstName = author?.firstName?.trim() ?? '';
+    final lastName = author?.lastName?.trim() ?? '';
+    final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
+        ? '$firstName $lastName'.trim()
+        : (author?.displayName ?? author?.username ?? author?.email ?? fallbackUser);
+    
     return Post(
       id: m.id,
       authorId: m.authorId,
-      userName: author?.displayName ?? author?.username ?? author?.email ?? 'User',
+      userName: fullName,
       userAvatarUrl: author?.avatarUrl ?? '',
       createdAt: m.createdAt,
       text: m.text,
@@ -267,7 +278,7 @@ class _CommunityPageState extends State<CommunityPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Bookmark failed: ${_toError(e)}',
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('community.bookmark_failed')}${_toError(e)}',
               style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
@@ -313,7 +324,7 @@ class _CommunityPageState extends State<CommunityPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Like failed: ${_toError(e)}',
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('community.like_failed')}${_toError(e)}',
                 style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
@@ -368,7 +379,7 @@ class _CommunityPageState extends State<CommunityPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Unlike failed: ${_toError(e)}',
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('community.unlike_failed')}${_toError(e)}',
                 style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
@@ -389,7 +400,7 @@ class _CommunityPageState extends State<CommunityPage> {
       onStories: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Stories', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('community.shared_stories'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF4CAF50),
           ),
         );
@@ -397,7 +408,7 @@ class _CommunityPageState extends State<CommunityPage> {
       onCopyLink: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Link copied to clipboard', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('community.link_copied'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF9E9E9E),
           ),
         );
@@ -405,7 +416,7 @@ class _CommunityPageState extends State<CommunityPage> {
       onTelegram: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Telegram', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('community.shared_telegram'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF0088CC),
           ),
         );
@@ -413,7 +424,7 @@ class _CommunityPageState extends State<CommunityPage> {
       onFacebook: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Shared to Facebook', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('community.shared_facebook'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF1877F2),
           ),
         );
@@ -421,7 +432,7 @@ class _CommunityPageState extends State<CommunityPage> {
       onMore: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('More share options', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('community.more_share'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF666666),
           ),
         );
@@ -431,7 +442,7 @@ class _CommunityPageState extends State<CommunityPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Sent to $userNames${message.isNotEmpty ? ' with message: "$message"' : ''}',
+              '${Provider.of<LanguageProvider>(context, listen: false).t('community.sent_to')}$userNames${message.isNotEmpty ? '${Provider.of<LanguageProvider>(context, listen: false).t('community.with_message')}$message"' : ''}',
               style: GoogleFonts.inter(),
             ),
             backgroundColor: const Color(0xFFBFAE01),
@@ -452,17 +463,17 @@ class _CommunityPageState extends State<CommunityPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title:
-            Text('Repost this?', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            Text(Provider.of<LanguageProvider>(ctx, listen: false).t('community.repost_title'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         content:
-            Text('Are you sure you want to repost this?', style: GoogleFonts.inter()),
+            Text(Provider.of<LanguageProvider>(ctx, listen: false).t('community.repost_confirm'), style: GoogleFonts.inter()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel', style: GoogleFonts.inter()),
+            child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('community.cancel'), style: GoogleFonts.inter()),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Repost',
+            child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('community.repost'),
                 style: GoogleFonts.inter(color: const Color(0xFFBFAE01))),
           ),
         ],
@@ -477,7 +488,7 @@ class _CommunityPageState extends State<CommunityPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-              Text('Post reposted successfully', style: GoogleFonts.inter()),
+              Text(Provider.of<LanguageProvider>(context, listen: false).t('community.repost_success'), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
@@ -499,18 +510,18 @@ class _CommunityPageState extends State<CommunityPage> {
         final remove = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text('Remove repost?',
+            title: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('community.remove_repost_title'),
                 style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            content: Text('You already reposted this. Remove your repost?',
+            content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('community.remove_repost_confirm'),
                 style: GoogleFonts.inter()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: Text('Cancel', style: GoogleFonts.inter()),
+                child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('community.cancel'), style: GoogleFonts.inter()),
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text('Remove',
+                child: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('community.remove'),
                     style: GoogleFonts.inter(color: Colors.red)),
               ),
             ],
@@ -524,7 +535,7 @@ class _CommunityPageState extends State<CommunityPage> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Repost removed', style: GoogleFonts.inter()),
+                content: Text(Provider.of<LanguageProvider>(context, listen: false).t('community.repost_removed'), style: GoogleFonts.inter()),
                 backgroundColor: const Color(0xFF9E9E9E),
               ),
             );
@@ -533,7 +544,7 @@ class _CommunityPageState extends State<CommunityPage> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to remove repost: ${_toError(e2)}',
+                content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('community.remove_repost_failed')}${_toError(e2)}',
                     style: GoogleFonts.inter()),
                 backgroundColor: Colors.red,
               ),
@@ -544,7 +555,7 @@ class _CommunityPageState extends State<CommunityPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Repost failed: $msg', style: GoogleFonts.inter()),
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('community.repost_failed')}$msg', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -554,7 +565,7 @@ class _CommunityPageState extends State<CommunityPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-              Text('Repost failed: ${_toError(e)}', style: GoogleFonts.inter()),
+              Text('${Provider.of<LanguageProvider>(context, listen: false).t('community.repost_failed')}${_toError(e)}', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -619,7 +630,7 @@ class _CommunityPageState extends State<CommunityPage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: SegmentedTabs(
-                    tabs: const ['Post', 'About', 'Media'],
+                    tabs: [Provider.of<LanguageProvider>(context, listen: false).t('community.tab_post'), Provider.of<LanguageProvider>(context, listen: false).t('community.tab_about'), Provider.of<LanguageProvider>(context, listen: false).t('community.tab_media')],
                     selectedIndex: _selectedTabIndex,
                     onTabSelected: (index) {
                       setState(() {
@@ -637,7 +648,7 @@ class _CommunityPageState extends State<CommunityPage> {
                           : (_posts.isEmpty
                               ? Center(
                                   child: Text(
-                                    'No posts yet',
+                                    Provider.of<LanguageProvider>(context, listen: false).t('community.no_posts'),
                                     style: GoogleFonts.inter(
                                       fontSize: 14,
                                       color: const Color(0xFF666666),

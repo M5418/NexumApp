@@ -34,32 +34,33 @@ class ActivityPostCard extends StatefulWidget {
 
 class _ActivityPostCardState extends State<ActivityPostCard> {
   bool _showTranslation = false;
+  
+  // Local state for likes (like comments do)
+  late bool _isLiked;
+  late int _likeCount;
 
+  // Returns original post ID for reposts, otherwise current post ID
+  String _effectivePostId() {
+    if (widget.post.isRepost &&
+        (widget.post.originalPostId != null &&
+            widget.post.originalPostId!.isNotEmpty)) {
+      return widget.post.originalPostId!;
+    }
+    return widget.post.id;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize local state from widget props (like comments do)
+    _isLiked = widget.post.userReaction != null;
+    _likeCount = widget.post.counts.likes.clamp(0, 999999);
+  }
+  
   void _toggleTranslation() {
     setState(() {
       _showTranslation = !_showTranslation;
     });
-  }
-
-
-
-  IconData _getReactionIcon(ReactionType? reaction) {
-    switch (reaction) {
-      case ReactionType.diamond:
-        return Icons.workspace_premium;
-      case ReactionType.like:
-        return Icons.thumb_up_alt;
-      case ReactionType.heart:
-        return Icons.favorite;
-      case ReactionType.wow:
-        return Icons.emoji_emotions;
-      default:
-        return Icons.thumb_up_alt_outlined;
-    }
-  }
-
-  Color _getReactionColor(ReactionType? reaction) {
-    return reaction != null ? const Color(0xFFBFAE01) : const Color(0xFF666666);
   }
 
   @override
@@ -111,7 +112,14 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${widget.post.repostedBy!.userName} ${widget.post.repostedBy!.actionType}',
+                    () {
+                      final rb = widget.post.repostedBy!;
+                      final hasAction = (rb.actionType ?? '').isNotEmpty;
+                      if (hasAction) return 'You reposted this';
+                      final name = rb.userName.trim();
+                      if (name.isNotEmpty) return '$name reposted this';
+                      return 'Reposted';
+                    }(),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       color: const Color(0xFF666666),
@@ -361,17 +369,21 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
               Builder(
                 builder: (likeButtonContext) => GestureDetector(
                   onTap: () {
-                    if (widget.post.userReaction != null) {
-                      widget.onReactionChanged?.call(
-                        widget.post.id,
-                        widget.post.userReaction!,
-                      );
-                    } else {
-                      widget.onReactionChanged?.call(
-                        widget.post.id,
-                        ReactionType.like,
-                      );
-                    }
+                    // Optimistic update (like comments do)
+                    setState(() {
+                      _isLiked = !_isLiked;
+                      if (_isLiked) {
+                        _likeCount++;
+                      } else {
+                        _likeCount = (_likeCount - 1).clamp(0, 999999);
+                      }
+                    });
+                    
+                    // Call backend
+                    widget.onReactionChanged?.call(
+                      _effectivePostId(),
+                      _isLiked ? ReactionType.like : ReactionType.like, // Toggle
+                    );
                   },
                   onLongPress: () {
                     final RenderBox renderBox =
@@ -390,13 +402,13 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
                   child: Row(
                     children: [
                       Icon(
-                        _getReactionIcon(widget.post.userReaction),
+                        _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
                         size: 20,
-                        color: _getReactionColor(widget.post.userReaction),
+                        color: _isLiked ? const Color(0xFFBFAE01) : const Color(0xFF666666),
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        widget.post.counts.likes.toString(),
+                        _likeCount.toString(),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: const Color(0xFF666666),
@@ -411,7 +423,7 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
 
               // Comment button
               GestureDetector(
-                onTap: () => widget.onComment?.call(widget.post.id),
+                onTap: () => widget.onComment?.call(_effectivePostId()),
                 child: Row(
                   children: [
                     const Icon(
@@ -435,7 +447,7 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
 
               // Share button
               GestureDetector(
-                onTap: () => widget.onShare?.call(widget.post.id),
+                onTap: () => widget.onShare?.call(_effectivePostId()),
                 child: Row(
                   children: [
                     const Icon(
@@ -459,7 +471,7 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
 
               // Repost button
               GestureDetector(
-                onTap: () => widget.onRepost?.call(widget.post.id),
+                onTap: () => widget.onRepost?.call(_effectivePostId()),
                 child: Row(
                   children: [
                     const Icon(
@@ -483,7 +495,7 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
 
               // Bookmark button
               GestureDetector(
-                onTap: () => widget.onBookmarkToggle?.call(widget.post.id),
+                onTap: () => widget.onBookmarkToggle?.call(_effectivePostId()),
                 child: Row(
                   children: [
                     Icon(
@@ -545,7 +557,12 @@ class ActivityReactionPickerManager {
                 child: ReactionPicker(
                   currentReaction: post.userReaction,
                   onReactionSelected: (reaction) {
-                    onReactionChanged(post.id, reaction);
+                    final effectiveId = (post.isRepost &&
+                            post.originalPostId != null &&
+                            post.originalPostId!.isNotEmpty)
+                        ? post.originalPostId!
+                        : post.id;
+                    onReactionChanged(effectiveId, reaction);
                     hideReactions();
                   },
                 ),

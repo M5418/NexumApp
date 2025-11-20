@@ -330,7 +330,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Profil details',
+                            lang.t('profile_setup.profil_details'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -350,7 +350,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                             children: [
                               const SizedBox(height: 8),
                               Text(
-                                'Professional Experience',
+                                lang.t('profile_experience.title'),
                                 style: GoogleFonts.inter(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
@@ -359,7 +359,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                'List your work experiences, positions, or roles',
+                                lang.t('profile_experience.subtitle'),
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
                                   color: const Color(0xFF666666),
@@ -395,7 +395,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                                   icon: const Icon(Icons.add,
                                       color: Color(0xFFBFAE01), size: 20),
                                   label: Text(
-                                    'Add Experience',
+                                    lang.t('profile_experience.add'),
                                     style: GoogleFonts.inter(
                                       fontSize: 15,
                                       color: const Color(0xFFBFAE01),
@@ -432,7 +432,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
                                   ),
                                 )
                               : Text(
-                                  'Continue',
+                                  lang.t('profile_setup.continue'),
                                   style: GoogleFonts.inter(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -458,6 +458,7 @@ class _MobileAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
@@ -490,7 +491,7 @@ class _MobileAppBar extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                   ),
                   Text(
-                    'Experience',
+                    lang.t('profile_experience.experience'),
                     style: GoogleFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,

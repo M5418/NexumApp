@@ -635,7 +635,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
                         },
                       ),
                       Text(
-                        'Interests',
+                        Provider.of<LanguageProvider>(context).t('common.interests'),
                         style: GoogleFonts.inter(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,

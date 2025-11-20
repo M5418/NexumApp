@@ -45,6 +45,7 @@ import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
 import 'responsive/responsive_breakpoints.dart';
 import 'core/i18n/language_provider.dart';
+import 'services/auth_service.dart';
 
 class HomeFeedPage extends StatefulWidget {
   const HomeFeedPage({super.key});
@@ -174,12 +175,18 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
       if (!mounted) return;
       setState(() {
-        _prefShowReposts = (data['show_reposts'] is bool)
-            ? data['show_reposts']
-            : (data['show_reposts'] == 1 ||
-                data['show_reposts'] == '1' ||
-                (data['show_reposts'] is String &&
-                    (data['show_reposts'] as String).toLowerCase() == 'true'));
+        // Default to true if not set
+        if (data['show_reposts'] == null) {
+          _prefShowReposts = true;
+        } else {
+          _prefShowReposts = (data['show_reposts'] is bool)
+              ? data['show_reposts']
+              : (data['show_reposts'] == 1 ||
+                  data['show_reposts'] == '1' ||
+                  (data['show_reposts'] is String &&
+                      (data['show_reposts'] as String).toLowerCase() == 'true'));
+        }
+        debugPrint('🔁 Repost preference: $_prefShowReposts (from backend: ${data['show_reposts']})');
 
         _prefShowSuggested = (data['show_suggested_posts'] is bool)
             ? data['show_suggested_posts']
@@ -226,16 +233,42 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     List<StoryRingModel> rings = [];
     String? errMsg;
 
+    // LOG CURRENT USER STATUS (critical for TestFlight debugging)
+    debugPrint('🔐 =================================');
+    debugPrint('🔐 HOME FEED LOADING DATA');
+    debugPrint('🔐 Current User ID: ${_currentUserId ?? "NOT SET"}');
+    debugPrint('🔐 Auth Service Logged In: ${AuthService().isLoggedIn}');
+    debugPrint('🔐 Auth Service User ID: ${AuthService().userId ?? "NULL"}');
+    debugPrint('🔐 =================================');
+
     // Refresh preferences before fetching/applying filters
     await _loadFeedPrefs();
 
     try {
+      debugPrint('📊 Fetching feed from Firestore...');
       final models = await _postRepo.getFeed(limit: 20);
+      debugPrint('📨 Fetched ${models.length} post models from Firebase');
+      
+      if (models.isEmpty) {
+        debugPrint('⚠️ NO POSTS FOUND IN FIRESTORE - Check:');
+        debugPrint('   1. Are there posts in the "posts" collection?');
+        debugPrint('   2. Are Firestore rules allowing reads?');
+        debugPrint('   3. Is App Check blocking requests?');
+      }
+      
       posts = await _mapModelsToPosts(models);
+      debugPrint('📬 Mapped to ${posts.length} posts');
+      final repostCount = posts.where((p) => p.isRepost).length;
+      debugPrint('🔁 Found $repostCount reposts before hydration');
       posts = await _hydrateReposts(posts);
+      debugPrint('💧 After hydration: ${posts.length} posts');
       posts = _applyFeedFilters(posts);
-    } catch (e) {
+      debugPrint('🔍 After filters: ${posts.length} posts (reposts: ${posts.where((p) => p.isRepost).length})');
+    } catch (e, stackTrace) {
       errMsg = 'Posts failed: ${_toError(e)}';
+      debugPrint('❌ CRITICAL ERROR LOADING POSTS:');
+      debugPrint('   Error: $e');
+      debugPrint('   Stack: $stackTrace');
     }
 
     try {
@@ -287,12 +320,21 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       setState(() {
         _suggestedUsers = models
             .where((u) => u.uid != (_currentUserId ?? ''))
-            .map((u) => {
-              'id': u.uid,
-              'name': u.displayName ?? u.username ?? 'User',
-              'username': u.username,
-              'profile_photo_url': u.avatarUrl,
-              'bio': u.bio,
+            .map((u) {
+              // Build full name
+              final fn = u.firstName?.trim() ?? '';
+              final ln = u.lastName?.trim() ?? '';
+              final fullName = (fn.isNotEmpty || ln.isNotEmpty)
+                  ? '$fn $ln'.trim()
+                  : (u.displayName ?? u.username ?? 'User');
+              
+              return {
+                'id': u.uid,
+                'name': fullName,
+                'username': u.username,
+                'profile_photo_url': u.avatarUrl,
+                'bio': u.bio,
+              };
             })
             .toList();
       });
@@ -397,9 +439,17 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     // If this is a repost, get the reposter's info (the author of this repost entry)
     RepostedBy? repostedBy;
     if (m.repostOf != null && m.repostOf!.isNotEmpty) {
+      debugPrint('🔁 Processing repost: ${m.id} -> original: ${m.repostOf}');
+      // Build full name for reposter
+      final repostFirstName = author?.firstName?.trim() ?? '';
+      final repostLastName = author?.lastName?.trim() ?? '';
+      final repostFullName = (repostFirstName.isNotEmpty || repostLastName.isNotEmpty)
+          ? '$repostFirstName $repostLastName'.trim()
+          : (author?.displayName ?? author?.username ?? 'User');
+      
       repostedBy = RepostedBy(
         userId: m.authorId,
-        userName: author?.displayName ?? author?.username ?? 'User',
+        userName: repostFullName,
         userAvatarUrl: author?.avatarUrl ?? '',
         actionType: 'reposted this',
       );
@@ -433,10 +483,18 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
     int clamp(int v) => v < 0 ? 0 : v;
     final avatarUrl = await _normalizeUrl(author?.avatarUrl ?? '');
+    // Build full name from firstName and lastName
+    final firstName = author?.firstName?.trim() ?? '';
+    final lastName = author?.lastName?.trim() ?? '';
+    final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
+        ? '$firstName $lastName'.trim()
+        : (author?.displayName ?? author?.username ?? author?.email ?? 'User');
+    
+    
     return Post(
       id: m.id,
       authorId: m.authorId,
-      userName: author?.displayName ?? author?.username ?? author?.email ?? 'User',
+      userName: fullName,
       userAvatarUrl: avatarUrl,
       createdAt: m.createdAt,
       text: m.text,
@@ -799,10 +857,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       },
       onSendToUsers: (selectedUsers, message) {
         final userNames = selectedUsers.map((user) => user.name).join(', ');
+        final lang = Provider.of<LanguageProvider>(context, listen: false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Sent to $userNames${message.isNotEmpty ? ' with message: "$message"' : ''}',
+              '${lang.t('community.sent_to')}$userNames${message.isNotEmpty ? '${lang.t('community.with_message')}$message"' : ''}',
               style: GoogleFonts.inter(),
             ),
             backgroundColor: const Color(0xFFBFAE01),
@@ -819,10 +878,17 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final byId = {for (final p in profiles) p.uid: p};
     return list.map((m) {
       final u = byId[m.authorId];
+      // Build full name for comment author
+      final commentFirstName = u?.firstName?.trim() ?? '';
+      final commentLastName = u?.lastName?.trim() ?? '';
+      final commentFullName = (commentFirstName.isNotEmpty || commentLastName.isNotEmpty)
+          ? '$commentFirstName $commentLastName'.trim()
+          : (u?.displayName ?? u?.username ?? 'User');
+      
       return Comment(
         id: m.id,
         userId: m.authorId,
-        userName: (u?.displayName ?? u?.username ?? 'User'),
+        userName: commentFullName,
         userAvatarUrl: (u?.avatarUrl ?? ''),
         text: m.text,
         createdAt: m.createdAt,

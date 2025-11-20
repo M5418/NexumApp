@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'profile_bio_page.dart';
 import 'core/profile_api.dart';
+import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
 
 class ProfileTrainingPage extends StatefulWidget {
@@ -165,7 +167,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save trainings. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('profile_training.save_failed'),
             style: GoogleFonts.inter(),
           ),
         ),
@@ -177,6 +179,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     if (_loading) {
@@ -212,7 +215,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'List your educational background, certifications, or courses',
+                lang.t('profile_training.subtitle'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w400,
@@ -241,11 +244,10 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
 
               // Add Training Button
               TextButton.icon(
-                onPressed:
-                    _trainingControllers.length < 10 ? _addTraining : null,
-                icon: const Icon(Icons.add, color: Color(0xFFBFAE01)),
+                onPressed: _addTraining,
+                icon: const Icon(Icons.add, color: Color(0xFFBFAE01), size: 20),
                 label: Text(
-                  'Add Training',
+                  lang.t('profile_training.add'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     color: const Color(0xFFBFAE01),
@@ -269,7 +271,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
                     elevation: 0,
                   ),
                   child: Text(
-                    _isSaving ? 'Saving...' : 'Next',
+                    _isSaving ? lang.t('profile_setup.saving') : lang.t('profile_setup.next'),
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -312,7 +314,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Profil details',
+                            lang.t('profile_setup.profil_details'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -342,7 +344,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                'List your educational background, certifications, or courses',
+                                lang.t('profile_training.subtitle'),
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
                                   color: const Color(0xFF666666),
@@ -375,11 +377,11 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
 
                               // Add Training Button
                               TextButton.icon(
-                                onPressed:
-                                    _trainingControllers.length < 10 ? _addTraining : null,
-                                icon: const Icon(Icons.add, color: Color(0xFFBFAE01)),
+                                onPressed: _addTraining,
+                                icon: const Icon(Icons.add,
+                                    color: Color(0xFFBFAE01), size: 20),
                                 label: Text(
-                                  'Add Training',
+                                  lang.t('profile_training.add'),
                                   style: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFFBFAE01),
@@ -405,7 +407,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
                             ),
                           ),
                           child: Text(
-                            _isSaving ? 'Saving...' : 'Next',
+                            _isSaving ? lang.t('profile_setup.saving') : lang.t('profile_setup.next'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -431,6 +433,7 @@ class _MobileAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
@@ -463,7 +466,7 @@ class _MobileAppBar extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                   ),
                   Text(
-                    'Trainings',
+                    lang.t('profile_training.title'),
                     style: GoogleFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
@@ -486,20 +489,21 @@ class _TrainingItemCard extends StatelessWidget {
   final bool isDarkMode;
   final TextEditingController titleController;
   final TextEditingController subtitleController;
+  final VoidCallback? onRemove;
   final bool canRemove;
-  final VoidCallback onRemove;
 
   const _TrainingItemCard({
     required this.index,
     required this.isDarkMode,
     required this.titleController,
     required this.subtitleController,
+    this.onRemove,
     required this.canRemove,
-    required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -515,7 +519,7 @@ class _TrainingItemCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Training ${index + 1}',
+                  '${lang.t('profile_training.training_number')} ${index + 1}',
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -541,7 +545,7 @@ class _TrainingItemCard extends StatelessWidget {
               color: isDarkMode ? Colors.white : Colors.black,
             ),
             decoration: InputDecoration(
-              labelText: 'Institution/Course Title',
+              labelText: lang.t('profile_training.institution'),
               labelStyle: GoogleFonts.inter(
                 fontSize: 16,
                 color: const Color(0xFF666666),
@@ -576,7 +580,7 @@ class _TrainingItemCard extends StatelessWidget {
               color: isDarkMode ? Colors.white : Colors.black,
             ),
             decoration: InputDecoration(
-              labelText: 'Degree/Certificate (Optional)',
+              labelText: lang.t('profile_training.degree'),
               labelStyle: GoogleFonts.inter(
                 fontSize: 16,
                 color: const Color(0xFF666666),

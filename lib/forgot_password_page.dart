@@ -45,7 +45,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   const SizedBox(height: 50),
                   // NEXUM Title
                   Text(
-                    'NEXUM',
+                    Provider.of<LanguageProvider>(context, listen: false).t('app.name'),
                     style: GoogleFonts.inika(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -86,7 +86,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                         const SizedBox(height: 16),
                         // Subtext
                         Text(
-                          'Enter your email address and we\'ll send you a link to reset your password',
+                          Provider.of<LanguageProvider>(context, listen: false).t('forgot.subtitle'),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
                             fontSize: 14,
@@ -166,7 +166,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                 if (!navContext.mounted) return;
                                 ScaffoldMessenger.of(navContext).showSnackBar(
                                   SnackBar(
-                                    content: Text('Failed to send reset email', style: GoogleFonts.inter()),
+                                    content: Text(Provider.of<LanguageProvider>(context, listen: false).t('forgot.error_failed'), style: GoogleFonts.inter()),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
@@ -180,7 +180,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                               elevation: 0,
                             ),
                             child: Text(
-                              'Send Reset Link',
+                              Provider.of<LanguageProvider>(context, listen: false).t('forgot.send_link'),
                               style: GoogleFonts.inter(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -197,7 +197,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                               Navigator.pop(context);
                             },
                             child: Text(
-                              'Back to Sign In',
+                              Provider.of<LanguageProvider>(context, listen: false).t('forgot.back_signin'),
                               style: GoogleFonts.inter(
                                 fontSize: 16,
                                 color: const Color(0xFFBFAE01),

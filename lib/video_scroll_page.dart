@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
+import 'package:provider/provider.dart';
 
 import 'models/post.dart';
 import 'models/comment.dart';
@@ -10,10 +11,13 @@ import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_comment_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'core/i18n/language_provider.dart';
 import 'widgets/custom_video_player.dart';
 import 'widgets/reaction_picker.dart';
 import 'widgets/comment_bottom_sheet.dart';
 import 'widgets/share_bottom_sheet.dart';
+import 'other_user_profile_page.dart';
+import 'profile_page.dart';
 
 class VideoScrollPage extends StatefulWidget {
   const VideoScrollPage({super.key});
@@ -98,6 +102,9 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
   }
 
   Future<Post> _toPost(PostModel m) async {
+    // Capture fallback user text before async gap
+    final fallbackUser = mounted ? Provider.of<LanguageProvider>(context, listen: false).t('video.user') : 'User';
+    
     final author = await _userRepo.getUserProfile(m.authorId);
     final uid = _currentUserId;
     bool isBookmarked = false;
@@ -134,7 +141,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     return Post(
       id: m.id,
       authorId: m.authorId,
-      userName: author?.displayName ?? author?.username ?? author?.email ?? 'User',
+      userName: author?.displayName ?? author?.username ?? author?.email ?? fallbackUser,
       userAvatarUrl: author?.avatarUrl ?? '',
       createdAt: m.createdAt,
       text: m.text,
@@ -222,7 +229,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('video.like_failed')}${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -256,7 +263,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
-                Text('Unlike failed: ${_toError(e)}', style: GoogleFonts.inter()),
+                Text('${Provider.of<LanguageProvider>(context, listen: false).t('video.unlike_failed')}${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -300,7 +307,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Like failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('video.like_failed')}${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -344,7 +351,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
-                Text('Unlike failed: ${_toError(e)}', style: GoogleFonts.inter()),
+                Text('${Provider.of<LanguageProvider>(context, listen: false).t('video.unlike_failed')}${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -389,7 +396,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Bookmark failed: ${_toError(e)}', style: GoogleFonts.inter()),
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('video.bookmark_failed')}${_toError(e)}', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -434,7 +441,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Videos',
+          Provider.of<LanguageProvider>(context, listen: false).t('video.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -453,7 +460,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       body: _videoPosts.isEmpty
           ? Center(
               child: Text(
-                'No videos available',
+                Provider.of<LanguageProvider>(context, listen: false).t('video.no_videos'),
                 style: GoogleFonts.inter(
                   color: isDark ? Colors.white70 : Colors.black54,
                 ),
@@ -555,68 +562,91 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // User info
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundImage: NetworkImage(post.userAvatarUrl),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            post.userName,
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              shadows: [
-                                Shadow(
-                                  offset: const Offset(0, 1),
-                                  blurRadius: 3,
-                                  color: Colors.black.withValues(alpha: 128),
-                                ),
-                              ],
-                            ),
+                GestureDetector(
+                  onTap: () {
+                    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                    if (currentUserId == post.authorId) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ProfilePage()),
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => OtherUserProfilePage(
+                            userId: post.authorId,
+                            userName: post.userName,
+                            userAvatarUrl: post.userAvatarUrl,
+                            userBio: '',
                           ),
-                          Text(
-                            _formatTimeAgo(post.createdAt),
-                            style: GoogleFonts.inter(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              shadows: [
-                                Shadow(
-                                  offset: const Offset(0, 1),
-                                  blurRadius: 3,
-                                  color: Colors.black.withValues(alpha: 128),
-                                ),
-                              ],
+                        ),
+                      );
+                    }
+                  },
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundImage: NetworkImage(post.userAvatarUrl),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              post.userName,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                shadows: [
+                                  Shadow(
+                                    offset: const Offset(0, 1),
+                                    blurRadius: 3,
+                                    color: Colors.black.withValues(alpha: 128),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFBFAE01),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Connect',
-                        style: GoogleFonts.inter(
-                          color: Colors.black,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                            Text(
+                              _formatTimeAgo(post.createdAt),
+                              style: GoogleFonts.inter(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                shadows: [
+                                  Shadow(
+                                    offset: const Offset(0, 1),
+                                    blurRadius: 3,
+                                    color: Colors.black.withValues(alpha: 128),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFBFAE01),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          Provider.of<LanguageProvider>(context, listen: false).t('video.connect'),
+                          style: GoogleFonts.inter(
+                            color: Colors.black,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
 
@@ -652,7 +682,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                         ),
                         if (post.text.length > 100)
                           Text(
-                            isExpanded ? 'Read less' : 'Read more',
+                            isExpanded ? Provider.of<LanguageProvider>(context, listen: false).t('video.read_less') : Provider.of<LanguageProvider>(context, listen: false).t('video.read_more'),
                             style: GoogleFonts.inter(
                               color: Colors.white70,
                               fontSize: 14,
@@ -721,7 +751,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'Added to Stories!',
+                              Provider.of<LanguageProvider>(context, listen: false).t('video.added_stories'),
                               style: GoogleFonts.inter(),
                             ),
                             backgroundColor:
@@ -733,7 +763,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'Link copied to clipboard!',
+                              Provider.of<LanguageProvider>(context, listen: false).t('video.link_copied'),
                               style: GoogleFonts.inter(),
                             ),
                             backgroundColor:
@@ -745,7 +775,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'Shared to Telegram!',
+                              Provider.of<LanguageProvider>(context, listen: false).t('video.shared_telegram'),
                               style: GoogleFonts.inter(),
                             ),
                             backgroundColor:
@@ -757,7 +787,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'Shared to Facebook!',
+                              Provider.of<LanguageProvider>(context, listen: false).t('video.shared_facebook'),
                               style: GoogleFonts.inter(),
                             ),
                             backgroundColor:
@@ -769,7 +799,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'More sharing options coming soon!',
+                              Provider.of<LanguageProvider>(context, listen: false).t('video.more_share_soon'),
                               style: GoogleFonts.inter(),
                             ),
                             backgroundColor:
@@ -781,7 +811,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'Sent to ${selectedUsers.length} ${selectedUsers.length == 1 ? 'person' : 'people'}!',
+                              '${Provider.of<LanguageProvider>(context, listen: false).t('video.sent_to')}${selectedUsers.length} ${selectedUsers.length == 1 ? Provider.of<LanguageProvider>(context, listen: false).t('video.person') : Provider.of<LanguageProvider>(context, listen: false).t('video.people')}!',
                               style: GoogleFonts.inter(),
                             ),
                             backgroundColor:
@@ -864,7 +894,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     if (!ctx.mounted) return;
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
-        content: Text('Load comments failed: ${_toError(e)}', style: GoogleFonts.inter()),
+        content: Text('${Provider.of<LanguageProvider>(ctx, listen: false).t('video.load_comments_failed')}${_toError(e)}', style: GoogleFonts.inter()),
         backgroundColor: Colors.red,
       ),
     );
@@ -901,7 +931,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         if (!ctx.mounted) return;
         ScaffoldMessenger.of(ctx).showSnackBar(
           SnackBar(
-            content: Text('Comment posted!', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('video.comment_posted'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF4CAF50),
           ),
         );
@@ -909,7 +939,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         if (!ctx.mounted) return;
         ScaffoldMessenger.of(ctx).showSnackBar(
           SnackBar(
-            content: Text('Post comment failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            content: Text('${Provider.of<LanguageProvider>(ctx, listen: false).t('video.post_comment_failed')}${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -921,7 +951,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         if (!ctx.mounted) return;
         ScaffoldMessenger.of(ctx).showSnackBar(
           SnackBar(
-            content: Text('Reply posted!', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('video.reply_posted'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFF4CAF50),
           ),
         );
@@ -929,7 +959,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         if (!ctx.mounted) return;
         ScaffoldMessenger.of(ctx).showSnackBar(
           SnackBar(
-            content: Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
+            content: Text('${Provider.of<LanguageProvider>(ctx, listen: false).t('video.reply_failed')}${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -948,7 +978,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       return Comment(
         id: m.id,
         userId: m.authorId,
-        userName: (u?.displayName ?? u?.username ?? 'User'),
+        userName: (u?.displayName ?? u?.username ?? Provider.of<LanguageProvider>(context, listen: false).t('video.user')),
         userAvatarUrl: (u?.avatarUrl ?? ''),
         text: m.text,
         createdAt: m.createdAt,

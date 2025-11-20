@@ -17,9 +17,13 @@ import '../widgets/chat_input.dart';
 import '../widgets/attachment_dropdown_menu.dart';
 import '../widgets/message_actions_sheet.dart';
 import '../widgets/media_preview_page.dart';
+import '../other_user_profile_page.dart';
+import '../profile_page.dart';
 import '../repositories/interfaces/mentorship_repository.dart';
+import '../repositories/interfaces/storage_repository.dart';
 import '../core/profile_api.dart';
 import '../core/audio_recorder.dart';
+import '../core/video_utils_stub.dart' if (dart.library.io) '../core/video_utils_io.dart';
 // removed ApiClient usage
 
 class MentorshipChatPage extends StatefulWidget {
@@ -47,6 +51,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   final _reactions = <String, String>{};
   final _audio = AudioRecorder();
   late MentorshipRepository _mentorRepo;
+  late StorageRepository _storageRepo;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
 
@@ -64,6 +69,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   void initState() {
     super.initState();
     _mentorRepo = context.read<MentorshipRepository>();
+    _storageRepo = context.read<StorageRepository>();
     _init();
     _startPolling();
   }
@@ -314,8 +320,32 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         final r = await _audio.stopRecording();
         setState(() => _recording = false);
         if (r == null) return;
-        final url = await _audio.uploadVoiceFile(r.filePath);
-        if (url == null) throw 'Failed to upload voice';
+        
+        // Upload to Firebase Storage
+        if (r.filePath == null) throw 'Recording file path is null';
+        final file = File(r.filePath!);
+        if (!await file.exists()) throw 'Recording file not found';
+        
+        final uid = _auth.currentUser?.uid;
+        if (uid == null) throw 'User not authenticated';
+        
+        final path = _storageRepo.generateUniqueFileName(
+          uid: uid,
+          extension: 'm4a',
+          prefix: 'mentorship_voice_messages',
+        );
+        
+        final url = await _storageRepo.uploadFileFromPath(
+          path: path,
+          file: file,
+          contentType: 'audio/m4a',
+        );
+        
+        // Clean up temp file
+        try {
+          await file.delete();
+        } catch (_) {}
+        
         final id = await _requireConv();
         final data = {
           'senderId': _auth.currentUser?.uid,
@@ -462,6 +492,22 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
           p.toLowerCase().endsWith('.webm') ||
           p.toLowerCase().endsWith('.mkv') ||
           p.toLowerCase().endsWith('.avi');
+      String guessVideoContentType(String ext) {
+        switch (ext.toLowerCase()) {
+          case 'mp4':
+            return 'video/mp4';
+          case 'webm':
+            return 'video/webm';
+          case 'mov':
+            return 'video/quicktime';
+          case 'mkv':
+            return 'video/x-matroska';
+          case 'avi':
+            return 'video/x-msvideo';
+          default:
+            return 'video/mp4';
+        }
+      }
       for (final f in files) {
         final nameOrPath = f.name.isNotEmpty ? f.name : f.path;
         final dot = nameOrPath.lastIndexOf('.');
@@ -470,20 +516,33 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
             : 'bin';
         String url;
         int? size;
+        String? thumbUrl;
         if (kIsWeb) {
           final bytes = await f.readAsBytes();
           size = bytes.length;
-          url = await profile.uploadBytes(bytes, ext: ext);
+          final isVideo = isVideoName(nameOrPath);
+          final ct = isVideo ? guessVideoContentType(ext) : null;
+          url = await profile.uploadBytes(bytes, ext: ext, contentType: ct);
         } else {
           final file = File(f.path);
           size = await file.length();
           url = await profile.uploadFile(file);
+          final isVideo = isVideoName(nameOrPath);
+          if (isVideo) {
+            try {
+              final thumb = await generateVideoThumbnail(file.path);
+              if (thumb != null && thumb.isNotEmpty) {
+                thumbUrl = await profile.uploadBytes(thumb, ext: 'jpg', contentType: 'image/jpeg');
+              }
+            } catch (_) {}
+          }
         }
         atts.add({
           'type': isVideoName(nameOrPath) ? 'video' : 'image',
           'url': url,
           'fileName': f.name,
-          'fileSize': size
+          'fileSize': size,
+          if (thumbUrl != null) 'thumbnail': thumbUrl
         });
       }
       final id = await _requireConv();
@@ -652,45 +711,64 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
           icon: Icon(Icons.arrow_back_ios,
               color: isDark ? Colors.white : Colors.black, size: 20),
         ),
-        title: Row(children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: CachedNetworkImage(
-              imageUrl: widget.mentorAvatar,
-              width: 40,
-              height: 40,
-              fit: BoxFit.cover,
-              placeholder: (_, __) => Container(
+        title: GestureDetector(
+          onTap: () {
+            final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+            if (currentUserId == widget.mentorUserId) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfilePage()),
+              );
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OtherUserProfilePage(
+                    userId: widget.mentorUserId,
+                    userName: widget.mentorName,
+                    userAvatarUrl: widget.mentorAvatar,
+                    userBio: '',
+                  ),
+                ),
+              );
+            }
+          },
+          child: Row(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: CachedNetworkImage(
+                imageUrl: widget.mentorAvatar,
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF666666).withAlpha(51),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(Icons.person,
-                    color: Color(0xFF666666), size: 20),
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                    width: 40,
+                    height: 40,
+                    color: const Color(0xFF666666).withAlpha(51)),
+                errorWidget: (context, url, error) =>
+                    const Icon(Icons.person, size: 40),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                widget.mentorName,
-                style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black),
-              ),
-              Text(
-                widget.isOnline ? 'Online' : 'Last seen recently',
-                style: GoogleFonts.inter(
-                    fontSize: 12, color: const Color(0xFF666666)),
-              ),
-            ]),
-          ),
-        ]),
+            const SizedBox(width: 12),
+            Expanded(
+              child:
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  widget.mentorName,
+                  style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black),
+                ),
+                Text(
+                  widget.isOnline ? 'Online' : 'Last seen recently',
+                  style: GoogleFonts.inter(
+                      fontSize: 12, color: const Color(0xFF666666)),
+                ),
+              ]),
+            ),
+          ]),
+        ),
         actions: [
           IconButton(
               onPressed: () {},

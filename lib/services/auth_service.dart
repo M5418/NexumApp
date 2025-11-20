@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../repositories/firebase/firebase_auth_repository.dart';
 import '../repositories/firebase/firebase_user_repository.dart';
 import '../repositories/firebase/firebase_notification_repository.dart';
@@ -64,11 +65,46 @@ class AuthService extends ChangeNotifier {
     if (fu == null) return;
     
     try {
-      await fm.FirebaseMessaging.instance.setAutoInitEnabled(true);
-      final settings = await fm.FirebaseMessaging.instance.requestPermission();
+      // Add timeout to prevent hanging/freezing
+      await fm.FirebaseMessaging.instance.setAutoInitEnabled(true).timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('⚠️ Messaging auto-init timed out - likely on simulator');
+          return;
+        },
+      );
+      
+      final settings = await fm.FirebaseMessaging.instance.requestPermission().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('⚠️ Messaging permission request timed out');
+          return fm.NotificationSettings(
+            authorizationStatus: fm.AuthorizationStatus.denied,
+            alert: fm.AppleNotificationSetting.disabled,
+            announcement: fm.AppleNotificationSetting.disabled,
+            badge: fm.AppleNotificationSetting.disabled,
+            carPlay: fm.AppleNotificationSetting.disabled,
+            lockScreen: fm.AppleNotificationSetting.disabled,
+            notificationCenter: fm.AppleNotificationSetting.disabled,
+            showPreviews: fm.AppleShowPreviewSetting.never,
+            timeSensitive: fm.AppleNotificationSetting.disabled,
+            criticalAlert: fm.AppleNotificationSetting.disabled,
+            sound: fm.AppleNotificationSetting.disabled,
+            providesAppNotificationSettings: fm.AppleNotificationSetting.disabled,
+          );
+        },
+      );
+      
       if (settings.authorizationStatus == fm.AuthorizationStatus.denied) return;
 
-      final token = await fm.FirebaseMessaging.instance.getToken();
+      final token = await fm.FirebaseMessaging.instance.getToken().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('⚠️ FCM token request timed out');
+          return null;
+        },
+      );
+      
       if (token != null && token.isNotEmpty) {
         await _fbUsers.updateFCMToken(token);
         await _fbNotifs.subscribeTopic('direct:user:${fu.uid}');
@@ -76,7 +112,7 @@ class AuthService extends ChangeNotifier {
         await _fbNotifs.subscribeTopic('system:announcements');
       }
     } catch (e) {
-      debugPrint('Messaging setup error: $e');
+      debugPrint('Messaging setup error (non-critical): $e');
     }
   }
 
@@ -120,12 +156,38 @@ class AuthService extends ChangeNotifier {
             break;
           } else {
             debugPrint('⚠️  Profile returned null (document may not exist)');
+            
+            // CREATE USER DOCUMENT IF IT DOESN'T EXIST (critical for TestFlight)
+            if (attempt == 0) {
+              debugPrint('📝 Creating user document for ${fu.uid}...');
+              try {
+                await _fbUsers.updateUserProfile(fu.uid, {
+                  'uid': fu.uid,
+                  'email': fu.email ?? '',
+                  'displayName': fu.displayName ?? '',
+                  'avatarUrl': fu.photoURL ?? '',
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'lastActive': FieldValue.serverTimestamp(),
+                  'firstName': '',
+                  'lastName': '',
+                  'bio': '',
+                  'isVerified': false,
+                  'followersCount': 0,
+                  'followingCount': 0,
+                  'postsCount': 0,
+                });
+                debugPrint('✅ User document created, retrying profile fetch...');
+                // Continue to next attempt to fetch the newly created profile
+              } catch (createError) {
+                debugPrint('❌ Failed to create user document: $createError');
+              }
+            }
           }
         } catch (e) {
           debugPrint('❌ Attempt ${attempt + 1} failed: $e');
           if (attempt == 2) {
             debugPrint('🚨 CRITICAL: Profile fetch failed after 3 attempts: $e');
-            debugPrint('🔍 Check: 1) Firestore rules deployed? 2) User document exists? 3) Auth token valid?');
+            debugPrint('🔍 Check: 1) Firestore rules deployed? 2) Auth token valid? 3) Network connection?');
           } else {
             await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
           }

@@ -26,7 +26,7 @@ class ReportOption {
 
 class ReportBottomSheet extends StatefulWidget {
   // Generic target
-  final String targetType; // 'post' | 'story' | 'user'
+  final String targetType; // 'post' | 'story' | 'user' | 'comment' | 'community_post'
   final String targetId;
   final String authorName; // display name (post/story owner or user full name)
   final String? authorUsername; // like '@username'
@@ -46,7 +46,7 @@ class ReportBottomSheet extends StatefulWidget {
 
   static void show(
     BuildContext context, {
-    required String targetType, // 'post' | 'story' | 'user'
+    required String targetType, // 'post' | 'story' | 'user' | 'comment' | 'community_post'
     required String targetId,
     required String authorName,
     String? authorUsername,
@@ -130,6 +130,10 @@ class _ReportBottomSheetState extends State<ReportBottomSheet> {
         return "What's wrong with this user?";
       case 'story':
         return "What's wrong with this story?";
+      case 'comment':
+        return "What's wrong with this comment?";
+      case 'community_post':
+        return "What's wrong with this community post?";
       case 'post':
       default:
         return "What's wrong with this post?";

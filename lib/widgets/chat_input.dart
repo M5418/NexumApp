@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
 import '../core/i18n/language_provider.dart';
+import '../core/audio_recorder.dart';
 
 class ChatInput extends StatefulWidget {
   final Function(String) onSendMessage;
@@ -10,6 +11,7 @@ class ChatInput extends StatefulWidget {
   final VoidCallback onAttachment;
   final String? replyToMessage;
   final VoidCallback? onCancelReply;
+  final VoidCallback? onVoiceSendComplete;
 
   const ChatInput({
     super.key,
@@ -18,6 +20,7 @@ class ChatInput extends StatefulWidget {
     required this.onAttachment,
     this.replyToMessage,
     this.onCancelReply,
+    this.onVoiceSendComplete,
   });
 
   @override
@@ -28,7 +31,10 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _isRecording = false;
+  bool _isSending = false;
   bool _hasText = false;
+  bool _cancelRequested = false;
+  final AudioRecorder _audioRecorder = AudioRecorder();
   AnimationController? _pulseController;
   AnimationController? _rippleController;
   Animation<double>? _pulseAnimation;
@@ -116,19 +122,57 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
   }
 
   void _startRecording() async {
-    setState(() {
-      _isRecording = true;
-    });
+    _cancelRequested = false;
+    
+    // Add timeout to prevent UI freeze on simulator
+    bool granted = false;
+    try {
+      granted = await _audioRecorder.hasPermission().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('⚠️ Permission check timed out - likely on simulator');
+          return false;
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Error checking microphone permission: $e');
+      return;
+    }
+    
+    if (!granted) {
+      debugPrint('ℹ️ Microphone permission not granted');
+      return;
+    }
+    if (_cancelRequested) return;
+    if (mounted) {
+      setState(() {
+        _isRecording = true;
+      });
+    }
     _startRecordingAnimation();
-    await widget.onVoiceRecord(); // toggles start in ChatPage
+    await widget.onVoiceRecord();
   }
 
   void _stopRecording() async {
+    _cancelRequested = true;
+    if (!_isRecording) return;
     setState(() {
       _isRecording = false;
+      _isSending = true;
     });
     _stopRecordingAnimation();
-    await widget.onVoiceRecord(); // toggles stop + upload + send in ChatPage
+    try {
+      await widget.onVoiceRecord().timeout(const Duration(seconds: 30));
+    } catch (_) {
+      // swallow; ChatPage will show a SnackBar if needed
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+        widget.onVoiceSendComplete?.call();
+      }
+    }
   }
 
   @override
@@ -194,8 +238,8 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                     if (!_isRecording) const SizedBox(width: 12),
 
                     Expanded(
-                      child: _isRecording
-                          ? const SizedBox.shrink()
+                      child: (_isRecording || _isSending)
+                          ? (_isSending ? _buildSendingIndicator(isDark) : const SizedBox.shrink())
                           : Stack(
                               children: [
                                 Container(
@@ -263,20 +307,21 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
                     const SizedBox(width: 12),
 
                     SizedBox(
-                      width: _isRecording ? 200 : 36,
+                      width: _isRecording ? 200 : (_isSending ? 0 : 36),
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onLongPressStart: (_) {
-                          if (!_isRecording) {
+                          if (!_isRecording && !_isSending) {
                             _startRecording();
                           }
                         },
                         onLongPressEnd: (_) {
+                          _cancelRequested = true;
                           if (_isRecording) {
                             _stopRecording();
                           }
                         },
-                        child: _isRecording
+                        child: (_isRecording && !_isSending)
                             ? Row(
                                 mainAxisSize: MainAxisSize.min,
                                 mainAxisAlignment: MainAxisAlignment.end,
@@ -397,6 +442,41 @@ class _ChatInputState extends State<ChatInput> with TickerProviderStateMixin {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSendingIndicator(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF666666).withAlpha(51),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            Provider.of<LanguageProvider>(context, listen: false).t('chat.sending'),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: const Color(0xFF666666),
+            ),
+          ),
+        ],
       ),
     );
   }

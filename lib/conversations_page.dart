@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -22,6 +23,8 @@ import 'repositories/interfaces/community_repository.dart';
 import 'repositories/firebase/firebase_notification_repository.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'core/time_utils.dart';
+import 'services/community_interest_sync_service.dart';
+import 'core/profile_api.dart';
 
 class ConversationsPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -83,6 +86,10 @@ class _ConversationsPageState extends State<ConversationsPage>
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
         setState(() => _selectedTabIndex = _tabController.index);
+        // Refresh communities when switching to Communities tab
+        if (_tabController.index == 1) {
+          _loadCommunities();
+        }
       }
     });
 
@@ -91,14 +98,54 @@ class _ConversationsPageState extends State<ConversationsPage>
     _loadUnreadNotifications();
   }
 
+
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
 
-    bool _isWideLayout(BuildContext context) {
+  bool _isWideLayout(BuildContext context) {
     return kIsWeb && (context.isDesktop || context.isLargeDesktop);
+  }
+
+  /// Quick sync: Reconcile community memberships with user interests
+  /// Runs in milliseconds - removes/adds memberships as needed
+  Future<void> _syncCommunitiesWithInterests() async {
+    try {
+      // Get user's current interests from profile
+      final profileData = await ProfileApi().me();
+      final userData = profileData['data'] as Map<String, dynamic>?;
+      if (userData == null) return;
+      
+      // Parse interests
+      final interestsRaw = userData['interest_domains'];
+      List<String> userInterests = [];
+      if (interestsRaw is List) {
+        userInterests = interestsRaw.map((e) => e.toString()).toList();
+      } else if (interestsRaw is String) {
+        // Handle JSON string
+        userInterests = List<String>.from(jsonDecode(interestsRaw));
+      }
+      
+      if (userInterests.isEmpty) return;
+      
+      // Get current community memberships
+      final currentCommunities = await _commRepo.listMine();
+      final currentCommunityNames = currentCommunities.map((c) => c.name).toSet();
+      
+      // Find mismatches
+      final shouldHave = userInterests.toSet();
+      final shouldRemove = currentCommunityNames.difference(shouldHave);
+      final shouldAdd = shouldHave.difference(currentCommunityNames);
+      
+      // Quick sync if there are mismatches
+      if (shouldRemove.isNotEmpty || shouldAdd.isNotEmpty) {
+        await CommunityInterestSyncService().syncUserInterests(userInterests);
+      }
+    } catch (e) {
+      // Silent fail - don't block community loading
+    }
   }
 
   Future<void> _loadUnreadNotifications() async {
@@ -186,6 +233,10 @@ String _formatTime(DateTime? dt) {
         _loadingCommunities = true;
         _errorCommunities = null;
       });
+      
+      // Quick sync: Ensure communities match user's interests
+      await _syncCommunitiesWithInterests();
+      
       final list = await _commRepo.listMine();
       if (!mounted) return;
       final mapped = list
@@ -885,7 +936,7 @@ Widget _buildDesktopBody(bool isDark) {
     if (_chats.isEmpty) {
       return Center(
         child: Text(
-          'No conversations yet',
+          Provider.of<LanguageProvider>(context).t('chat.no_conversations'),
           style: GoogleFonts.inter(
             fontSize: 14,
             color: const Color(0xFF666666),

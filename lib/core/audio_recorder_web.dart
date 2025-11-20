@@ -15,9 +15,11 @@ class AudioRecorder {
   html.MediaStream? _mediaStream;
   html.MediaRecorder? _recorder;
   final List<html.Blob> _chunks = [];
+  html.EventListener? _onDataHandler;
 
   DateTime? _startTime;
   Uint8List? _lastBytes;
+  bool _permissionGranted = false;
 
   Future<bool> hasPermission() async {
     try {
@@ -33,8 +35,8 @@ class AudioRecorder {
         debugPrint('❌ Web mic permission denied or unavailable');
         return false;
       }
-
       debugPrint('✅ Web mic permission granted');
+      _permissionGranted = true;
       
       // Immediately stop tracks; they'll be reacquired at startRecording
       for (final t in _mediaStream!.getTracks()) {
@@ -55,7 +57,7 @@ class AudioRecorder {
         throw Exception('MediaDevices API not available. Recording requires HTTPS or localhost.');
       }
 
-      final permitted = await hasPermission();
+      final permitted = _permissionGranted ? true : await hasPermission();
       if (!permitted) {
         throw Exception('Microphone permission denied. Please allow microphone access in your browser.');
       }
@@ -90,7 +92,7 @@ class AudioRecorder {
       _recorder!.addEventListener('start', onStartHandler);
 
       // Collect chunks on 'dataavailable'
-      void onDataHandler(html.Event e) {
+      _onDataHandler = (html.Event e) {
         try {
           final dynamic de = e;
           final data = (de as dynamic).data as html.Blob?;
@@ -101,8 +103,8 @@ class AudioRecorder {
         } catch (err) {
           debugPrint('⚠️ Web dataavailable parse error: $err');
         }
-      }
-      _recorder!.addEventListener('dataavailable', onDataHandler);
+      };
+      _recorder!.addEventListener('dataavailable', _onDataHandler!);
 
       // Request chunks every 1 second to ensure dataavailable fires reliably
       _recorder!.start(1000);
@@ -132,7 +134,12 @@ class AudioRecorder {
       }
       _recorder!.addEventListener('stop', onStopHandler);
 
+      // Stop and remove listeners
       _recorder!.stop();
+      if (_onDataHandler != null) {
+        try { _recorder!.removeEventListener('dataavailable', _onDataHandler!); } catch (_) {}
+        _onDataHandler = null;
+      }
       await stopped.future;
 
       if (_chunks.isEmpty) {
@@ -241,6 +248,13 @@ class AudioRecorder {
     }
   }
 
+  // Retrieve the recorded bytes for upload via app's StorageRepository
+  Future<Uint8List?> takeRecordedBytes() async {
+    final bytes = _lastBytes;
+    _lastBytes = null;
+    return bytes;
+  }
+
   void dispose() {
     try {
       _recorder?.stop();
@@ -252,6 +266,7 @@ class AudioRecorder {
     _recorder = null;
     _startTime = null;
     _chunks.clear();
+    _onDataHandler = null;
     try {
       _mediaStream?.getTracks().forEach((t) => t.stop());
     } catch (_) {}

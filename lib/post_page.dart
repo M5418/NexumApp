@@ -18,6 +18,8 @@ import 'widgets/comment_thread.dart';
 import 'widgets/animated_navbar.dart';
 import 'widgets/post_options_menu.dart';
 import 'widgets/share_bottom_sheet.dart';
+import 'other_user_profile_page.dart';
+import 'profile_page.dart';
 import 'core/time_utils.dart';
 import 'package:provider/provider.dart';
 import 'core/i18n/language_provider.dart';
@@ -236,6 +238,14 @@ class _PostPageState extends State<PostPage> {
       final model = await _postRepo.getPost(widget.postId!);
       if (model == null) throw Exception('Post not found');
       final author = await _userRepo.getUserProfile(model.authorId);
+      
+      // Build full name for post author
+      final firstName = author?.firstName?.trim() ?? '';
+      final lastName = author?.lastName?.trim() ?? '';
+      final authorFullName = (firstName.isNotEmpty || lastName.isNotEmpty)
+          ? '$firstName $lastName'.trim()
+          : (author?.displayName ?? author?.username ?? 'User');
+      
       bool liked = false;
       bool isBookmarked = false;
       if (_currentUserId != null) {
@@ -247,7 +257,7 @@ class _PostPageState extends State<PostPage> {
       final detail = PostDetail(
         id: model.id,
         authorId: model.authorId,
-        authorName: author?.displayName ?? author?.username ?? 'User',
+        authorName: authorFullName,
         authorAvatarUrl: avatarUrl,
         createdAt: model.createdAt,
         text: model.text,
@@ -300,7 +310,13 @@ class _PostPageState extends State<PostPage> {
       if (name.isEmpty || avatar.isEmpty) {
         final a = await _userRepo.getUserProfile(model.authorId);
         if (!mounted) return;
-        name = a?.displayName ?? a?.username ?? 'User';
+        
+        // Build full name for post author
+        final fn = a?.firstName?.trim() ?? '';
+        final ln = a?.lastName?.trim() ?? '';
+        name = (fn.isNotEmpty || ln.isNotEmpty)
+            ? '$fn $ln'.trim()
+            : (a?.displayName ?? a?.username ?? 'User');
         avatar = a?.avatarUrl ?? '';
       }
       final normUrls = await _normalizeUrls(model.mediaUrls);
@@ -1218,38 +1234,84 @@ class _PostPageState extends State<PostPage> {
           children: [
             Row(
               children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    image: DecorationImage(
-                      image: NetworkImage(_post!.authorAvatarUrl),
-                      fit: BoxFit.cover,
+                GestureDetector(
+                  onTap: () {
+                    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                    if (currentUserId == _post!.authorId) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ProfilePage()),
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => OtherUserProfilePage(
+                            userId: _post!.authorId,
+                            userName: _post!.authorName,
+                            userAvatarUrl: _post!.authorAvatarUrl,
+                            userBio: '',
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(
+                        image: NetworkImage(_post!.authorAvatarUrl),
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _post!.authorName,
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black,
+                  child: GestureDetector(
+                    onTap: () {
+                      final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                      if (currentUserId == _post!.authorId) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ProfilePage()),
+                        );
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => OtherUserProfilePage(
+                              userId: _post!.authorId,
+                              userName: _post!.authorName,
+                              userAvatarUrl: _post!.authorAvatarUrl,
+                              userBio: '',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _post!.authorName,
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
                         ),
-                      ),
-                      Text(
-                        TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: const Color(0xFF666666),
+                        Text(
+                          TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: const Color(0xFF666666),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

@@ -1,9 +1,9 @@
 // lib/core/audio_recorder_io.dart
 import 'dart:io';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart' as rec;
-import 'profile_api.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class AudioRecorder {
   static final AudioRecorder _instance = AudioRecorder._internal();
@@ -16,31 +16,57 @@ class AudioRecorder {
   DateTime? _recordingStartTime;
 
   Future<bool> hasPermission() async {
+    // Check if running on iOS Simulator (doesn't support microphone)
+    if (Platform.isIOS && kDebugMode) {
+      try {
+        final deviceInfo = DeviceInfoPlugin();
+        final iosInfo = await deviceInfo.iosInfo;
+        if (!iosInfo.isPhysicalDevice) {
+          debugPrint('⚠️ Running on iOS Simulator - microphone not supported');
+          debugPrint('   Voice recording will not work on simulator');
+          return false; // Don't open settings, just return false
+        }
+      } catch (e) {
+        debugPrint('⚠️ Could not detect if simulator: $e');
+      }
+    }
+    
     final status = await Permission.microphone.status;
     
     // Already granted
-    if (status.isGranted) return true;
-    
-    // If permanently denied, user needs to go to Settings
-    if (status.isPermanentlyDenied) {
-      debugPrint('⚠️ Microphone permission permanently denied. Opening Settings...');
-      await openAppSettings();
-      return false;
+    if (status.isGranted) {
+      debugPrint('✅ Microphone permission already granted');
+      return true;
     }
     
-    // Request permission - this shows the iOS system dialog
+    // Request permission - this shows the iOS system dialog on FIRST USE
+    // Add timeout to prevent freezing on simulator
     debugPrint('🎤 Requesting microphone permission...');
-    final result = await Permission.microphone.request();
+    PermissionStatus result;
+    try {
+      result = await Permission.microphone.request().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          debugPrint('⚠️ Permission request timed out');
+          return PermissionStatus.denied;
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Permission request error: $e');
+      return false;
+    }
     
     if (result.isGranted) {
       debugPrint('✅ Microphone permission granted');
       return true;
     } else if (result.isPermanentlyDenied) {
-      debugPrint('⚠️ Microphone permission permanently denied');
-      await openAppSettings();
+      // Only open settings if user has permanently denied (denied multiple times)
+      debugPrint('⚠️ Microphone permission permanently denied. User needs to enable in Settings.');
+      // Don't call openAppSettings on timeout/simulator
       return false;
     } else {
-      debugPrint('❌ Microphone permission denied');
+      // User denied once - just return false, don't open settings
+      debugPrint('❌ Microphone permission denied by user');
       return false;
     }
   }
@@ -48,6 +74,16 @@ class AudioRecorder {
   Future<String?> startRecording() async {
     try {
       if (!await hasPermission()) {
+        // Check if simulator
+        if (Platform.isIOS && kDebugMode) {
+          try {
+            final deviceInfo = DeviceInfoPlugin();
+            final iosInfo = await deviceInfo.iosInfo;
+            if (!iosInfo.isPhysicalDevice) {
+              throw Exception('Voice recording is not supported on iOS Simulator. Please test on a real device.');
+            }
+          } catch (_) {}
+        }
         throw Exception('Microphone permission denied. Please enable microphone access in Settings.');
       }
 
@@ -137,27 +173,6 @@ class AudioRecorder {
 
   Future<bool> isRecording() async {
     return await _recorder.isRecording();
-  }
-
-  Future<String?> uploadVoiceFile(String? filePath) async {
-    try {
-      if (filePath == null) return null;
-
-      final file = File(filePath);
-      if (!await file.exists()) return null;
-
-      final profileApi = ProfileApi();
-      final url = await profileApi.uploadFile(file);
-
-      try {
-        await file.delete();
-      } catch (_) {}
-
-      return url;
-    } catch (e) {
-      debugPrint('❌ AudioRecorder(IO): Failed to upload voice file: $e');
-      return null;
-    }
   }
 
   void dispose() {

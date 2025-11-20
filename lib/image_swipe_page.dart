@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:video_player/video_player.dart';
 import 'core/i18n/language_provider.dart';
 
 class ImageSwipePage extends StatefulWidget {
@@ -41,6 +42,7 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
     setState(() {
       _currentIndex = index;
     });
+    _precacheNeighbors();
   }
 
   void _showActionSheet() {
@@ -198,6 +200,12 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
             itemCount: widget.mediaUrls.length,
             itemBuilder: (context, index) {
               final mediaUrl = widget.mediaUrls[index];
+              final isVideo = _isVideoUrl(mediaUrl);
+              if (isVideo) {
+                return Center(
+                  child: _RemoteVideoViewer(url: mediaUrl),
+                );
+              }
               return SizedBox(
                 width: double.infinity,
                 height: double.infinity,
@@ -272,7 +280,7 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Added to favorites',
+                        Provider.of<LanguageProvider>(context, listen: false).t('image.added_favorites'),
                         style: GoogleFonts.inter(),
                       ),
                       backgroundColor: Colors.red,
@@ -306,6 +314,201 @@ class _ImageSwipePageState extends State<ImageSwipePage> {
           shape: BoxShape.circle,
         ),
         child: Icon(icon, color: Colors.white, size: 24),
+      ),
+    );
+  }
+
+  bool _isVideoUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('.mp4') || lower.contains('.mov') || lower.contains('.webm') || lower.contains('.mkv') || lower.contains('.avi')) {
+      return true;
+    }
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      final last = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : uri.path;
+      final name = Uri.decodeComponent(last).toLowerCase();
+      return name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.mkv') || name.endsWith('.avi');
+    }
+    return false;
+  }
+
+  void _precacheNeighbors() {
+    // Preload images for smoother swiping. Videos are skipped.
+    final prev = _currentIndex - 1;
+    final next = _currentIndex + 1;
+    for (final i in [prev, next]) {
+      if (i >= 0 && i < widget.mediaUrls.length) {
+        final url = widget.mediaUrls[i];
+        if (!_isVideoUrl(url)) {
+          // ignore: discarded_futures
+          precacheImage(NetworkImage(url), context);
+        }
+      }
+    }
+  }
+}
+
+class _RemoteVideoViewer extends StatefulWidget {
+  final String url;
+
+  const _RemoteVideoViewer({required this.url});
+
+  @override
+  State<_RemoteVideoViewer> createState() => _RemoteVideoViewerState();
+}
+
+class _RemoteVideoViewerState extends State<_RemoteVideoViewer> {
+  VideoPlayerController? _controller;
+  bool _initialized = false;
+  bool _showOverlay = true;
+  bool _muted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RemoteVideoViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _disposeController();
+      _init();
+    }
+  }
+
+  Future<void> _init() async {
+    try {
+      _controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.url),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
+      await _controller!.initialize();
+      _controller!.setLooping(true);
+      await _controller!.setVolume(_muted ? 0.0 : 1.0);
+      setState(() {
+        _initialized = true;
+      });
+    } catch (_) {}
+  }
+
+  void _disposeController() {
+    try {
+      _controller?.dispose();
+    } catch (_) {}
+    _controller = null;
+    _initialized = false;
+  }
+
+  @override
+  void dispose() {
+    _disposeController();
+    super.dispose();
+  }
+
+  void _togglePlay() {
+    if (!_initialized || _controller == null) return;
+    if (_controller!.value.isPlaying) {
+      _controller!.pause();
+    } else {
+      _controller!.play();
+    }
+    setState(() {
+      _showOverlay = true;
+    });
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _showOverlay = false);
+    });
+  }
+
+  Future<void> _toggleMute() async {
+    if (_controller == null) return;
+    setState(() => _muted = !_muted);
+    await _controller!.setVolume(_muted ? 0.0 : 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = _initialized
+        ? (_controller!.value.aspectRatio == 0 ? (9 / 16) : _controller!.value.aspectRatio)
+        : (9 / 16);
+
+    return AspectRatio(
+      aspectRatio: ratio,
+      child: Stack(
+        children: [
+          Container(
+            color: Colors.black,
+            child: _initialized && _controller != null
+                ? VideoPlayer(_controller!)
+                : const Center(child: CircularProgressIndicator()),
+          ),
+          Positioned.fill(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _togglePlay,
+                child: AnimatedOpacity(
+                  opacity: _showOverlay || !(_controller?.value.isPlaying ?? false) ? 1 : 0,
+                  duration: const Duration(milliseconds: 250),
+                  child: Container(
+                    color: Colors.black26,
+                    child: Center(
+                      child: Icon(
+                        (_controller?.value.isPlaying ?? false)
+                            ? Icons.pause_circle_filled
+                            : Icons.play_circle_fill,
+                        color: Colors.white,
+                        size: 72,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (_initialized && _controller != null)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: _toggleMute,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    _muted ? Icons.volume_off : Icons.volume_up,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+          if (_initialized && _controller != null)
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: Column(
+                children: [
+                  VideoProgressIndicator(
+                    _controller!,
+                    allowScrubbing: true,
+                    colors: const VideoProgressColors(
+                      playedColor: Color(0xFF007AFF),
+                      bufferedColor: Colors.white38,
+                      backgroundColor: Colors.white24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

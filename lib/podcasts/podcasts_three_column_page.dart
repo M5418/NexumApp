@@ -8,9 +8,8 @@ import 'podcast_details_page.dart';
 import 'my_library_page.dart';
 import 'my_episodes_page.dart';
 import 'podcast_categories_page.dart';
-import 'favorites_page.dart';
-import 'add_to_playlist_sheet.dart';
 import 'podcast_search_page.dart';
+import 'create_podcast_page.dart';
 
 class PodcastsThreeColumnPage extends StatefulWidget {
   const PodcastsThreeColumnPage({super.key});
@@ -38,6 +37,44 @@ class _PodcastsThreeColumnPageState extends State<PodcastsThreeColumnPage> {
     super.initState();
     _loadLeft();
     _loadTop();
+  }
+
+  Future<void> _openCreateDialog(BuildContext context) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final size = MediaQuery.of(ctx).size;
+        final maxWidth = 900.0;
+        final minWidth = 600.0;
+        final width = size.width * 0.7;
+        final dialogWidth = width.clamp(minWidth, maxWidth);
+        final maxHeight = size.height - 120.0;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: dialogWidth,
+              maxHeight: maxHeight,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Material(
+                color: isDark ? Colors.black : Colors.white,
+                child: SizedBox(
+                  width: dialogWidth,
+                  child: const CreatePodcastPage(),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (changed == true) {
+      await _loadLeft();
+      await _loadTop();
+    }
   }
 
   Future<void> _loadLeft() async {
@@ -344,7 +381,10 @@ class _LeftLandingPage extends StatelessWidget {
                 isDark: isDark,
                 podcast: p,
                 onTap: () => onOpenInMiddle(p),
-                onAddToPlaylist: () => showAddToPlaylistSheet(ctx, p),
+                onAddToPlaylist: () async {
+                  final parent = context.findAncestorStateOfType<_PodcastsThreeColumnPageState>();
+                  await parent?._openCreateDialog(ctx);
+                },
               );
             },
           ),
@@ -383,10 +423,13 @@ class _LeftQuickActions extends StatelessWidget {
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyLibraryPage())),
         ),
         _QuickActionPill(
-          icon: Icons.star_border,
-          label: 'Favorites',
+          icon: Icons.add_circle_outline,
+          label: 'Add Podcast',
           isDark: isDark,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage())),
+          onTap: () async {
+            final parent = context.findAncestorStateOfType<_PodcastsThreeColumnPageState>();
+            await parent?._openCreateDialog(context);
+          },
         ),
         _QuickActionPill(
           icon: Icons.category_outlined,

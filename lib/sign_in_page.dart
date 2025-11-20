@@ -87,7 +87,7 @@ class _SignInPageState extends State<SignInPage> {
               msg = Provider.of<LanguageProvider>(context, listen: false).t('signin.error_too_many');
               break;
             default:
-              msg = 'Sign in failed: $err';
+              msg = '${Provider.of<LanguageProvider>(context, listen: false).t('signin.error_failed')}$err';
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -365,7 +365,7 @@ class _SignInPageState extends State<SignInPage> {
                                 color: isDarkMode ? Colors.white : Colors.black,
                               ),
                               children: [
-                                const TextSpan(text: "Don't have an account? "),
+                                TextSpan(text: Provider.of<LanguageProvider>(context, listen: false).t('signin.no_account')),
                                 WidgetSpan(
                                   child: GestureDetector(
                                     onTap: () {

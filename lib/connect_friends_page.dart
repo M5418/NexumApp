@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'core/i18n/language_provider.dart';
+import 'providers/follow_state.dart';
 
 import 'repositories/firebase/firebase_user_repository.dart';
-import 'repositories/firebase/firebase_follow_repository.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'other_user_profile_page.dart';
+import 'profile_page.dart';
 import 'home_feed_page.dart';
 
 class ConnectFriendsPage extends StatefulWidget {
@@ -23,8 +26,6 @@ class ConnectFriendsPage extends StatefulWidget {
 }
 
 class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
-  // Track connection status for each friend
-  final Map<String, bool> _connectionStatus = {};
 
   // Loaded from backend
   List<Map<String, dynamic>> _friends = [];
@@ -34,7 +35,6 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
     debugPrint('🔍 ConnectFriendsPage: Starting to load users...');
     try {
       final userRepo = FirebaseUserRepository();
-      final followRepo = FirebaseFollowRepository();
       
       // Get suggested users
       final userModels = await userRepo.getSuggestedUsers(limit: 50);
@@ -46,20 +46,9 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
         'bio': u.bio,
       }).toList();
 
-      // Fetch current connections
-      final connectionsStatus = await followRepo.getConnectionsStatus();
-      final outbound = connectionsStatus.outbound;
-
       if (mounted) {
         setState(() {
           _friends = users;
-          _connectionStatus.clear();
-          for (final u in users) {
-            final id = u['id'] as String;
-            final isConnected = outbound.contains(id);
-            _connectionStatus[id] = isConnected;
-            debugPrint('🔍 ConnectFriendsPage: User ${u['name']} (ID: $id) - Connected: $isConnected');
-          }
           _loading = false;
         });
         debugPrint('🔍 ConnectFriendsPage: Successfully loaded ${_friends.length} users');
@@ -69,7 +58,6 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
       if (mounted) {
         setState(() {
           _friends = [];
-          _connectionStatus.clear();
           _loading = false;
         });
 
@@ -94,22 +82,9 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
   }
 
   Future<void> _toggleConnection(String userId) async {
-    final followRepo = FirebaseFollowRepository();
-    final connected = _connectionStatus[userId] ?? false;
-    final next = !connected;
-    setState(() {
-      _connectionStatus[userId] = next;
-    });
     try {
-      if (next) {
-        await followRepo.followUser(userId);
-      } else {
-        await followRepo.unfollowUser(userId);
-      }
+      await context.read<FollowState>().toggle(userId);
     } catch (e) {
-      setState(() {
-        _connectionStatus[userId] = !next;
-      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -137,6 +112,9 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
   void initState() {
     super.initState();
     _loadUsers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<FollowState>().initialize();
+    });
   }
 
   @override
@@ -180,7 +158,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                           onPressed: () => Navigator.pop(context),
                         ),
                         Text(
-                          'Connect with Friends',
+                          Provider.of<LanguageProvider>(context).t('connect_friends.title'),
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -229,7 +207,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Connect with Friends',
+                            Provider.of<LanguageProvider>(context).t('connect_friends.title'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -303,57 +281,77 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                   itemBuilder: (context, index) {
                     final user = _friends[index];
                     final String userId = user['id'] as String;
-                    final bool isConnected = _connectionStatus[userId] ?? false;
+                    final bool isConnected = context.watch<FollowState>().isConnected(userId);
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Row(
-                        children: [
-                          // Profile Avatar
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundImage: (user['avatarUrl'] != null && (user['avatarUrl'] as String).isNotEmpty)
-                                ? NetworkImage(user['avatarUrl'] as String)
-                                : null,
-                            child: (user['avatarUrl'] == null || (user['avatarUrl'] as String).isEmpty)
-                                ? Text(
-                                    (user['avatarLetter'] ?? 'U').toString(),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 16),
-
-                          // Name and Username
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  (user['name'] ?? 'User').toString(),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white : Colors.black,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  (user['username'] ?? '').toString(),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    color: const Color(0xFF666666),
-                                  ),
-                                ),
-                              ],
+                    return GestureDetector(
+                      onTap: () {
+                        final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                        if (currentUserId == userId) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const ProfilePage()),
+                          );
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => OtherUserProfilePage(
+                                userId: userId,
+                                userName: user['name'] as String? ?? 'Unknown',
+                                userAvatarUrl: user['avatarUrl'] as String? ?? '',
+                                userBio: '',
+                              ),
                             ),
-                          ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          children: [
+                            // Profile Avatar
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundImage: (user['avatarUrl'] != null && (user['avatarUrl'] as String).isNotEmpty)
+                                  ? NetworkImage(user['avatarUrl'] as String)
+                                  : null,
+                              child: (user['avatarUrl'] == null || (user['avatarUrl'] as String).isEmpty)
+                                  ? Text(
+                                      (user['avatarLetter'] ?? 'U').toString(),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 16),
 
-                          // Connect/Connected Button
+                            // Name and Username
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    (user['name'] ?? 'User').toString(),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white : Colors.black,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    (user['username'] ?? '').toString(),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: const Color(0xFF666666),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           SizedBox(
                             width: 100,
                             height: 36,
@@ -370,7 +368,7 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               ),
                               child: Text(
-                                isConnected ? 'Connected' : 'Connect',
+                                isConnected ? Provider.of<LanguageProvider>(context).t('connections.connected') : Provider.of<LanguageProvider>(context).t('connections.connect'),
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -378,7 +376,8 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
                               ),
                             ),
                           ),
-                        ],
+                          ],
+                        ),
                       ),
                     );
                   },

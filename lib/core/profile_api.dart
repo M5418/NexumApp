@@ -80,7 +80,7 @@ class ProfileApi {
   }
 
   // Web-friendly upload using raw bytes (Firebase Storage)
-  Future<String> uploadBytes(Uint8List bytes, {required String ext}) async {
+  Future<String> uploadBytes(Uint8List bytes, {required String ext, String? contentType}) async {
     final u = _auth.currentUser;
     if (u == null) throw Exception('unauthenticated');
     String resolvedExt = _normalizeExt(ext);
@@ -97,10 +97,10 @@ class ProfileApi {
     if (resolvedExt == 'jpeg') resolvedExt = 'jpg';
     if (!allowed.contains(resolvedExt)) resolvedExt = 'jpg';
 
-    final contentType = _contentTypeForExt(resolvedExt);
+    final ct = contentType ?? _contentTypeForExt(resolvedExt);
     final path = 'uploads/${u.uid}/profile/${DateTime.now().microsecondsSinceEpoch}.$resolvedExt';
     final ref = _storage.ref(path);
-    await ref.putData(bytes, fs.SettableMetadata(contentType: contentType));
+    await ref.putData(bytes, fs.SettableMetadata(contentType: ct));
     final url = await ref.getDownloadURL();
     return url;
   }
@@ -164,7 +164,7 @@ class ProfileApi {
       case 'aac':
         return 'audio/aac';
       case 'webm':
-        return 'audio/webm';
+        return 'video/webm';
 
       // Docs
       case 'pdf':

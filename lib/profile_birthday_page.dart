@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'profile_gender_page.dart';
 import 'core/profile_api.dart';
+import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
 
 class ProfileBirthdayPage extends StatefulWidget {
@@ -61,7 +63,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please select your birthday',
+            Provider.of<LanguageProvider>(context, listen: false).t('profile_setup.birthday_required'),
             style: GoogleFonts.inter(),
           ),
         ),
@@ -93,7 +95,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save birthday. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('profile_setup.birthday_save_failed'),
             style: GoogleFonts.inter(),
           ),
         ),
@@ -144,7 +146,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                           onPressed: () => Navigator.pop(context),
                         ),
                         Text(
-                          'Profil details',
+                          Provider.of<LanguageProvider>(context).t('profile_setup.title'),
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -167,7 +169,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
             children: [
               const SizedBox(height: 32),
               Text(
-                "What's your birthday?",
+                Provider.of<LanguageProvider>(context).t('profile_setup.birthday_question'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -176,7 +178,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Enter your real names and choose an unique username',
+                Provider.of<LanguageProvider>(context).t('profile_setup.birthday_help'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w400,
@@ -194,12 +196,12 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                       color: isDarkMode ? Colors.white : Colors.black,
                     ),
                     decoration: InputDecoration(
-                      labelText: 'Date of Birth',
+                      labelText: Provider.of<LanguageProvider>(context).t('profile_setup.birthday_label'),
                       labelStyle: GoogleFonts.inter(
                         fontSize: 16,
                         color: const Color(0xFF666666),
                       ),
-                      hintText: 'Select your birthday',
+                      hintText: Provider.of<LanguageProvider>(context).t('profile_setup.birthday_hint'),
                       hintStyle: GoogleFonts.inter(
                         fontSize: 16,
                         color: const Color(0xFF999999),
@@ -239,7 +241,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                     elevation: 0,
                   ),
                   child: Text(
-                    'Next',
+                    Provider.of<LanguageProvider>(context).t('profile_setup.next'),
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -279,7 +281,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Profil details',
+                            Provider.of<LanguageProvider>(context).t('profile_setup.title'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -299,7 +301,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                             children: [
                               const SizedBox(height: 8),
                               Text(
-                                "What's your birthday?",
+                                Provider.of<LanguageProvider>(context).t('profile_setup.birthday_question'),
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   fontSize: 24,
@@ -309,7 +311,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Enter your real names and choose an unique username',
+                                Provider.of<LanguageProvider>(context).t('profile_setup.birthday_help'),
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
@@ -328,12 +330,12 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                                       color: isDarkMode ? Colors.white : Colors.black,
                                     ),
                                     decoration: InputDecoration(
-                                      labelText: 'Date of Birth',
+                                      labelText: Provider.of<LanguageProvider>(context).t('profile_setup.birthday_label'),
                                       labelStyle: GoogleFonts.inter(
                                         fontSize: 16,
                                         color: const Color(0xFF666666),
                                       ),
-                                      hintText: 'Select your birthday',
+                                      hintText: Provider.of<LanguageProvider>(context).t('profile_setup.birthday_hint'),
                                       hintStyle: GoogleFonts.inter(
                                         fontSize: 16,
                                         color: const Color(0xFF999999),
@@ -376,7 +378,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                           ),
                           child: Text(
-                            'Next',
+                            Provider.of<LanguageProvider>(context).t('profile_setup.next'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,

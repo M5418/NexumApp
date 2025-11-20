@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../models/comment.dart';
+import '../other_user_profile_page.dart';
+import '../profile_page.dart';
+import 'report_bottom_sheet.dart';
 
 class CommentWidget extends StatefulWidget {
   final Comment comment;
@@ -75,9 +79,32 @@ class _CommentWidgetState extends State<CommentWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // User avatar
-              CircleAvatar(
-                radius: widget.depth > 0 ? 14 : 18,
-                backgroundImage: NetworkImage(widget.comment.userAvatarUrl),
+              GestureDetector(
+                onTap: () {
+                  final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                  if (currentUserId == widget.comment.userId) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ProfilePage()),
+                    );
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OtherUserProfilePage(
+                          userId: widget.comment.userId,
+                          userName: widget.comment.userName,
+                          userAvatarUrl: widget.comment.userAvatarUrl,
+                          userBio: '',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: CircleAvatar(
+                  radius: widget.depth > 0 ? 14 : 18,
+                  backgroundImage: NetworkImage(widget.comment.userAvatarUrl),
+                ),
               ),
 
               const SizedBox(width: 12),
@@ -90,12 +117,37 @@ class _CommentWidgetState extends State<CommentWidget> {
                     // User name and badges
                     Row(
                       children: [
-                        Text(
-                          widget.comment.userName,
-                          style: GoogleFonts.inter(
-                            color: textColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                        GestureDetector(
+                          onTap: () {
+                            if (fb.FirebaseAuth.instance.currentUser != null) {
+                              final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                              if (currentUserId == widget.comment.userId) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                                );
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => OtherUserProfilePage(
+                                      userId: widget.comment.userId,
+                                      userName: widget.comment.userName,
+                                      userAvatarUrl: widget.comment.userAvatarUrl,
+                                      userBio: '',
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          child: Text(
+                            widget.comment.userName,
+                            style: GoogleFonts.inter(
+                              color: textColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
 
@@ -136,16 +188,23 @@ class _CommentWidgetState extends State<CommentWidget> {
                           ),
                         ),
 
-                        if (canDelete)
-                          PopupMenuButton<String>(
-                            color: widget.isDarkMode ? Colors.grey[900] : Colors.white,
-                            icon: Icon(Icons.more_vert, size: 18, color: subtitleColor),
-                            onSelected: (value) {
-                              if (value == 'delete') {
-                                widget.onDelete?.call(widget.comment);
-                              }
-                            },
-                            itemBuilder: (context) => [
+                        PopupMenuButton<String>(
+                          color: widget.isDarkMode ? Colors.grey[900] : Colors.white,
+                          icon: Icon(Icons.more_vert, size: 18, color: subtitleColor),
+                          onSelected: (value) {
+                            if (value == 'delete') {
+                              widget.onDelete?.call(widget.comment);
+                            } else if (value == 'report') {
+                              ReportBottomSheet.show(
+                                context,
+                                targetType: 'comment',
+                                targetId: widget.comment.id,
+                                authorName: widget.comment.userName,
+                              );
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            if (canDelete)
                               PopupMenuItem(
                                 value: 'delete',
                                 child: Row(
@@ -162,8 +221,24 @@ class _CommentWidgetState extends State<CommentWidget> {
                                   ],
                                 ),
                               ),
-                            ],
-                          ),
+                            PopupMenuItem(
+                              value: 'report',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.flag_outlined, size: 18, color: Colors.red),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Report',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.red,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
 

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'providers/follow_state.dart';
 
 import 'widgets/post_card.dart';
 import 'widgets/segmented_tabs.dart';
@@ -12,6 +14,8 @@ import 'models/post.dart';
 import 'widgets/community_card.dart';
 import 'conversations_page.dart'; // for CommunityItem model
 import 'community_page.dart';
+import 'other_user_profile_page.dart';
+import 'profile_page.dart';
 
 import 'repositories/firebase/firebase_search_repository.dart';
 import 'repositories/interfaces/search_repository.dart';
@@ -36,8 +40,7 @@ class _SearchPageState extends State<SearchPage> {
   List<Post> _posts = const [];
   List<CommunityItem> _communities = const [];
 
-  // Keep local visual toggle for the "Connect" button (UI only)
-  final Set<String> _connectedIds = <String>{};
+  // Connection state is managed globally by FollowState
 
   Timer? _debounce;
 
@@ -45,6 +48,9 @@ class _SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     // No initial fetch until user types.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<FollowState>().initialize();
+    });
   }
 
   @override
@@ -68,7 +74,6 @@ class _SearchPageState extends State<SearchPage> {
         _accounts = const [];
         _posts = const [];
         _communities = const [];
-        _connectedIds.clear();
       });
       return;
     }
@@ -195,7 +200,6 @@ class _SearchPageState extends State<SearchPage> {
                                   _accounts = const [];
                                   _posts = const [];
                                   _communities = const [];
-                                  _connectedIds.clear();
                                   _error = null;
                                 });
                               },
@@ -221,7 +225,12 @@ class _SearchPageState extends State<SearchPage> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: SegmentedTabs(
-              tabs: const ['Trending', 'Account', 'Post', 'Community'],
+              tabs: [
+                Provider.of<LanguageProvider>(context).t('search.trending'),
+                Provider.of<LanguageProvider>(context).t('search.account'),
+                Provider.of<LanguageProvider>(context).t('search.post'),
+                Provider.of<LanguageProvider>(context).t('search.community'),
+              ],
               selectedIndex: _selectedTabIndex,
               onTabSelected: (i) => setState(() => _selectedTabIndex = i),
             ),
@@ -264,7 +273,7 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildTrending(bool isDark) {
     return Center(
       child: Text(
-        'Coming soon',
+        Provider.of<LanguageProvider>(context).t('search.coming_soon'),
         style: GoogleFonts.inter(
           fontSize: 16,
           fontWeight: FontWeight.w600,
@@ -277,11 +286,12 @@ class _SearchPageState extends State<SearchPage> {
   // Account tab
   Widget _buildAccounts(bool isDark) {
     final users = _accounts;
+    final follow = context.watch<FollowState>();
     if (_controller.text.isEmpty) {
-      return _emptyState('Start typing to search accounts', isDark);
+      return _emptyState(Provider.of<LanguageProvider>(context).t('search.start_typing_accounts'), isDark);
     }
     if (users.isEmpty) {
-      return _emptyState('No accounts found', isDark);
+      return _emptyState(Provider.of<LanguageProvider>(context).t('search.no_accounts'), isDark);
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -289,8 +299,9 @@ class _SearchPageState extends State<SearchPage> {
       separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final u = users[index];
-        final isConnected = _connectedIds.contains(u.id);
+        final isConnected = follow.isConnected(u.id);
         final vm = _SearchUser(
+          u.id,
           u.name,
           u.username,
           u.avatarUrl ?? '',
@@ -299,14 +310,17 @@ class _SearchPageState extends State<SearchPage> {
         return _UserRowTile(
           user: vm,
           isDark: isDark,
-          onToggleConnect: () {
-            setState(() {
-              if (isConnected) {
-                _connectedIds.remove(u.id);
-              } else {
-                _connectedIds.add(u.id);
-              }
-            });
+          onToggleConnect: () async {
+            final messenger = ScaffoldMessenger.of(context);
+            final errorMessage = Provider.of<LanguageProvider>(context, listen: false).t('my_connections.action_failed');
+            try {
+              await context.read<FollowState>().toggle(u.id);
+            } catch (e) {
+              if (!mounted) return;
+              messenger.showSnackBar(
+                SnackBar(content: Text(errorMessage)),
+              );
+            }
           },
         );
       },
@@ -317,10 +331,10 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildPosts(bool isDark) {
     final posts = _posts;
     if (_controller.text.isEmpty) {
-      return _emptyState('Start typing to search posts', isDark);
+      return _emptyState(Provider.of<LanguageProvider>(context).t('search.start_typing_posts'), isDark);
     }
     if (posts.isEmpty) {
-      return _emptyState('No posts found', isDark);
+      return _emptyState(Provider.of<LanguageProvider>(context).t('search.no_posts'), isDark);
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -335,10 +349,10 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildCommunities(bool isDark) {
     final communities = _communities;
     if (_controller.text.isEmpty) {
-      return _emptyState('Start typing to search communities', isDark);
+      return _emptyState(Provider.of<LanguageProvider>(context).t('search.start_typing_communities'), isDark);
     }
     if (communities.isEmpty) {
-      return _emptyState('No communities found', isDark);
+      return _emptyState(Provider.of<LanguageProvider>(context).t('search.no_communities'), isDark);
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -376,12 +390,13 @@ class _SearchPageState extends State<SearchPage> {
 
 // Simple user model used by the existing row tile
 class _SearchUser {
+  final String id;
   final String name;
   final String handle;
   final String avatarUrl;
   bool connected;
 
-  _SearchUser(this.name, this.handle, this.avatarUrl, {this.connected = false});
+  _SearchUser(this.id, this.name, this.handle, this.avatarUrl, {this.connected = false});
 }
 
 // Row tile (avatar + name/handle + Connect/Connected button)
@@ -413,61 +428,83 @@ class _UserRowTile extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: CachedNetworkImage(
-              imageUrl: user.avatarUrl,
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
+      child: GestureDetector(
+        onTap: () {
+          final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+          if (currentUserId == user.id) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfilePage()),
+            );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => OtherUserProfilePage(
+                  userId: user.id,
+                  userName: user.name,
+                  userAvatarUrl: user.avatarUrl,
+                  userBio: '',
+                ),
+              ),
+            );
+          }
+        },
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: CachedNetworkImage(
+                imageUrl: user.avatarUrl,
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  color: const Color(0xFF666666).withValues(alpha: 0),
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: const Color(0xFF666666).withValues(alpha: 0),
+                  ),
+                  child: const Icon(Icons.person, color: Color(0xFF666666)),
                 ),
-                child: const Icon(Icons.person, color: Color(0xFF666666)),
-              ),
-              errorWidget: (context, url, error) => Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  color: const Color(0xFF666666).withValues(alpha: 0),
+                errorWidget: (context, url, error) => Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: const Color(0xFF666666).withValues(alpha: 0),
+                  ),
+                  child: const Icon(Icons.person, color: Color(0xFF666666)),
                 ),
-                child: const Icon(Icons.person, color: Color(0xFF666666)),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.name,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user.name,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  user.handle,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: const Color(0xFF666666),
+                  const SizedBox(height: 2),
+                  Text(
+                    user.handle,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF666666),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
+            const SizedBox(width: 8),
+            SizedBox(
             height: 34,
             child: user.connected
                 ? OutlinedButton(
@@ -482,7 +519,7 @@ class _UserRowTile extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'Connected',
+                      Provider.of<LanguageProvider>(context).t('connections.connected'),
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -501,15 +538,16 @@ class _UserRowTile extends StatelessWidget {
                       elevation: 2,
                     ),
                     child: Text(
-                      'Connect',
+                      Provider.of<LanguageProvider>(context).t('connections.connect'),
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

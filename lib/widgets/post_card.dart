@@ -3,6 +3,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:readmore/readmore.dart';
 import '../models/post.dart';
+import '../other_user_profile_page.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import '../profile_page.dart';
 import 'auto_play_video.dart';
 import 'reaction_picker.dart';
 import '../core/time_utils.dart';
@@ -42,6 +45,11 @@ class _PostCardState extends State<PostCard> {
   bool _showTranslation = false;
   String? _translatedText;
   String? _lastUgcCode;
+  
+  // Local state for likes (like comments do)
+  late bool _isLiked;
+  late int _likeCount;
+  late bool _isBookmarked;
 
   Future<void> _translateCurrentText(String target) async {
     final text = widget.post.text.trim();
@@ -54,6 +62,15 @@ class _PostCardState extends State<PostCard> {
         _translatedText = translated;
       });
     } catch (_) {}
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize local state from widget props (like comments do)
+    _isLiked = widget.post.userReaction != null;
+    _likeCount = widget.post.counts.likes.clamp(0, 999999);
+    _isBookmarked = widget.post.isBookmarked;
   }
 
   @override
@@ -99,25 +116,6 @@ class _PostCardState extends State<PostCard> {
       return widget.post.originalPostId!;
     }
     return widget.post.id;
-  }
-
-  IconData _getReactionIcon(ReactionType? reaction) {
-    switch (reaction) {
-      case ReactionType.diamond:
-        return Icons.workspace_premium;
-      case ReactionType.like:
-        return Icons.thumb_up_alt;
-      case ReactionType.heart:
-        return Icons.favorite;
-      case ReactionType.wow:
-        return Icons.emoji_emotions;
-      default:
-        return Icons.thumb_up_alt_outlined;
-    }
-  }
-
-  Color _getReactionColor(ReactionType? reaction) {
-    return reaction != null ? const Color(0xFFBFAE01) : const Color(0xFF666666);
   }
 
   @override
@@ -212,33 +210,79 @@ class _PostCardState extends State<PostCard> {
 
             Row(
               children: [
-                _AvatarCircle(
-                  url: widget.post.userAvatarUrl,
-                  name: widget.post.userName,
-                  size: 40,
-                  isDark: isDarkMode,
+                GestureDetector(
+                  onTap: () {
+                    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                    if (currentUserId == widget.post.authorId) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ProfilePage()),
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => OtherUserProfilePage(
+                            userId: widget.post.authorId,
+                            userName: widget.post.userName,
+                            userAvatarUrl: widget.post.userAvatarUrl,
+                            userBio: '',
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: _AvatarCircle(
+                    url: widget.post.userAvatarUrl,
+                    name: widget.post.userName,
+                    size: 40,
+                    isDark: isDarkMode,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.post.userName,
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
+                  child: GestureDetector(
+                    onTap: () {
+                      final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                      if (currentUserId == widget.post.authorId) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ProfilePage()),
+                        );
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => OtherUserProfilePage(
+                              userId: widget.post.authorId,
+                              userName: widget.post.userName,
+                              userAvatarUrl: widget.post.userAvatarUrl,
+                              userBio: '',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.post.userName,
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: textColor,
+                          ),
                         ),
-                      ),
-                      Text(
-                        TimeUtils.relativeLabel(widget.post.createdAt, locale: 'en_short'),
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: secondaryTextColor,
+                        Text(
+                          TimeUtils.relativeLabel(widget.post.createdAt, locale: 'en_short'),
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: secondaryTextColor,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 IconButton(
@@ -395,17 +439,19 @@ class _PostCardState extends State<PostCard> {
                 Builder(
                   builder: (likeButtonContext) => GestureDetector(
                     onTap: () {
-                      if (widget.post.userReaction != null) {
-                        widget.onReactionChanged?.call(
-                          _effectivePostId(),
-                          widget.post.userReaction!,
-                        );
-                      } else {
-                        widget.onReactionChanged?.call(
-                          _effectivePostId(),
-                          ReactionType.like,
-                        );
-                      }
+                      setState(() {
+                        _isLiked = !_isLiked;
+                        if (_isLiked) {
+                          _likeCount++;
+                        } else {
+                          _likeCount = (_likeCount - 1).clamp(0, 999999);
+                        }
+                      });
+                      
+                      widget.onReactionChanged?.call(
+                        _effectivePostId(),
+                        _isLiked ? ReactionType.like : ReactionType.like, // Toggle
+                      );
                     },
                     onLongPress: () {
                       final RenderBox renderBox =
@@ -417,6 +463,12 @@ class _PostCardState extends State<PostCard> {
                         position,
                         widget.post,
                         (postId, reaction) {
+                          setState(() {
+                            if (!_isLiked) {
+                              _isLiked = true;
+                              _likeCount++;
+                            }
+                          });
                           widget.onReactionChanged?.call(
                             _effectivePostId(),
                             reaction,
@@ -427,13 +479,13 @@ class _PostCardState extends State<PostCard> {
                     child: Row(
                       children: [
                         Icon(
-                          _getReactionIcon(widget.post.userReaction),
+                          _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
                           size: 20,
-                          color: _getReactionColor(widget.post.userReaction),
+                          color: _isLiked ? const Color(0xFFBFAE01) : const Color(0xFF666666),
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          widget.post.counts.likes.toString(),
+                          _likeCount.toString(),
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: secondaryTextColor,
@@ -511,16 +563,23 @@ class _PostCardState extends State<PostCard> {
 
                 const Spacer(),
 
+                // Bookmark button
                 GestureDetector(
-                  onTap: () => widget.onBookmarkToggle?.call(_effectivePostId()),
+                  onTap: () {
+                    // Optimistic update for bookmarks
+                    setState(() {
+                      _isBookmarked = !_isBookmarked;
+                    });
+                    widget.onBookmarkToggle?.call(_effectivePostId());
+                  },
                   child: Row(
                     children: [
                       Icon(
-                        widget.post.isBookmarked
+                        _isBookmarked
                             ? Icons.bookmark
                             : Icons.bookmark_border,
                         size: 20,
-                        color: widget.post.isBookmarked
+                        color: _isBookmarked
                             ? bookmarkColor
                             : secondaryTextColor,
                       ),

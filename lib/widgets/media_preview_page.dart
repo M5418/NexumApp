@@ -173,34 +173,30 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
 
       if (kIsWeb) {
         // Use plugin-returned XFile when available, else in-memory bytes
-        if (editedXFile != null) {
-          setState(() => _files[_index] = editedXFile!);
-        } else if (editedBytes != null) {
-          final web = XFile.fromData(
-            editedBytes,
-            mimeType: mime,
-            name: 'edited_${DateTime.now().millisecondsSinceEpoch}.${_extForMime(mime)}',
-          );
-          setState(() => _files[_index] = web);
-        }
+        if (editedBytes != null) {
+        final web = XFile.fromData(
+          editedBytes,
+          mimeType: mime,
+          name: 'edited_${DateTime.now().millisecondsSinceEpoch}.${_extForMime(mime)}',
+        );
+        setState(() => _files[_index] = web);
+      }
       } else {
         // Mobile/Desktop: prefer XFile, then path, else bytes
-        if (editedXFile != null) {
-          setState(() => _files[_index] = editedXFile!);
-        } else if (editedPath != null && editedPath.isNotEmpty) {
-          final xf = XFile(editedPath, mimeType: mime, name: io.File(editedPath).uri.pathSegments.last);
-          setState(() => _files[_index] = xf);
-        } else if (editedBytes != null) {
-          final ext = _extForMime(mime);
-          final dirPath = io.File(current.path).parent.path;
-          final sep = io.Platform.pathSeparator;
-          final filename = 'edited_${DateTime.now().millisecondsSinceEpoch}.$ext';
-          final outPath = '$dirPath$sep$filename';
-          final outFile = io.File(outPath);
-          await outFile.writeAsBytes(editedBytes);
-          final xf = XFile(outFile.path, mimeType: mime, name: filename);
-          setState(() => _files[_index] = xf);
-        }
+        if (editedPath != null && editedPath.isNotEmpty) {
+        final xf = XFile(editedPath, mimeType: mime, name: io.File(editedPath).uri.pathSegments.last);
+        setState(() => _files[_index] = xf);
+      } else if (editedBytes != null) {
+        final ext = _extForMime(mime);
+        final dirPath = io.File(current.path).parent.path;
+        final sep = io.Platform.pathSeparator;
+        final filename = 'edited_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final outPath = '$dirPath$sep$filename';
+        final outFile = io.File(outPath);
+        await outFile.writeAsBytes(editedBytes);
+        final xf = XFile(outFile.path, mimeType: mime, name: filename);
+        setState(() => _files[_index] = xf);
+      }
       }
     } catch (e) {
       if (!mounted) return;
@@ -958,6 +954,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   VideoPlayerController? _controller;
   bool _initialized = false;
   bool _showOverlay = true;
+  bool _muted = false;
 
   @override
   void initState() {
@@ -977,12 +974,19 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   Future<void> _init() async {
     try {
       if (kIsWeb) {
-        _controller = VideoPlayerController.networkUrl(Uri.parse(widget.file.path));
+        _controller = VideoPlayerController.networkUrl(
+          Uri.parse(widget.file.path),
+          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        );
       } else {
-        _controller = VideoPlayerController.file(io.File(widget.file.path));
+        _controller = VideoPlayerController.file(
+          io.File(widget.file.path),
+          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        );
       }
       await _controller!.initialize();
       _controller!.setLooping(true);
+      await _controller!.setVolume(_muted ? 0.0 : 1.0);
       setState(() {
         _initialized = true;
       });
@@ -1018,6 +1022,12 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _showOverlay = false);
     });
+  }
+
+  Future<void> _toggleMute() async {
+    if (_controller == null) return;
+    setState(() => _muted = !_muted);
+    await _controller!.setVolume(_muted ? 0.0 : 1.0);
   }
 
   @override
@@ -1061,6 +1071,27 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
               ),
             ),
           ),
+          if (_initialized && _controller != null)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: _toggleMute,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    _muted ? Icons.volume_off : Icons.volume_up,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
           if (_initialized && _controller != null)
             Positioned(
               left: 8,

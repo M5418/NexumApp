@@ -38,15 +38,15 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     final confirm = _confirmController.text.trim();
 
     if (current.isEmpty || next.isEmpty || confirm.isEmpty) {
-      _showSnack('Please fill in all fields');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_password.error_fill_fields'));
       return;
     }
     if (next.length < 8) {
-      _showSnack('New password must be at least 8 characters');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_password.error_min_length'));
       return;
     }
     if (next != confirm) {
-      _showSnack('Passwords do not match');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_password.error_mismatch'));
       return;
     }
 
@@ -55,10 +55,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       final repo = context.read<AuthRepository>();
       await repo.updatePassword(currentPassword: current, newPassword: next);
       if (!mounted) return;
-      _showSnack('Password changed successfully');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_password.success'));
       Navigator.pop(context);
     } catch (e) {
-      _showSnack('Failed to change password');
+      _showSnack(Provider.of<LanguageProvider>(context, listen: false).t('change_password.failed'));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

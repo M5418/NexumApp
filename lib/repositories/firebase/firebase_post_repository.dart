@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../interfaces/post_repository.dart';
@@ -28,9 +29,6 @@ class FirebasePostRepository implements PostRepository {
       createdAt: DateTime.now(),
     ).toMap();
     final ref = await _posts.add(data);
-    if (repostOf != null && repostOf.isNotEmpty) {
-      await _posts.doc(repostOf).update({'summary.reposts': FieldValue.increment(1)});
-    }
     return ref.id;
   }
 
@@ -54,16 +52,32 @@ class FirebasePostRepository implements PostRepository {
   @override
   Future<List<PostModel>> getFeed({int limit = 20, PostModel? lastPost}) async {
     try {
+      debugPrint('🔍 [PostRepo] Starting getFeed query...');
+      debugPrint('🔍 [PostRepo] Auth user: ${_auth.currentUser?.uid ?? "NOT LOGGED IN"}');
+      
       Query<Map<String, dynamic>> q = _posts.orderBy('createdAt', descending: true).limit(limit);
       if (lastPost?.snapshot != null) {
         q = q.startAfterDocument(lastPost!.snapshot!);
       }
+      
+      debugPrint('🔍 [PostRepo] Executing Firestore query...');
       final snap = await q.get();
-      print('✅ Posts fetched successfully: ${snap.docs.length} posts');
-      return snap.docs.map(_fromDoc).toList();
-    } catch (e) {
-      print('❌ Posts getFeed error: $e');
-      print('🔍 Check: 1) Firestore rules for posts collection 2) Network connectivity');
+      debugPrint('🔍 [PostRepo] Query returned ${snap.docs.length} documents');
+      
+      if (snap.docs.isEmpty) {
+        debugPrint('⚠️ [PostRepo] NO POSTS FOUND - Check:');
+        debugPrint('   1. Is auth user logged in? ${_auth.currentUser != null}');
+        debugPrint('   2. Does posts collection exist in Firestore?');
+        debugPrint('   3. Do posts have createdAt field for ordering?');
+      }
+      
+      final posts = snap.docs.map(_fromDoc).toList();
+      debugPrint('✅ [PostRepo] Mapped ${posts.length} posts successfully');
+      return posts;
+    } catch (e, stackTrace) {
+      debugPrint('❌ [PostRepo] CRITICAL ERROR in getFeed:');
+      debugPrint('   Error: $e');
+      debugPrint('   Stack: $stackTrace');
       rethrow;
     }
   }
@@ -76,11 +90,8 @@ class FirebasePostRepository implements PostRepository {
         q = q.startAfterDocument(lastPost!.snapshot!);
       }
       final snap = await q.get();
-      print('✅ User posts fetched successfully: ${snap.docs.length} posts for uid: $uid');
       return snap.docs.map(_fromDoc).toList();
     } catch (e) {
-      print('❌ Posts getUserPosts error for uid $uid: $e');
-      print('🔍 Check: 1) Firestore rules for posts collection 2) User exists 3) Network connectivity');
       rethrow;
     }
   }
@@ -95,6 +106,8 @@ class FirebasePostRepository implements PostRepository {
     return snap.docs.map(_fromDoc).toList();
   }
 
+  // Unused method - kept for potential future use
+  // ignore: unused_element
   Future<List<PostModel>> _getPostsByIds(List<String> ids) async {
     if (ids.isEmpty) return [];
     final results = <PostModel>[];
@@ -111,33 +124,49 @@ class FirebasePostRepository implements PostRepository {
 
   @override
   Future<List<PostModel>> getPostsLikedByUser({required String uid, int limit = 50}) async {
-    // Query all likes docs by this uid across posts
-    final likeDocs = await _db
-        .collectionGroup('likes')
-        .where(FieldPath.documentId, isEqualTo: uid)
-        .limit(limit)
-        .get();
-    final postIds = <String>{};
-    for (final d in likeDocs.docs) {
-      final postRef = d.reference.parent.parent; // posts/{postId}
-      if (postRef != null) postIds.add(postRef.id);
+    try {
+      final likes = await _db
+          .collectionGroup('likes')
+          .where(FieldPath.documentId, isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(limit * 2)
+          .get();
+
+      // Collect parent post IDs
+      final ids = <String>{};
+      for (final d in likes.docs) {
+        final postRef = d.reference.parent.parent; // posts/<postId>
+        if (postRef != null) ids.add(postRef.id);
+        if (ids.length >= limit) break;
+      }
+      if (ids.isEmpty) return [];
+      return await _getPostsByIds(ids.toList());
+    } catch (_) {
+      rethrow;
     }
-    return _getPostsByIds(postIds.toList());
   }
 
   @override
   Future<List<PostModel>> getPostsBookmarkedByUser({required String uid, int limit = 50}) async {
-    final bmDocs = await _db
-        .collectionGroup('bookmarks')
-        .where(FieldPath.documentId, isEqualTo: uid)
-        .limit(limit)
-        .get();
-    final postIds = <String>{};
-    for (final d in bmDocs.docs) {
-      final postRef = d.reference.parent.parent;
-      if (postRef != null) postIds.add(postRef.id);
+    try {
+      final bookmarks = await _db
+          .collectionGroup('bookmarks')
+          .where(FieldPath.documentId, isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(limit * 2)
+          .get();
+
+      final ids = <String>{};
+      for (final d in bookmarks.docs) {
+        final postRef = d.reference.parent.parent; // posts/<postId>
+        if (postRef != null) ids.add(postRef.id);
+        if (ids.length >= limit) break;
+      }
+      if (ids.isEmpty) return [];
+      return await _getPostsByIds(ids.toList());
+    } catch (_) {
+      rethrow;
     }
-    return _getPostsByIds(postIds.toList());
   }
 
   @override
@@ -160,10 +189,7 @@ class FirebasePostRepository implements PostRepository {
     final likeRef = _posts.doc(postId).collection('likes').doc(u.uid);
     final likeDoc = await likeRef.get();
     if (likeDoc.exists) return; // already liked; idempotent
-    final batch = _db.batch();
-    batch.set(likeRef, {'createdAt': Timestamp.now()});
-    batch.update(_posts.doc(postId), {'summary.likes': FieldValue.increment(1)});
-    await batch.commit();
+    await likeRef.set({'createdAt': Timestamp.now()});
   }
 
   @override
@@ -173,10 +199,7 @@ class FirebasePostRepository implements PostRepository {
     final likeRef = _posts.doc(postId).collection('likes').doc(u.uid);
     final likeDoc = await likeRef.get();
     if (!likeDoc.exists) return; // nothing to unlike; idempotent
-    final batch = _db.batch();
-    batch.delete(likeRef);
-    batch.update(_posts.doc(postId), {'summary.likes': FieldValue.increment(-1)});
-    await batch.commit();
+    await likeRef.delete();
   }
 
   @override
@@ -186,10 +209,7 @@ class FirebasePostRepository implements PostRepository {
     final ref = _posts.doc(postId).collection('bookmarks').doc(u.uid);
     final bmDoc = await ref.get();
     if (bmDoc.exists) return; // already bookmarked
-    final batch = _db.batch();
-    batch.set(ref, {'createdAt': Timestamp.now()});
-    batch.update(_posts.doc(postId), {'summary.bookmarks': FieldValue.increment(1)});
-    await batch.commit();
+    await ref.set({'createdAt': Timestamp.now()});
   }
 
   @override
@@ -199,10 +219,7 @@ class FirebasePostRepository implements PostRepository {
     final ref = _posts.doc(postId).collection('bookmarks').doc(u.uid);
     final bmDoc = await ref.get();
     if (!bmDoc.exists) return; // nothing to unbookmark
-    final batch = _db.batch();
-    batch.delete(ref);
-    batch.update(_posts.doc(postId), {'summary.bookmarks': FieldValue.increment(-1)});
-    await batch.commit();
+    await ref.delete();
   }
 
   @override
@@ -219,7 +236,6 @@ class FirebasePostRepository implements PostRepository {
     final q = await _posts.where('authorId', isEqualTo: u.uid).where('repostOf', isEqualTo: postId).limit(1).get();
     if (q.docs.isNotEmpty) {
       await _posts.doc(q.docs.first.id).delete();
-      await _posts.doc(postId).update({'summary.reposts': FieldValue.increment(-1)});
     }
   }
 

@@ -37,7 +37,9 @@ service cloud.firestore {
     // Posts
     match /posts/{postId} {
       allow read: if true;                       // Public posts
-      allow create: if signedIn();               // Authenticated users can post
+      // Ensure the creating user is the author of the post
+      allow create: if signedIn() &&
+        request.resource.data.authorId == request.auth.uid;
       allow update: if signedIn() && 
         (request.auth.uid == resource.data.authorId || isAdmin());
       allow delete: if signedIn() && 
@@ -46,15 +48,23 @@ service cloud.firestore {
       // Post likes subcollection
       match /likes/{likeId} {
         allow read: if true;
-        allow create: if signedIn();
-        allow delete: if signedIn();
+        // Users can only like as themselves, and only set createdAt
+        allow create: if signedIn() &&
+          likeId == request.auth.uid &&
+          request.resource.data.keys().hasOnly(['createdAt']);
+        // Users can only remove their own like document
+        allow delete: if signedIn() && likeId == request.auth.uid;
       }
       
       // Post bookmarks subcollection
       match /bookmarks/{bookmarkId} {
         allow read: if signedIn();
-        allow create: if signedIn();
-        allow delete: if signedIn();
+        // Users can only bookmark as themselves, and only set createdAt
+        allow create: if signedIn() &&
+          bookmarkId == request.auth.uid &&
+          request.resource.data.keys().hasOnly(['createdAt']);
+        // Users can only remove their own bookmark document
+        allow delete: if signedIn() && bookmarkId == request.auth.uid;
       }
     }
     
@@ -135,6 +145,16 @@ service cloud.firestore {
       allow create: if signedIn();
       allow update: if signedIn();
       allow delete: if signedIn();
+
+      // Story replies subcollection (comments on stories)
+      match /replies/{replyId} {
+        allow read: if true;
+        // Only authenticated users can create a reply; userId must match
+        allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+        // No updates; delete allowed only by author or admin
+        allow update: if false;
+        allow delete: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+      }
     }
     
     // Story rings
@@ -239,6 +259,52 @@ service cloud.firestore {
       allow create: if signedIn();
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+    
+    // Blocks
+    match /blocks/{blockId} {
+      allow read: if signedIn() && 
+        (request.auth.uid == resource.data.blockedByUid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == request.resource.data.blockedByUid;
+      allow delete: if signedIn() && 
+        (request.auth.uid == resource.data.blockedByUid || isAdmin());
+    }
+    
+    // Mutes
+    match /mutes/{muteId} {
+      allow read: if signedIn() && 
+        (request.auth.uid == resource.data.mutedByUid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == request.resource.data.mutedByUid;
+      allow delete: if signedIn() && 
+        (request.auth.uid == resource.data.mutedByUid || isAdmin());
+    }
+    
+    // Bookmarks (top-level collection for posts, podcasts, books)
+    match /bookmarks/{bookmarkId} {
+      allow read: if signedIn() && 
+        (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if signedIn() && 
+        request.auth.uid == request.resource.data.userId &&
+        request.resource.data.keys().hasAll(['userId', 'type', 'itemId', 'createdAt']) &&
+        request.resource.data.type in ['post', 'podcast', 'book'];
+      allow update: if false; // Bookmarks are immutable (create or delete only)
+      allow delete: if signedIn() && 
+        (request.auth.uid == resource.data.userId || isAdmin());
+    }
+    
+    // Drafts (for posts and podcasts)
+    match /drafts/{draftId} {
+      allow read: if signedIn() && 
+        (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if signedIn() && 
+        request.auth.uid == request.resource.data.userId &&
+        request.resource.data.keys().hasAll(['userId', 'type', 'title', 'body', 'createdAt', 'updatedAt']) &&
+        request.resource.data.type in ['post', 'podcast'];
+      allow update: if signedIn() && 
+        (request.auth.uid == resource.data.userId || isAdmin()) &&
+        request.resource.data.userId == resource.data.userId; // Cannot change owner
+      allow delete: if signedIn() && 
+        (request.auth.uid == resource.data.userId || isAdmin());
     }
   }
 }

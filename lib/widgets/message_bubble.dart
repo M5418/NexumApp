@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -7,6 +8,33 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/message.dart';
 import '../image_swipe_page.dart';
 import '../core/time_utils.dart';
+
+// Platform helper for safe access
+String _platformName() {
+  if (kIsWeb) return 'Web';
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+      return 'Android';
+    case TargetPlatform.iOS:
+      return 'iOS';
+    case TargetPlatform.macOS:
+      return 'macOS';
+    case TargetPlatform.windows:
+      return 'Windows';
+    case TargetPlatform.linux:
+      return 'Linux';
+    default:
+      return 'Unknown';
+  }
+}
+
+bool _isIOSPlatform() {
+  return !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+}
+
+bool _isAndroidPlatform() {
+  return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+}
 
 class MessageBubble extends StatefulWidget {
   final Message message;
@@ -131,9 +159,13 @@ class _MessageBubbleState extends State<MessageBubble>
       for (final attachment in msg.attachments) {
         if (attachment.type == MediaType.image) {
           allMedia.add(attachment.url);
-        } else if (attachment.type == MediaType.video &&
-            attachment.thumbnailUrl != null) {
-          allMedia.add(attachment.thumbnailUrl!);
+        } else if (attachment.type == MediaType.video) {
+          if (attachment.thumbnailUrl != null && attachment.thumbnailUrl!.isNotEmpty) {
+            allMedia.add(attachment.thumbnailUrl!);
+          } else {
+            // No thumbnail available; include the video URL so viewer can handle it.
+            allMedia.add(attachment.url);
+          }
         }
       }
     }
@@ -818,13 +850,88 @@ class _MessageBubbleState extends State<MessageBubble>
             _currentlyPlayingMessageId != widget.message.id) {
           // could broadcast a pause to other bubbles if we had a controller
         }
-        await _audioPlayer!.play(UrlSource(attachment.url));
+        
+        // Check if URL is valid
+        final url = attachment.url;
+        if (url.isEmpty) {
+          throw Exception('Audio URL is empty');
+        }
+        
+        // Validate URL format
+        final uri = Uri.tryParse(url);
+        if (uri == null) {
+          throw Exception('Invalid audio URL format');
+        }
+        
+        // Check if it's a Firebase Storage URL
+        final isFirebaseUrl = url.contains('firebasestorage.googleapis.com') || 
+                              url.contains('firebase.storage');
+        
+        // Detect audio format from URL
+        final isWebM = url.toLowerCase().contains('.webm');
+        final isM4A = url.toLowerCase().contains('.m4a');
+        
+        debugPrint('🎵 Attempting to play audio:');
+        debugPrint('   URL: ${url.length > 100 ? '${url.substring(0, 100)}...' : url}');
+        debugPrint('   Format: ${isWebM ? "WebM" : isM4A ? "M4A" : "Unknown"}');
+        debugPrint('   Firebase URL: $isFirebaseUrl');
+        debugPrint('   Platform: ${_platformName()}');
+        
+        // Check platform compatibility
+        if (isWebM && (_isIOSPlatform() || _isAndroidPlatform())) {
+          debugPrint('⚠️ WebM audio format may not be supported on this platform');
+          // Try to play anyway, but warn user if it fails
+        }
+        
+        // Attempt to play with better error context
+        try {
+          await _audioPlayer!.play(UrlSource(url));
+        } catch (playError) {
+          debugPrint('❌ Audio playback failed:');
+          debugPrint('   Error: $playError');
+          debugPrint('   URL: $url');
+          
+          // Provide more specific error message
+          String errorMessage = 'Unable to play audio';
+          if (playError.toString().contains('403') || 
+              playError.toString().contains('401')) {
+            errorMessage = 'Audio file access denied. Please try again later.';
+          } else if (playError.toString().contains('404')) {
+            errorMessage = 'Audio file not found.';
+          } else if (isWebM && (_isIOSPlatform() || _isAndroidPlatform())) {
+            errorMessage = 'This audio format may not be supported on your device.';
+          } else if (playError.toString().contains('source') || 
+                     playError.toString().contains('null')) {
+            errorMessage = 'Invalid audio source. The file may be corrupted.';
+          }
+          
+          throw Exception(errorMessage);
+        }
       }
     } catch (e) {
       debugPrint('❌ Audio playback error: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed to play audio: $e')));
+      
+      // Show user-friendly error message
+      String displayMessage = e.toString();
+      if (e is Exception) {
+        displayMessage = e.toString().replaceAll('Exception: ', '');
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(displayMessage),
+          backgroundColor: Colors.red.shade600,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            textColor: Colors.white,
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
+        ),
+      );
     }
   }
 
@@ -1004,38 +1111,51 @@ class _MessageBubbleState extends State<MessageBubble>
     bool isVideo = false,
     String? overlayText,
   }) {
+    final hasThumb = (attachment.thumbnailUrl != null && attachment.thumbnailUrl!.isNotEmpty);
+    final displayUrl = attachment.thumbnailUrl ?? attachment.url;
     return Stack(
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(radius),
-          child: CachedNetworkImage(
-            imageUrl: attachment.thumbnailUrl ?? attachment.url,
-            width: width,
-            height: height,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
-              width: width,
-              height: height,
-              decoration: BoxDecoration(
-                color: const Color(0xFF666666).withValues(alpha: 51),
-                borderRadius: BorderRadius.circular(radius),
-              ),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-            errorWidget: (context, url, error) => Container(
-              width: width,
-              height: height,
-              decoration: BoxDecoration(
-                color: const Color(0xFF666666).withValues(alpha: 51),
-                borderRadius: BorderRadius.circular(radius),
-              ),
-              child: const Icon(
-                Icons.broken_image,
-                color: Color(0xFF666666),
-                size: 48,
-              ),
-            ),
-          ),
+          child: isVideo && !hasThumb
+              ? Container(
+                  width: width,
+                  height: height,
+                  color: const Color(0xFF000000).withValues(alpha: 26),
+                  child: const Center(
+                    child: Icon(Icons.videocam_outlined, color: Colors.white70, size: 40),
+                  ),
+                )
+              : CachedNetworkImage(
+                  imageUrl: displayUrl,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    width: width,
+                    height: height,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF666666).withValues(alpha: 51),
+                      borderRadius: BorderRadius.circular(radius),
+                    ),
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: width,
+                    height: height,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF000000).withValues(alpha: 26),
+                      borderRadius: BorderRadius.circular(radius),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        isVideo ? Icons.videocam_off_outlined : Icons.broken_image,
+                        color: const Color(0xFF666666),
+                        size: 40,
+                      ),
+                    ),
+                  ),
+                ),
         ),
         if (isVideo)
           Positioned.fill(

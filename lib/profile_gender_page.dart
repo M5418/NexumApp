@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'profile_address_page.dart';
 import 'core/profile_api.dart';
+import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
 
 class ProfileGenderPage extends StatefulWidget {
@@ -22,10 +24,13 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
   String? _selectedGender;
   bool _isSaving = false;
 
-  final List<String> _genderOptions = ['Male', 'Female', 'Prefer not to say'];
+  // Gender options - translated dynamically in build
+  final List<String> _genderKeys = ['profile_gender.male', 'profile_gender.female', 'profile_gender.prefer_not_say'];
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
+    final genderOptions = _genderKeys.map((key) => lang.t(key)).toList();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     if (context.isMobile) {
@@ -65,7 +70,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                           onPressed: () => Navigator.pop(context),
                         ),
                         Text(
-                          'Profil details',
+                          lang.t('profile_setup.profil_details'),
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -105,7 +110,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                   color: isDarkMode ? Colors.white : Colors.black,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'Gender',
+                  labelText: lang.t('profile_gender.gender'),
                   labelStyle: GoogleFonts.inter(
                     fontSize: 16,
                     color: const Color(0xFF666666),
@@ -122,7 +127,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 dropdownColor: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-                items: _genderOptions.map((String gender) {
+                items: genderOptions.map((String gender) {
                   return DropdownMenuItem<String>(
                     value: gender,
                     child: Text(
@@ -140,7 +145,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                   });
                 },
                 hint: Text(
-                  'Select your gender',
+                  lang.t('profile_gender.select'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     color: const Color(0xFF999999),
@@ -162,7 +167,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                     elevation: 0,
                   ),
                   child: Text(
-                    _isSaving ? 'Saving...' : 'Next',
+                    _isSaving ? lang.t('profile_setup.saving') : lang.t('profile_setup.next'),
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -202,7 +207,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Profil details',
+                            lang.t('profile_setup.profil_details'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -238,7 +243,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                                   color: isDarkMode ? Colors.white : Colors.black,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'Gender',
+                                  labelText: lang.t('profile_gender.gender'),
                                   labelStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF666666),
@@ -255,7 +260,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                                 ),
                                 dropdownColor: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-                                items: _genderOptions.map((String gender) {
+                                items: genderOptions.map((String gender) {
                                   return DropdownMenuItem<String>(
                                     value: gender,
                                     child: Text(
@@ -273,7 +278,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                                   });
                                 },
                                 hint: Text(
-                                  'Select your gender',
+                                  lang.t('profile_gender.select'),
                                   style: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF999999),
@@ -297,7 +302,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                           ),
                           child: Text(
-                            _isSaving ? 'Saving...' : 'Next',
+                            _isSaving ? lang.t('profile_setup.saving') : lang.t('profile_setup.next'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -369,7 +374,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save gender. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('profile_gender.save_failed'),
             style: GoogleFonts.inter(),
           ),
         ),

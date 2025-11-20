@@ -95,11 +95,10 @@ class FirebaseMessageRepository implements MessageRepository {
           .limit(limit)
           .get();
       final list = snap.docs.map(_fromDoc).toList();
-      print('✅ Messages fetched: ${list.length} messages for conversation $conversationId');
       return list.reversed.toList();
     } catch (e) {
-      print('❌ Messages.list error for $conversationId: $e');
-      print('🔍 Check: 1) Firestore rules for conversations/{id}/messages 2) Auth status');
+      
+      
       rethrow;
     }
   }
@@ -180,12 +179,22 @@ class FirebaseMessageRepository implements MessageRepository {
     final me = _auth.currentUser?.uid;
     if (me == null) throw Exception('not_authenticated');
     final other = await _otherParticipant(convId);
+    // Determine file extension from URL
+    String fileName = 'voice_message.m4a';
+    if (audioUrl.toLowerCase().contains('.webm')) {
+      fileName = 'voice_message.webm';
+    } else if (audioUrl.toLowerCase().contains('.wav')) {
+      fileName = 'voice_message.wav';
+    } else if (audioUrl.toLowerCase().contains('.mp3')) {
+      fileName = 'voice_message.mp3';
+    }
+    
     final att = {
       'type': 'voice',
       'url': audioUrl,
       'durationSec': durationSec,
       'fileSize': fileSize,
-      'fileName': 'voice_message.m4a',
+      'fileName': fileName,
     };
     final data = {
       'conversationId': convId,

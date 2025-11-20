@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 class Translations {
   static const supportedCodes = ['en', 'fr', 'pt', 'es', 'de'];
+  
+  // Active codes shown in UI (currently EN + FR only, PT/ES/DE translations kept for future)
+  static const activeCodes = ['en', 'fr'];
 
   static const displayNames = {
     'en': 'English',
@@ -184,6 +187,7 @@ class Translations {
       // Conversations
       'chat.type_message': 'Type a message...',
       'chat.send': 'Send',
+      'chat.sending': 'Sending...',
       'chat.no_conversations': 'No conversations yet',
       'chat.start_conversation': 'Start a conversation',
       'chat.online': 'Online',
@@ -374,6 +378,9 @@ class Translations {
       'post.comment_posted': 'Comment posted!',
       'post.comment_failed': 'Failed to post comment',
       'post.comments': 'Comments',
+      'translation.show_original': 'Show Original',
+      'translation.translate': 'Translate',
+      'kyc.search_countries': 'Search countries...',
       'common.link_copied': 'Link copied to clipboard',
       'common.yesterday': 'Yesterday',
       'common.today': 'Today',
@@ -612,6 +619,9 @@ class Translations {
       'community.load_failed': 'Failed to load community details',
       'community.posts_failed': 'Failed to load community posts',
       'community.user': 'User',
+      'community.tab_post': 'Posts',
+      'community.tab_about': 'About',
+      'community.tab_media': 'Media',
 
       // Conversation Search
       'convsearch.search_chats': 'Search chats...',
@@ -623,10 +633,35 @@ class Translations {
 
       // Insights
       'insights.title': 'Insights',
-      'insights.last_7_days': 'Last 7 days',
-      'insights.top_location': 'Top Location',
-      'insights.by_views': 'By Views',
       'insights.weekly': 'Weekly',
+      'insights.monthly': 'Monthly',
+      'insights.yearly': 'Yearly',
+      'insights.performance': 'Performance',
+      'insights.views': 'Views',
+      'insights.comments': 'Comments',
+      'insights.likes': 'Likes',
+      'insights.shares': 'Shares',
+      'insights.today_activity': 'Activity Timeline',
+      'insights.last_7_days': 'Last 7 days',
+      'insights.last_30_days': 'Last 30 days',
+      'insights.last_90_days': 'Last 90 days',
+      'insights.followers_overview': 'Followers Overview',
+      'insights.top_location': 'Top Location',
+      'insights.all_locations': 'All Locations',
+      'insights.post_activity': 'Post Activity',
+      'insights.reached': 'Reached',
+      'insights.posts': 'Posts',
+      'insights.your_top_posts': 'Your Top Posts',
+      'insights.by_views': 'By Views',
+      'insights.by_likes': 'By Likes',
+      'insights.by_comments': 'By Comments',
+      'insights.day_s': 'S',
+      'insights.day_m': 'M',
+      'insights.day_t': 'T',
+      'insights.day_w': 'W',
+      'insights.day_f': 'F',
+      'insights.no_data': 'No data available',
+      'insights.loading': 'Loading insights...',
 
       // Monetization Page
       'monetization.eligible': 'You are eligible',
@@ -800,6 +835,61 @@ class Translations {
       'profile_bio.next': 'Next',
       'profile_bio.saving': 'Saving...',
 
+      // Profile Setup Pages
+      'profile_setup.title': 'Profile Setup',
+      'profile_setup.profil_details': 'Profil details',
+      'profile_setup.nexum': 'NEXUM',
+      'profile_setup.next': 'Next',
+      'profile_setup.saving': 'Saving...',
+      'profile_setup.continue': 'Continue',
+      'profile_setup.skip_for_now': 'Skip for Now',
+      'profile_setup.complete_setup': 'Complete Setup',
+      
+      // Profile Name
+      'profile_name.help_text': 'Enter your real names and choose an unique username',
+      'profile_name.first_name': 'First Name',
+      'profile_name.first_name_hint': 'Enter your first name',
+      'profile_name.last_name': 'Last Name',
+      'profile_name.last_name_hint': 'Enter your last name',
+      'profile_name.username': 'Username',
+      'profile_name.username_hint': 'Choose a username',
+      'profile_name.save_failed': 'Failed to save profile. Try again.',
+      
+      // Profile Gender
+      'profile_gender.gender': 'Gender',
+      'profile_gender.select': 'Select your gender',
+      'profile_gender.male': 'Male',
+      'profile_gender.female': 'Female',
+      'profile_gender.prefer_not_say': 'Prefer not to say',
+      'profile_gender.save_failed': 'Failed to save gender. Try again.',
+      
+      // Profile Photo Page
+      'profile_photo.add_photo': 'Add Profile Photo',
+      'profile_photo.choose_represents': 'Choose a photo that represents you',
+      'profile_photo.add_button': 'Add Photo',
+      'profile_photo.selected_success': 'Photo selected successfully!',
+      
+      // Profile Cover Page
+      'profile_cover.add_cover': 'Add Cover Photo',
+      'profile_cover.choose_personality': 'Choose a cover that represents your personality',
+      'profile_cover.add_button': 'Add Cover Photo',
+      'profile_cover.selected_success': 'Cover photo selected successfully!',
+      
+      // Profile Experience
+      'profile_experience.title': 'Professional Experience',
+      'profile_experience.subtitle': 'List your work experiences, positions, or roles',
+      'profile_experience.add': 'Add Experience',
+      'profile_experience.experience': 'Experience',
+      
+      // Profile Training
+      'profile_training.title': 'Trainings',
+      'profile_training.subtitle': 'List your educational background, certifications, or courses',
+      'profile_training.add': 'Add Training',
+      'profile_training.training_number': 'Training',
+      'profile_training.institution': 'Institution/Course Title',
+      'profile_training.degree': 'Degree/Certificate (Optional)',
+      'profile_training.save_failed': 'Failed to save trainings. Try again.',
+
       // Account Center
       'account_center.title': 'Account Center',
       'account_center.confirm_password': 'Confirm Password',
@@ -927,6 +1017,9 @@ class Translations {
       'post.comment_posted': 'Commentaire publié !',
       'post.comment_failed': 'Échec de la publication du commentaire',
       'post.comments': 'Commentaires',
+      'translation.show_original': 'Afficher l\'original',
+      'translation.translate': 'Traduire',
+      'kyc.search_countries': 'Rechercher des pays...',
       'common.link_copied': 'Lien copié dans le presse-papiers',
       'common.yesterday': 'Hier',
       'common.today': 'Aujourd\'hui',
@@ -1074,6 +1167,7 @@ class Translations {
 
       // Conversations
       'chat.type_message': 'Tapez un message...',
+      'chat.sending': 'Envoi en cours...',
       'conversations.title': 'Conversations',
       'conversations.chats': 'Discussions',
       'conversations.communities': 'Communautés',
@@ -1310,6 +1404,9 @@ class Translations {
       'community.load_failed': 'Échec du chargement des détails de la communauté',
       'community.posts_failed': 'Échec du chargement des publications de la communauté',
       'community.user': 'Utilisateur',
+      'community.tab_post': 'Publications',
+      'community.tab_about': 'À propos',
+      'community.tab_media': 'Médias',
 
       // Conversation Search
       'convsearch.search_chats': 'Rechercher des discussions...',
@@ -1321,10 +1418,35 @@ class Translations {
 
       // Insights
       'insights.title': 'Statistiques',
-      'insights.last_7_days': '7 derniers jours',
-      'insights.top_location': 'Meilleure localisation',
-      'insights.by_views': 'Par vues',
       'insights.weekly': 'Hebdomadaire',
+      'insights.monthly': 'Mensuel',
+      'insights.yearly': 'Annuel',
+      'insights.performance': 'Performance',
+      'insights.views': 'Vues',
+      'insights.comments': 'Commentaires',
+      'insights.likes': 'J\'aime',
+      'insights.shares': 'Partages',
+      'insights.today_activity': 'Chronologie d\'activité',
+      'insights.last_7_days': '7 derniers jours',
+      'insights.last_30_days': '30 derniers jours',
+      'insights.last_90_days': '90 derniers jours',
+      'insights.followers_overview': 'Aperçu des abonnés',
+      'insights.top_location': 'Meilleure localisation',
+      'insights.all_locations': 'Toutes les localisations',
+      'insights.post_activity': 'Activité des publications',
+      'insights.reached': 'Atteints',
+      'insights.posts': 'Publications',
+      'insights.your_top_posts': 'Vos meilleures publications',
+      'insights.by_views': 'Par vues',
+      'insights.by_likes': 'Par j\'aime',
+      'insights.by_comments': 'Par commentaires',
+      'insights.day_s': 'D',
+      'insights.day_m': 'L',
+      'insights.day_t': 'M',
+      'insights.day_w': 'M',
+      'insights.day_f': 'V',
+      'insights.no_data': 'Aucune donnée disponible',
+      'insights.loading': 'Chargement des statistiques...',
 
       // Monetization Page
       'monetization.eligible': 'Vous êtes éligible',
@@ -1453,6 +1575,61 @@ class Translations {
       'profile_bio.skip': 'Passer',
       'profile_bio.next': 'Suivant',
       'profile_bio.saving': 'Enregistrement...',
+
+      // Profile Setup Pages
+      'profile_setup.title': 'Configuration du profil',
+      'profile_setup.profil_details': 'Détails du profil',
+      'profile_setup.nexum': 'NEXUM',
+      'profile_setup.next': 'Suivant',
+      'profile_setup.saving': 'Enregistrement...',
+      'profile_setup.continue': 'Continuer',
+      'profile_setup.skip_for_now': 'Passer pour l\'instant',
+      'profile_setup.complete_setup': 'Terminer la configuration',
+      
+      // Profile Name
+      'profile_name.help_text': 'Entrez vos vrais noms et choisissez un nom d\'utilisateur unique',
+      'profile_name.first_name': 'Prénom',
+      'profile_name.first_name_hint': 'Entrez votre prénom',
+      'profile_name.last_name': 'Nom',
+      'profile_name.last_name_hint': 'Entrez votre nom',
+      'profile_name.username': 'Nom d\'utilisateur',
+      'profile_name.username_hint': 'Choisissez un nom d\'utilisateur',
+      'profile_name.save_failed': 'Échec de l\'enregistrement du profil. Réessayez.',
+      
+      // Profile Gender
+      'profile_gender.gender': 'Genre',
+      'profile_gender.select': 'Sélectionnez votre genre',
+      'profile_gender.male': 'Homme',
+      'profile_gender.female': 'Femme',
+      'profile_gender.prefer_not_say': 'Préfère ne pas dire',
+      'profile_gender.save_failed': 'Échec de l\'enregistrement du genre. Réessayez.',
+      
+      // Profile Photo Page
+      'profile_photo.add_photo': 'Ajouter une photo de profil',
+      'profile_photo.choose_represents': 'Choisissez une photo qui vous représente',
+      'profile_photo.add_button': 'Ajouter une photo',
+      'profile_photo.selected_success': 'Photo sélectionnée avec succès !',
+      
+      // Profile Cover Page
+      'profile_cover.add_cover': 'Ajouter une photo de couverture',
+      'profile_cover.choose_personality': 'Choisissez une couverture qui représente votre personnalité',
+      'profile_cover.add_button': 'Ajouter une photo de couverture',
+      'profile_cover.selected_success': 'Photo de couverture sélectionnée avec succès !',
+      
+      // Profile Experience
+      'profile_experience.title': 'Expérience professionnelle',
+      'profile_experience.subtitle': 'Listez vos expériences professionnelles, postes ou rôles',
+      'profile_experience.add': 'Ajouter une expérience',
+      'profile_experience.experience': 'Expérience',
+      
+      // Profile Training
+      'profile_training.title': 'Formations',
+      'profile_training.subtitle': 'Listez votre parcours éducatif, certifications ou cours',
+      'profile_training.add': 'Ajouter une formation',
+      'profile_training.training_number': 'Formation',
+      'profile_training.institution': 'Établissement/Titre du cours',
+      'profile_training.degree': 'Diplôme/Certificat (Optionnel)',
+      'profile_training.save_failed': 'Échec de l\'enregistrement des formations. Réessayez.',
 
       // Account Center
       'account_center.title': 'Centre des comptes',
@@ -1693,6 +1870,7 @@ class Translations {
 
       // Conversations
       'chat.type_message': 'Digite uma mensagem...',
+      'chat.sending': 'Enviando...',
       'conversations.title': 'Conversas',
       'conversations.chats': 'Chats',
       'conversations.communities': 'Comunidades',
@@ -1927,6 +2105,9 @@ class Translations {
       'community.load_failed': 'Falha ao carregar detalhes da comunidade',
       'community.posts_failed': 'Falha ao carregar publicações da comunidade',
       'community.user': 'Usuário',
+      'community.tab_post': 'Publicações',
+      'community.tab_about': 'Sobre',
+      'community.tab_media': 'Mídia',
 
       // Conversation Search
       'convsearch.search_chats': 'Pesquisar chats...',
@@ -1938,10 +2119,35 @@ class Translations {
 
       // Insights
       'insights.title': 'Estatísticas',
-      'insights.last_7_days': 'Últimos 7 dias',
-      'insights.top_location': 'Melhor localização',
-      'insights.by_views': 'Por visualizações',
       'insights.weekly': 'Semanal',
+      'insights.monthly': 'Mensal',
+      'insights.yearly': 'Anual',
+      'insights.performance': 'Desempenho',
+      'insights.views': 'Visualizações',
+      'insights.comments': 'Comentários',
+      'insights.likes': 'Curtidas',
+      'insights.shares': 'Compartilhamentos',
+      'insights.today_activity': 'Linha do tempo de atividade',
+      'insights.last_7_days': 'Últimos 7 dias',
+      'insights.last_30_days': 'Últimos 30 dias',
+      'insights.last_90_days': 'Últimos 90 dias',
+      'insights.followers_overview': 'Visão geral de seguidores',
+      'insights.top_location': 'Melhor localização',
+      'insights.all_locations': 'Todas as localizações',
+      'insights.post_activity': 'Atividade de publicações',
+      'insights.reached': 'Alcançados',
+      'insights.posts': 'Publicações',
+      'insights.your_top_posts': 'Suas melhores publicações',
+      'insights.by_views': 'Por visualizações',
+      'insights.by_likes': 'Por curtidas',
+      'insights.by_comments': 'Por comentários',
+      'insights.day_s': 'D',
+      'insights.day_m': 'S',
+      'insights.day_t': 'T',
+      'insights.day_w': 'Q',
+      'insights.day_f': 'S',
+      'insights.no_data': 'Nenhum dado disponível',
+      'insights.loading': 'Carregando estatísticas...',
 
       // Monetization Page
       'monetization.eligible': 'Você é elegível',
@@ -2303,6 +2509,7 @@ class Translations {
 
       // Conversations
       'chat.type_message': 'Escribe un mensaje...',
+      'chat.sending': 'Enviando...',
       'conversations.title': 'Conversaciones',
       'conversations.chats': 'Chats',
       'conversations.communities': 'Comunidades',
@@ -2537,6 +2744,9 @@ class Translations {
       'community.load_failed': 'Error al cargar detalles de la comunidad',
       'community.posts_failed': 'Error al cargar publicaciones de la comunidad',
       'community.user': 'Usuario',
+      'community.tab_post': 'Publicaciones',
+      'community.tab_about': 'Acerca de',
+      'community.tab_media': 'Medios',
 
       // Conversation Search
       'convsearch.search_chats': 'Buscar chats...',
@@ -2548,10 +2758,35 @@ class Translations {
 
       // Insights
       'insights.title': 'Estadísticas',
-      'insights.last_7_days': 'Últimos 7 días',
-      'insights.top_location': 'Mejor ubicación',
-      'insights.by_views': 'Por vistas',
       'insights.weekly': 'Semanal',
+      'insights.monthly': 'Mensual',
+      'insights.yearly': 'Anual',
+      'insights.performance': 'Rendimiento',
+      'insights.views': 'Vistas',
+      'insights.comments': 'Comentarios',
+      'insights.likes': 'Me gusta',
+      'insights.shares': 'Compartidos',
+      'insights.today_activity': 'Línea de tiempo de actividad',
+      'insights.last_7_days': 'Últimos 7 días',
+      'insights.last_30_days': 'Últimos 30 días',
+      'insights.last_90_days': 'Últimos 90 días',
+      'insights.followers_overview': 'Resumen de seguidores',
+      'insights.top_location': 'Mejor ubicación',
+      'insights.all_locations': 'Todas las ubicaciones',
+      'insights.post_activity': 'Actividad de publicaciones',
+      'insights.reached': 'Alcanzados',
+      'insights.posts': 'Publicaciones',
+      'insights.your_top_posts': 'Tus mejores publicaciones',
+      'insights.by_views': 'Por vistas',
+      'insights.by_likes': 'Por me gusta',
+      'insights.by_comments': 'Por comentarios',
+      'insights.day_s': 'D',
+      'insights.day_m': 'L',
+      'insights.day_t': 'M',
+      'insights.day_w': 'M',
+      'insights.day_f': 'V',
+      'insights.no_data': 'No hay datos disponibles',
+      'insights.loading': 'Cargando estadísticas...',
 
       // Monetization Page
       'monetization.eligible': 'Eres elegible',
@@ -2913,6 +3148,7 @@ class Translations {
 
       // Conversations
       'chat.type_message': 'Nachricht eingeben...',
+      'chat.sending': 'Wird gesendet...',
       'conversations.title': 'Gespräche',
       'conversations.chats': 'Chats',
       'conversations.communities': 'Communities',
@@ -3147,6 +3383,9 @@ class Translations {
       'community.load_failed': 'Fehler beim Laden der Community-Details',
       'community.posts_failed': 'Fehler beim Laden der Community-Beiträge',
       'community.user': 'Benutzer',
+      'community.tab_post': 'Beiträge',
+      'community.tab_about': 'Über',
+      'community.tab_media': 'Medien',
 
       // Conversation Search
       'convsearch.search_chats': 'Chats suchen...',
@@ -3158,10 +3397,35 @@ class Translations {
 
       // Insights
       'insights.title': 'Einblicke',
-      'insights.last_7_days': 'Letzte 7 Tage',
-      'insights.top_location': 'Top-Standort',
-      'insights.by_views': 'Nach Ansichten',
       'insights.weekly': 'Wöchentlich',
+      'insights.monthly': 'Monatlich',
+      'insights.yearly': 'Jährlich',
+      'insights.performance': 'Leistung',
+      'insights.views': 'Ansichten',
+      'insights.comments': 'Kommentare',
+      'insights.likes': 'Likes',
+      'insights.shares': 'Teilungen',
+      'insights.today_activity': 'Aktivitätsverlauf',
+      'insights.last_7_days': 'Letzte 7 Tage',
+      'insights.last_30_days': 'Letzte 30 Tage',
+      'insights.last_90_days': 'Letzte 90 Tage',
+      'insights.followers_overview': 'Follower-Übersicht',
+      'insights.top_location': 'Top-Standort',
+      'insights.all_locations': 'Alle Standorte',
+      'insights.post_activity': 'Beitragsaktivität',
+      'insights.reached': 'Erreicht',
+      'insights.posts': 'Beiträge',
+      'insights.your_top_posts': 'Ihre Top-Beiträge',
+      'insights.by_views': 'Nach Ansichten',
+      'insights.by_likes': 'Nach Likes',
+      'insights.by_comments': 'Nach Kommentaren',
+      'insights.day_s': 'S',
+      'insights.day_m': 'M',
+      'insights.day_t': 'D',
+      'insights.day_w': 'M',
+      'insights.day_f': 'F',
+      'insights.no_data': 'Keine Daten verfügbar',
+      'insights.loading': 'Lade Einblicke...',
 
       // Monetization Page
       'monetization.eligible': 'Sie sind berechtigt',

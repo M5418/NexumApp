@@ -785,7 +785,7 @@ class _CountrySearchDialogState extends State<CountrySearchDialog> {
               controller: _searchController,
               onChanged: _filterCountries,
               decoration: InputDecoration(
-                hintText: 'Search countries...',
+                hintText: Provider.of<LanguageProvider>(context).t('kyc.search_countries'),
                 hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
                 prefixIcon: const Icon(Icons.search, color: Color(0xFFBFAE01)),
                 filled: true,

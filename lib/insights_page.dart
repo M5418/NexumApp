@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'core/i18n/language_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:math' as math;
+
+import 'core/i18n/language_provider.dart';
+import 'repositories/interfaces/analytics_repository.dart';
+import 'post_page.dart';
 
 class InsightsPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -12,17 +18,35 @@ class InsightsPage extends StatefulWidget {
   State<InsightsPage> createState() => _InsightsPageState();
 }
 
-class _InsightsPageState extends State<InsightsPage>
-    with SingleTickerProviderStateMixin {
+class _InsightsPageState extends State<InsightsPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _selectedActivityFilter = 'Last 7 days';
-  String _selectedLocationFilter = 'Top Location';
-  String _selectedPostFilter = 'By Views';
+  late AnalyticsRepository _analyticsRepo;
+  String? _currentUserId;
+  Period _selectedPeriod = Period.weekly;
+  SortBy _selectedSortBy = SortBy.views;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+    
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) return;
+      setState(() {
+        _selectedPeriod = [Period.weekly, Period.monthly, Period.yearly][_tabController.index];
+      });
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _analyticsRepo = Provider.of<AnalyticsRepository>(context, listen: false);
+      _initialized = true;
+    }
   }
 
   @override
@@ -31,69 +55,66 @@ class _InsightsPageState extends State<InsightsPage>
     super.dispose();
   }
 
+  String _formatNumber(int number) {
+    if (number >= 1000000) return '${(number / 1000000).toStringAsFixed(1)}M';
+    if (number >= 1000) return '${(number / 1000).toStringAsFixed(1)}k';
+    return number.toString();
+  }
+
+  String _formatChange(double change) {
+    if (change == 0) return '0%';
+    final sign = change > 0 ? '+' : '';
+    return '$sign${change.toStringAsFixed(1)}%';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        widget.isDarkMode ?? Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark
-        ? const Color(0xFF0C0C0C)
-        : const Color(0xFFF1F4F8);
-    final cardColor = isDark ? const Color(0xFF000000) : Colors.white;
+    final isDark = widget.isDarkMode ?? Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+    final cardColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final lang = context.watch<LanguageProvider>();
+
+    if (_currentUserId == null) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: _buildAppBar(cardColor, textColor, lang),
+        body: Center(child: Text(lang.t('insights.no_data'), style: GoogleFonts.inter(color: textColor))),
+      );
+    }
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          Provider.of<LanguageProvider>(context, listen: false).t('insights.title'),
-          style: GoogleFonts.inter(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: textColor,
-          ),
-        ),
-        centerTitle: true,
-      ),
+      appBar: _buildAppBar(cardColor, textColor, lang),
       body: Column(
         children: [
-          // Tab Navigation
-          Container(
-            color: cardColor,
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: isDark ? Colors.white : Colors.black,
-                borderRadius: const BorderRadius.all(Radius.circular(20)),
-              ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              labelColor: isDark ? Colors.black : Colors.white,
-              unselectedLabelColor: Colors.grey,
-              labelStyle: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-              tabs: [
-                Tab(text: Provider.of<LanguageProvider>(context, listen: false).t('insights.weekly')),
-                const Tab(text: 'Monthly'),
-                const Tab(text: 'Yearly'),
-              ],
-            ),
-          ),
+          _buildTabBar(cardColor, isDark, lang, isDesktop),
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildInsightsContent(isDark, cardColor, textColor),
-                _buildInsightsContent(isDark, cardColor, textColor),
-                _buildInsightsContent(isDark, cardColor, textColor),
-              ],
+            child: StreamBuilder<PerformanceMetrics>(
+              stream: _analyticsRepo.performanceMetricsStream(uid: _currentUserId!, period: _selectedPeriod),
+              builder: (context, metricsSnapshot) {
+                if (metricsSnapshot.connectionState == ConnectionState.waiting) {
+                  return _buildLoading(lang, textColor);
+                }
+                if (metricsSnapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                        const SizedBox(height: 16),
+                        Text('Error: ${metricsSnapshot.error}', style: GoogleFonts.inter(color: textColor)),
+                      ],
+                    ),
+                  );
+                }
+                
+                if (!metricsSnapshot.hasData) {
+                  return Center(child: Text(lang.t('insights.no_data'), style: GoogleFonts.inter(color: textColor)));
+                }
+                return _buildContent(context, isDark, cardColor, textColor, isDesktop, metricsSnapshot.data!, lang);
+              },
             ),
           ),
         ],
@@ -101,99 +122,113 @@ class _InsightsPageState extends State<InsightsPage>
     );
   }
 
-  Widget _buildInsightsContent(bool isDark, Color cardColor, Color textColor) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+  AppBar _buildAppBar(Color cardColor, Color textColor, LanguageProvider lang) {
+    return AppBar(
+      backgroundColor: cardColor,
+      elevation: 0,
+      leading: IconButton(
+        icon: Icon(Icons.arrow_back_ios, color: textColor, size: 20),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Text(lang.t('insights.title'), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: textColor)),
+      centerTitle: true,
+    );
+  }
+
+  Widget _buildTabBar(Color cardColor, bool isDark, LanguageProvider lang, bool isDesktop) {
+    return Container(
+      color: cardColor,
+      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 32 : 16, vertical: 12),
+      child: Center(
+        child: Container(
+          constraints: BoxConstraints(maxWidth: isDesktop ? 500 : double.infinity),
+          decoration: BoxDecoration(color: isDark ? Colors.grey[900] : Colors.grey[100], borderRadius: BorderRadius.circular(25)),
+          padding: const EdgeInsets.all(4),
+          child: TabBar(
+            controller: _tabController,
+            indicator: BoxDecoration(color: const Color(0xFFBFAE01), borderRadius: BorderRadius.circular(20)),
+            indicatorSize: TabBarIndicatorSize.tab,
+            dividerColor: Colors.transparent,
+            labelColor: Colors.black,
+            unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+            labelStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+            tabs: [Tab(text: lang.t('insights.weekly')), Tab(text: lang.t('insights.monthly')), Tab(text: lang.t('insights.yearly'))],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoading(LanguageProvider lang, Color textColor) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01))),
+          const SizedBox(height: 16),
+          Text(lang.t('insights.loading'), style: GoogleFonts.inter(color: textColor)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, bool isDark, Color cardColor, Color textColor, bool isDesktop, PerformanceMetrics metrics, LanguageProvider lang) {
+    final content = SingleChildScrollView(
+      padding: EdgeInsets.all(isDesktop ? 32 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Performance Indicators
-          _buildPerformanceIndicators(isDark, cardColor, textColor),
+          _buildPerformanceCard(isDark, cardColor, textColor, metrics, lang),
           const SizedBox(height: 24),
-
-          // Today Activity
-          _buildTodayActivity(isDark, cardColor, textColor),
+          if (isDesktop)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _buildActivityTimeline(isDark, cardColor, textColor, lang)),
+                const SizedBox(width: 24),
+                Expanded(child: _buildFollowersOverview(isDark, cardColor, textColor, lang)),
+              ],
+            )
+          else ...[
+            _buildActivityTimeline(isDark, cardColor, textColor, lang),
+            const SizedBox(height: 24),
+            _buildFollowersOverview(isDark, cardColor, textColor, lang),
+          ],
           const SizedBox(height: 24),
-
-          // Followers Overview
-          _buildFollowersOverview(isDark, cardColor, textColor),
+          _buildPostActivity(isDark, cardColor, textColor, lang),
           const SizedBox(height: 24),
-
-          // Post Activity
-          _buildPostActivity(isDark, cardColor, textColor),
-          const SizedBox(height: 24),
-
-          // Your Top Post
-          _buildYourTopPost(isDark, cardColor, textColor),
+          _buildTopPosts(isDark, cardColor, textColor, lang),
         ],
       ),
     );
+    return isDesktop ? Center(child: Container(constraints: const BoxConstraints(maxWidth: 1200), child: content)) : content;
   }
 
-  Widget _buildPerformanceIndicators(
-    bool isDark,
-    Color cardColor,
-    Color textColor,
-  ) {
+  Widget _buildPerformanceCard(bool isDark, Color cardColor, Color textColor, PerformanceMetrics metrics, LanguageProvider lang) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(isDark ? 0 : 10),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Performance Indicators',
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
+          Text(lang.t('insights.performance'), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: textColor)),
+          const SizedBox(height: 20),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 2,
             children: [
-              Expanded(
-                child: _buildStatCard(
-                  '328k',
-                  'Views',
-                  '+8%',
-                  true,
-                  isDark,
-                  textColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  '3.2k',
-                  'Comments',
-                  '+4%',
-                  true,
-                  isDark,
-                  textColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  '178k',
-                  'Likes',
-                  '+12%',
-                  true,
-                  isDark,
-                  textColor,
-                ),
-              ),
+              _buildMetricTile(lang.t('insights.views'), metrics.totalViews, metrics.viewsChange, isDark, textColor),
+              _buildMetricTile(lang.t('insights.comments'), metrics.totalComments, metrics.commentsChange, isDark, textColor),
+              _buildMetricTile(lang.t('insights.likes'), metrics.totalLikes, metrics.likesChange, isDark, textColor),
+              _buildMetricTile(lang.t('insights.shares'), metrics.totalShares, metrics.sharesChange, isDark, textColor),
             ],
           ),
         ],
@@ -201,581 +236,305 @@ class _InsightsPageState extends State<InsightsPage>
     );
   }
 
-  Widget _buildStatCard(
-    String value,
-    String label,
-    String change,
-    bool isPositive,
-    bool isDark,
-    Color textColor,
-  ) {
+  Widget _buildMetricTile(String label, int value, double change, bool isDark, Color textColor) {
+    final isPositive = change >= 0;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: isDark ? Colors.grey[900] : Colors.grey[50], borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(_formatNumber(value), style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w700, color: textColor)),
+          const SizedBox(height: 4),
+          Text(label, style: GoogleFonts.inter(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+          if (change != 0) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(isPositive ? Icons.arrow_upward : Icons.arrow_downward, size: 12, color: isPositive ? Colors.green : Colors.red),
+                const SizedBox(width: 2),
+                Text(_formatChange(change), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: isPositive ? Colors.green : Colors.red)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivityTimeline(bool isDark, Color cardColor, Color textColor, LanguageProvider lang) {
+    return FutureBuilder<List<ActivityData>>(
+      future: _analyticsRepo.getActivityTimeline(uid: _currentUserId!, period: _selectedPeriod),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))]),
+            height: 250,
+            child: const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Color(0xFFBFAE01)))),
+          );
+        }
+        final activityData = snapshot.data!;
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(lang.t('insights.today_activity'), style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 150,
+                child: activityData.isEmpty
+                    ? Center(child: Text(lang.t('insights.no_data'), style: GoogleFonts.inter(color: textColor)))
+                    : CustomPaint(painter: ActivityChartPainter(activityData, isDark), size: const Size(double.infinity, 150)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFollowersOverview(bool isDark, Color cardColor, Color textColor, LanguageProvider lang) {
+    return FutureBuilder<Map<String, LocationData>>(
+      future: _analyticsRepo.getFollowersOverview(uid: _currentUserId!),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))]),
+            height: 250,
+            child: const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Color(0xFFBFAE01)))),
+          );
+        }
+        final locations = snapshot.data!;
+        final totalCount = locations.values.fold<int>(0, (sum, loc) => sum + loc.count);
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(lang.t('insights.followers_overview'), style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
+              const SizedBox(height: 12),
+              Text(_formatNumber(totalCount), style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w700, color: textColor)),
+              const SizedBox(height: 20),
+              if (locations.isEmpty)
+                Text(lang.t('insights.no_data'), style: GoogleFonts.inter(color: textColor))
+              else
+                ...locations.entries.map((entry) => Padding(padding: const EdgeInsets.only(bottom: 16), child: _buildLocationBar(entry.value, isDark, textColor))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLocationBar(LocationData loc, bool isDark, Color textColor) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: textColor,
-          ),
+        Row(
+          children: [
+            Text(loc.flag, style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 12),
+            Expanded(child: Text(loc.country, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: textColor))),
+            Text(_formatNumber(loc.count), style: GoogleFonts.inter(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: isDark ? Colors.grey[400] : Colors.grey[600],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          change,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: isPositive ? Colors.green : Colors.red,
-          ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(value: loc.percentage, backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200], valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)), minHeight: 8),
         ),
       ],
     );
   }
 
-  Widget _buildTodayActivity(bool isDark, Color cardColor, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(isDark ? 0 : 10),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildPostActivity(bool isDark, Color cardColor, Color textColor, LanguageProvider lang) {
+    return FutureBuilder<Map<String, int>>(
+      future: _analyticsRepo.getPostActivityCalendar(uid: _currentUserId!, period: _selectedPeriod),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))]),
+            height: 200,
+            child: const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Color(0xFFBFAE01)))),
+          );
+        }
+        final calendar = snapshot.data!;
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Today Activity',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                ),
-              ),
-              _buildDropdown(
-                _selectedActivityFilter,
-                [Provider.of<LanguageProvider>(context, listen: false).t('insights.last_7_days'), 'Last 30 days', 'Last 90 days'],
-                (value) {
-                  setState(() => _selectedActivityFilter = value!);
-                },
-                isDark,
-              ),
+              Text(lang.t('insights.post_activity'), style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
+              const SizedBox(height: 20),
+              _buildCalendarHeatmap(calendar, isDark, textColor, lang),
             ],
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 120,
-            child: CustomPaint(
-              painter: LineChartPainter(),
-              size: const Size(double.infinity, 120),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildFollowersOverview(
-    bool isDark,
-    Color cardColor,
-    Color textColor,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(isDark ? 0 : 10),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+  Widget _buildCalendarHeatmap(Map<String, int> calendar, bool isDark, Color textColor, LanguageProvider lang) {
+    final now = DateTime.now();
+    final startDate = now.subtract(Duration(days: _selectedPeriod == Period.weekly ? 7 : _selectedPeriod == Period.monthly ? 30 : 365));
+    final days = <DateTime>[];
+    for (var d = startDate; d.isBefore(now); d = d.add(const Duration(days: 1))) {
+      days.add(d);
+    }
+    final maxPosts = calendar.values.isEmpty ? 1 : calendar.values.reduce(math.max);
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: days.map((day) {
+        final dateKey = DateTime(day.year, day.month, day.day).toIso8601String();
+        final postCount = calendar[dateKey] ?? 0;
+        final intensity = maxPosts > 0 ? (postCount / maxPosts) : 0.0;
+        return Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: postCount > 0 ? Color(0xFFBFAE01).withValues(alpha: 0.3 + (intensity * 0.7)) : (isDark ? Colors.grey[800] : Colors.grey[200]),
+            borderRadius: BorderRadius.circular(4),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Followers Overview',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                ),
-              ),
-              _buildDropdown(
-                _selectedLocationFilter,
-                [Provider.of<LanguageProvider>(context, listen: false).t('insights.top_location'), 'All Locations'],
-                (value) {
-                  setState(() => _selectedLocationFilter = value!);
-                },
-                isDark,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '89,827',
-            style: GoogleFonts.inter(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildCountryItem(
-            '🇺🇸',
-            'United States',
-            '102.6k',
-            0.6,
-            isDark,
-            textColor,
-          ),
-          const SizedBox(height: 12),
-          _buildCountryItem('🇫🇷', 'France', '86.7k', 0.5, isDark, textColor),
-          const SizedBox(height: 12),
-          _buildCountryItem(
-            '🇰🇷',
-            'South Korea',
-            '34.7k',
-            0.2,
-            isDark,
-            textColor,
-          ),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildCountryItem(
-    String flag,
-    String country,
-    String count,
-    double progress,
-    bool isDark,
-    Color textColor,
-  ) {
-    return Row(
-      children: [
-        Text(flag, style: const TextStyle(fontSize: 20)),
-        const SizedBox(width: 12),
-        Expanded(
+  Widget _buildTopPosts(bool isDark, Color cardColor, Color textColor, LanguageProvider lang) {
+    return FutureBuilder<List<TopPostData>>(
+      future: _analyticsRepo.getTopPosts(uid: _currentUserId!, limit: 5, sortBy: _selectedSortBy),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))]),
+            height: 200,
+            child: const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Color(0xFFBFAE01)))),
+          );
+        }
+        final topPosts = snapshot.data!;
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 20, offset: const Offset(0, 4))]),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    country,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: textColor,
-                    ),
-                  ),
-                  Text(
-                    count,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
+                  Text(lang.t('insights.your_top_posts'), style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
+                  _buildSortDropdown(isDark, lang),
                 ],
               ),
-              const SizedBox(height: 4),
-              LinearProgressIndicator(
-                value: progress,
-                backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  Color(0xFFBFAE01),
-                ),
-              ),
+              const SizedBox(height: 16),
+              if (topPosts.isEmpty)
+                Text(lang.t('insights.no_data'), style: GoogleFonts.inter(color: textColor))
+              else
+                ...topPosts.map((post) => Padding(padding: const EdgeInsets.only(bottom: 16), child: _buildTopPostItem(post, isDark, textColor))),
             ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
-  Widget _buildPostActivity(bool isDark, Color cardColor, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(isDark ? 0 : 10),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Post Activity',
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  '328',
-                  'Reached',
-                  '',
-                  false,
-                  isDark,
-                  textColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  '178',
-                  'Likes',
-                  '',
-                  false,
-                  isDark,
-                  textColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  '3',
-                  'Posts',
-                  '',
-                  false,
-                  isDark,
-                  textColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildCalendarGrid(isDark, textColor),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalendarGrid(bool isDark, Color textColor) {
-    final days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    final weeks = [
-      [null, null, null, null, null, 1, 2],
-      [3, 4, 5, 6, 7, 8, 9],
-      [10, 11, 12, 13, 14, 15, 16],
-      [17, 18, 19, 20, 21, 22, 23],
-      [24, 25, 26, 27, 28, 29, 30],
-      [31, null, null, null, null, null, null],
-    ];
-
-    return Column(
-      children: [
-        Row(
-          children: days
-              .map(
-                (day) => Expanded(
-                  child: Center(
-                    child: Text(
-                      day,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 8),
-        ...weeks
-            .map(
-              (week) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: week
-                      .map(
-                        (day) => Expanded(
-                          child: Container(
-                            height: 32,
-                            margin: const EdgeInsets.all(1),
-                            decoration: BoxDecoration(
-                              color: day != null
-                                  ? (day % 3 == 0
-                                        ? const Color(0xFFBFAE01)
-                                        : isDark
-                                        ? Colors.grey[800]
-                                        : Colors.grey[100])
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: day != null
-                                ? Center(
-                                    child: Text(
-                                      day.toString(),
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: day % 3 == 0
-                                            ? Colors.white
-                                            : textColor,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            )
-            ,
-      ],
-    );
-  }
-
-  Widget _buildYourTopPost(bool isDark, Color cardColor, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(isDark ? 0 : 10),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Your Top Post',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                ),
-              ),
-              _buildDropdown(
-                _selectedPostFilter,
-                [Provider.of<LanguageProvider>(context, listen: false).t('insights.by_views'), 'By Likes', 'By Comments'],
-                (value) {
-                  setState(() => _selectedPostFilter = value!);
-                },
-                isDark,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildTopPostItem(
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=60&h=60&fit=crop',
-            'Just had the most incredible adventure. Endless destinations. 🌍✈️',
-            '#IncredibleJourney #Moments',
-            '2.3k views',
-            isDark,
-            textColor,
-          ),
-          const SizedBox(height: 12),
-          _buildTopPostItem(
-            'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=60&h=60&fit=crop',
-            'Chasing sunsets, finding peace 🌅 #WanderlustMoments',
-            '',
-            '1.8k views',
-            isDark,
-            textColor,
-          ),
-          const SizedBox(height: 12),
-          _buildTopPostItem(
-            'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=60&h=60&fit=crop',
-            'Warm it up, bite into joy — Pop-Tarts just hit different toasted.',
-            '',
-            '1.2k views',
-            isDark,
-            textColor,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopPostItem(
-    String imageUrl,
-    String text,
-    String hashtags,
-    String views,
-    bool isDark,
-    Color textColor,
-  ) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: const BoxDecoration(
-            color: Color(0xFFBFAE01),
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            imageUrl,
-            width: 60,
-            height: 60,
-            fit: BoxFit.cover,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                text,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: textColor,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (hashtags.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  hashtags,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFFBFAE01),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 4),
-              Text(
-                views,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDropdown(
-    String value,
-    List<String> items,
-    ValueChanged<String?> onChanged,
-    bool isDark,
-  ) {
+  Widget _buildSortDropdown(bool isDark, LanguageProvider lang) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: isDark ? Colors.grey[400]! : Colors.grey[300]!,
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: DropdownButton<String>(
-        value: value,
-        items: items
-            .map(
-              (item) => DropdownMenuItem(
-                value: item,
-                child: Text(item, style: GoogleFonts.inter(fontSize: 12)),
-              ),
-            )
-            .toList(),
-        onChanged: onChanged,
-        underline: Container(),
+      decoration: BoxDecoration(border: Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[300]!), borderRadius: BorderRadius.circular(20)),
+      child: DropdownButton<SortBy>(
+        value: _selectedSortBy,
+        underline: const SizedBox(),
         isDense: true,
+        items: [
+          DropdownMenuItem(value: SortBy.views, child: Text(lang.t('insights.by_views'), style: GoogleFonts.inter(fontSize: 12))),
+          DropdownMenuItem(value: SortBy.likes, child: Text(lang.t('insights.by_likes'), style: GoogleFonts.inter(fontSize: 12))),
+          DropdownMenuItem(value: SortBy.comments, child: Text(lang.t('insights.by_comments'), style: GoogleFonts.inter(fontSize: 12))),
+        ],
+        onChanged: (value) => setState(() => _selectedSortBy = value!),
+      ),
+    );
+  }
+
+  Widget _buildTopPostItem(TopPostData post, bool isDark, Color textColor) {
+    final statValue = _selectedSortBy == SortBy.views ? post.views : _selectedSortBy == SortBy.likes ? post.likes : post.comments;
+    return InkWell(
+      onTap: () {
+        Navigator.push(context, MaterialPageRoute(builder: (context) => PostPage(postId: post.postId)));
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: isDark ? Colors.grey[900] : Colors.grey[50], borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          children: [
+            if (post.mediaUrls.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(imageUrl: post.mediaUrls.first, width: 60, height: 60, fit: BoxFit.cover, placeholder: (_, __) => Container(width: 60, height: 60, color: Colors.grey[800])),
+              )
+            else
+              Container(width: 60, height: 60, decoration: BoxDecoration(color: const Color(0xFFBFAE01).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.article, color: Color(0xFFBFAE01))),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(post.text.isEmpty ? '(No text)' : post.text, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: textColor), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text('${_formatNumber(statValue)} ${_selectedSortBy.name}', style: GoogleFonts.inter(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFFBFAE01)),
+          ],
+        ),
       ),
     );
   }
 }
 
-class LineChartPainter extends CustomPainter {
+class ActivityChartPainter extends CustomPainter {
+  final List<ActivityData> data;
+  final bool isDark;
+
+  ActivityChartPainter(this.data, this.isDark);
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFBFAE01)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
+    if (data.isEmpty) return;
+    final maxValue = data.map((d) => d.views).reduce(math.max).toDouble();
+    if (maxValue == 0) return;
+    final paint = Paint()..color = const Color(0xFFBFAE01)..strokeWidth = 3..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
     final path = Path();
-    final points = [
-      Offset(0, size.height * 0.8),
-      Offset(size.width * 0.1, size.height * 0.6),
-      Offset(size.width * 0.2, size.height * 0.7),
-      Offset(size.width * 0.3, size.height * 0.4),
-      Offset(size.width * 0.4, size.height * 0.5),
-      Offset(size.width * 0.5, size.height * 0.3),
-      Offset(size.width * 0.6, size.height * 0.2),
-      Offset(size.width * 0.7, size.height * 0.4),
-      Offset(size.width * 0.8, size.height * 0.1),
-      Offset(size.width * 0.9, size.height * 0.3),
-      Offset(size.width, size.height * 0.5),
-    ];
-
-    path.moveTo(points[0].dx, points[0].dy);
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].dx, points[i].dy);
+    final step = size.width / (data.length - 1).clamp(1, double.infinity);
+    for (var i = 0; i < data.length; i++) {
+      final x = i * step;
+      final y = size.height - (data[i].views / maxValue * size.height);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
     }
-
     canvas.drawPath(path, paint);
-
-    // Draw points
-    final pointPaint = Paint()
-      ..color = const Color(0xFFBFAE01)
-      ..style = PaintingStyle.fill;
-
-    for (final point in points) {
-      canvas.drawCircle(point, 3, pointPaint);
+    final pointPaint = Paint()..color = const Color(0xFFBFAE01)..style = PaintingStyle.fill;
+    for (var i = 0; i < data.length; i++) {
+      final x = i * step;
+      final y = size.height - (data[i].views / maxValue * size.height);
+      canvas.drawCircle(Offset(x, y), 4, pointPaint);
     }
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

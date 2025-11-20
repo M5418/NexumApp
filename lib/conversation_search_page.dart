@@ -412,10 +412,10 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
         return _errorBox(_errorCommunities!);
       }
       if (_controller.text.isEmpty) {
-        return _hint('Start typing to search your communities');
+        return _hint(Provider.of<LanguageProvider>(context, listen: false).t('convsearch.start_typing_comm'));
       }
       if (_commResults.isEmpty) {
-        return _hint('No communities match your search');
+        return _hint(Provider.of<LanguageProvider>(context, listen: false).t('convsearch.no_match_comm'));
       }
       return RefreshIndicator(
         color: const Color(0xFFBFAE01),
@@ -563,15 +563,16 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
     }
 
   String _labelType(String? t) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
     switch ((t ?? '').toLowerCase()) {
       case 'image':
-        return 'Photo';
+        return lang.t('convsearch.type_photo');
       case 'video':
-        return 'Video';
+        return lang.t('convsearch.type_video');
       case 'voice':
-        return 'Voice message';
+        return lang.t('convsearch.type_voice');
       case 'file':
-        return 'File';
+        return lang.t('convsearch.type_file');
       default:
         return '';
     }

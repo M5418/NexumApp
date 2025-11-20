@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 import '../other_user_profile_page.dart';
-import '../repositories/firebase/firebase_follow_repository.dart';
+import '../providers/follow_state.dart';
 
 class ConnectionCard extends StatefulWidget {
   final String userId;
@@ -14,6 +15,7 @@ class ConnectionCard extends StatefulWidget {
   final bool initialConnectionStatus;
   final bool theyConnectToYou;
   final VoidCallback? onMessage;
+  final VoidCallback? onTap;
 
   const ConnectionCard({
     super.key,
@@ -26,6 +28,7 @@ class ConnectionCard extends StatefulWidget {
     this.initialConnectionStatus = false,
     this.theyConnectToYou = false,
     this.onMessage,
+    this.onTap,
   });
 
   @override
@@ -33,21 +36,26 @@ class ConnectionCard extends StatefulWidget {
 }
 
 class _ConnectionCardState extends State<ConnectionCard> {
-  late bool isConnected;
-
-  @override
-  void initState() {
-    super.initState();
-    isConnected = widget.initialConnectionStatus;
-  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? Colors.black : Colors.white;
+    final follow = context.watch<FollowState>();
+    if (!follow.initialized) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<FollowState>().initialize();
+      });
+    }
+    final connected = follow.isConnected(widget.userId);
+    final theyConnect = widget.theyConnectToYou || follow.theyConnectToYou(widget.userId);
 
     return GestureDetector(
       onTap: () {
+        if (widget.onTap != null) {
+          widget.onTap!.call();
+          return;
+        }
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -57,7 +65,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
               userAvatarUrl: widget.avatarUrl,
               userBio: widget.bio,
               userCoverUrl: widget.coverUrl,
-              isConnected: isConnected,
+              isConnected: connected,
               theyConnectToYou: widget.theyConnectToYou,
             ),
           ),
@@ -201,56 +209,39 @@ class _ConnectionCardState extends State<ConnectionCard> {
                           child: ElevatedButton(
                             onPressed: () async {
                               final ctx = context;
-                              final repo = FirebaseFollowRepository();
-                              final next = !isConnected;
-                              setState(() {
-                                isConnected = next;
-                              });
                               try {
-                                if (next) {
-                                  await repo.followUser(widget.userId);
-                                } else {
-                                  await repo.unfollowUser(widget.userId);
-                                }
+                                await ctx.read<FollowState>().toggle(widget.userId);
                               } catch (e) {
-                                setState(() {
-                                  isConnected = !next;
-                                });
-                                if (ctx.mounted) {
-                                  ScaffoldMessenger.of(ctx).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Failed to ${next ? 'connect' : 'disconnect'}',
-                                      ),
-                                    ),
-                                  );
-                                }
+                                if (!ctx.mounted) return;
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to toggle connection'),
+                                  ),
+                                );
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: isConnected
+                              backgroundColor: connected
                                   ? Colors.transparent
                                   : (isDark ? Colors.white : Colors.black),
-                              foregroundColor: isConnected
+                              foregroundColor: connected
                                   ? const Color(0xFF666666)
                                   : (isDark ? Colors.black : Colors.white),
-                              side: isConnected
+                              side: connected
                                   ? const BorderSide(
                                       color: Color(0xFF666666),
                                       width: 1,
                                     )
                                   : null,
-                              elevation: isConnected ? 0 : 2,
+                              elevation: connected ? 0 : 2,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
                             ),
                             child: Text(
-                              isConnected
+                              connected
                                   ? 'Disconnect'
-                                  : (widget.theyConnectToYou
-                                      ? 'Connect Back'
-                                      : 'Connect'),
+                                  : (theyConnect ? 'Connect Back' : 'Connect'),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,

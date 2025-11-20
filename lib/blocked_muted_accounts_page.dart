@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/block_repository.dart';
 import 'repositories/interfaces/mute_repository.dart';
+import 'other_user_profile_page.dart';
+import 'profile_page.dart';
 
 class BlockedMutedAccountsPage extends StatefulWidget {
   const BlockedMutedAccountsPage({super.key});
@@ -223,6 +226,27 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
             ],
           ),
           child: ListTile(
+            onTap: () {
+              final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+              if (currentUserId == user.blockedUid) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OtherUserProfilePage(
+                      userId: user.blockedUid,
+                      userName: user.blockedUsername ?? 'Unknown',
+                      userAvatarUrl: user.blockedAvatarUrl ?? '',
+                      userBio: '',
+                    ),
+                  ),
+                );
+              }
+            },
             leading: CircleAvatar(
               backgroundImage: user.blockedAvatarUrl != null && user.blockedAvatarUrl!.isNotEmpty
                   ? NetworkImage(user.blockedAvatarUrl!)
@@ -232,7 +256,7 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
                   : null,
             ),
             title: Text(
-              user.blockedUsername ?? 'Unknown User',
+              user.blockedUsername ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown_user'),
               style: GoogleFonts.inter(fontWeight: FontWeight.w500),
             ),
             trailing: TextButton(
@@ -276,6 +300,27 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
             ],
           ),
           child: ListTile(
+            onTap: () {
+              final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+              if (currentUserId == user.mutedUid) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OtherUserProfilePage(
+                      userId: user.mutedUid,
+                      userName: user.mutedUsername ?? 'Unknown',
+                      userAvatarUrl: user.mutedAvatarUrl ?? '',
+                      userBio: '',
+                    ),
+                  ),
+                );
+              }
+            },
             leading: CircleAvatar(
               backgroundImage: user.mutedAvatarUrl != null && user.mutedAvatarUrl!.isNotEmpty
                   ? NetworkImage(user.mutedAvatarUrl!)
@@ -285,13 +330,13 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
                   : null,
             ),
             title: Text(
-              user.mutedUsername ?? 'Unknown User',
+              user.mutedUsername ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown_user'),
               style: GoogleFonts.inter(fontWeight: FontWeight.w500),
             ),
             trailing: TextButton(
               onPressed: () => _handleUnmute(user.mutedUid),
               child: Text(
-                'Unmute',
+                Provider.of<LanguageProvider>(context).t('blocked_muted.unmute'),
                 style: GoogleFonts.inter(
                   color: const Color(0xFFBFAE01),
                   fontWeight: FontWeight.w600,

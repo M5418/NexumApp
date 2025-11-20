@@ -1355,17 +1355,20 @@ class _CreatePostPageState extends State<CreatePostPage> {
         final path = item.path;
         if (xf == null && (path == null || path.isEmpty)) continue;
 
-        final uploaded = await _uploadXFile(xf!, item.type);
+        String? url;
+        if (xf != null) {
+          final uploaded = await _uploadXFile(xf, item.type);
+          url = uploaded['url'];
+        } else if (path != null && path.startsWith('http')) {
+          // Already uploaded (e.g., editing draft)
+          url = path;
+        }
+
+        if (url == null || url.isEmpty) continue;
         if (item.type == MediaType.image) {
-          mediaPayload.add({
-            'type': 'image',
-            'url': uploaded['url'],
-          });
+          mediaPayload.add({'type': 'image', 'url': url});
         } else if (item.type == MediaType.video) {
-          mediaPayload.add({
-            'type': 'video',
-            'url': uploaded['url'],
-          });
+          mediaPayload.add({'type': 'video', 'url': url});
         }
       }
 
@@ -1376,7 +1379,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
       // Create post in Firebase (global feed)
       final mediaUrls = mediaPayload.map((m) => (m['url'] ?? '').toString()).where((u) => u.isNotEmpty).toList();
-      final postId = await _postRepo.createPost(text: content, mediaUrls: mediaUrls);
+      await _postRepo.createPost(text: content, mediaUrls: mediaUrls);
 
       // Delete draft if editing an existing one
       if (_isEditingDraft && _draftId != null) {
@@ -1396,10 +1399,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
-      // Navigate to the newly created post detail page
-      Navigator.pop(context);
-      if (!mounted) return;
-      Navigator.pushNamed(context, '/post', arguments: {'postId': postId});
+      // Close composer and notify parent to refresh feed
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

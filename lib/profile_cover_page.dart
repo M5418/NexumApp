@@ -150,7 +150,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
         ScaffoldMessenger.of(navContext).showSnackBar(
           SnackBar(
             content: Text(
-              'Cover photo selected successfully!',
+              Provider.of<LanguageProvider>(navContext, listen: false).t('profile_cover.selected_success'),
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -275,7 +275,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                   children: [
                     const SizedBox(height: 50),
                     Text(
-                      'NEXUM',
+                      lang.t('profile_setup.nexum'),
                       style: GoogleFonts.inika(
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
@@ -387,7 +387,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                 elevation: 0,
                               ),
                               child: Text(
-                                _hasSelectedCover ? 'Complete Setup' : 'Skip for Now',
+                                _hasSelectedCover ? lang.t('profile_setup.complete_setup') : lang.t('profile_setup.skip_for_now'),
                                 style: GoogleFonts.inter(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -433,7 +433,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Profil details',
+                            lang.t('profile_setup.profil_details'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -452,7 +452,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                             children: [
                               const SizedBox(height: 8),
                               Text(
-                                'Add Cover Photo',
+                                lang.t('profile_cover.add_cover'),
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   fontSize: 24,
@@ -462,7 +462,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                'Choose a cover that represents your personality',
+                                lang.t('profile_cover.choose_personality'),
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
@@ -505,7 +505,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
-                                              'Add Cover Photo',
+                                              lang.t('profile_cover.add_button'),
                                               style: GoogleFonts.inter(
                                                 fontSize: 16,
                                                 color: isDark ? Colors.white54 : Colors.black54,
@@ -529,10 +529,10 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                             backgroundColor: const Color(0xFFBFAE01),
                             foregroundColor: Colors.black,
                             elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                           ),
                           child: Text(
-                            _hasSelectedCover ? 'Complete Setup' : 'Skip for Now',
+                            _hasSelectedCover ? lang.t('profile_setup.complete_setup') : lang.t('profile_setup.skip_for_now'),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,

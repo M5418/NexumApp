@@ -1,5 +1,11 @@
 const { onRequest, onCall } = require("firebase-functions/v2/https");
+const { onDocumentWritten, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
+const admin = require("firebase-admin");
+admin.initializeApp();
+
+// Export Firestore triggers (likes, bookmarks, repost counters)
+Object.assign(exports, require('./triggers'));
 
 // Reverse proxy to legacy backend so the web app can call same-origin /api/**
 // TARGET is configurable via env; defaults to production legacy API.
@@ -45,7 +51,6 @@ exports.api = onRequest({ region: "us-central1", cors: true }, async (req, res) 
     };
 
     logger.info("Proxying request", { method: req.method, path: forwardPath, target: targetUrl });
-
     const resp = await fetch(targetUrl, init);
     const buf = Buffer.from(await resp.arrayBuffer());
 

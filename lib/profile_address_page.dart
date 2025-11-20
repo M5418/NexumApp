@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'profile_photo_page.dart';
 import 'core/profile_api.dart';
+import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
 
 class ProfileAddressPage extends StatefulWidget {
@@ -206,7 +208,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                           onPressed: () => Navigator.pop(context),
                         ),
                         Text(
-                          'Profile Setup',
+                          Provider.of<LanguageProvider>(context).t('profile_setup.title'),
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -230,7 +232,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
               children: [
                 const SizedBox(height: 24),
                 Text(
-                  'Where are you located?',
+                  Provider.of<LanguageProvider>(context).t('profile_setup.location_question'),
                   style: GoogleFonts.inter(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -239,7 +241,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Help others find and connect with you by sharing your location.',
+                  Provider.of<LanguageProvider>(context).t('profile_setup.location_help'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     color: const Color(0xFF666666),
@@ -259,12 +261,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                             color: isDarkMode ? Colors.white : Colors.black,
                           ),
                           decoration: InputDecoration(
-                            labelText: 'Street Address',
+                            labelText: Provider.of<LanguageProvider>(context).t('profile_setup.street'),
                             labelStyle: GoogleFonts.inter(
                               fontSize: 16,
                               color: const Color(0xFF666666),
                             ),
-                            hintText: 'Enter your street address',
+                            hintText: Provider.of<LanguageProvider>(context).t('profile_setup.street_hint'),
                             hintStyle: GoogleFonts.inter(
                               fontSize: 16,
                               color: const Color(0xFF999999),
@@ -299,12 +301,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                   color: isDarkMode ? Colors.white : Colors.black,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'City',
+                                  labelText: Provider.of<LanguageProvider>(context).t('profile_setup.city'),
                                   labelStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF666666),
                                   ),
-                                  hintText: 'Enter city',
+                                  hintText: Provider.of<LanguageProvider>(context).t('profile_setup.city_hint'),
                                   hintStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF999999),
@@ -340,12 +342,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                   color: isDarkMode ? Colors.white : Colors.black,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'State/Province',
+                                  labelText: Provider.of<LanguageProvider>(context).t('profile_setup.state'),
                                   labelStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF666666),
                                   ),
-                                  hintText: 'Enter state',
+                                  hintText: Provider.of<LanguageProvider>(context).t('profile_setup.state_hint'),
                                   hintStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF999999),
@@ -388,12 +390,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                   color: isDarkMode ? Colors.white : Colors.black,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'Postal Code',
+                                  labelText: Provider.of<LanguageProvider>(context).t('profile_setup.postal'),
                                   labelStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF666666),
                                   ),
-                                  hintText: 'Enter postal code',
+                                  hintText: Provider.of<LanguageProvider>(context).t('profile_setup.postal_hint'),
                                   hintStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF999999),
@@ -430,7 +432,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                   color: isDarkMode ? Colors.white : Colors.black,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'Country',
+                                  labelText: Provider.of<LanguageProvider>(context).t('profile_setup.country'),
                                   labelStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF666666),
@@ -474,7 +476,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                   });
                                 },
                                 hint: Text(
-                                  'Select country',
+                                  Provider.of<LanguageProvider>(context).t('profile_setup.select_country'),
                                   style: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF999999),
@@ -509,7 +511,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                       ),
                     ),
                     child: Text(
-                      _isSaving ? 'Saving...' : 'Next',
+                      _isSaving ? Provider.of<LanguageProvider>(context).t('profile_setup.saving') : Provider.of<LanguageProvider>(context).t('profile_setup.next'),
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -594,12 +596,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                   color: isDarkMode ? Colors.white : Colors.black,
                                 ),
                                 decoration: InputDecoration(
-                                  labelText: 'Street Address',
+                                  labelText: Provider.of<LanguageProvider>(context).t('profile_setup.street'),
                                   labelStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF666666),
                                   ),
-                                  hintText: 'Enter your street address',
+                                  hintText: Provider.of<LanguageProvider>(context).t('profile_setup.street_hint'),
                                   hintStyle: GoogleFonts.inter(
                                     fontSize: 16,
                                     color: const Color(0xFF999999),
@@ -628,12 +630,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                         color: isDarkMode ? Colors.white : Colors.black,
                                       ),
                                       decoration: InputDecoration(
-                                        labelText: 'City',
+                                        labelText: Provider.of<LanguageProvider>(context).t('profile_setup.city'),
                                         labelStyle: GoogleFonts.inter(
                                           fontSize: 16,
                                           color: const Color(0xFF666666),
                                         ),
-                                        hintText: 'Enter city',
+                                        hintText: Provider.of<LanguageProvider>(context).t('profile_setup.city_hint'),
                                         hintStyle: GoogleFonts.inter(
                                           fontSize: 16,
                                           color: const Color(0xFF999999),
@@ -660,12 +662,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                         color: isDarkMode ? Colors.white : Colors.black,
                                       ),
                                       decoration: InputDecoration(
-                                        labelText: 'State/Province',
+                                        labelText: Provider.of<LanguageProvider>(context).t('profile_setup.state'),
                                         labelStyle: GoogleFonts.inter(
                                           fontSize: 16,
                                           color: const Color(0xFF666666),
                                         ),
-                                        hintText: 'Enter state',
+                                        hintText: Provider.of<LanguageProvider>(context).t('profile_setup.state_hint'),
                                         hintStyle: GoogleFonts.inter(
                                           fontSize: 16,
                                           color: const Color(0xFF999999),
@@ -698,12 +700,12 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                         color: isDarkMode ? Colors.white : Colors.black,
                                       ),
                                       decoration: InputDecoration(
-                                        labelText: 'Postal Code',
+                                        labelText: Provider.of<LanguageProvider>(context).t('profile_setup.postal'),
                                         labelStyle: GoogleFonts.inter(
                                           fontSize: 16,
                                           color: const Color(0xFF666666),
                                         ),
-                                        hintText: 'Enter postal code',
+                                        hintText: Provider.of<LanguageProvider>(context).t('profile_setup.postal_hint'),
                                         hintStyle: GoogleFonts.inter(
                                           fontSize: 16,
                                           color: const Color(0xFF999999),
@@ -731,7 +733,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                         color: isDarkMode ? Colors.white : Colors.black,
                                       ),
                                       decoration: InputDecoration(
-                                        labelText: 'Country',
+                                        labelText: Provider.of<LanguageProvider>(context).t('profile_setup.country'),
                                         labelStyle: GoogleFonts.inter(
                                           fontSize: 16,
                                           color: const Color(0xFF666666),
@@ -766,7 +768,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                                         });
                                       },
                                       hint: Text(
-                                        'Select country',
+                                        Provider.of<LanguageProvider>(context).t('profile_setup.select_country'),
                                         style: GoogleFonts.inter(
                                           fontSize: 16,
                                           color: const Color(0xFF999999),
@@ -799,7 +801,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
                             ),
                           ),
                           child: Text(
-                            _isSaving ? 'Saving...' : 'Next',
+                            _isSaving ? Provider.of<LanguageProvider>(context).t('profile_setup.saving') : Provider.of<LanguageProvider>(context).t('profile_setup.next'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -868,7 +870,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save address. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('profile_setup.save_failed'),
             style: GoogleFonts.inter(),
           ),
         ),

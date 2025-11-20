@@ -56,34 +56,44 @@ class FirebasePodcastRepository implements PodcastRepository {
   }) async {
     try {
       Query<Map<String, dynamic>> q = _podcasts;
-      
+      bool hasFilter = false;
+
       if (mine) {
         final uid = _auth.currentUser?.uid;
         if (uid == null) {
-          print('⚠️  Podcasts.listPodcasts: No authenticated user for mine=true');
           return [];
         }
         q = q.where('authorId', isEqualTo: uid);
+        hasFilter = true;
       } else if (authorId != null) {
         q = q.where('authorId', isEqualTo: authorId);
+        hasFilter = true;
       }
-      
+
       if (category != null) {
         q = q.where('category', isEqualTo: category);
+        hasFilter = true;
       }
-      
+
       if (isPublished != null) {
         q = q.where('isPublished', isEqualTo: isPublished);
+        hasFilter = true;
       }
-      
-      q = q.orderBy('createdAt', descending: true).limit(limit);
-      
-      final snap = await q.get();
-      print('✅ Podcasts fetched: ${snap.docs.length} items (page $page, limit $limit)');
-      return snap.docs.map(_podcastFromDoc).toList();
+
+      if (!hasFilter) {
+        q = q.orderBy('createdAt', descending: true);
+      }
+      q = q.limit(limit);
+
+      try {
+        final snap = await q.get();
+        return snap.docs.map(_podcastFromDoc).toList();
+      } on FirebaseException catch (_) {
+        final fallback = _podcasts.limit(limit);
+        final snap = await fallback.get();
+        return snap.docs.map(_podcastFromDoc).toList();
+      }
     } catch (e) {
-      print('❌ Podcasts.listPodcasts error: $e');
-      print('🔍 Check: 1) Firestore rules for podcasts 2) Composite indexes');
       rethrow;
     }
   }
@@ -333,7 +343,7 @@ class FirebasePodcastRepository implements PodcastRepository {
     try {
       final uid = _auth.currentUser?.uid;
       if (uid == null) {
-        print('⚠️  Podcasts.getBookmarkedPodcasts: No authenticated user');
+        
         return [];
       }
       
@@ -343,10 +353,8 @@ class FirebasePodcastRepository implements PodcastRepository {
           .limit(50)
           .get();
       
-      print('✅ Bookmarked podcasts fetched: ${snap.docs.length} items');
       return snap.docs.map(_podcastFromDoc).toList();
     } catch (e) {
-      print('❌ Podcasts.getBookmarkedPodcasts error: $e');
       rethrow;
     }
   }
@@ -356,7 +364,7 @@ class FirebasePodcastRepository implements PodcastRepository {
     try {
       final uid = _auth.currentUser?.uid;
       if (uid == null) {
-        print('⚠️  Podcasts.getSubscribedPodcasts: No authenticated user');
+        
         return [];
       }
       
@@ -366,10 +374,8 @@ class FirebasePodcastRepository implements PodcastRepository {
           .limit(100)
           .get();
       
-      print('✅ Subscribed podcasts fetched: ${snap.docs.length} items');
       return snap.docs.map(_podcastFromDoc).toList();
     } catch (e) {
-      print('❌ Podcasts.getSubscribedPodcasts error: $e');
       rethrow;
     }
   }

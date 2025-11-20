@@ -1,7 +1,7 @@
 abstract class ReportRepository {
   // Create a report
   Future<String> createReport({
-    required String targetType, // 'post', 'story', 'user'
+    required String targetType, // 'post', 'story', 'user', 'comment', 'community_post'
     required String targetId,
     required String cause,
     String? comment,
@@ -35,7 +35,7 @@ abstract class ReportRepository {
 
 class ReportModel {
   final String id;
-  final String targetType; // 'post', 'story', 'user'
+  final String targetType; // 'post', 'story', 'user', 'comment', 'community_post'
   final String targetId;
   final String cause;
   final String comment;
