@@ -11,6 +11,7 @@ class Book {
   final String id;
   final String title;
   final String? author;
+  final String? description;
   final String? coverUrl;
   final String? pdfUrl;
   final String? audioUrl;
@@ -34,6 +35,7 @@ class Book {
     required this.id,
     required this.title,
     this.author,
+    this.description,
     this.coverUrl,
     this.pdfUrl,
     this.audioUrl,
@@ -58,6 +60,7 @@ class Book {
       id: m.id,
       title: m.title,
       author: m.author,
+      description: m.description,
       coverUrl: m.coverUrl,
       pdfUrl: m.pdfUrl,
       audioUrl: m.audioUrl,
