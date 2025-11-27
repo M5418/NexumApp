@@ -97,6 +97,8 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
   String _domainTitle = 'Educations'; // UI label
   String? _domainCategoryParam; // actual category string from interestDomains
 
+  String _selectedLanguage = 'All';
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +106,23 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
     _loadTop();
     _loadDomain();
   }
+
+  List<String> get _languages {
+    final set = <String>{'All'};
+    for (final p in _top) {
+      if ((p.language ?? '').isNotEmpty) set.add(p.language!);
+    }
+    for (final p in _domainItems) {
+      if ((p.language ?? '').isNotEmpty) set.add(p.language!);
+    }
+    return set.toList();
+  }
+
+  List<Podcast> get _filteredTop =>
+      _selectedLanguage == 'All' ? _top : _top.where((p) => (p.language ?? '') == _selectedLanguage).toList();
+
+  List<Podcast> get _filteredDomain =>
+      _selectedLanguage == 'All' ? _domainItems : _domainItems.where((p) => (p.language ?? '') == _selectedLanguage).toList();
 
   void _pickDomainSection() {
     // Try to find a domain that matches Education in your interests, else fallback to the first.
@@ -194,16 +213,22 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
           ),
         ),
         actions: [
-        IconButton(
-          tooltip: 'Search',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PodcastSearchPage()),
-            );
-          },
-          icon: Icon(Icons.search, color: isDark ? Colors.white : Colors.black),
-        ),
+          _LanguageFilter(
+            selected: _selectedLanguage,
+            options: _languages,
+            onChanged: (v) => setState(() => _selectedLanguage = v),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Search',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PodcastSearchPage()),
+              );
+            },
+            icon: Icon(Icons.search, color: isDark ? Colors.white : Colors.black),
+          ),
           const SizedBox(width: 4),
         ],
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
@@ -275,7 +300,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
               )
             else
               _HorizontalPodcastList(
-                items: _top,
+                items: _filteredTop,
                 isDark: isDark,
                 onTap: (p) => Navigator.push(
                   context,
@@ -311,7 +336,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
               )
             else
               _HorizontalPodcastList(
-                items: _domainItems,
+                items: _filteredDomain,
                 isDark: isDark,
                 onTap: (p) => Navigator.push(
                   context,
@@ -720,5 +745,54 @@ class _AllPodcastsPageState extends State<AllPodcastsPage> {
     if (diff.inHours >= 1) return '${diff.inHours} hr';
     if (diff.inMinutes >= 1) return '${diff.inMinutes} min';
     return 'Just now';
+  }
+}
+
+class _LanguageFilter extends StatelessWidget {
+  final String selected;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+  const _LanguageFilter({
+    required this.selected,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF111111) : const Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
+      ),
+      child: PopupMenuButton<String>(
+        onSelected: onChanged,
+        position: PopupMenuPosition.under,
+        itemBuilder: (context) => [
+          for (final o in options) PopupMenuItem<String>(value: o, child: Text(o, style: GoogleFonts.inter(fontSize: 13))),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            children: [
+              const Icon(Icons.translate, size: 16, color: Color(0xFFBFAE01)),
+              const SizedBox(width: 6),
+              Text(
+                selected,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFFBFAE01)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
