@@ -262,6 +262,10 @@ class _MessageBubbleState extends State<MessageBubble>
 
   Widget _buildTextMessage(BuildContext context, bool isDark) {
     final maxW = _bubbleContentWidth(context);
+    
+    // Check if this is a story reply
+    final isStoryReply = widget.message.content.startsWith('📖 Story reply:');
+    
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxW),
       child: Container(
@@ -276,15 +280,18 @@ class _MessageBubbleState extends State<MessageBubble>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (widget.message.replyTo != null) _buildReplyPreview(isDark),
-            Text(
-              widget.message.content,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                color: widget.message.isFromCurrentUser
-                    ? Colors.white
-                    : (isDark ? Colors.white : Colors.black),
+            if (isStoryReply)
+              _buildStoryReplyPreview(isDark)
+            else
+              Text(
+                widget.message.content,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: widget.message.isFromCurrentUser
+                      ? Colors.white
+                      : (isDark ? Colors.white : Colors.black),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -1042,6 +1049,104 @@ class _MessageBubbleState extends State<MessageBubble>
           ),
         ],
       ),
+    );
+  }
+  
+  Widget _buildStoryReplyPreview(bool isDark) {
+    // Extract the actual message from "📖 Story reply: message"
+    final fullText = widget.message.content;
+    final messageText = fullText.replaceFirst('📖 Story reply: ', '');
+    
+    final textColor = widget.message.isFromCurrentUser
+        ? Colors.white
+        : (isDark ? Colors.white : Colors.black);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Story reply header with thumbnail
+        Container(
+          padding: const EdgeInsets.all(10),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: widget.message.isFromCurrentUser
+                ? Colors.white.withValues(alpha: 51)
+                : (isDark ? Colors.white.withValues(alpha: 26) : const Color(0xFFF1F4F8)),
+            borderRadius: BorderRadius.circular(10),
+            border: Border(
+              left: BorderSide(
+                color: widget.message.isFromCurrentUser
+                    ? Colors.white
+                    : const Color(0xFF9D7BFF), // Purple like WhatsApp
+                width: 3,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${widget.message.senderName} • Story',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: widget.message.isFromCurrentUser
+                            ? Colors.white
+                            : const Color(0xFF9D7BFF),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.camera_alt,
+                          size: 14,
+                          color: textColor.withValues(alpha: 179),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Story reply',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: textColor.withValues(alpha: 179),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Story thumbnail placeholder
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9D7BFF).withValues(alpha: 51),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.auto_stories,
+                  size: 20,
+                  color: widget.message.isFromCurrentUser
+                      ? Colors.white
+                      : const Color(0xFF9D7BFF),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Actual reply message
+        Text(
+          messageText,
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            color: textColor,
+          ),
+        ),
+      ],
     );
   }
 
