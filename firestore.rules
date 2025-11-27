@@ -68,6 +68,41 @@ service cloud.firestore {
       }
     }
     
+    // Community Posts (separate collection for posts within communities)
+    match /community_posts/{postId} {
+      allow read: if true;                       // Public community posts
+      // Ensure the creating user is the author and communityId is provided
+      allow create: if signedIn() &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.communityId != null;
+      allow update: if signedIn() && 
+        (request.auth.uid == resource.data.authorId || isAdmin());
+      allow delete: if signedIn() && 
+        (request.auth.uid == resource.data.authorId || isAdmin());
+      
+      // Community post likes subcollection
+      match /likes/{likeId} {
+        allow read: if true;
+        // Users can only like as themselves, and only set createdAt
+        allow create: if signedIn() &&
+          likeId == request.auth.uid &&
+          request.resource.data.keys().hasOnly(['createdAt']);
+        // Users can only remove their own like document
+        allow delete: if signedIn() && likeId == request.auth.uid;
+      }
+      
+      // Community post bookmarks subcollection
+      match /bookmarks/{bookmarkId} {
+        allow read: if signedIn();
+        // Users can only bookmark as themselves, and only set createdAt
+        allow create: if signedIn() &&
+          bookmarkId == request.auth.uid &&
+          request.resource.data.keys().hasOnly(['createdAt']);
+        // Users can only remove their own bookmark document
+        allow delete: if signedIn() && bookmarkId == request.auth.uid;
+      }
+    }
+    
     // Comments
     match /comments/{commentId} {
       allow read: if true;                       // Public comments

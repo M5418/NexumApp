@@ -14,6 +14,28 @@ class ProfileApi {
     if (u == null) return {'ok': false, 'error': 'unauthenticated'};
     final doc = await _db.collection('users').doc(u.uid).get();
     final data = _legacyFromFirestore(doc.data() ?? {});
+    
+    // Fetch real-time connection counts if not in user document
+    if (!data.containsKey('connections_total_count') || data['connections_total_count'] == 0) {
+      try {
+        final followersSnap = await _db.collection('follows')
+            .where('followedUid', isEqualTo: u.uid)
+            .count()
+            .get();
+        data['connections_total_count'] = followersSnap.count ?? 0;
+      } catch (_) {}
+    }
+    
+    if (!data.containsKey('connections_inbound_count') || data['connections_inbound_count'] == 0) {
+      try {
+        final followingSnap = await _db.collection('follows')
+            .where('followerUid', isEqualTo: u.uid)
+            .count()
+            .get();
+        data['connections_inbound_count'] = followingSnap.count ?? 0;
+      } catch (_) {}
+    }
+    
     return {'ok': true, 'data': {'id': u.uid, 'email': u.email, ...data}};
   }
 
@@ -194,6 +216,15 @@ class ProfileApi {
     mapKey('coverUrl', 'cover_photo_url');
     mapKey('interestDomains', 'interest_domains');
     mapKey('professionalExperiences', 'professional_experiences');
+    
+    // Include connection counts if they exist in Firestore
+    if (d.containsKey('followersCount')) {
+      out['connections_total_count'] = d['followersCount'];
+    }
+    if (d.containsKey('followingCount')) {
+      out['connections_inbound_count'] = d['followingCount'];
+    }
+    
     return out;
   }
 }

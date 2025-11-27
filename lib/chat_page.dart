@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:video_compress/video_compress.dart';
 import 'models/message.dart';
 import 'widgets/message_bubble.dart';
 import 'package:file_picker/file_picker.dart';
@@ -23,6 +24,7 @@ import 'widgets/media_preview_page.dart';
 import 'core/video_utils_stub.dart' if (dart.library.io) 'core/video_utils_io.dart';
 import 'other_user_profile_page.dart';
 import 'profile_page.dart';
+import 'services/media_compression_service.dart';
 import 'core/i18n/language_provider.dart';
 
 class ChatPage extends StatefulWidget {
@@ -756,29 +758,90 @@ void dispose() {
         String url;
         int? fileSize;
         String? thumbUrl;
+        final compressionService = MediaCompressionService();
+        final isVideo = isVideoPath(nameOrPath);
+        final isImage = MediaCompressionService.isImage(nameOrPath);
 
         if (kIsWeb) {
-          final bytes = await mediaFile.readAsBytes();
-          fileSize = bytes.length;
-          final isVideo = isVideoPath(nameOrPath);
-          final ct = isVideo ? guessVideoContentType(ext) : null;
-          url = await profileApi.uploadBytes(bytes, ext: ext, contentType: ct);
+          // Web: Compress images only (video compression not supported on web)
+          if (isImage) {
+            debugPrint('🖼️ Compressing image before sending: $nameOrPath');
+            final originalBytes = await mediaFile.readAsBytes();
+            final compressedBytes = await compressionService.compressImageBytes(
+              bytes: originalBytes,
+              filename: nameOrPath,
+              quality: 92,
+              minWidth: 1920,
+              minHeight: 1920,
+            );
+            
+            final bytes = compressedBytes ?? originalBytes;
+            fileSize = bytes.length;
+            url = await profileApi.uploadBytes(bytes, ext: ext);
+          } else {
+            // Video on web - upload without compression
+            final bytes = await mediaFile.readAsBytes();
+            fileSize = bytes.length;
+            final ct = isVideo ? guessVideoContentType(ext) : null;
+            url = await profileApi.uploadBytes(bytes, ext: ext, contentType: ct);
+          }
         } else {
-          final file = File(mediaFile.path);
-          fileSize = await file.length();
-          url = await profileApi.uploadFile(file);
-          final isVideo = isVideoPath(nameOrPath);
-          if (isVideo) {
-            try {
-              final thumb = await generateVideoThumbnail(file.path);
-              if (thumb != null && thumb.isNotEmpty) {
-                thumbUrl = await profileApi.uploadBytes(thumb, ext: 'jpg', contentType: 'image/jpeg');
-              }
-            } catch (_) {}
+          // Mobile: Compress both images and videos
+          if (isImage) {
+            debugPrint('🖼️ Compressing image before sending: $nameOrPath');
+            final compressedBytes = await compressionService.compressImage(
+              filePath: mediaFile.path,
+              quality: 92,
+              minWidth: 1920,
+              minHeight: 1920,
+            );
+            
+            if (compressedBytes != null) {
+              fileSize = compressedBytes.length;
+              url = await profileApi.uploadBytes(compressedBytes, ext: ext);
+            } else {
+              final file = File(mediaFile.path);
+              fileSize = await file.length();
+              url = await profileApi.uploadFile(file);
+            }
+          } else if (isVideo) {
+            debugPrint('🎥 Compressing video before sending: $nameOrPath');
+            final compressedFile = await compressionService.compressVideo(
+              filePath: mediaFile.path,
+              quality: VideoQuality.HighestQuality,
+            );
+            
+            if (compressedFile != null) {
+              fileSize = await compressedFile.length();
+              url = await profileApi.uploadFile(compressedFile);
+              
+              // Generate thumbnail from compressed video
+              try {
+                final thumb = await generateVideoThumbnail(compressedFile.path);
+                if (thumb != null && thumb.isNotEmpty) {
+                  thumbUrl = await profileApi.uploadBytes(thumb, ext: 'jpg', contentType: 'image/jpeg');
+                }
+              } catch (_) {}
+            } else {
+              final file = File(mediaFile.path);
+              fileSize = await file.length();
+              url = await profileApi.uploadFile(file);
+              
+              // Generate thumbnail from original video
+              try {
+                final thumb = await generateVideoThumbnail(file.path);
+                if (thumb != null && thumb.isNotEmpty) {
+                  thumbUrl = await profileApi.uploadBytes(thumb, ext: 'jpg', contentType: 'image/jpeg');
+                }
+              } catch (_) {}
+            }
+          } else {
+            // Other file types - upload without compression
+            final file = File(mediaFile.path);
+            fileSize = await file.length();
+            url = await profileApi.uploadFile(file);
           }
         }
-
-        final isVideo = isVideoPath(nameOrPath);
 
         attachments.add({
           'type': isVideo ? 'video' : 'image',

@@ -4,14 +4,17 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'models/post.dart';
 import 'repositories/interfaces/community_repository.dart';
 import 'repositories/interfaces/post_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'repositories/models/post_model.dart';
 import 'community_post_page.dart';
+import 'edit_community_page.dart';
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
+import 'core/admin_config.dart';
 import 'widgets/post_card.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/segmented_tabs.dart';
@@ -38,6 +41,13 @@ class _CommunityPageState extends State<CommunityPage> {
   bool _loadingPosts = false;
   bool _loadingDetails = false;
 
+  // Pagination state
+  final ScrollController _scrollController = ScrollController();
+  bool _isLoadingMore = false;
+  bool _hasMorePosts = true;
+  PostModel? _lastPost;
+  static const int _postsPerPage = 10;
+
   // Community details
   CommunityModel? _community;
 
@@ -53,7 +63,24 @@ class _CommunityPageState extends State<CommunityPage> {
     super.initState();
     _commRepo = context.read<CommunityRepository>();
     _postRepo = context.read<PostRepository>();
+    _scrollController.addListener(_onScroll);
     _loadAll();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.8) {
+      // User scrolled to 80% of the content
+      if (!_isLoadingMore && _hasMorePosts && _selectedTabIndex == 0) {
+        _loadMorePosts();
+      }
+    }
   }
 
   Future<void> _loadAll() async {
@@ -100,8 +127,19 @@ class _CommunityPageState extends State<CommunityPage> {
     });
 
     try {
+      debugPrint('📊 Fetching initial community posts...');
       final models = await _postRepo.getCommunityPosts(
-          communityId: widget.communityId, limit: 100);
+          communityId: widget.communityId, limit: _postsPerPage);
+      debugPrint('📨 Fetched ${models.length} community posts');
+      
+      // Store last post for pagination
+      if (models.isNotEmpty) {
+        _lastPost = models.last;
+        _hasMorePosts = models.length == _postsPerPage;
+      } else {
+        _hasMorePosts = false;
+      }
+      
       final list = await _mapModelsToPosts(models);
       if (!mounted) return;
       setState(() {
@@ -109,8 +147,7 @@ class _CommunityPageState extends State<CommunityPage> {
       });
 
       // Build media list: all images and videos (exclude repost rows to avoid duplicates)
-      _mediaItems
-        .clear();
+      _mediaItems.clear();
       for (final p in list) {
         if (p.isRepost) continue; // exclude repost media to avoid duplicates
         if (p.mediaType == MediaType.video && p.videoUrl != null) {
@@ -152,6 +189,83 @@ class _CommunityPageState extends State<CommunityPage> {
           _loadingPosts = false;
         });
       }
+    }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore || !_hasMorePosts || _lastPost == null) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      debugPrint('📊 Loading more community posts... (starting after: ${_lastPost!.id})');
+      final models = await _postRepo.getCommunityPosts(
+        communityId: widget.communityId,
+        limit: _postsPerPage,
+        lastPost: _lastPost,
+      );
+      debugPrint('📨 Fetched ${models.length} more community posts');
+
+      if (models.isEmpty) {
+        debugPrint('🏁 No more community posts to load');
+        if (!mounted) return;
+        setState(() {
+          _hasMorePosts = false;
+          _isLoadingMore = false;
+        });
+        return;
+      }
+
+      // Update last post for next pagination
+      _lastPost = models.last;
+      _hasMorePosts = models.length == _postsPerPage;
+
+      // Process new posts
+      final newPosts = await _mapModelsToPosts(models);
+      debugPrint('📬 Mapped ${newPosts.length} new community posts');
+
+      if (!mounted) return;
+      setState(() {
+        _posts.addAll(newPosts);
+        _isLoadingMore = false;
+      });
+      
+      // Add new media items
+      for (final p in newPosts) {
+        if (p.isRepost) continue;
+        if (p.mediaType == MediaType.video && p.videoUrl != null) {
+          _mediaItems.add(_CommunityMediaItem(
+            postId: p.id,
+            url: p.videoUrl!,
+            isVideo: true,
+          ));
+        } else if (p.mediaType == MediaType.image && p.imageUrls.isNotEmpty) {
+          _mediaItems.add(_CommunityMediaItem(
+            postId: p.id,
+            url: p.imageUrls.first,
+            isVideo: false,
+          ));
+        } else if (p.mediaType == MediaType.images && p.imageUrls.isNotEmpty) {
+          for (final u in p.imageUrls) {
+            _mediaItems.add(_CommunityMediaItem(
+              postId: p.id,
+              url: u,
+              isVideo: false,
+            ));
+          }
+        }
+      }
+      
+      debugPrint('✅ Total community posts in feed: ${_posts.length}');
+      debugPrint('📄 Has more posts: $_hasMorePosts');
+    } catch (e) {
+      debugPrint('❌ Error loading more community posts: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMore = false;
+      });
     }
   }
 
@@ -656,19 +770,65 @@ class _CommunityPageState extends State<CommunityPage> {
                                   ),
                                 )
                               : ListView.builder(
+                                  controller: _scrollController,
                                   padding: const EdgeInsets.only(bottom: 12),
-                                  itemCount: _posts.length,
+                                  itemCount: _posts.length + (_isLoadingMore ? 1 : 0) + (!_hasMorePosts && _posts.isNotEmpty ? 1 : 0),
                                   itemBuilder: (context, index) {
-                                    final p = _posts[index];
-                                    return PostCard(
-                                      post: p,
-                                      onReactionChanged: _onReactionChanged,
-                                      onBookmarkToggle: _onBookmarkToggle,
-                                      onTap: (id) => _onPostTap(id),
-                                      onShare: _onShare,
-                                      onComment: _onComment,
-                                      onRepost: _onRepost,
-                                      isDarkMode: isDark,
+                                    // Show posts
+                                    if (index < _posts.length) {
+                                      final p = _posts[index];
+                                      return PostCard(
+                                        post: p,
+                                        onReactionChanged: _onReactionChanged,
+                                        onBookmarkToggle: _onBookmarkToggle,
+                                        onTap: (id) => _onPostTap(id),
+                                        onShare: _onShare,
+                                        onComment: _onComment,
+                                        onRepost: _onRepost,
+                                        isDarkMode: isDark,
+                                      );
+                                    }
+                                    
+                                    // Show loading indicator
+                                    if (_isLoadingMore && index == _posts.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 20),
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const CircularProgressIndicator(
+                                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                                                strokeWidth: 2.5,
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'Loading more posts...',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13,
+                                                  color: const Color(0xFF666666),
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    
+                                    // Show end of feed indicator
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 24),
+                                      child: Center(
+                                        child: Text(
+                                          'You\'re all caught up! 🎉',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: const Color(0xFF999999),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
                                     );
                                   },
                                 )))
@@ -1044,12 +1204,13 @@ class _CommunityPageState extends State<CommunityPage> {
                   ),
                 ),
               ),
-              // Stats chips
+              // Stats chips + Edit button for admin
               Positioned(
                 right: 12,
                 bottom: 12,
                 child: Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _chipStat(
                       icon: Icons.article_outlined,
@@ -1061,6 +1222,50 @@ class _CommunityPageState extends State<CommunityPage> {
                       label: '${_community?.memberCount ?? 0} Members',
                       isDark: isDark,
                     ),
+                    // Admin-only edit button
+                    if (AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+                      GestureDetector(
+                        onTap: () async {
+                          if (_community == null) return;
+                          final updated = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => EditCommunityPage(
+                                community: _community!,
+                              ),
+                            ),
+                          );
+                          if (updated == true) {
+                            _loadDetails(); // Reload community details
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFBFAE01),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.edit,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Edit',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
 
 import 'widgets/home_post_card.dart';
@@ -898,7 +899,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
           children: [
             ListTile(
               leading: Icon(
-                Icons.report,
+                Ionicons.flag_outline,
                 color: isDark ? Colors.grey[300] : Colors.black87,
               ),
               title: Text(
@@ -921,7 +922,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
             ),
             ListTile(
               leading: Icon(
-                Icons.block,
+                Ionicons.ban_outline,
                 color: isDark ? Colors.grey[300] : Colors.black87,
               ),
               title: Text(

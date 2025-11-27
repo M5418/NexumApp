@@ -36,17 +36,28 @@ class FirebaseCommunityRepository implements CommunityRepository {
   }
 
   @override
-  Future<List<CommunityModel>> listAll({int limit = 100}) async {
+  Future<List<CommunityModel>> listAll({int limit = 100, String? lastCommunityId}) async {
     try {
-      final q = await _communities.orderBy('createdAt', descending: true).limit(limit).get();
-      return q.docs.map(_fromDoc).toList();
+      // Admin sees communities sorted alphabetically A-Z
+      Query<Map<String, dynamic>> q = _communities.orderBy('name', descending: false).limit(limit);
+      
+      // Add pagination cursor if provided
+      if (lastCommunityId != null) {
+        final lastDoc = await _communities.doc(lastCommunityId).get();
+        if (lastDoc.exists) {
+          q = q.startAfterDocument(lastDoc);
+        }
+      }
+      
+      final snap = await q.get();
+      return snap.docs.map(_fromDoc).toList();
     } catch (e) {
       rethrow;
     }
   }
 
   @override
-  Future<List<CommunityModel>> listMine({int limit = 100}) async {
+  Future<List<CommunityModel>> listMine({int limit = 100, String? lastCommunityId}) async {
     try {
       final u = _auth.currentUser;
       if (u == null) {
@@ -86,12 +97,26 @@ class FirebaseCommunityRepository implements CommunityRepository {
         }
       }
 
+      // Get all communities and sort by createdAt
       final results = <CommunityModel>[];
       for (final chunk in _chunk(ids.toList(), 10)) {
         final snap = await _communities.where(FieldPath.documentId, whereIn: chunk).get();
         results.addAll(snap.docs.map(_fromDoc));
       }
-      return results;
+      
+      // Sort by createdAt descending
+      results.sort((a, b) => b.id.compareTo(a.id));
+      
+      // Apply pagination if lastCommunityId is provided
+      if (lastCommunityId != null) {
+        final startIndex = results.indexWhere((c) => c.id == lastCommunityId);
+        if (startIndex >= 0 && startIndex + 1 < results.length) {
+          return results.sublist(startIndex + 1).take(limit).toList();
+        }
+        return [];
+      }
+      
+      return results.take(limit).toList();
     } catch (e) {
       rethrow;
     }
@@ -116,6 +141,30 @@ class FirebaseCommunityRepository implements CommunityRepository {
     try {
       final q = await _communities.doc(communityId).collection('members').limit(limit).get();
       return q.docs.map(_memberFrom).toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateCommunity({
+    required String communityId,
+    String? name,
+    String? bio,
+    String? avatarUrl,
+    String? coverUrl,
+  }) async {
+    try {
+      final updates = <String, dynamic>{};
+      if (name != null) updates['name'] = name;
+      if (bio != null) updates['bio'] = bio;
+      if (avatarUrl != null) updates['avatarUrl'] = avatarUrl;
+      if (coverUrl != null) updates['coverUrl'] = coverUrl;
+      
+      if (updates.isNotEmpty) {
+        updates['updatedAt'] = FieldValue.serverTimestamp();
+        await _communities.doc(communityId).update(updates);
+      }
     } catch (e) {
       rethrow;
     }

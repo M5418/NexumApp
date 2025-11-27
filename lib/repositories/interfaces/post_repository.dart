@@ -7,6 +7,7 @@ abstract class PostRepository {
     required String text,
     List<String>? mediaUrls,
     String? repostOf,
+    String? communityId,
   });
   
   // Get single post

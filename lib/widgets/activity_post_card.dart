@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:readmore/readmore.dart';
+import 'package:ionicons/ionicons.dart';
 import '../models/post.dart';
 import '../other_user_profile_page.dart';
 import 'auto_play_video.dart';
@@ -67,6 +68,161 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
   void dispose() {
     ActivityReactionPickerManager.hideReactions();
     super.dispose();
+  }
+
+  // Helper to check if URL is a placeholder from optimistic posting
+  bool _isPlaceholderUrl(String url) {
+    return url.startsWith('uploading_');
+  }
+
+  // Build media widgets with placeholder filtering
+  List<Widget> _buildMediaWidgets(Color placeholderColor) {
+    // Filter out placeholder URLs
+    final validImageUrls = widget.post.imageUrls
+        .where((url) => !_isPlaceholderUrl(url))
+        .toList();
+    final validVideoUrl = widget.post.videoUrl != null && !_isPlaceholderUrl(widget.post.videoUrl!)
+        ? widget.post.videoUrl
+        : null;
+
+    // Show loading indicator if media is still uploading
+    final hasPlaceholders = widget.post.imageUrls.any(_isPlaceholderUrl) ||
+        (widget.post.videoUrl != null && _isPlaceholderUrl(widget.post.videoUrl!));
+
+    if (hasPlaceholders) {
+      return [
+        Container(
+          width: double.infinity,
+          height: 200,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(25),
+            color: const Color(0xFF666666).withValues(alpha: 0.2),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Uploading media...',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: const Color(0xFF666666),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ];
+    }
+
+    if (widget.post.mediaType == MediaType.none) {
+      return [];
+    }
+
+    final widgets = <Widget>[];
+
+    // Single image
+    if (widget.post.mediaType == MediaType.image && validImageUrls.isNotEmpty) {
+      widgets.add(
+        Container(
+          width: double.infinity,
+          height: 200,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(25),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: CachedNetworkImage(
+            imageUrl: validImageUrls.first,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+              color: placeholderColor,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                ),
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(
+              color: placeholderColor,
+              child: const Icon(
+                Icons.broken_image,
+                color: Color(0xFF666666),
+                size: 50,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Multiple images
+    if (widget.post.mediaType == MediaType.images && validImageUrls.length > 1) {
+      widgets.add(
+        SizedBox(
+          height: 160,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: validImageUrls.length,
+            itemBuilder: (context, index) {
+              return Container(
+                width: 120,
+                height: 160,
+                margin: EdgeInsets.only(
+                  right: index < validImageUrls.length - 1 ? 12 : 0,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: CachedNetworkImage(
+                  imageUrl: validImageUrls[index],
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: placeholderColor,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                      ),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: placeholderColor,
+                    child: const Icon(
+                      Icons.broken_image,
+                      color: Color(0xFF666666),
+                      size: 30,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    // Video
+    if (widget.post.mediaType == MediaType.video && validVideoUrl != null) {
+      widgets.add(
+        AutoPlayVideo(
+          videoUrl: validVideoUrl,
+          width: double.infinity,
+          height: 200,
+          borderRadius: BorderRadius.circular(25),
+        ),
+      );
+    }
+
+    return widgets;
   }
 
   @override
@@ -259,99 +415,8 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
             const SizedBox(height: 16),
           ],
 
-          // Media content
-          if (widget.post.mediaType != MediaType.none) ...[
-            if (widget.post.mediaType == MediaType.image &&
-                widget.post.imageUrls.isNotEmpty)
-              Container(
-                width: double.infinity,
-                height: 200,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: CachedNetworkImage(
-                  imageUrl: widget.post.imageUrls.first,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: const Color(0xFF666666).withValues(alpha: 51),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Color(0xFFBFAE01),
-                        ),
-                      ),
-                    ),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: const Color(0xFF666666).withValues(alpha: 51),
-                    child: const Icon(
-                      Icons.broken_image,
-                      color: Color(0xFF666666),
-                      size: 50,
-                    ),
-                  ),
-                ),
-              ),
-
-            if (widget.post.mediaType == MediaType.images &&
-                widget.post.imageUrls.length > 1)
-              SizedBox(
-                height: 160,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: widget.post.imageUrls.length,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      width: 120,
-                      height: 160,
-                      margin: EdgeInsets.only(
-                        right: index < widget.post.imageUrls.length - 1
-                            ? 12
-                            : 0,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: CachedNetworkImage(
-                        imageUrl: widget.post.imageUrls[index],
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: const Color(0xFF666666).withValues(alpha: 51),
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFFBFAE01),
-                              ),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: const Color(0xFF666666).withValues(alpha: 51),
-                          child: const Icon(
-                            Icons.broken_image,
-                            color: Color(0xFF666666),
-                            size: 30,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-            if (widget.post.mediaType == MediaType.video &&
-                widget.post.videoUrl != null)
-              AutoPlayVideo(
-                videoUrl: widget.post.videoUrl!,
-                width: double.infinity,
-                height: 200,
-                borderRadius: BorderRadius.circular(25),
-              ),
-          ],
+          // Media content with placeholder filtering
+          ..._buildMediaWidgets(const Color(0xFF666666).withValues(alpha: 0.2)),
 
           const SizedBox(height: 8),
 
@@ -402,7 +467,7 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
                   child: Row(
                     children: [
                       Icon(
-                        _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                        _isLiked ? Ionicons.heart : Ionicons.heart_outline,
                         size: 20,
                         color: _isLiked ? const Color(0xFFBFAE01) : const Color(0xFF666666),
                       ),
@@ -426,10 +491,10 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
                 onTap: () => widget.onComment?.call(_effectivePostId()),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.chat_bubble_outline,
+                    Icon(
+                      Ionicons.chatbubble_outline,
                       size: 20,
-                      color: Color(0xFF666666),
+                      color: const Color(0xFF666666),
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -450,10 +515,10 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
                 onTap: () => widget.onShare?.call(_effectivePostId()),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.share_outlined,
+                    Icon(
+                      Ionicons.arrow_redo_outline,
                       size: 20,
-                      color: Color(0xFF666666),
+                      color: const Color(0xFF666666),
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -475,7 +540,7 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
                 child: Row(
                   children: [
                     const Icon(
-                      Icons.repeat,
+                      Ionicons.repeat_outline,
                       size: 20,
                       color: Color(0xFF666666),
                     ),
@@ -500,8 +565,8 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
                   children: [
                     Icon(
                       widget.post.isBookmarked
-                          ? Icons.bookmark
-                          : Icons.bookmark_border,
+                          ? Ionicons.bookmark
+                          : Ionicons.bookmark_outline,
                       size: 20,
                       color: widget.post.isBookmarked
                           ? const Color(0xFFBFAE01)

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
 import 'services/community_interest_sync_service.dart';
 import 'widgets/post_card.dart';
@@ -3036,7 +3037,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 20),
                 ListTile(
                   leading: Icon(
-                    Icons.drafts_outlined,
+                    Ionicons.document_text_outline,
                     color: isDark ? Colors.white70 : Colors.black87,
                     size: 22,
                   ),
@@ -3060,7 +3061,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 ListTile(
                   leading: Icon(
-                    Icons.bookmark_outline,
+                    Ionicons.bookmark_outline,
                     color: isDark ? Colors.white70 : Colors.black87,
                     size: 22,
                   ),
@@ -3084,7 +3085,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 ListTile(
                   leading: Icon(
-                    Icons.settings,
+                    Ionicons.settings_outline,
                     color: isDark ? Colors.white70 : Colors.black87,
                     size: 22,
                   ),
@@ -3108,7 +3109,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 ListTile(
                   leading: Icon(
-                    Icons.monetization_on_outlined,
+                    Ionicons.cash_outline,
                     color: isDark ? Colors.white70 : Colors.black87,
                     size: 22,
                   ),
@@ -3132,7 +3133,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 ListTile(
                   leading: Icon(
-                    Icons.workspace_premium_outlined,
+                    Ionicons.diamond_outline,
                     color: isDark ? Colors.white70 : Colors.black87,
                     size: 22,
                   ),
@@ -3151,7 +3152,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 ListTile(
                   leading: Icon(
-                    Icons.bar_chart,
+                    Ionicons.bar_chart_outline,
                     color: isDark ? Colors.white70 : Colors.black87,
                     size: 22,
                   ),
@@ -3179,7 +3180,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Row(
                     children: [
                       Icon(
-                        Icons.brightness_6,
+                        Ionicons.moon_outline,
                         color: isDark ? Colors.white70 : Colors.black87,
                         size: 22,
                       ),

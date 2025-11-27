@@ -41,8 +41,15 @@ class CommunityMemberModel {
 }
 
 abstract class CommunityRepository {
-  Future<List<CommunityModel>> listAll({int limit = 100});
-  Future<List<CommunityModel>> listMine({int limit = 100});
+  Future<List<CommunityModel>> listAll({int limit = 100, String? lastCommunityId});
+  Future<List<CommunityModel>> listMine({int limit = 100, String? lastCommunityId});
   Future<CommunityModel?> details(String communityId);
   Future<List<CommunityMemberModel>> members(String communityId, {int limit = 200});
+  Future<void> updateCommunity({
+    required String communityId,
+    String? name,
+    String? bio,
+    String? avatarUrl,
+    String? coverUrl,
+  });
 }

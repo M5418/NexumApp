@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
 import '../core/i18n/language_provider.dart';
 
@@ -42,11 +43,11 @@ class AnimatedNavbar extends StatelessWidget {
             tabBackgroundColor: const Color(0xFFBFAE01).withValues(alpha: 0.1),
             color: const Color(0xFF666666),
             tabs: [
-              GButton(icon: Icons.home_outlined, text: lang.t('nav.home')),
-              GButton(icon: Icons.people_outline, text: lang.t('nav.connections')),
-              const GButton(icon: Icons.add_circle_outline, text: '', iconSize: 28),
-              GButton(icon: Icons.chat_bubble_outline, text: lang.t('nav.conversations')),
-              GButton(icon: Icons.person_outline, text: lang.t('nav.profile')),
+              GButton(icon: Ionicons.home_outline, text: lang.t('nav.home')),
+              GButton(icon: Ionicons.people_outline, text: lang.t('nav.connections')),
+              const GButton(icon: Ionicons.add_circle_outline, text: '', iconSize: 28),
+              GButton(icon: Ionicons.chatbubble_outline, text: lang.t('nav.conversations')),
+              GButton(icon: Ionicons.person_outline, text: lang.t('nav.profile')),
             ],
             selectedIndex: selectedIndex,
             onTabChange: onTabChange,

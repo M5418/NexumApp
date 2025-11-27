@@ -7,6 +7,7 @@ class PostModel {
   final List<String> mediaUrls;
   final PostSummary summary;
   final String? repostOf;
+  final String? communityId;  // Community context for post
   final DateTime createdAt;
   final DateTime? updatedAt;
   
@@ -20,6 +21,7 @@ class PostModel {
     this.mediaUrls = const [],
     required this.summary,
     this.repostOf,
+    this.communityId,
     required this.createdAt,
     this.updatedAt,
     this.snapshot,
@@ -34,6 +36,7 @@ class PostModel {
       mediaUrls: List<String>.from(data['mediaUrls'] ?? []),
       summary: PostSummary.fromMap(data['summary'] ?? {}),
       repostOf: data['repostOf'],
+      communityId: data['communityId'],
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
       snapshot: doc,
@@ -41,15 +44,17 @@ class PostModel {
   }
   
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'authorId': authorId,
       'text': text,
       'mediaUrls': mediaUrls,
       'summary': summary.toMap(),
-      'repostOf': repostOf,
       'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
+    if (repostOf != null) map['repostOf'] = repostOf!;
+    if (communityId != null) map['communityId'] = communityId!;
+    if (updatedAt != null) map['updatedAt'] = Timestamp.fromDate(updatedAt!);
+    return map;
   }
   
   PostModel copyWith({
@@ -59,6 +64,7 @@ class PostModel {
     List<String>? mediaUrls,
     PostSummary? summary,
     String? repostOf,
+    String? communityId,
     DateTime? createdAt,
     DateTime? updatedAt,
     DocumentSnapshot? snapshot,
@@ -70,6 +76,7 @@ class PostModel {
       mediaUrls: mediaUrls ?? this.mediaUrls,
       summary: summary ?? this.summary,
       repostOf: repostOf ?? this.repostOf,
+      communityId: communityId ?? this.communityId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       snapshot: snapshot ?? this.snapshot,

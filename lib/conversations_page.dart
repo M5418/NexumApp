@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'widgets/segmented_tabs.dart';
 import 'widgets/new_chat_bottom_sheet.dart';
@@ -16,6 +17,7 @@ import 'conversation_search_page.dart';
 import 'notification_page.dart';
 import 'profile_page.dart';
 import 'core/i18n/language_provider.dart'; // Fixed import path
+import 'core/admin_config.dart';
 
 import 'package:provider/provider.dart';
 import 'repositories/interfaces/conversation_repository.dart';
@@ -67,6 +69,13 @@ class _ConversationsPageState extends State<ConversationsPage>
   bool _loadingCommunities = false;
   String? _errorCommunities;
   final List<CommunityItem> _communities = [];
+  
+  // Pagination for communities
+  final ScrollController _communitiesScrollController = ScrollController();
+  bool _loadingMoreCommunities = false;
+  bool _hasMoreCommunities = true;
+  String? _lastCommunityId;
+  static const int _communitiesPerPage = 20;
 
   // Split-view selection (desktop)
   ChatItem? _selectedChat;
@@ -92,17 +101,29 @@ class _ConversationsPageState extends State<ConversationsPage>
         }
       }
     });
+    
+    // Add scroll listener for communities pagination
+    _communitiesScrollController.addListener(_onCommunitiesScroll);
 
     _loadConversations();
     _loadCommunities();
     _loadUnreadNotifications();
   }
-
-
+  
   @override
   void dispose() {
     _tabController.dispose();
+    _communitiesScrollController.dispose();
     super.dispose();
+  }
+  
+  void _onCommunitiesScroll() {
+    if (_communitiesScrollController.position.pixels >=
+        _communitiesScrollController.position.maxScrollExtent * 0.8) {
+      if (!_loadingMoreCommunities && _hasMoreCommunities) {
+        _loadMoreCommunities();
+      }
+    }
   }
 
   bool _isWideLayout(BuildContext context) {
@@ -232,12 +253,22 @@ String _formatTime(DateTime? dt) {
       setState(() {
         _loadingCommunities = true;
         _errorCommunities = null;
+        _lastCommunityId = null;
+        _hasMoreCommunities = true;
       });
       
       // Quick sync: Ensure communities match user's interests
       await _syncCommunitiesWithInterests();
       
-      final list = await _commRepo.listMine();
+      // Admin sees all communities, regular users see their communities
+      final isAdmin = AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid);
+      debugPrint('📊 Loading initial communities (admin: $isAdmin)...');
+      
+      final list = isAdmin 
+          ? await _commRepo.listAll(limit: _communitiesPerPage)
+          : await _commRepo.listMine(limit: _communitiesPerPage);
+      debugPrint('📨 Loaded ${list.length} communities');
+      
       if (!mounted) return;
       final mapped = list
           .map(
@@ -256,6 +287,8 @@ String _formatTime(DateTime? dt) {
         _communities
           ..clear()
           ..addAll(mapped);
+        _lastCommunityId = list.isNotEmpty ? list.last.id : null;
+        _hasMoreCommunities = list.length == _communitiesPerPage;
       });
     } catch (e) {
       if (!mounted) return;
@@ -264,6 +297,64 @@ String _formatTime(DateTime? dt) {
       });
     } finally {
       if (mounted) setState(() => _loadingCommunities = false);
+    }
+  }
+  
+  Future<void> _loadMoreCommunities() async {
+    if (_loadingMoreCommunities || !_hasMoreCommunities || _lastCommunityId == null) return;
+    
+    setState(() => _loadingMoreCommunities = true);
+    
+    try {
+      final isAdmin = AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid);
+      debugPrint('📊 Loading more communities after: $_lastCommunityId (admin: $isAdmin)');
+      
+      final list = isAdmin
+          ? await _commRepo.listAll(
+              limit: _communitiesPerPage,
+              lastCommunityId: _lastCommunityId,
+            )
+          : await _commRepo.listMine(
+              limit: _communitiesPerPage,
+              lastCommunityId: _lastCommunityId,
+            );
+      debugPrint('📨 Loaded ${list.length} more communities');
+      
+      if (!mounted) return;
+      
+      if (list.isEmpty) {
+        setState(() {
+          _hasMoreCommunities = false;
+          _loadingMoreCommunities = false;
+        });
+        return;
+      }
+      
+      final mapped = list
+          .map(
+            (c) => CommunityItem(
+              id: c.id,
+              name: c.name,
+              avatarUrl: c.avatarUrl,
+              bio: c.bio,
+              friendsInCommon: c.friendsInCommon,
+              unreadPosts: c.unreadPosts,
+            ),
+          )
+          .toList();
+      
+      setState(() {
+        _communities.addAll(mapped);
+        _lastCommunityId = list.last.id;
+        _hasMoreCommunities = list.length == _communitiesPerPage;
+        _loadingMoreCommunities = false;
+      });
+      
+      debugPrint('✅ Total communities loaded: ${_communities.length}');
+    } catch (e) {
+      debugPrint('❌ Error loading more communities: $e');
+      if (!mounted) return;
+      setState(() => _loadingMoreCommunities = false);
     }
   }
 
@@ -1013,18 +1104,67 @@ Widget _buildDesktopBody(bool isDark) {
     }
 
     return ListView.separated(
+      controller: _communitiesScrollController,
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _communities.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      itemCount: _communities.length + (_loadingMoreCommunities ? 1 : 0) + (!_hasMoreCommunities && _communities.isNotEmpty ? 1 : 0),
+      separatorBuilder: (context, index) {
+        if (index >= _communities.length) return const SizedBox.shrink();
+        return const SizedBox(height: 8);
+      },
       itemBuilder: (context, index) {
-        final c = _communities[index];
-        final selected = _isWideLayout(context) && _selectedCommunity?.id == c.id;
+        // Show communities
+        if (index < _communities.length) {
+          final c = _communities[index];
+          final selected = _isWideLayout(context) && _selectedCommunity?.id == c.id;
 
-        return CommunityListTile(
-          item: c,
-          isDark: isDark,
-          selected: selected,
-          onTap: () => _selectCommunity(c),
+          return CommunityListTile(
+            item: c,
+            isDark: isDark,
+            selected: selected,
+            onTap: () => _selectCommunity(c),
+          );
+        }
+        
+        // Show loading indicator
+        if (_loadingMoreCommunities && index == _communities.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                    strokeWidth: 2.5,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Loading more communities...',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF666666),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        // Show end of list indicator
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: Text(
+              'All communities loaded! 🎉',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: const Color(0xFF999999),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         );
       },
     );

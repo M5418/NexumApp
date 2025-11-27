@@ -10,43 +10,98 @@ class FirebasePostRepository implements PostRepository {
   final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
 
   CollectionReference<Map<String, dynamic>> get _posts => _db.collection('posts');
+  CollectionReference<Map<String, dynamic>> get _communityPosts => _db.collection('community_posts');
 
   PostModel _fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     return PostModel.fromFirestore(doc);
   }
 
   @override
-  Future<String> createPost({required String text, List<String>? mediaUrls, String? repostOf}) async {
-    final u = _auth.currentUser;
-    if (u == null) throw Exception('not_authenticated');
-    final data = PostModel(
-      id: '',
-      authorId: u.uid,
-      text: text,
-      mediaUrls: mediaUrls ?? const [],
-      summary: PostSummary(),
-      repostOf: repostOf,
-      createdAt: DateTime.now(),
-    ).toMap();
-    final ref = await _posts.add(data);
-    return ref.id;
+  Future<String> createPost({required String text, List<String>? mediaUrls, String? repostOf, String? communityId}) async {
+    try {
+      final u = _auth.currentUser;
+      if (u == null) {
+        debugPrint('❌ User not authenticated');
+        throw Exception('not_authenticated');
+      }
+      
+      debugPrint('📝 Creating post - User: ${u.uid}, CommunityId: $communityId');
+      
+      final data = PostModel(
+        id: '',
+        authorId: u.uid,
+        text: text,
+        mediaUrls: mediaUrls ?? const [],
+        summary: PostSummary(),
+        repostOf: repostOf,
+        communityId: communityId,
+        createdAt: DateTime.now(),
+      ).toMap();
+      
+      debugPrint('📝 Post data prepared: ${data.keys.toList()}');
+      
+      // Route to correct collection: community posts go to community_posts, regular posts go to posts
+      final collection = (communityId != null && communityId.isNotEmpty) ? _communityPosts : _posts;
+      final collectionName = communityId != null && communityId.isNotEmpty ? 'community_posts' : 'posts';
+      debugPrint('📝 Writing to Firebase collection: $collectionName');
+      
+      final ref = await collection.add(data);
+      debugPrint('✅ Post created successfully with ID: ${ref.id} in $collectionName');
+      return ref.id;
+    } catch (e, stackTrace) {
+      debugPrint('❌ FIREBASE ERROR creating post: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   @override
   Future<PostModel?> getPost(String postId) async {
-    final doc = await _posts.doc(postId).get();
-    if (!doc.exists) return null;
-    return _fromDoc(doc);
+    // Check regular posts first
+    var doc = await _posts.doc(postId).get();
+    if (doc.exists) return _fromDoc(doc);
+    
+    // Check community posts
+    doc = await _communityPosts.doc(postId).get();
+    if (doc.exists) return _fromDoc(doc);
+    
+    return null;
   }
 
   @override
   Future<void> updatePost({required String postId, required String text, List<String>? mediaUrls}) async {
-    await _posts.doc(postId).update({'text': text, if (mediaUrls != null) 'mediaUrls': mediaUrls, 'updatedAt': Timestamp.now()});
+    // Try to update in regular posts
+    final regularDoc = await _posts.doc(postId).get();
+    if (regularDoc.exists) {
+      await _posts.doc(postId).update({'text': text, if (mediaUrls != null) 'mediaUrls': mediaUrls, 'updatedAt': Timestamp.now()});
+      return;
+    }
+    
+    // Try to update in community posts
+    final communityDoc = await _communityPosts.doc(postId).get();
+    if (communityDoc.exists) {
+      await _communityPosts.doc(postId).update({'text': text, if (mediaUrls != null) 'mediaUrls': mediaUrls, 'updatedAt': Timestamp.now()});
+      return;
+    }
+    
+    throw Exception('Post not found: $postId');
   }
 
   @override
   Future<void> deletePost(String postId) async {
-    await _posts.doc(postId).delete();
+    // Try to delete from regular posts
+    final regularDoc = await _posts.doc(postId).get();
+    if (regularDoc.exists) {
+      await _posts.doc(postId).delete();
+      return;
+    }
+    
+    // Try to delete from community posts
+    final communityDoc = await _communityPosts.doc(postId).get();
+    if (communityDoc.exists) {
+      await _communityPosts.doc(postId).delete();
+      return;
+    }
   }
 
   @override
@@ -98,11 +153,16 @@ class FirebasePostRepository implements PostRepository {
 
   @override
   Future<List<PostModel>> getCommunityPosts({required String communityId, int limit = 20, PostModel? lastPost}) async {
-    Query<Map<String, dynamic>> q = _posts.where('communityId', isEqualTo: communityId).orderBy('createdAt', descending: true).limit(limit);
+    debugPrint('📊 Fetching community posts from community_posts collection for community: $communityId');
+    Query<Map<String, dynamic>> q = _communityPosts
+        .where('communityId', isEqualTo: communityId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
     if (lastPost?.snapshot != null) {
       q = q.startAfterDocument(lastPost!.snapshot!);
     }
     final snap = await q.get();
+    debugPrint('📨 Found ${snap.docs.length} community posts');
     return snap.docs.map(_fromDoc).toList();
   }
 
@@ -186,7 +246,12 @@ class FirebasePostRepository implements PostRepository {
   Future<void> likePost(String postId) async {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
-    final likeRef = _posts.doc(postId).collection('likes').doc(u.uid);
+    
+    // Check which collection the post is in
+    final regularDoc = await _posts.doc(postId).get();
+    final collection = regularDoc.exists ? _posts : _communityPosts;
+    
+    final likeRef = collection.doc(postId).collection('likes').doc(u.uid);
     final likeDoc = await likeRef.get();
     if (likeDoc.exists) return; // already liked; idempotent
     await likeRef.set({'createdAt': Timestamp.now()});
@@ -196,7 +261,12 @@ class FirebasePostRepository implements PostRepository {
   Future<void> unlikePost(String postId) async {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
-    final likeRef = _posts.doc(postId).collection('likes').doc(u.uid);
+    
+    // Check which collection the post is in
+    final regularDoc = await _posts.doc(postId).get();
+    final collection = regularDoc.exists ? _posts : _communityPosts;
+    
+    final likeRef = collection.doc(postId).collection('likes').doc(u.uid);
     final likeDoc = await likeRef.get();
     if (!likeDoc.exists) return; // nothing to unlike; idempotent
     await likeRef.delete();
@@ -206,7 +276,12 @@ class FirebasePostRepository implements PostRepository {
   Future<void> bookmarkPost(String postId) async {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
-    final ref = _posts.doc(postId).collection('bookmarks').doc(u.uid);
+    
+    // Check which collection the post is in
+    final regularDoc = await _posts.doc(postId).get();
+    final collection = regularDoc.exists ? _posts : _communityPosts;
+    
+    final ref = collection.doc(postId).collection('bookmarks').doc(u.uid);
     final bmDoc = await ref.get();
     if (bmDoc.exists) return; // already bookmarked
     await ref.set({'createdAt': Timestamp.now()});
@@ -216,7 +291,12 @@ class FirebasePostRepository implements PostRepository {
   Future<void> unbookmarkPost(String postId) async {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
-    final ref = _posts.doc(postId).collection('bookmarks').doc(u.uid);
+    
+    // Check which collection the post is in
+    final regularDoc = await _posts.doc(postId).get();
+    final collection = regularDoc.exists ? _posts : _communityPosts;
+    
+    final ref = collection.doc(postId).collection('bookmarks').doc(u.uid);
     final bmDoc = await ref.get();
     if (!bmDoc.exists) return; // nothing to unbookmark
     await ref.delete();
@@ -233,17 +313,29 @@ class FirebasePostRepository implements PostRepository {
   Future<void> unrepostPost(String postId) async {
     final u = _auth.currentUser;
     if (u == null) throw Exception('not_authenticated');
-    final q = await _posts.where('authorId', isEqualTo: u.uid).where('repostOf', isEqualTo: postId).limit(1).get();
+    
+    // Check both collections for the repost
+    var q = await _posts.where('authorId', isEqualTo: u.uid).where('repostOf', isEqualTo: postId).limit(1).get();
     if (q.docs.isNotEmpty) {
       await _posts.doc(q.docs.first.id).delete();
+      return;
+    }
+    
+    q = await _communityPosts.where('authorId', isEqualTo: u.uid).where('repostOf', isEqualTo: postId).limit(1).get();
+    if (q.docs.isNotEmpty) {
+      await _communityPosts.doc(q.docs.first.id).delete();
     }
   }
 
   @override
   Future<List<String>> getPostLikes({required String postId, int limit = 20, String? lastUserId}) async {
-    Query<Map<String, dynamic>> q = _posts.doc(postId).collection('likes').orderBy('createdAt', descending: true).limit(limit);
+    // Check which collection the post is in
+    final regularDoc = await _posts.doc(postId).get();
+    final collection = regularDoc.exists ? _posts : _communityPosts;
+    
+    Query<Map<String, dynamic>> q = collection.doc(postId).collection('likes').orderBy('createdAt', descending: true).limit(limit);
     if (lastUserId != null) {
-      final lastDoc = await _posts.doc(postId).collection('likes').doc(lastUserId).get();
+      final lastDoc = await collection.doc(postId).collection('likes').doc(lastUserId).get();
       if (lastDoc.exists) {
         q = q.startAfterDocument(lastDoc);
       }
@@ -254,19 +346,34 @@ class FirebasePostRepository implements PostRepository {
 
   @override
   Future<bool> hasUserLikedPost({required String postId, required String uid}) async {
-    final doc = await _posts.doc(postId).collection('likes').doc(uid).get();
+    // Check which collection the post is in
+    final regularDoc = await _posts.doc(postId).get();
+    final collection = regularDoc.exists ? _posts : _communityPosts;
+    
+    final doc = await collection.doc(postId).collection('likes').doc(uid).get();
     return doc.exists;
   }
 
   @override
   Future<bool> hasUserBookmarkedPost({required String postId, required String uid}) async {
-    final doc = await _posts.doc(postId).collection('bookmarks').doc(uid).get();
+    // Check which collection the post is in
+    final regularDoc = await _posts.doc(postId).get();
+    final collection = regularDoc.exists ? _posts : _communityPosts;
+    
+    final doc = await collection.doc(postId).collection('bookmarks').doc(uid).get();
     return doc.exists;
   }
 
   @override
   Stream<PostModel?> postStream(String postId) {
-    return _posts.doc(postId).snapshots().map((d) => d.exists ? _fromDoc(d) : null);
+    // Try regular posts stream first, then fallback to community posts
+    return _posts.doc(postId).snapshots().asyncMap((d) async {
+      if (d.exists) return _fromDoc(d);
+      
+      // Check community posts if not found in regular posts
+      final communityDoc = await _communityPosts.doc(postId).get();
+      return communityDoc.exists ? _fromDoc(communityDoc) : null;
+    });
   }
 
   @override

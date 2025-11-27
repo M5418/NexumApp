@@ -14,16 +14,21 @@ class CachedPostRepository implements PostRepository {
     required String text,
     List<String>? mediaUrls,
     String? repostOf,
+    String? communityId,
   }) async {
     final postId = await _source.createPost(
       text: text,
       mediaUrls: mediaUrls,
       repostOf: repostOf,
+      communityId: communityId,
     );
     
     // Invalidate feed caches
     await _cache.removePattern('feed_*');
     await _cache.removePattern('user_posts_*');
+    if (communityId != null) {
+      await _cache.removePattern('community_posts_$communityId*');
+    }
     
     return postId;
   }

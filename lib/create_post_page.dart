@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:video_compress/video_compress.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +18,7 @@ import 'repositories/firebase/firebase_follow_repository.dart';
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'services/media_compression_service.dart';
 import '../responsive/responsive_breakpoints.dart';
 
 class CreatePostPage extends StatefulWidget {
@@ -1348,65 +1351,71 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
     setState(() => _posting = true);
     try {
-      // Upload local files (if any) and collect media descriptors
-      final mediaPayload = <Map<String, dynamic>>[];
-      for (final item in _mediaItems) {
-        final xf = item.xfile;
-        final path = item.path;
-        if (xf == null && (path == null || path.isEmpty)) continue;
-
-        String? url;
-        if (xf != null) {
-          final uploaded = await _uploadXFile(xf, item.type);
-          url = uploaded['url'];
-        } else if (path != null && path.startsWith('http')) {
-          // Already uploaded (e.g., editing draft)
-          url = path;
-        }
-
-        if (url == null || url.isEmpty) continue;
-        if (item.type == MediaType.image) {
-          mediaPayload.add({'type': 'image', 'url': url});
-        } else if (item.type == MediaType.video) {
-          mediaPayload.add({'type': 'video', 'url': url});
-        }
-      }
-
       final content = [
         _titleController.text.trim(),
         body,
       ].where((e) => e.isNotEmpty).join('\n\n');
 
-      // Create post in Firebase (global feed)
-      final mediaUrls = mediaPayload.map((m) => (m['url'] ?? '').toString()).where((u) => u.isNotEmpty).toList();
-      await _postRepo.createPost(text: content, mediaUrls: mediaUrls);
-
-      // Delete draft if editing an existing one
-      if (_isEditingDraft && _draftId != null) {
-        try {
-          if (!mounted) return;
-          final draftRepo = context.read<DraftRepository>();
-          await draftRepo.deleteDraft(_draftId!);
-        } catch (e) {
-          // Non-critical error, continue
-        }
-      }
+      // OPTIMISTIC UI: Create post immediately with placeholder media
+      final hasMedia = _mediaItems.isNotEmpty;
+      final placeholderUrls = hasMedia 
+          ? List.generate(_mediaItems.length, (i) => 'uploading_$i')
+          : <String>[];
+      
+      // Get communityId if posting to a community
+      final communityId = _selectedCommunities.isNotEmpty ? _selectedCommunities.first.id : null;
+      
+      debugPrint('🚀 Creating post optimistically with ${_mediaItems.length} media items${communityId != null ? ' to community $communityId' : ''}');
+      final postId = await _postRepo.createPost(
+        text: content, 
+        mediaUrls: placeholderUrls,
+        communityId: communityId,
+      );
+      debugPrint('✅ Post created with ID: $postId');
 
       if (!mounted) return;
+      
+      // Delete draft if editing (non-blocking)
+      if (_isEditingDraft && _draftId != null) {
+        context.read<DraftRepository>().deleteDraft(_draftId!).catchError((_) {});
+      }
+      
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_post.posted'), style: GoogleFonts.inter()),
+          content: Text(
+            hasMedia 
+                ? 'Post created! Media uploading in background...'
+                : Provider.of<LanguageProvider>(context, listen: false).t('create_post.posted'),
+            style: GoogleFonts.inter(),
+          ),
           backgroundColor: const Color(0xFF4CAF50),
+          duration: const Duration(seconds: 2),
         ),
       );
-      // Close composer and notify parent to refresh feed
+      
+      // Navigate back immediately (< 2 seconds!)
       Navigator.pop(context, true);
-    } catch (e) {
+
+      // Upload media in background if needed
+      if (hasMedia) {
+        debugPrint('💾 Starting background upload for ${_mediaItems.length} items');
+        _uploadMediaInBackground(postId, content, _mediaItems);
+      }
+
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error creating post: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      debugPrint('❌ Error type: ${e.runtimeType}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_post.publish_failed'), style: GoogleFonts.inter()),
+          content: Text(
+            '${Provider.of<LanguageProvider>(context, listen: false).t('create_post.publish_failed')}: $e',
+            style: GoogleFonts.inter(),
+          ),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
         ),
       );
     } finally {
@@ -1414,12 +1423,122 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
+  // Background upload: doesn't block UI
+  Future<void> _uploadMediaInBackground(String postId, String text, List<MediaItem> items) async {
+    try {
+      final mediaUrls = <String>[];
+      
+      for (int i = 0; i < items.length; i++) {
+        final item = items[i];
+        final xf = item.xfile;
+        final path = item.path;
+        
+        if (xf == null && (path == null || path.isEmpty)) continue;
+
+        String? url;
+        if (xf != null) {
+          debugPrint('💾 Uploading media ${i + 1}/${items.length}');
+          final uploaded = await _uploadXFile(xf, item.type);
+          url = uploaded['url'];
+          debugPrint('✅ Media ${i + 1} uploaded: $url');
+        } else if (path != null && path.startsWith('http')) {
+          url = path; // Already uploaded
+        }
+
+        if (url != null && url.isNotEmpty) {
+          mediaUrls.add(url);
+        }
+      }
+
+      if (mediaUrls.isEmpty) {
+        debugPrint('⚠️ No media URLs to update');
+        return;
+      }
+
+      // Update post with real media URLs
+      debugPrint('🔄 Updating post with ${mediaUrls.length} real URLs');
+      await _postRepo.updatePost(
+        postId: postId,
+        text: text,
+        mediaUrls: mediaUrls,
+      );
+      debugPrint('✅ Post updated successfully with real media');
+    } catch (e) {
+      debugPrint('❌ Background upload failed: $e');
+      // Optionally: could retry or notify user
+    }
+  }
+
   // Upload helper that works on web and mobile using XFile bytes
   Future<Map<String, String>> _uploadXFile(XFile file, MediaType type) async {
     final ext = _extensionOf(file.name);
-    final bytes = await file.readAsBytes();
-    final res = await FilesApi().uploadBytes(bytes, ext: ext);
-    return {'url': res['url'] ?? ''};
+    final compressionService = MediaCompressionService();
+    
+    try {
+      // Compress based on media type
+      if (type == MediaType.image) {
+        debugPrint('🖼️ Compressing image before upload: ${file.name}');
+        
+        // Compress image with high quality
+        final compressedBytes = kIsWeb
+            ? await compressionService.compressImageBytes(
+                bytes: await file.readAsBytes(),
+                filename: file.name,
+                quality: 92,
+                minWidth: 1920,
+                minHeight: 1920,
+              )
+            : await compressionService.compressImage(
+                filePath: file.path,
+                quality: 92,
+                minWidth: 1920,
+                minHeight: 1920,
+              );
+        
+        if (compressedBytes == null) {
+          debugPrint('⚠️ Compression failed, using original image');
+          final bytes = await file.readAsBytes();
+          final res = await FilesApi().uploadBytes(bytes, ext: ext);
+          return {'url': res['url'] ?? ''};
+        }
+        
+        // Upload compressed image
+        final res = await FilesApi().uploadBytes(compressedBytes, ext: ext);
+        return {'url': res['url'] ?? ''};
+      } else if (type == MediaType.video && !kIsWeb) {
+        debugPrint('🎥 Compressing video before upload: ${file.name}');
+        
+        // Compress video (mobile only)
+        final compressedFile = await compressionService.compressVideo(
+          filePath: file.path,
+          quality: VideoQuality.HighestQuality,
+        );
+        
+        if (compressedFile == null) {
+          debugPrint('⚠️ Video compression failed, using original');
+          final bytes = await file.readAsBytes();
+          final res = await FilesApi().uploadBytes(bytes, ext: ext);
+          return {'url': res['url'] ?? ''};
+        }
+        
+        // Upload compressed video
+        final compressedBytes = await compressedFile.readAsBytes();
+        final res = await FilesApi().uploadBytes(compressedBytes, ext: ext);
+        return {'url': res['url'] ?? ''};
+      } else {
+        // Web video or unsupported type - upload original
+        debugPrint('📤 Uploading without compression: ${file.name}');
+        final bytes = await file.readAsBytes();
+        final res = await FilesApi().uploadBytes(bytes, ext: ext);
+        return {'url': res['url'] ?? ''};
+      }
+    } catch (e) {
+      debugPrint('❌ Error during compression/upload: $e');
+      // Fallback to original upload
+      final bytes = await file.readAsBytes();
+      final res = await FilesApi().uploadBytes(bytes, ext: ext);
+      return {'url': res['url'] ?? ''};
+    }
   }
 
   String _extensionOf(String filename) {

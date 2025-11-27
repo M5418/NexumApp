@@ -19,6 +19,7 @@ import 'post_page.dart';
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_comment_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/interfaces/user_repository.dart';
 import 'repositories/models/post_model.dart';
 import 'repositories/interfaces/story_repository.dart';
 import 'repositories/interfaces/bookmark_repository.dart';
@@ -79,6 +80,13 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   // Blocked users list
   Set<String> _blockedUserIds = {};
 
+  // Pagination state
+  final ScrollController _scrollController = ScrollController();
+  bool _isLoadingMore = false;
+  bool _hasMorePosts = true;
+  PostModel? _lastPost;
+  static const int _postsPerPage = 10;
+
   final FirebasePostRepository _postRepo = FirebasePostRepository();
   final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
   final FirebaseUserRepository _userRepo = FirebaseUserRepository();
@@ -86,14 +94,27 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   @override
   void initState() {
     super.initState();
+    // Load critical data first, then load secondary data in parallel
     () async {
+      // Load user ID first (required for everything else)
       await _loadCurrentUserId();
-      await _loadBlockedUsers();
-      await _loadFeedPrefs(); // load prefs before posts
+      
+      // Load everything else in parallel
+      await Future.wait([
+        _loadBlockedUsers(),
+        _loadFeedPrefs(),
+        _loadUnreadCount(),
+      ]);
+      
+      // Load feed data (depends on blocked users and prefs)
       await _loadData();
-      await _loadUnreadCount();
-      await _loadSuggestedUsers(); // for desktop right column
+      
+      // Load suggested users in background (not critical)
+      _loadSuggestedUsers();
     }();
+
+    // Setup scroll listener for pagination
+    _scrollController.addListener(_onScroll);
 
     // Subscribe to post update events to keep feed in sync with PostPage
     _postEventsSub = PostEvents.stream.listen((e) {
@@ -116,8 +137,19 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _postEventsSub?.cancel();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.8) {
+      // User scrolled to 80% of the content
+      if (!_isLoadingMore && _hasMorePosts) {
+        _loadMorePosts();
+      }
+    }
   }
 
   bool _useDesktopPopup(BuildContext context) {
@@ -241,13 +273,18 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     debugPrint('🔐 Auth Service User ID: ${AuthService().userId ?? "NULL"}');
     debugPrint('🔐 =================================');
 
-    // Refresh preferences before fetching/applying filters
-    await _loadFeedPrefs();
-
     try {
-      debugPrint('📊 Fetching feed from Firestore...');
-      final models = await _postRepo.getFeed(limit: 20);
+      debugPrint('📊 Fetching initial feed from Firestore...');
+      final models = await _postRepo.getFeed(limit: _postsPerPage);
       debugPrint('📨 Fetched ${models.length} post models from Firebase');
+      
+      // Store last post for pagination
+      if (models.isNotEmpty) {
+        _lastPost = models.last;
+        _hasMorePosts = models.length == _postsPerPage;
+      } else {
+        _hasMorePosts = false;
+      }
       
       if (models.isEmpty) {
         debugPrint('⚠️ NO POSTS FOUND IN FIRESTORE - Check:');
@@ -264,6 +301,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       debugPrint('💧 After hydration: ${posts.length} posts');
       posts = _applyFeedFilters(posts);
       debugPrint('🔍 After filters: ${posts.length} posts (reposts: ${posts.where((p) => p.isRepost).length})');
+      debugPrint('📄 Has more posts: $_hasMorePosts');
     } catch (e, stackTrace) {
       errMsg = 'Posts failed: ${_toError(e)}';
       debugPrint('❌ CRITICAL ERROR LOADING POSTS:');
@@ -307,6 +345,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     setState(() {
       _posts = posts;
       _storyRings = rings;
+      _isLoadingMore = false;
     });
 
     if (errMsg != null) {
@@ -316,6 +355,59 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore || !_hasMorePosts || _lastPost == null) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      debugPrint('📊 Loading more posts... (starting after: ${_lastPost!.id})');
+      final models = await _postRepo.getFeed(
+        limit: _postsPerPage,
+        lastPost: _lastPost,
+      );
+      debugPrint('📨 Fetched ${models.length} more posts');
+
+      if (models.isEmpty) {
+        debugPrint('🏁 No more posts to load');
+        if (!mounted) return;
+        setState(() {
+          _hasMorePosts = false;
+          _isLoadingMore = false;
+        });
+        return;
+      }
+
+      // Update last post for next pagination
+      _lastPost = models.last;
+      _hasMorePosts = models.length == _postsPerPage;
+
+      // Process new posts
+      var newPosts = await _mapModelsToPosts(models);
+      debugPrint('📬 Mapped ${newPosts.length} new posts');
+      newPosts = await _hydrateReposts(newPosts);
+      debugPrint('💧 Hydrated ${newPosts.length} new posts');
+      newPosts = _applyFeedFilters(newPosts);
+      debugPrint('🔍 After filters: ${newPosts.length} new posts');
+
+      if (!mounted) return;
+      setState(() {
+        _posts.addAll(newPosts);
+        _isLoadingMore = false;
+      });
+      debugPrint('✅ Total posts in feed: ${_posts.length}');
+      debugPrint('📄 Has more posts: $_hasMorePosts');
+    } catch (e) {
+      debugPrint('❌ Error loading more posts: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMore = false;
+      });
     }
   }
 
@@ -353,42 +445,39 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   // Fetch original posts for repost items when the backend didn't hydrate them.
   Future<List<Post>> _hydrateReposts(List<Post> posts) async {
     if (posts.isEmpty) return posts;
-    final result = List<Post>.from(posts);
-
-    final futures = <Future<void>>[];
-    for (int i = 0; i < result.length; i++) {
-      final p = result[i];
-      if (!p.isRepost) continue;
-      final ogId = p.originalPostId;
-      if (ogId == null || ogId.isEmpty) continue;
+    
+    // Process all reposts in parallel
+    final futures = <Future<Post>>[];
+    for (final p in posts) {
+      if (!p.isRepost || p.originalPostId == null || p.originalPostId!.isEmpty) {
+        futures.add(Future.value(p));
+        continue;
+      }
 
       futures.add(() async {
-        final m = await _postRepo.getPost(ogId);
-        if (m == null) return;
-        final og = await _toPost(m);
-        // Merge original post content but keep the repost metadata (repostedBy, etc.)
-        final merged = p.copyWith(
-          authorId: og.authorId,  // Use original author's ID
-          userName: og.userName,
-          userAvatarUrl: og.userAvatarUrl,
-          text: og.text,
-          mediaType: og.mediaType,
-          imageUrls: og.imageUrls,
-          videoUrl: og.videoUrl,
-          counts: og.counts,
-          // Keep repostedBy from the original repost entry (p.repostedBy)
-        );
-        result[i] = merged;
+        try {
+          final m = await _postRepo.getPost(p.originalPostId!);
+          if (m == null) return p;
+          final og = await _toPost(m);
+          // Merge original post content but keep the repost metadata (repostedBy, etc.)
+          return p.copyWith(
+            authorId: og.authorId,  // Use original author's ID
+            userName: og.userName,
+            userAvatarUrl: og.userAvatarUrl,
+            text: og.text,
+            mediaType: og.mediaType,
+            imageUrls: og.imageUrls,
+            videoUrl: og.videoUrl,
+            counts: og.counts,
+            // Keep repostedBy from the original repost entry (p.repostedBy)
+          );
+        } catch (_) {
+          return p; // Return original on error
+        }
       }());
     }
 
-    try {
-      await Future.wait(futures);
-    } catch (_) {
-      // Ignore hydration errors
-    }
-
-    return result;
+    return await Future.wait(futures);
   }
 
   // Normalize storage URLs so UI can load images reliably
@@ -425,23 +514,28 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   Future<List<String>> _normalizeUrls(List<String> urls) async {
-    final out = <String>[];
-    for (final u in urls) {
-      final n = await _normalizeUrl(u);
-      if (n.isNotEmpty) out.add(n);
-    }
-    return out;
+    // Parallelize URL normalization
+    final normalized = await Future.wait(
+      urls.map((u) => _normalizeUrl(u))
+    );
+    return normalized.where((n) => n.isNotEmpty).toList();
   }
 
   Future<Post> _toPost(PostModel m) async {
-    final author = await _userRepo.getUserProfile(m.authorId);
     final uid = fb.FirebaseAuth.instance.currentUser?.uid;
-    bool isBookmarked = false;
-    bool isLiked = false;
-    if (uid != null) {
-      isBookmarked = await _postRepo.hasUserBookmarkedPost(postId: m.id, uid: uid);
-      isLiked = await _postRepo.hasUserLikedPost(postId: m.id, uid: uid);
-    }
+    
+    // Parallelize all async operations
+    final results = await Future.wait([
+      _userRepo.getUserProfile(m.authorId),
+      _normalizeUrls(m.mediaUrls),
+      if (uid != null) _postRepo.hasUserBookmarkedPost(postId: m.id, uid: uid) else Future.value(false),
+      if (uid != null) _postRepo.hasUserLikedPost(postId: m.id, uid: uid) else Future.value(false),
+    ]);
+    
+    final author = results[0] as UserProfile?;
+    final normUrls = results[1] as List<String>;
+    final isBookmarked = results[2] as bool;
+    final isLiked = results[3] as bool;
     
     // If this is a repost, get the reposter's info (the author of this repost entry)
     RepostedBy? repostedBy;
@@ -461,8 +555,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         actionType: 'reposted this',
       );
     }
-    // Normalize media URLs to ensure they are valid HTTP links
-    final normUrls = await _normalizeUrls(m.mediaUrls);
 
     MediaType mediaType;
     String? videoUrl;
@@ -489,7 +581,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       }
     }
     int clamp(int v) => v < 0 ? 0 : v;
+    
+    // Normalize avatar URL (still needs await but only one operation)
     final avatarUrl = await _normalizeUrl(author?.avatarUrl ?? '');
+    
     // Build full name from firstName and lastName
     final firstName = author?.firstName?.trim() ?? '';
     final lastName = author?.lastName?.trim() ?? '';
@@ -524,11 +619,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   Future<List<Post>> _mapModelsToPosts(List<PostModel> models) async {
-    final out = <Post>[];
-    for (final m in models) {
-      out.add(await _toPost(m));
-    }
-    return out;
+    // Parallelize post conversion
+    return await Future.wait(
+      models.map((m) => _toPost(m))
+    );
   }
 
   String _toError(Object e) {
@@ -1629,6 +1723,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   Widget _buildCenterFeedPanel(bool isDark) {
+    // Calculate item count including loading and end indicators
+    int itemCount = _posts.length;
+    if (_isLoadingMore) itemCount++;
+    if (!_hasMorePosts && _posts.isNotEmpty) itemCount++;
+
     return Container(
       height: double.infinity,
       decoration: BoxDecoration(
@@ -1636,20 +1735,66 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: ListView.builder(
+        controller: _scrollController,
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 24),
-        itemCount: _posts.length,
+        itemCount: itemCount,
         itemBuilder: (context, index) {
-          return PostCard(
-            post: _posts[index],
-            onReactionChanged: _onReactionChanged,
-            onBookmarkToggle: _onBookmarkToggle,
-            onTap: _onPostTap,
-            onShare: _onShare,
-            onComment: _onComment,
-            onRepost: _onRepost,
-            isDarkMode: isDark,
-            currentUserId: _currentUserId,
+          // Show posts
+          if (index < _posts.length) {
+            return PostCard(
+              post: _posts[index],
+              onReactionChanged: _onReactionChanged,
+              onBookmarkToggle: _onBookmarkToggle,
+              onTap: _onPostTap,
+              onShare: _onShare,
+              onComment: _onComment,
+              onRepost: _onRepost,
+              isDarkMode: isDark,
+              currentUserId: _currentUserId,
+            );
+          }
+          
+          // Show loading indicator
+          if (_isLoadingMore && index == _posts.length) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                      strokeWidth: 2.5,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Loading more posts...',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: const Color(0xFF666666),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          
+          // Show end of feed indicator
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: Text(
+                'You\'re all caught up! 🎉',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: const Color(0xFF999999),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
           );
         },
       ),
@@ -1828,6 +1973,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           return false;
         },
         child: CustomScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           slivers: [
           // App bar + stories as a scrollable sliver
@@ -2099,6 +2245,52 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
               }, childCount: _posts.length),
             ),
           ),
+
+          // Loading indicator for pagination
+          if (_isLoadingMore)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                        strokeWidth: 2.5,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Loading more posts...',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: const Color(0xFF666666),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // End of feed indicator
+          if (!_hasMorePosts && _posts.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    'You\'re all caught up! 🎉',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: const Color(0xFF999999),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
         ),
       ),
