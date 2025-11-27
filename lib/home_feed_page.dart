@@ -278,11 +278,18 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       errMsg = errMsg == null ? s : '$errMsg | $s';
     }
 
-    // Ensure "Your Story" ring shows even if you have no active stories
-    if (_currentUserId != null &&
-        !rings.any((r) => r.userId == _currentUserId)) {
-      rings = [
-        StoryRingModel(
+    // Always put "Your Story" ring first, at the left
+    if (_currentUserId != null) {
+      // Find user's ring if it exists
+      final myRingIndex = rings.indexWhere((r) => r.userId == _currentUserId);
+      
+      if (myRingIndex > 0) {
+        // User has stories but not in first position - move to front
+        final myRing = rings.removeAt(myRingIndex);
+        rings.insert(0, myRing);
+      } else if (myRingIndex == -1) {
+        // User has no stories - add empty "Your Story" ring at front
+        rings.insert(0, StoryRingModel(
           userId: _currentUserId!,
           userName: '',
           userAvatar: null,
@@ -291,9 +298,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           thumbnailUrl: null,
           storyCount: 0,
           stories: const [],
-        ),
-        ...rings,
-      ];
+        ));
+      }
+      // If myRingIndex == 0, it's already first - do nothing
     }
 
     if (!mounted) return;
