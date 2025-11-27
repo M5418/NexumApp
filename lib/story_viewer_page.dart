@@ -374,11 +374,17 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     } else if (frame.item.type == StoryMediaType.image) {
       final audioUrl = frame.item.audioUrl;
       if (audioUrl != null) {
-        final p = AudioPlayer();
-        _audioPlayer = p;
-        await p.setReleaseMode(ReleaseMode.loop);
-        await p.setVolume(_isMuted ? 0.0 : 1.0);
-        await p.play(UrlSource(audioUrl));
+        try {
+          final p = AudioPlayer();
+          _audioPlayer = p;
+          await p.setReleaseMode(ReleaseMode.loop);
+          await p.setVolume(_isMuted ? 0.0 : 1.0);
+          await p.play(UrlSource(audioUrl));
+        } catch (e) {
+          // Silently fail on CORS errors (common on web with external audio)
+          debugPrint('🎵 [Story] Could not play audio: $e');
+          _audioPlayer = null;
+        }
       }
     }
     // Mark as viewed
