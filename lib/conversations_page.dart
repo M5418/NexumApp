@@ -93,7 +93,8 @@ class _ConversationsPageState extends State<ConversationsPage>
     );
     _selectedTabIndex = widget.initialTabIndex.clamp(0, 1).toInt();
     _tabController.addListener(() {
-      if (_tabController.indexIsChanging) {
+      // Update on any index change (tap or swipe)
+      if (_tabController.index != _selectedTabIndex) {
         setState(() => _selectedTabIndex = _tabController.index);
         // Refresh communities when switching to Communities tab
         if (_tabController.index == 1) {
