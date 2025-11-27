@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../interfaces/message_repository.dart';
 import 'firebase_conversation_repository.dart';
 
@@ -90,34 +91,82 @@ class FirebaseMessageRepository implements MessageRepository {
   @override
   Future<List<MessageRecordModel>> list(String conversationId, {int limit = 50}) async {
     try {
+      final uid = _auth.currentUser?.uid;
       final snap = await _conv(conversationId)
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
-      final list = snap.docs.map(_fromDoc).toList();
+      
+      // Filter out messages deleted by current user or deleted for everyone
+      final list = snap.docs
+          .where((doc) {
+            final data = doc.data();
+            final deletedFor = data['deletedFor'] as Map?;
+            final deletedForEveryone = data['deletedForEveryone'] as bool?;
+            
+            // Hide if deleted for everyone
+            if (deletedForEveryone == true) return false;
+            
+            // Hide if current user deleted it
+            if (uid != null && deletedFor != null && deletedFor[uid] == true) {
+              return false;
+            }
+            
+            return true;
+          })
+          .map(_fromDoc)
+          .toList();
+      
       return list.reversed.toList();
     } catch (e) {
-      
-      
       rethrow;
     }
   }
 
   @override
   Stream<List<MessageRecordModel>> messagesStream(String conversationId, {int limit = 50}) {
+    final uid = _auth.currentUser?.uid;
     return _conv(conversationId)
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map((s) => s.docs.map(_fromDoc).toList().reversed.toList());
+        .map((s) {
+          // Filter out messages deleted by current user or deleted for everyone
+          final filtered = s.docs.where((doc) {
+            final data = doc.data();
+            final deletedFor = data['deletedFor'] as Map?;
+            final deletedForEveryone = data['deletedForEveryone'] as bool?;
+            
+            // Hide if deleted for everyone
+            if (deletedForEveryone == true) return false;
+            
+            // Hide if current user deleted it
+            if (uid != null && deletedFor != null && deletedFor[uid] == true) {
+              return false;
+            }
+            
+            return true;
+          }).map(_fromDoc).toList();
+          
+          return filtered.reversed.toList();
+        });
   }
 
   @override
   Future<MessageRecordModel> sendText({String? conversationId, String? otherUserId, required String text, String? replyToMessageId}) async {
+    debugPrint('💬 [MessageRepo] sendText called');
+    debugPrint('💬 [MessageRepo] conversationId: $conversationId, otherUserId: $otherUserId');
+    debugPrint('💬 [MessageRepo] text: $text');
+    
     final convId = await _ensureConversation(conversationId, otherUserId);
+    debugPrint('💬 [MessageRepo] Resolved conversationId: $convId');
+    
     final me = _auth.currentUser?.uid;
     if (me == null) throw Exception('not_authenticated');
+    
     final other = await _otherParticipant(convId);
+    debugPrint('💬 [MessageRepo] senderId: $me, receiverId: $other');
+    
     final data = {
       'conversationId': convId,
       'senderId': me,
@@ -129,10 +178,20 @@ class FirebaseMessageRepository implements MessageRepository {
       'readBy': [me],
       'createdAt': FieldValue.serverTimestamp(),
       'deletedFor': {},
+      'deletedForEveryone': false,
     };
+    
+    debugPrint('💬 [MessageRepo] Creating message document...');
     final ref = await _conv(convId).add(data);
+    debugPrint('💬 [MessageRepo] Message created with ID: ${ref.id}');
+    
     await _updateConversationSummary(conversationId: convId, type: 'text', text: text);
+    debugPrint('💬 [MessageRepo] Conversation summary updated');
+    
     final fresh = await ref.get();
+    debugPrint('💬 [MessageRepo] Message retrieved: ${fresh.exists}');
+    debugPrint('💬 [MessageRepo] Message data: ${fresh.data()}');
+    
     return _fromDoc(fresh);
   }
 
@@ -166,6 +225,7 @@ class FirebaseMessageRepository implements MessageRepository {
       'readBy': [me],
       'createdAt': FieldValue.serverTimestamp(),
       'deletedFor': {},
+      'deletedForEveryone': false,
     };
     final ref = await _conv(convId).add(data);
     await _updateConversationSummary(conversationId: convId, type: type, text: text);
@@ -207,6 +267,7 @@ class FirebaseMessageRepository implements MessageRepository {
       'readBy': [me],
       'createdAt': FieldValue.serverTimestamp(),
       'deletedFor': {},
+      'deletedForEveryone': false,
     };
     final ref = await _conv(convId).add(data);
     await _updateConversationSummary(conversationId: convId, type: 'voice', text: '');
