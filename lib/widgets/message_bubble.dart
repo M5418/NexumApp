@@ -1053,9 +1053,12 @@ class _MessageBubbleState extends State<MessageBubble>
   }
   
   Widget _buildStoryReplyPreview(bool isDark) {
-    // Extract the actual message from "📖 Story reply: message"
+    // Parse the story reply: "📖 Story reply: message|mediaUrl|mediaType"
     final fullText = widget.message.content;
-    final messageText = fullText.replaceFirst('📖 Story reply: ', '');
+    final parts = fullText.replaceFirst('📖 Story reply: ', '').split('|');
+    final messageText = parts[0];
+    final mediaUrl = parts.length > 1 ? parts[1] : '';
+    final mediaType = parts.length > 2 ? parts[2] : 'image';
     
     final textColor = widget.message.isFromCurrentUser
         ? Colors.white
@@ -1102,13 +1105,13 @@ class _MessageBubbleState extends State<MessageBubble>
                     Row(
                       children: [
                         Icon(
-                          Icons.camera_alt,
+                          mediaType == 'video' ? Icons.videocam : Icons.camera_alt,
                           size: 14,
                           color: textColor.withValues(alpha: 179),
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Story reply',
+                          mediaType == 'video' ? 'Video' : 'Photo',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: textColor.withValues(alpha: 179),
@@ -1119,22 +1122,60 @@ class _MessageBubbleState extends State<MessageBubble>
                   ],
                 ),
               ),
-              // Story thumbnail placeholder
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF9D7BFF).withValues(alpha: 51),
+              // Story media thumbnail
+              if (mediaUrl.isNotEmpty)
+                ClipRRect(
                   borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: mediaUrl,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 50,
+                      height: 50,
+                      color: const Color(0xFF9D7BFF).withValues(alpha: 51),
+                      child: Icon(
+                        mediaType == 'video' ? Icons.play_circle_outline : Icons.image,
+                        size: 20,
+                        color: widget.message.isFromCurrentUser
+                            ? Colors.white
+                            : const Color(0xFF9D7BFF),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9D7BFF).withValues(alpha: 51),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.auto_stories,
+                        size: 20,
+                        color: widget.message.isFromCurrentUser
+                            ? Colors.white
+                            : const Color(0xFF9D7BFF),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9D7BFF).withValues(alpha: 51),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.auto_stories,
+                    size: 20,
+                    color: widget.message.isFromCurrentUser
+                        ? Colors.white
+                        : const Color(0xFF9D7BFF),
+                  ),
                 ),
-                child: Icon(
-                  Icons.auto_stories,
-                  size: 20,
-                  color: widget.message.isFromCurrentUser
-                      ? Colors.white
-                      : const Color(0xFF9D7BFF),
-                ),
-              ),
             ],
           ),
         ),

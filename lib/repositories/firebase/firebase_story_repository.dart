@@ -270,9 +270,13 @@ class FirebaseStoryRepository implements StoryRepository {
     final userDoc = await _db.collection('users').doc(uid).get();
     final userData = userDoc.data() ?? {};
     
-    // Get story to find the owner
+    // Get story to find the owner and media
     final storyDoc = await _stories.doc(storyId).get();
-    final storyOwnerId = storyDoc.data()?['userId']?.toString();
+    final storyData = storyDoc.data() ?? {};
+    final storyOwnerId = storyData['userId']?.toString();
+    final storyMediaUrl = storyData['mediaUrl']?.toString() ?? '';
+    final storyMediaType = storyData['mediaType']?.toString() ?? 'image';
+    final storyThumbnailUrl = storyData['thumbnailUrl']?.toString();
     
     // Add reply to story's replies collection
     await _stories.doc(storyId).collection('replies').add({
@@ -307,6 +311,13 @@ class FirebaseStoryRepository implements StoryRepository {
         debugPrint('📖 [StoryRepo] Story owner: $storyOwnerId');
         debugPrint('📖 [StoryRepo] Current user (replying): $uid');
         debugPrint('📖 [StoryRepo] Is admin replying: $isAdmin');
+        debugPrint('📖 [StoryRepo] Story media: $storyMediaUrl');
+        
+        // Include story media URL in the message for thumbnail display
+        // Format: 📖 Story reply: message|mediaUrl|mediaType|thumbnailUrl
+        final thumbnailForMessage = storyMediaType == 'video' && storyThumbnailUrl != null 
+            ? storyThumbnailUrl 
+            : storyMediaUrl;
         
         // Send reply as a message in their conversation
         // Works for all scenarios:
@@ -315,7 +326,7 @@ class FirebaseStoryRepository implements StoryRepository {
         // - User replying to another user's story → message sent to that user
         await _messageRepo.sendText(
           otherUserId: storyOwnerId,
-          text: '📖 Story reply: $message',
+          text: '📖 Story reply: $message|$thumbnailForMessage|$storyMediaType',
         );
         
         debugPrint('📖 [StoryRepo] ✅ Message sent successfully!');
