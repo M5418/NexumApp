@@ -55,17 +55,16 @@ class _BookReadPageState extends State<BookReadPage> {
         throw Exception('No PDF URL available');
       }
 
-      // Download PDF file to cache
-      final file = await DefaultCacheManager().getSingleFile(pdfUrl);
-      final bytes = await file.readAsBytes();
-      
-      // Open PDF document
-      final document = await PdfDocument.openData(bytes);
-
+      // Create PdfControllerPinch with Future<PdfDocument>
       _pdfController = PdfControllerPinch(
-        document: document,
+        document: PdfDocument.openData(
+          DefaultCacheManager().getSingleFile(pdfUrl).then((file) => file.readAsBytes()),
+        ),
         initialPage: defaultPage + 1, // PdfControllerPinch uses 1-based pages
       );
+
+      // Wait for document to load to get page count
+      final document = await _pdfController!.document;
 
       totalPages = document.pagesCount;
       if (mounted) setState(() => isLoading = false);
