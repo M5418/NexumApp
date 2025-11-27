@@ -290,14 +290,29 @@ class FirebaseStoryRepository implements StoryRepository {
     });
     
     // If user is replying to someone else's story, send it as a message too
+    // This works for everyone: regular users, admin replying to users, users replying to admin
     if (storyOwnerId != null && 
         storyOwnerId != uid && 
         _messageRepo != null) {
       try {
+        // Check if current user is admin
+        final currentUserDoc = await _db.collection('users').doc(uid).get();
+        final currentUserData = currentUserDoc.data() ?? {};
+        final currentUserEmail = currentUserData['email']?.toString().toLowerCase() ?? '';
+        final isAdmin = currentUserEmail.contains('nexumadmin') || 
+                       currentUserEmail == 'nexumadmin@nexum-connects.com' ||
+                       currentUserData['isAdmin'] == true;
+        
         debugPrint('📖 [StoryRepo] Sending story reply as message...');
-        debugPrint('📖 [StoryRepo] Story owner: $storyOwnerId, Current user: $uid');
+        debugPrint('📖 [StoryRepo] Story owner: $storyOwnerId');
+        debugPrint('📖 [StoryRepo] Current user (replying): $uid');
+        debugPrint('📖 [StoryRepo] Is admin replying: $isAdmin');
         
         // Send reply as a message in their conversation
+        // Works for all scenarios:
+        // - Admin replying to user's story → message sent to user
+        // - User replying to admin's story → message sent to admin
+        // - User replying to another user's story → message sent to that user
         await _messageRepo.sendText(
           otherUserId: storyOwnerId,
           text: '📖 Story reply: $message',
