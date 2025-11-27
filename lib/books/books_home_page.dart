@@ -13,6 +13,7 @@ class Book {
   final String? author;
   final String? description;
   final String? coverUrl;
+  final String? epubUrl;
   final String? pdfUrl;
   final String? audioUrl;
   final String? language;
@@ -37,6 +38,7 @@ class Book {
     this.author,
     this.description,
     this.coverUrl,
+    this.epubUrl,
     this.pdfUrl,
     this.audioUrl,
     this.language,
@@ -62,6 +64,7 @@ class Book {
       author: m.author,
       description: m.description,
       coverUrl: m.coverUrl,
+      epubUrl: m.epubUrl,
       pdfUrl: m.pdfUrl,
       audioUrl: m.audioUrl,
       language: m.language,

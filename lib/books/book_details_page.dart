@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'books_home_page.dart' show Book;
+import 'book_epub_page.dart';
 import 'book_read_page.dart';
 import 'book_play_page.dart';
 import '../repositories/interfaces/bookmark_repository.dart';
@@ -82,11 +83,14 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
 
     // Debug logging
     debugPrint('📚 [BookDetails] Book: ${book.title}');
+    debugPrint('📚 [BookDetails] EPUB URL: ${book.epubUrl ?? "null"}');
     debugPrint('📚 [BookDetails] PDF URL: ${book.pdfUrl ?? "null"}');
     debugPrint('📚 [BookDetails] Audio URL: ${book.audioUrl ?? "null"}');
     
     // Determine which format is available for reading
+    final hasEpub = (book.epubUrl ?? '').isNotEmpty;
     final hasPdf = (book.pdfUrl ?? '').isNotEmpty;
+    final hasReadable = hasEpub || hasPdf;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -305,16 +309,26 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: _buildActionButton(
-                          label: 'Start Reading',
+                          label: hasEpub
+                              ? 'Start Reading (EPUB)'
+                              : (hasPdf ? 'Start Reading (PDF)' : 'Start Reading'),
                           icon: Icons.auto_stories,
                           isPrimary: true,
-                          onPressed: hasPdf
+                          onPressed: hasReadable
                               ? () {
-                                  debugPrint('📖 [BookDetails] Opening PDF reader');
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => BookReadPage(book: book)),
-                                  );
+                                  if (hasEpub) {
+                                    debugPrint('📖 [BookDetails] Opening EPUB reader');
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => BookEpubPage(book: book)),
+                                    );
+                                  } else if (hasPdf) {
+                                    debugPrint('📖 [BookDetails] Opening PDF reader');
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => BookReadPage(book: book)),
+                                    );
+                                  }
                                 }
                               : null,
                         ),
