@@ -294,20 +294,37 @@ class FirebaseStoryRepository implements StoryRepository {
     // If user is replying to someone else's story AND we have the necessary repos
     if (storyOwnerId != null && 
         storyOwnerId != uid && 
-        _messageRepo != null && 
-        _followRepo != null) {
+        _messageRepo != null) {
       try {
         debugPrint('📖 [StoryRepo] Story owner: $storyOwnerId, Current user: $uid');
         
-        // Check if users can communicate (mutual connection)
-        final connectionsStatus = await _followRepo.getConnectionsStatus();
-        debugPrint('📖 [StoryRepo] Inbound connections: ${connectionsStatus.inbound}');
-        debugPrint('📖 [StoryRepo] Outbound connections: ${connectionsStatus.outbound}');
+        // Check if story owner is admin (admin email or specific check)
+        final ownerDoc = await _db.collection('users').doc(storyOwnerId).get();
+        final ownerData = ownerDoc.data() ?? {};
+        final ownerEmail = ownerData['email']?.toString().toLowerCase() ?? '';
+        final isAdmin = ownerEmail.contains('nexumadmin') || 
+                       ownerEmail == 'nexumadmin@nexum-connects.com' ||
+                       ownerData['isAdmin'] == true;
         
-        final canCommunicate = connectionsStatus.inbound.contains(storyOwnerId) && 
-                               connectionsStatus.outbound.contains(storyOwnerId);
+        debugPrint('📖 [StoryRepo] Is admin: $isAdmin (email: $ownerEmail)');
         
-        debugPrint('📖 [StoryRepo] Can communicate: $canCommunicate');
+        bool canCommunicate = false;
+        
+        if (isAdmin) {
+          // Admin accounts can receive messages from anyone
+          canCommunicate = true;
+          debugPrint('📖 [StoryRepo] ✅ Story owner is admin - allowing message');
+        } else if (_followRepo != null) {
+          // Regular users: check mutual connection
+          final connectionsStatus = await _followRepo.getConnectionsStatus();
+          debugPrint('📖 [StoryRepo] Inbound connections: ${connectionsStatus.inbound}');
+          debugPrint('📖 [StoryRepo] Outbound connections: ${connectionsStatus.outbound}');
+          
+          canCommunicate = connectionsStatus.inbound.contains(storyOwnerId) && 
+                          connectionsStatus.outbound.contains(storyOwnerId);
+          
+          debugPrint('📖 [StoryRepo] Can communicate (mutual connection): $canCommunicate');
+        }
         
         if (canCommunicate) {
           debugPrint('📖 [StoryRepo] Sending story reply as message...');
@@ -326,7 +343,7 @@ class FirebaseStoryRepository implements StoryRepository {
         debugPrint('📖 [StoryRepo] Stack trace: $stack');
       }
     } else {
-      debugPrint('📖 [StoryRepo] Skipping message - storyOwnerId: $storyOwnerId, uid: $uid, messageRepo: ${_messageRepo != null}, followRepo: ${_followRepo != null}');
+      debugPrint('📖 [StoryRepo] Skipping message - storyOwnerId: $storyOwnerId, uid: $uid, messageRepo: ${_messageRepo != null}');
     }
   }
 
