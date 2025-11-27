@@ -92,10 +92,14 @@ class FirebaseMessageRepository implements MessageRepository {
   Future<List<MessageRecordModel>> list(String conversationId, {int limit = 50}) async {
     try {
       final uid = _auth.currentUser?.uid;
+      debugPrint('💬 [MessageRepo] Fetching messages for conversation: $conversationId');
+      
       final snap = await _conv(conversationId)
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
+      
+      debugPrint('💬 [MessageRepo] Fetched ${snap.docs.length} raw messages from Firestore');
       
       // Filter out messages deleted by current user or deleted for everyone
       final list = snap.docs
@@ -104,11 +108,17 @@ class FirebaseMessageRepository implements MessageRepository {
             final deletedFor = data['deletedFor'] as Map?;
             final deletedForEveryone = data['deletedForEveryone'] as bool?;
             
+            debugPrint('💬 [MessageRepo] Checking message ${doc.id}: deletedForEveryone=$deletedForEveryone, deletedFor[$uid]=${deletedFor?[uid]}');
+            
             // Hide if deleted for everyone
-            if (deletedForEveryone == true) return false;
+            if (deletedForEveryone == true) {
+              debugPrint('💬 [MessageRepo] ❌ Filtering out message ${doc.id}: deleted for everyone');
+              return false;
+            }
             
             // Hide if current user deleted it
             if (uid != null && deletedFor != null && deletedFor[uid] == true) {
+              debugPrint('💬 [MessageRepo] ❌ Filtering out message ${doc.id}: deleted by current user');
               return false;
             }
             
@@ -117,8 +127,10 @@ class FirebaseMessageRepository implements MessageRepository {
           .map(_fromDoc)
           .toList();
       
+      debugPrint('💬 [MessageRepo] Returning ${list.length} messages after filtering');
       return list.reversed.toList();
     } catch (e) {
+      debugPrint('💬 [MessageRepo] Error fetching messages: $e');
       rethrow;
     }
   }

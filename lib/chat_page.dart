@@ -171,8 +171,18 @@ Future<void> _handleUnblock() async {
         _messageReactions.clear();
       });
       if (_resolvedConversationId == null) return;
+      
+      debugPrint('💬 [Chat] Loading messages for conversation: $_resolvedConversationId');
       final records = await _msgRepo.list(_resolvedConversationId!);
+      debugPrint('💬 [Chat] Loaded ${records.length} messages from repository');
+      
+      for (var i = 0; i < records.length; i++) {
+        debugPrint('💬 [Chat] Message $i: id=${records[i].id}, type=${records[i].type}, text="${records[i].text}"');
+      }
+      
       final mapped = records.map(_toUiMessage).toList();
+      debugPrint('💬 [Chat] Mapped to ${mapped.length} UI messages');
+      
       setState(() {
         _messages.addAll(mapped);
         for (final r in records) {
@@ -186,6 +196,7 @@ Future<void> _handleUnblock() async {
       });
       _scrollToBottom();
     } catch (e) {
+      debugPrint('💬 [Chat] Error loading messages: $e');
       if (!mounted) return;
       setState(() {
         _isLoading = false;
@@ -260,6 +271,9 @@ void dispose() {
 }
 
   Message _toUiMessage(MessageRecordModel r) {
+    debugPrint('💬 [Chat] Converting message to UI: ${r.id}');
+    debugPrint('💬 [Chat] Message type: ${r.type}, text: "${r.text}"');
+    
     final isFromCurrentUser = r.senderId != widget.otherUser.id;
     String? senderAvatar = isFromCurrentUser ? null : widget.otherUser.avatarUrl;
 
