@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -88,7 +89,8 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
     debugPrint('📚 [BookDetails] Audio URL: ${book.audioUrl ?? "null"}');
     
     // Determine which format is available for reading
-    final hasEpub = (book.epubUrl ?? '').isNotEmpty;
+    // Note: EPUB viewer only works on mobile (Android/iOS), not on web
+    final hasEpub = !kIsWeb && (book.epubUrl ?? '').isNotEmpty;
     final hasPdf = (book.pdfUrl ?? '').isNotEmpty;
     final hasReadable = hasEpub || hasPdf;
 
