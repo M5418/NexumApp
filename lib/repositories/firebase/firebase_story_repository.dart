@@ -297,22 +297,36 @@ class FirebaseStoryRepository implements StoryRepository {
         _messageRepo != null && 
         _followRepo != null) {
       try {
+        debugPrint('📖 [StoryRepo] Story owner: $storyOwnerId, Current user: $uid');
+        
         // Check if users can communicate (mutual connection)
         final connectionsStatus = await _followRepo.getConnectionsStatus();
+        debugPrint('📖 [StoryRepo] Inbound connections: ${connectionsStatus.inbound}');
+        debugPrint('📖 [StoryRepo] Outbound connections: ${connectionsStatus.outbound}');
+        
         final canCommunicate = connectionsStatus.inbound.contains(storyOwnerId) && 
                                connectionsStatus.outbound.contains(storyOwnerId);
         
+        debugPrint('📖 [StoryRepo] Can communicate: $canCommunicate');
+        
         if (canCommunicate) {
+          debugPrint('📖 [StoryRepo] Sending story reply as message...');
           // Send reply as a message in their conversation
           await _messageRepo.sendText(
             otherUserId: storyOwnerId,
             text: '📖 Story reply: $message',
           );
+          debugPrint('📖 [StoryRepo] ✅ Message sent successfully!');
+        } else {
+          debugPrint('📖 [StoryRepo] ❌ Users are not mutually connected, skipping message');
         }
-      } catch (e) {
+      } catch (e, stack) {
         // Silent fail - reply to story was successful, message sending is optional
-        debugPrint('📖 [StoryRepo] Could not send reply as message: $e');
+        debugPrint('📖 [StoryRepo] ❌ Error sending reply as message: $e');
+        debugPrint('📖 [StoryRepo] Stack trace: $stack');
       }
+    } else {
+      debugPrint('📖 [StoryRepo] Skipping message - storyOwnerId: $storyOwnerId, uid: $uid, messageRepo: ${_messageRepo != null}, followRepo: ${_followRepo != null}');
     }
   }
 
