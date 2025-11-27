@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:pdfx/pdfx.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'books_home_page.dart' show Book;
 import '../repositories/interfaces/book_repository.dart';
 
@@ -14,7 +15,7 @@ class BookReadPage extends StatefulWidget {
 }
 
 class _BookReadPageState extends State<BookReadPage> {
-  final PdfViewerController _pdfController = PdfViewerController();
+  PdfControllerPinch? _pdfController;
 
   bool isLoading = true;
   String? errorMessage;
@@ -26,11 +27,18 @@ class _BookReadPageState extends State<BookReadPage> {
   @override
   void initState() {
     super.initState();
-    _loadProgress();
+    _loadPdfAndProgress();
   }
 
-  Future<void> _loadProgress() async {
+  @override
+  void dispose() {
+    _pdfController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPdfAndProgress() async {
     try {
+      // Load progress first
       final bookRepo = context.read<BookRepository>();
       final progress = await bookRepo.getProgress(widget.book.id);
       if (progress != null && progress.currentPage > 0) {
@@ -40,10 +48,35 @@ class _BookReadPageState extends State<BookReadPage> {
           totalPages = progress.totalPages;
         }
       }
-    } catch (_) {
-      // ignore errors
-    } finally {
+
+      // Load PDF document
+      final pdfUrl = widget.book.pdfUrl;
+      if (pdfUrl == null || pdfUrl.isEmpty) {
+        throw Exception('No PDF URL available');
+      }
+
+      // Download PDF file to cache
+      final file = await DefaultCacheManager().getSingleFile(pdfUrl);
+      final bytes = await file.readAsBytes();
+      
+      // Open PDF document
+      final document = await PdfDocument.openData(bytes);
+
+      _pdfController = PdfControllerPinch(
+        document: document,
+        initialPage: defaultPage + 1, // PdfControllerPinch uses 1-based pages
+      );
+
+      totalPages = document.pagesCount;
       if (mounted) setState(() => isLoading = false);
+    } catch (e) {
+      debugPrint('📖 [PDF] Error loading: $e');
+      if (mounted) {
+        setState(() {
+          errorMessage = 'Failed to load PDF: $e';
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -65,9 +98,6 @@ class _BookReadPageState extends State<BookReadPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
-    final pdfUrl = (widget.book.pdfUrl ?? '').isNotEmpty
-        ? widget.book.pdfUrl!
-        : 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
 
     return Scaffold(
       backgroundColor: bg,
@@ -120,24 +150,22 @@ class _BookReadPageState extends State<BookReadPage> {
                     ),
                   ),
                 )
-              : SfPdfViewer.network(
-                  pdfUrl,
-                  controller: _pdfController,
-                  canShowPaginationDialog: false,
-                  onDocumentLoaded: (details) {
-                    totalPages = details.document.pages.count;
-                    // Jump to last read page (1-based for viewer)
-                    if (defaultPage > 0) {
-                      _pdfController.jumpToPage(defaultPage + 1);
-                    }
-                    setState(() {}); // refresh page count in AppBar
-                  },
-                  onPageChanged: (details) {
-                    // details.newPageNumber is 1-based
-                    currentPage = (details.newPageNumber - 1).clamp(0, totalPages > 0 ? totalPages - 1 : 0);
-                    _updateProgress();
-                  },
-                ),
+              : _pdfController == null
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
+                  : PdfViewPinch(
+                      controller: _pdfController!,
+                      onPageChanged: (page) {
+                        currentPage = (page - 1).clamp(0, totalPages > 0 ? totalPages - 1 : 0);
+                        setState(() {}); // Update page counter in AppBar
+                        _updateProgress();
+                      },
+                      onDocumentError: (error) {
+                        debugPrint('📖 [PDF] Document error: $error');
+                        setState(() {
+                          errorMessage = 'Error displaying PDF: $error';
+                        });
+                      },
+                    ),
     );
   }
 }
