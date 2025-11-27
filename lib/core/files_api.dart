@@ -77,9 +77,11 @@ class FilesApi {
       case 'webp':
         return 'image/webp';
 
-      // PDF
+      // Documents
       case 'pdf':
         return 'application/pdf';
+      case 'epub':
+        return 'application/epub+zip';
 
       // Video
       case 'mp4':
