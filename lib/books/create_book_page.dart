@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:pdfx/pdfx.dart';
 import '../core/files_api.dart';
 import '../repositories/interfaces/book_repository.dart';
 
@@ -243,9 +243,29 @@ class _CreateBookPageState extends State<CreateBookPage> {
           child: SizedBox(
             width: 720,
             height: 920,
-            child: kIsWeb
-                ? SfPdfViewer.memory(_pdfBytes!)
-                : SfPdfViewer.file(_pdfFile!),
+            child: FutureBuilder<PdfDocument>(
+              future: kIsWeb
+                  ? PdfDocument.openData(_pdfBytes!)
+                  : PdfDocument.openFile(_pdfFile!.path),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error loading PDF',
+                      style: GoogleFonts.inter(color: Colors.red),
+                    ),
+                  );
+                }
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
+                  );
+                }
+                return PdfView(
+                  controller: PdfController(document: Future.value(snapshot.data!)),
+                );
+              },
+            ),
           ),
         );
       },
