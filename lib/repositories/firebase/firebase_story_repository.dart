@@ -10,13 +10,11 @@ class FirebaseStoryRepository implements StoryRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
   final MessageRepository? _messageRepo;
-  final FollowRepository? _followRepo;
 
   FirebaseStoryRepository({
     MessageRepository? messageRepository,
     FollowRepository? followRepository,
-  })  : _messageRepo = messageRepository,
-        _followRepo = followRepository;
+  })  : _messageRepo = messageRepository;
 
   CollectionReference<Map<String, dynamic>> get _stories => _db.collection('stories');
   CollectionReference<Map<String, dynamic>> get _storyRings => _db.collection('story_rings');
@@ -291,52 +289,21 @@ class FirebaseStoryRepository implements StoryRepository {
       'commentsCount': FieldValue.increment(1),
     });
     
-    // If user is replying to someone else's story AND we have the necessary repos
+    // If user is replying to someone else's story, send it as a message too
     if (storyOwnerId != null && 
         storyOwnerId != uid && 
         _messageRepo != null) {
       try {
+        debugPrint('📖 [StoryRepo] Sending story reply as message...');
         debugPrint('📖 [StoryRepo] Story owner: $storyOwnerId, Current user: $uid');
         
-        // Check if story owner is admin (admin email or specific check)
-        final ownerDoc = await _db.collection('users').doc(storyOwnerId).get();
-        final ownerData = ownerDoc.data() ?? {};
-        final ownerEmail = ownerData['email']?.toString().toLowerCase() ?? '';
-        final isAdmin = ownerEmail.contains('nexumadmin') || 
-                       ownerEmail == 'nexumadmin@nexum-connects.com' ||
-                       ownerData['isAdmin'] == true;
+        // Send reply as a message in their conversation
+        await _messageRepo.sendText(
+          otherUserId: storyOwnerId,
+          text: '📖 Story reply: $message',
+        );
         
-        debugPrint('📖 [StoryRepo] Is admin: $isAdmin (email: $ownerEmail)');
-        
-        bool canCommunicate = false;
-        
-        if (isAdmin) {
-          // Admin accounts can receive messages from anyone
-          canCommunicate = true;
-          debugPrint('📖 [StoryRepo] ✅ Story owner is admin - allowing message');
-        } else if (_followRepo != null) {
-          // Regular users: check mutual connection
-          final connectionsStatus = await _followRepo.getConnectionsStatus();
-          debugPrint('📖 [StoryRepo] Inbound connections: ${connectionsStatus.inbound}');
-          debugPrint('📖 [StoryRepo] Outbound connections: ${connectionsStatus.outbound}');
-          
-          canCommunicate = connectionsStatus.inbound.contains(storyOwnerId) && 
-                          connectionsStatus.outbound.contains(storyOwnerId);
-          
-          debugPrint('📖 [StoryRepo] Can communicate (mutual connection): $canCommunicate');
-        }
-        
-        if (canCommunicate) {
-          debugPrint('📖 [StoryRepo] Sending story reply as message...');
-          // Send reply as a message in their conversation
-          await _messageRepo.sendText(
-            otherUserId: storyOwnerId,
-            text: '📖 Story reply: $message',
-          );
-          debugPrint('📖 [StoryRepo] ✅ Message sent successfully!');
-        } else {
-          debugPrint('📖 [StoryRepo] ❌ Users are not mutually connected, skipping message');
-        }
+        debugPrint('📖 [StoryRepo] ✅ Message sent successfully!');
       } catch (e, stack) {
         // Silent fail - reply to story was successful, message sending is optional
         debugPrint('📖 [StoryRepo] ❌ Error sending reply as message: $e');
