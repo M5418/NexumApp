@@ -29,6 +29,7 @@ service firebase.storage {
     
     function isDocument() {
       return request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/epub\\+zip') ||
              request.resource.contentType.matches('application/msword') ||
              request.resource.contentType.matches('application/vnd.*');
     }

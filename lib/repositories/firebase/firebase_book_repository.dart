@@ -27,6 +27,7 @@ class FirebaseBookRepository implements BookRepository {
       authorId: d['authorId']?.toString(),
       description: d['description']?.toString(),
       coverUrl: d['coverUrl']?.toString(),
+      epubUrl: d['epubUrl']?.toString(),
       pdfUrl: d['pdfUrl']?.toString(),
       audioUrl: d['audioUrl']?.toString(),
       language: d['language']?.toString(),
@@ -117,6 +118,7 @@ class FirebaseBookRepository implements BookRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? epubUrl,
     String? pdfUrl,
     String? audioUrl,
     String? language,
@@ -137,6 +139,7 @@ class FirebaseBookRepository implements BookRepository {
       'authorId': uid,
       'description': description,
       'coverUrl': coverUrl,
+      'epubUrl': epubUrl,
       'pdfUrl': pdfUrl,
       'audioUrl': audioUrl,
       'language': language ?? 'en',
@@ -167,6 +170,7 @@ class FirebaseBookRepository implements BookRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? epubUrl,
     String? pdfUrl,
     String? audioUrl,
     String? language,
@@ -188,6 +192,7 @@ class FirebaseBookRepository implements BookRepository {
     if (author != null) updates['author'] = author;
     if (description != null) updates['description'] = description;
     if (coverUrl != null) updates['coverUrl'] = coverUrl;
+    if (epubUrl != null) updates['epubUrl'] = epubUrl;
     if (pdfUrl != null) updates['pdfUrl'] = pdfUrl;
     if (audioUrl != null) updates['audioUrl'] = audioUrl;
     if (language != null) updates['language'] = language;

@@ -8,6 +8,7 @@ class BookModel {
   final String? authorId;
   final String? description;
   final String? coverUrl;
+  final String? epubUrl;
   final String? pdfUrl;
   final String? audioUrl;
   final String? language;
@@ -34,6 +35,7 @@ class BookModel {
     this.authorId,
     this.description,
     this.coverUrl,
+    this.epubUrl,
     this.pdfUrl,
     this.audioUrl,
     this.language,
@@ -137,6 +139,7 @@ abstract class BookRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? epubUrl,
     String? pdfUrl,
     String? audioUrl,
     String? language,
@@ -154,6 +157,7 @@ abstract class BookRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? epubUrl,
     String? pdfUrl,
     String? audioUrl,
     String? language,

@@ -63,23 +63,28 @@ class _CreateBookPageState extends State<CreateBookPage> {
 
   // Native (mobile/desktop)
   File? _coverFile;
+  File? _epubFile;
   File? _pdfFile;
   File? _audioFile;
 
   // Web (bytes)
   Uint8List? _coverBytes;
+  Uint8List? _epubBytes;
   Uint8List? _pdfBytes;
   Uint8List? _audioBytes;
 
   // Friendly names + extensions (used across platforms)
+  String? _epubName;
   String? _pdfName;
   String? _audioName;
   String? _coverExt;
+  String? _epubExt;
   String? _pdfExt;
   String? _audioExt;
 
   // Uploaded URLs
   String? _coverUrl;
+  String? _epubUrl;
   String? _pdfUrl;
   String? _audioUrl;
 
@@ -124,6 +129,29 @@ class _CreateBookPageState extends State<CreateBookPage> {
       } else if (f.path != null) {
         _coverFile = File(f.path!);
         _coverBytes = null;
+      }
+    });
+  }
+
+  Future<void> _pickEpub() async {
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['epub'],
+      allowMultiple: false,
+      withData: kIsWeb,
+    );
+    if (res == null || res.files.isEmpty) return;
+
+    final f = res.files.first;
+    setState(() {
+      _epubName = f.name;
+      _epubExt = (f.extension ?? 'epub').toLowerCase();
+      if (kIsWeb) {
+        _epubBytes = f.bytes;
+        _epubFile = null;
+      } else if (f.path != null) {
+        _epubFile = File(f.path!);
+        _epubBytes = null;
       }
     });
   }
@@ -231,11 +259,12 @@ class _CreateBookPageState extends State<CreateBookPage> {
       );
       return;
     }
+    final hasEpub = _epubFile != null || _epubBytes != null;
     final hasPdf = _pdfFile != null || _pdfBytes != null;
     final hasAudio = _audioFile != null || _audioBytes != null;
-    if (!hasPdf && !hasAudio) {
+    if (!hasEpub && !hasPdf && !hasAudio) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Attach at least a PDF or an audio file', style: GoogleFonts.inter())),
+        SnackBar(content: Text('Attach at least an EPUB, PDF, or audio file', style: GoogleFonts.inter())),
       );
       return;
     }
@@ -252,6 +281,15 @@ class _CreateBookPageState extends State<CreateBookPage> {
       } else if (_coverBytes != null) {
         final up = await filesApi.uploadBytes(_coverBytes!, ext: _coverExt ?? 'jpg');
         _coverUrl = up['url'];
+      }
+
+      // EPUB upload
+      if (_epubFile != null) {
+        final up = await filesApi.uploadFile(_epubFile!);
+        _epubUrl = up['url'];
+      } else if (_epubBytes != null) {
+        final up = await filesApi.uploadBytes(_epubBytes!, ext: _epubExt ?? 'epub');
+        _epubUrl = up['url'];
       }
 
       // PDF upload
@@ -279,6 +317,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
         author: _authorCtrl.text.trim().isEmpty ? null : _authorCtrl.text.trim(),
         description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
         coverUrl: (_coverUrl ?? '').isEmpty ? null : _coverUrl,
+        epubUrl: (_epubUrl ?? '').isEmpty ? null : _epubUrl,
         pdfUrl: (_pdfUrl ?? '').isEmpty ? null : _pdfUrl,
         audioUrl: (_audioUrl ?? '').isEmpty ? null : _audioUrl,
         language: _language,
@@ -464,6 +503,29 @@ class _CreateBookPageState extends State<CreateBookPage> {
             ),
           ),
 
+          const SizedBox(height: 12),
+
+          // Upload EPUB section
+          _InputCard(
+            child: Row(
+              children: [
+                _SquareButton(icon: Icons.menu_book, label: 'EPUB', onTap: _pickEpub),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    kIsWeb
+                        ? (_epubName ?? 'No EPUB selected')
+                        : (_epubFile != null
+                            ? _epubFile!.path.split(Platform.pathSeparator).last
+                            : 'No EPUB selected'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 12),
 
           // Upload Book PDF section with preview button (web-friendly)
