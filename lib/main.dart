@@ -226,7 +226,12 @@ class MyApp extends StatelessWidget {
         Provider<MentorshipRepository>(create: (_) => FirebaseMentorshipRepository()),
         Provider<BookRepository>(create: (_) => FirebaseBookRepository()),
         Provider<PodcastRepository>(create: (_) => FirebasePodcastRepository()),
-        Provider<StoryRepository>(create: (_) => FirebaseStoryRepository()),
+        ProxyProvider2<MessageRepository, FollowRepository, StoryRepository>(
+          update: (context, messageRepo, followRepo, previous) => FirebaseStoryRepository(
+            messageRepository: messageRepo,
+            followRepository: followRepo,
+          ),
+        ),
         Provider<KycRepository>(create: (_) => FirebaseKycRepository()),
         Provider<ReportRepository>(create: (_) => FirebaseReportRepository()),
         Provider<SearchRepository>(create: (_) => FirebaseSearchRepository()),

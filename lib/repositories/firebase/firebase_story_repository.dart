@@ -1,11 +1,22 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../interfaces/story_repository.dart';
+import '../interfaces/message_repository.dart';
+import '../interfaces/follow_repository.dart';
 
 class FirebaseStoryRepository implements StoryRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
+  final MessageRepository? _messageRepo;
+  final FollowRepository? _followRepo;
+
+  FirebaseStoryRepository({
+    MessageRepository? messageRepository,
+    FollowRepository? followRepository,
+  })  : _messageRepo = messageRepository,
+        _followRepo = followRepository;
 
   CollectionReference<Map<String, dynamic>> get _stories => _db.collection('stories');
   CollectionReference<Map<String, dynamic>> get _storyRings => _db.collection('story_rings');
@@ -261,6 +272,11 @@ class FirebaseStoryRepository implements StoryRepository {
     final userDoc = await _db.collection('users').doc(uid).get();
     final userData = userDoc.data() ?? {};
     
+    // Get story to find the owner
+    final storyDoc = await _stories.doc(storyId).get();
+    final storyOwnerId = storyDoc.data()?['userId']?.toString();
+    
+    // Add reply to story's replies collection
     await _stories.doc(storyId).collection('replies').add({
       'storyId': storyId,
       'userId': uid,
@@ -274,6 +290,30 @@ class FirebaseStoryRepository implements StoryRepository {
     await _stories.doc(storyId).update({
       'commentsCount': FieldValue.increment(1),
     });
+    
+    // If user is replying to someone else's story AND we have the necessary repos
+    if (storyOwnerId != null && 
+        storyOwnerId != uid && 
+        _messageRepo != null && 
+        _followRepo != null) {
+      try {
+        // Check if users can communicate (mutual connection)
+        final connectionsStatus = await _followRepo.getConnectionsStatus();
+        final canCommunicate = connectionsStatus.inbound.contains(storyOwnerId) && 
+                               connectionsStatus.outbound.contains(storyOwnerId);
+        
+        if (canCommunicate) {
+          // Send reply as a message in their conversation
+          await _messageRepo.sendText(
+            otherUserId: storyOwnerId,
+            text: '📖 Story reply: $message',
+          );
+        }
+      } catch (e) {
+        // Silent fail - reply to story was successful, message sending is optional
+        debugPrint('📖 [StoryRepo] Could not send reply as message: $e');
+      }
+    }
   }
 
   @override
