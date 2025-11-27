@@ -175,6 +175,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   bool _liked = false;
 
   final TextEditingController _commentController = TextEditingController();
+  final FocusNode _commentFocusNode = FocusNode();
 
   AnimationController? _progressController;
 
@@ -182,11 +183,21 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   void initState() {
     super.initState();
     _initFromBackend();
+    
+    // Pause story when typing, resume when done
+    _commentFocusNode.addListener(() {
+      if (_commentFocusNode.hasFocus) {
+        _pauseStory();
+      } else {
+        _resumeStory();
+      }
+    });
   }
 
   @override
   void dispose() {
     _commentController.dispose();
+    _commentFocusNode.dispose();
     _disposePlayers();
     _progressController?.dispose();
     _pageController.dispose();
@@ -931,9 +942,15 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       if (text.isEmpty || _frames.isEmpty) return;
       final sid = _frames[_currentIndex].storyId;
       if (sid == null) return;
+      
+      // Immediately clear text and unfocus for instant feedback
+      _commentController.clear();
+      _commentFocusNode.unfocus();
+      _snack('Sending...', const Color(0xFFBFAE01));
+      
+      // Send in background without blocking UI
       try {
         await context.read<StoryRepository>().replyToStory(storyId: sid, message: text);
-        _commentController.clear();
         _snack('Reply sent', const Color(0xFFBFAE01));
       } catch (e) {
         _snack('Failed to reply', Colors.red);
@@ -954,6 +971,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             child: Center(
               child: TextField(
                 controller: _commentController,
+                focusNode: _commentFocusNode,
                 style: GoogleFonts.inter(color: Colors.black),
                 cursorColor: const Color(0xFFBFAE01),
                 decoration: InputDecoration(
