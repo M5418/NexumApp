@@ -26,11 +26,47 @@ class _PodcastsCategoriesPageState extends State<PodcastsCategoriesPage> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = false;
-      _error = null;
-      _cats = [];
-    });
+    setState(() => _loading = true);
+    try {
+      final podcastRepo = context.read<PodcastRepository>();
+      
+      // Fetch all published podcasts
+      final podcasts = await podcastRepo.listPodcasts(
+        page: 1,
+        limit: 1000, // Get all podcasts to count categories
+        isPublished: true,
+      );
+      
+      // Aggregate categories and count
+      final categoryMap = <String, int>{};
+      for (final podcast in podcasts) {
+        final category = podcast.category?.trim() ?? '';
+        if (category.isNotEmpty) {
+          // Handle multi-category (comma-separated)
+          final categories = category.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty);
+          for (final cat in categories) {
+            categoryMap[cat] = (categoryMap[cat] ?? 0) + 1;
+          }
+        }
+      }
+      
+      // Convert to list and sort by count
+      final categoryList = categoryMap.entries
+          .map((e) => {'category': e.key, 'count': e.value})
+          .toList()
+        ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+      
+      setState(() {
+        _cats = categoryList;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load categories: $e';
+        _loading = false;
+      });
+    }
   }
 
   @override
