@@ -2077,8 +2077,15 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     onAddTap: null,
                                     onTap: () async {
                                   if (isMine) {
-                                    if (ring.storyCount > 0 &&
-                                        _currentUserId != null) {
+                                    // Check if user has any ACTIVE stories (not expired)
+                                    final now = DateTime.now();
+                                    final activeStories = ring.stories.where((story) {
+                                      final age = now.difference(story.createdAt);
+                                      return age.inHours < 24; // Stories expire after 24 hours
+                                    }).toList();
+                                    
+                                    if (activeStories.isNotEmpty && _currentUserId != null) {
+                                      // User has active stories - show bottom sheet
                                       MyStoriesBottomSheet.show(
                                         context,
                                         currentUserId: _currentUserId!,
@@ -2103,6 +2110,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                         },
                                       );
                                     } else {
+                                      // No active stories - show type picker directly
                                       StoryTypePicker.show(
                                         context,
                                         onSelected: (type) async {
