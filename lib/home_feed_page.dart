@@ -1573,7 +1573,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                   return Row(
                     children: [
                       story_widget.StoryRing(
-                        imageUrl: ring.thumbnailUrl ?? ring.userAvatar,
+                        imageUrl: ring.userAvatar,
                         label: isMine
                             ? 'Your Story'
                             : (ring.userName.isNotEmpty
@@ -1677,8 +1677,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                 rings: _storyRings
                                     .map((r) => {
                                           'userId': r.userId,
-                                          'imageUrl':
-                                              r.thumbnailUrl ?? r.userAvatar,
+                                          'imageUrl': r.userAvatar,
                                           'label': r.userName,
                                           'isMine': r.userId == _currentUserId,
                                           'isSeen': !r.hasUnseen,
@@ -1694,8 +1693,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     rings: _storyRings
                                         .map((r) => {
                                               'userId': r.userId,
-                                              'imageUrl':
-                                                  r.thumbnailUrl ?? r.userAvatar,
+                                              'imageUrl': r.userAvatar,
                                               'label': r.userName,
                                               'isMine':
                                                   r.userId == _currentUserId,
@@ -2064,7 +2062,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     right: index < _storyRings.length - 1 ? 16 : 0,
                                   ),
                                   child: story_widget.StoryRing(
-                                    imageUrl: ring.thumbnailUrl ?? ring.userAvatar,
+                                    imageUrl: ring.userAvatar,
                                     label: isMine
                                         ? 'Your Story'
                                         : (ring.userName.isNotEmpty
@@ -2136,8 +2134,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                         rings: _storyRings
                                             .map((r) => {
                                                   'userId': r.userId,
-                                                  'imageUrl': r.thumbnailUrl ??
-                                                      r.userAvatar,
+                                                  'imageUrl': r.userAvatar,
                                                   'label': r.userName,
                                                   'isMine': r.userId ==
                                                       _currentUserId,
@@ -2154,9 +2151,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                             rings: _storyRings
                                                 .map((r) => {
                                                       'userId': r.userId,
-                                                      'imageUrl':
-                                                          r.thumbnailUrl ??
-                                                              r.userAvatar,
+                                                      'imageUrl': r.userAvatar,
                                                       'label': r.userName,
                                                       'isMine': r.userId ==
                                                           _currentUserId,
