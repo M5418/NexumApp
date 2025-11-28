@@ -343,14 +343,31 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
   }
 
   Widget _buildMobileBottomSheet(Color cardColor, Color textColor) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    
     return Container(
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      constraints: BoxConstraints(
+        maxHeight: screenHeight * 0.75, // Max 75% of screen height
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Handle bar
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0E0E0),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
           // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
@@ -405,7 +422,7 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
             ),
           ),
           // Content
-          Expanded(
+          Flexible(
             child: _loadingUsers
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredUsers.isEmpty

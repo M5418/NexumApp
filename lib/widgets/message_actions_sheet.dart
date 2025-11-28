@@ -139,9 +139,9 @@ class MessageActionsSheet extends StatelessWidget {
                                         : const Color(0xFFF3F4F6),
                                     borderRadius: BorderRadius.circular(24),
                                   ),
-                                  child: const Text(
-                                    '👍',
-                                    style: TextStyle(fontSize: 20),
+                                  child: Text(
+                                    emoji,
+                                    style: const TextStyle(fontSize: 20),
                                   ),
                                 ),
                               ),
