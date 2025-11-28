@@ -67,13 +67,73 @@ String _colorToHex(Color c) {
   return '#$rgb';
 }
 
-// Bottom sheet to pick the composer type
+// Popup menu to pick the composer type
 class StoryTypePicker {
   static void show(
     BuildContext context, {
     required void Function(StoryComposeType type) onSelected,
+    Offset? position, // If provided, show as popup at this position
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Show as positioned popup if position is provided
+    if (position != null) {
+      showMenu(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          position.dx + 1,
+          position.dy + 1,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
+        elevation: 8,
+        items: [
+          PopupMenuItem(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            onTap: () => Future.delayed(Duration.zero, () => onSelected(StoryComposeType.mixed)),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFBFAE01).withValues(alpha: 38),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.perm_media, color: Color(0xFFBFAE01), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text('Media story', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            onTap: () => Future.delayed(Duration.zero, () => onSelected(StoryComposeType.text)),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFBFAE01).withValues(alpha: 38),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.text_fields, color: Color(0xFFBFAE01), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text('Text story', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+              ],
+            ),
+          ),
+        ],
+      );
+      return;
+    }
+    
+    // Original bottom sheet behavior
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,

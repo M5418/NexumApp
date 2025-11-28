@@ -1646,9 +1646,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                 },
                               );
                             } else {
-                              // No stories - show type picker
+                              // No stories - show type picker as popup
                               StoryTypePicker.show(
                                 context,
+                                position: const Offset(320, 120), // Position for desktop sidebar
                                 onSelected: (type) async {
                                   if (_useDesktopPopup(context)) {
                                     await StoryComposerPopup.show(context,
@@ -2103,9 +2104,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                         },
                                       );
                                     } else {
-                                      // No active stories - show type picker
+                                      // No active stories - show type picker as popup near ring
                                       StoryTypePicker.show(
                                         context,
+                                        position: const Offset(16, 120), // Position below "Your Story" ring
                                         onSelected: (type) async {
                                           if (_useDesktopPopup(context)) {
                                             await StoryComposerPopup.show(
