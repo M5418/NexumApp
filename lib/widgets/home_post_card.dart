@@ -411,7 +411,7 @@ class _HomePostCardState extends State<HomePostCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Repost indicator - always shows "Username reposted this"
+          // Repost indicator - shows "You reposted this" or "Username reposted this"
           if (widget.post.isRepost && widget.post.repostedBy != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -425,7 +425,18 @@ class _HomePostCardState extends State<HomePostCard> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${widget.post.repostedBy!.userName} reposted this',
+                    () {
+                      final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                      final reposterId = widget.post.repostedBy!.userId;
+                      
+                      // Check if current user is the one who reposted
+                      if (currentUserId != null && currentUserId == reposterId) {
+                        return 'You reposted this';
+                      }
+                      
+                      // Otherwise show reposter's username
+                      return '${widget.post.repostedBy!.userName} reposted this';
+                    }(),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       color: _getTextColor(),

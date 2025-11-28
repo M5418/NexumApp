@@ -431,18 +431,11 @@ service cloud.firestore {
     
     // Support tickets
     match /support_tickets/{ticketId} {
-      // Consumers can read their own tickets, all office users can read all tickets
       allow read: if signedIn() && 
-        (request.auth.uid == resource.data.userId || isOfficeUser());
-      
-      // Consumers can create tickets
+        (request.auth.uid == resource.data.userId || isAdmin());
       allow create: if signedIn() && 
         request.auth.uid == request.resource.data.userId;
-      
-      // All office users can respond and update tickets (not just admins)
-      allow update: if isOfficeUser();
-      
-      // Only admins can delete tickets (safer option)
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
@@ -456,70 +449,6 @@ service cloud.firestore {
         request.auth.uid == resource.data.userId &&
         request.resource.data.userId == resource.data.userId;
       allow delete: if signedIn() && request.auth.uid == resource.data.userId;
-    }
-    
-    // ============================================
-    // MONETIZATION COLLECTIONS
-    // ============================================
-    
-    // Monetization profiles
-    match /monetization_profiles/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow create: if signedIn() && request.auth.uid == userId;
-      allow update: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAdmin();
-    }
-    
-    // Earnings
-    match /earnings/{earningId} {
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      // Allow anyone signed in to create earnings (for content owners when their content is viewed)
-      allow create: if signedIn();
-      allow update: if isAdmin(); // Only admins can update status
-      allow delete: if isAdmin();
-    }
-    
-    // Earnings summaries
-    match /earnings_summaries/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      // Allow anyone signed in to create/update summaries (for aggregating content owner earnings)
-      allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
-    }
-    
-    // Payouts
-    match /payouts/{payoutId} {
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow create: if signedIn() && request.auth.uid == request.resource.data.userId;
-      allow update: if isAdmin(); // Only admins can update payout status
-      allow delete: if isAdmin();
-    }
-    
-    // Premium subscriptions
-    match /premium_subscriptions/{subscriptionId} {
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow create: if signedIn() && request.auth.uid == request.resource.data.userId;
-      allow update: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow delete: if isAdmin();
-    }
-    
-    // Content monetization stats
-    match /content_monetization_stats/{contentId} {
-      // Content owners and admins can read their stats
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      // Anyone signed in can create/update stats (for tracking views on any content)
-      allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
-    }
-    
-    // Analytics tracking collection (for individual view/engagement events)
-    match /content_analytics/{analyticsId} {
-      allow read: if signedIn();
-      allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
     }
   }
 }

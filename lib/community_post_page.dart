@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
+import 'package:ionicons/ionicons.dart';
+import 'package:readmore/readmore.dart';
 
 import 'models/post_detail.dart';
 import 'models/comment.dart';
@@ -775,12 +777,13 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                           padding: const EdgeInsets.symmetric(horizontal: 5),
                           child: Container(
                             width: double.infinity,
+                            margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
                             decoration: BoxDecoration(
                               color: surfaceColor,
                               borderRadius: BorderRadius.circular(25),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0),
+                                  color: isDark ? Colors.black.withValues(alpha: 0) : Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 1,
                                   offset: const Offset(0, 2),
                                 ),
@@ -816,17 +819,22 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                             );
                                           }
                                         },
-                                        child: Container(
-                                          width: 50,
-                                          height: 50,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            image: DecorationImage(
-                                              image: NetworkImage(
-                                                  _post!.authorAvatarUrl),
-                                              fit: BoxFit.cover,
-                                            ),
-                                          ),
+                                        child: CircleAvatar(
+                                          radius: 20,
+                                          backgroundImage: _post!.authorAvatarUrl.isNotEmpty
+                                              ? NetworkImage(_post!.authorAvatarUrl)
+                                              : null,
+                                          backgroundColor: const Color(0xFFBFAE01),
+                                          child: _post!.authorAvatarUrl.isEmpty
+                                              ? Text(
+                                                  _post!.authorName.isNotEmpty ? _post!.authorName[0].toUpperCase() : 'U',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              : null,
                                         ),
                                       ),
                                       const SizedBox(width: 12),
@@ -861,7 +869,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                                 _post!.authorName,
                                                 style: GoogleFonts.inter(
                                                   fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
+                                                  fontWeight: FontWeight.w700,
                                                   color: isDark
                                                       ? Colors.white
                                                       : Colors.black,
@@ -881,19 +889,29 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                     ],
                                   ),
 
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 6),
 
                                   // Post text
                                   if (_post!.text.isNotEmpty) ...[
-                                    Text(
+                                    ReadMoreText(
                                       _showTranslation
                                           ? (_translatedText ?? _post!.text)
                                           : _post!.text,
-                                      style: GoogleFonts.inter(
+                                      trimMode: TrimMode.Length,
+                                      trimLength: 300,
+                                      colorClickableText: const Color(0xFFBFAE01),
+                                      trimCollapsedText: 'Read more',
+                                      trimExpandedText: 'Read less',
+                                      style: GoogleFonts.inter(fontSize: 16, color: isDark ? Colors.white : Colors.black),
+                                      moreStyle: GoogleFonts.inter(
                                         fontSize: 16,
-                                        color: isDark
-                                            ? Colors.white
-                                            : Colors.black,
+                                        color: const Color(0xFFBFAE01),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      lessStyle: GoogleFonts.inter(
+                                        fontSize: 16,
+                                        color: const Color(0xFFBFAE01),
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -912,7 +930,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                           ),
                                         ),
                                       ),
-                                    const SizedBox(height: 20),
+                                    const SizedBox(height: 16),
                                   ],
 
                                   // Media content
@@ -934,8 +952,14 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                         borderRadius:
                                             BorderRadius.circular(25),
                                       ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 8),
                                   ],
+
+                                  Container(
+                                    height: 1,
+                                    margin: const EdgeInsets.symmetric(vertical: 8),
+                                    color: const Color(0xFF666666).withAlpha(76),
+                                  ),
 
                                   // Engagement bar
                                   Row(
@@ -947,9 +971,8 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                           children: [
                                             Icon(
                                               _isLiked
-                                                  ? Icons.thumb_up_alt
-                                                  : Icons
-                                                      .thumb_up_alt_outlined,
+                                                  ? Ionicons.heart
+                                                  : Ionicons.heart_outline,
                                               size: 20,
                                               color: _isLiked
                                                   ? const Color(0xFFBFAE01)
@@ -975,7 +998,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                         child: Row(
                                           children: [
                                             const Icon(
-                                              Icons.chat_bubble_outline,
+                                              Ionicons.chatbubble_outline,
                                               size: 20,
                                               color: Color(0xFF666666),
                                             ),
@@ -1000,7 +1023,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                         child: Row(
                                           children: [
                                             const Icon(
-                                              Icons.share_outlined,
+                                              Ionicons.arrow_redo_outline,
                                               size: 20,
                                               color: Color(0xFF666666),
                                             ),
@@ -1022,7 +1045,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                       Row(
                                         children: [
                                           const Icon(
-                                            Icons.repeat,
+                                            Ionicons.repeat_outline,
                                             size: 20,
                                             color: Color(0xFF666666),
                                           ),
@@ -1046,8 +1069,8 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                           children: [
                                             Icon(
                                               _isBookmarked
-                                                  ? Icons.bookmark
-                                                  : Icons.bookmark_border,
+                                                  ? Ionicons.bookmark
+                                                  : Ionicons.bookmark_outline,
                                               size: 20,
                                               color: _isBookmarked
                                                   ? const Color(0xFFBFAE01)

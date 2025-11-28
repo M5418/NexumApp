@@ -1,59 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    // ============================================
-    // HELPER FUNCTIONS FOR BOTH APPS
-    // ============================================
-    
-    // Consumer App (NexumApp) - Regular users
-    function isConsumerUser() {
-      return request.auth != null && 
-             (request.auth.token.firebase.tenant == null || 
-              request.auth.token.firebase.tenant != 'nexumOffice-mxel5');
-    }
-    
-    // Office App (NexumOffice) - Tenant-based staff
-    function isOfficeTenant() {
-      return request.auth != null &&
-             request.auth.token.firebase.tenant == 'nexumOffice-mxel5';
-    }
-    
-    function isOfficeUser() {
-      return request.auth != null && (
-        request.auth.token.admin == true ||
-        request.auth.token.moderator == true ||
-        request.auth.token.kyc_agent == true ||
-        request.auth.token.employee == true
-      );
-    }
-    
-    function hasRole(role) {
-      return isOfficeUser() && 
-             request.auth.token[role] == true;
-    }
-    
-    function isAdmin() {
-      return hasRole('admin');
-    }
-
-    function isPeopleAdmin() {
-      return isOfficeUser() && (
-        request.auth.token.email == 'dehoua@nexum-connects.com' ||
-        request.auth.token.email == 'dehouaguy4@gmail.com' ||
-        request.auth.token.email == 'moussayeconstant@gmail.com'
-      );
-    }
-    
-    function isModerator() {
-      return hasRole('moderator') || isAdmin();
-    }
-    
-    function isKycAgent() {
-      return hasRole('kyc_agent') || isAdmin();
-    }
-    
-    // Consumer app helpers
+  match /databases/{db}/documents {
+    // Helper functions
     function signedIn() { 
       return request.auth != null; 
     }
@@ -62,136 +10,109 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid; 
     }
     
-    // ============================================
-    // OFFICE-ONLY COLLECTIONS
-    // ============================================
-    
-    // Admin audit logs
-    match /admin_actions/{document=**} {
-      allow read: if isAdmin();
-      allow write: if request.auth != null;
+    function hasRole(role) {
+      return signedIn() && request.auth.token[role] == true;
     }
     
-    // Dashboard snapshots
-    match /dashboard_snapshots/{snapshotId} {
-      allow read: if isOfficeUser();
-      allow write: if false;
+    function isAdmin() {
+      return hasRole('admin');
     }
     
-    // Office user profiles
-    match /office_users/{uid} {
-      allow read: if isOfficeUser() || (isOfficeTenant() && request.auth.uid == uid);
-      allow write: if request.auth != null && request.auth.uid == uid;
-    }
-
-    // Office employees directory
-    match /office_employees/{id} {
-      allow read: if isOfficeUser();
-      allow write: if isAdmin() || isPeopleAdmin();
-    }
-    
-    // Office conversations
-    match /office_conversations/{threadId} {
-      allow read: if isOfficeUser();
-      allow create: if isOfficeUser();
-      allow update: if isOfficeUser();
-      allow delete: if isAdmin();
-      
-      match /messages/{messageId} {
-        allow read: if isOfficeUser();
-        allow write: if isOfficeUser();
-      }
-    }
-    
-    // Office templates
-    match /office_templates/{teamId}/templates/{templateId} {
-      allow read: if isOfficeUser();
-      allow write: if isAdmin() || request.auth.token.team == teamId;
-    }
-    
-    // ============================================
-    // SHARED COLLECTIONS (Both Apps)
-    // ============================================
-    
-    // User profiles - Public read, owner writes, office reads
+    // User profiles
     match /users/{uid} {
-      allow read: if true;
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || isAdmin();
-      allow delete: if isOwner(uid) || isAdmin();
+      allow read: if true;                       // Public profiles
+      allow create: if isOwner(uid);             // User creates own profile
+      allow update: if isOwner(uid) || isAdmin(); // User or admin can update
+      allow delete: if isOwner(uid) || isAdmin(); // User or admin can delete
       
+      // User notifications subcollection
       match /notifications/{notifId} {
         allow read: if isOwner(uid);
-        allow create: if signedIn();
+        allow create: if signedIn();             // Usually via Functions
         allow update: if isOwner(uid);
         allow delete: if isOwner(uid);
       }
     }
     
-    // Posts - Public read, owner writes, office moderates
+    // Posts
     match /posts/{postId} {
-      allow read: if true;
+      allow read: if true;                       // Public posts
+      // Ensure the creating user is the author of the post
       allow create: if signedIn() &&
         request.resource.data.authorId == request.auth.uid;
       allow update: if signedIn() && 
-        (request.auth.uid == resource.data.authorId || isAdmin() || isModerator());
+        (request.auth.uid == resource.data.authorId || isAdmin());
       allow delete: if signedIn() && 
-        (request.auth.uid == resource.data.authorId || isAdmin() || isModerator());
+        (request.auth.uid == resource.data.authorId || isAdmin());
       
+      // Post likes subcollection
       match /likes/{likeId} {
         allow read: if true;
+        // Users can only like as themselves, and only set createdAt
         allow create: if signedIn() &&
           likeId == request.auth.uid &&
           request.resource.data.keys().hasOnly(['createdAt']);
+        // Users can only remove their own like document
         allow delete: if signedIn() && likeId == request.auth.uid;
       }
       
+      // Post bookmarks subcollection
       match /bookmarks/{bookmarkId} {
         allow read: if signedIn();
+        // Users can only bookmark as themselves, and only set createdAt
         allow create: if signedIn() &&
           bookmarkId == request.auth.uid &&
           request.resource.data.keys().hasOnly(['createdAt']);
+        // Users can only remove their own bookmark document
         allow delete: if signedIn() && bookmarkId == request.auth.uid;
       }
     }
     
-    // Community Posts
+    // Community Posts (separate collection for posts within communities)
     match /community_posts/{postId} {
-      allow read: if true;
+      allow read: if true;                       // Public community posts
+      // Ensure the creating user is the author and communityId is provided
       allow create: if signedIn() &&
         request.resource.data.authorId == request.auth.uid &&
         request.resource.data.communityId != null;
       allow update: if signedIn() && 
-        (request.auth.uid == resource.data.authorId || isAdmin() || isModerator());
+        (request.auth.uid == resource.data.authorId || isAdmin());
       allow delete: if signedIn() && 
-        (request.auth.uid == resource.data.authorId || isAdmin() || isModerator());
+        (request.auth.uid == resource.data.authorId || isAdmin());
       
+      // Community post likes subcollection
       match /likes/{likeId} {
         allow read: if true;
+        // Users can only like as themselves, and only set createdAt
         allow create: if signedIn() &&
           likeId == request.auth.uid &&
           request.resource.data.keys().hasOnly(['createdAt']);
+        // Users can only remove their own like document
         allow delete: if signedIn() && likeId == request.auth.uid;
       }
       
+      // Community post bookmarks subcollection
       match /bookmarks/{bookmarkId} {
         allow read: if signedIn();
+        // Users can only bookmark as themselves, and only set createdAt
         allow create: if signedIn() &&
           bookmarkId == request.auth.uid &&
           request.resource.data.keys().hasOnly(['createdAt']);
+        // Users can only remove their own bookmark document
         allow delete: if signedIn() && bookmarkId == request.auth.uid;
       }
     }
     
-    // Comments - Public read, owner writes, office moderates
+    // Comments
     match /comments/{commentId} {
-      allow read: if true;
+      allow read: if true;                       // Public comments
       allow create: if signedIn();
       allow update: if signedIn() && 
-        (request.auth.uid == resource.data.authorId || isAdmin() || isModerator());
+        (request.auth.uid == resource.data.authorId || isAdmin());
       allow delete: if signedIn() && 
-        (request.auth.uid == resource.data.authorId || isAdmin() || isModerator());
+        (request.auth.uid == resource.data.authorId || isAdmin());
       
+      // Comment likes subcollection
       match /likes/{likeId} {
         allow read: if true;
         allow create: if signedIn();
@@ -201,7 +122,7 @@ service cloud.firestore {
     
     // Follows
     match /follows/{id} {
-      allow read: if true;
+      allow read: if true;                       // Public follow relationships
       allow create: if signedIn();
       allow delete: if signedIn();
       allow update: if signedIn();
@@ -217,13 +138,14 @@ service cloud.firestore {
     
     // Conversations
     match /conversations/{conversationId} {
-      allow read: if signedIn() || isOfficeUser();
+      allow read: if signedIn();
       allow create: if signedIn();
       allow update: if signedIn();
       allow delete: if signedIn();
       
+      // Conversation messages subcollection
       match /messages/{msgId} {
-        allow read: if signedIn() || isOfficeUser();
+        allow read: if signedIn();
         allow create: if signedIn();
         allow update: if signedIn();
         allow delete: if signedIn();
@@ -232,11 +154,12 @@ service cloud.firestore {
     
     // Communities
     match /communities/{communityId} {
-      allow read: if true;
+      allow read: if true;                       // Public communities
       allow create: if signedIn();
       allow update: if signedIn();
       allow delete: if isAdmin();
       
+      // Community members subcollection
       match /members/{memberId} {
         allow read: if true;
         allow create: if signedIn();
@@ -245,21 +168,24 @@ service cloud.firestore {
       }
     }
     
-    // CollectionGroup for members
+    // CollectionGroup query support for community members  
+    // Must match or be more permissive than subcollection rule
     match /{path=**}/members/{memberId} {
-      allow read: if true;
+      allow read: if true;                       // Public read to match subcollection rule
     }
     
-    // CollectionGroup for likes
+    // CollectionGroup query support for likes
+    // Allows querying all likes across all posts (used for Activity tab)
     match /{path=**}/likes/{likeId} {
-      allow read: if signedIn();
+      allow read: if signedIn();                 // Authenticated users can read likes
       allow create: if signedIn() && likeId == request.auth.uid;
       allow delete: if signedIn() && likeId == request.auth.uid;
     }
     
-    // CollectionGroup for bookmarks
+    // CollectionGroup query support for bookmarks
+    // Allows querying all bookmarks across all posts (used for Activity tab)
     match /{path=**}/bookmarks/{bookmarkId} {
-      allow read: if signedIn();
+      allow read: if signedIn();                 // Authenticated users can read bookmarks
       allow create: if signedIn() && bookmarkId == request.auth.uid;
       allow delete: if signedIn() && bookmarkId == request.auth.uid;
     }
@@ -271,9 +197,12 @@ service cloud.firestore {
       allow update: if signedIn();
       allow delete: if signedIn();
 
+      // Story replies subcollection (comments on stories)
       match /replies/{replyId} {
         allow read: if true;
+        // Only authenticated users can create a reply; userId must match
         allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+        // No updates; delete allowed only by author or admin
         allow update: if false;
         allow delete: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
       }
@@ -361,25 +290,25 @@ service cloud.firestore {
     
     // Mentorship requests
     match /mentorship_requests/{requestId} {
-      allow read: if signedIn() || isOfficeUser();
+      allow read: if signedIn();
       allow create: if signedIn();
       allow update: if signedIn();
       allow delete: if signedIn();
     }
     
-    // Reports - Office moderates
+    // Reports
     match /reports/{reportId} {
-      allow read: if isAdmin() || isModerator();
+      allow read: if isAdmin();
       allow create: if signedIn();
-      allow update: if isAdmin() || isModerator();
-      allow delete: if isAdmin() || isModerator();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
     
-    // KYC requests - Office processes
+    // KYC requests
     match /kyc_requests/{kycId} {
-      allow read: if signedIn() && (isOwner(resource.data.userId) || isAdmin() || isKycAgent());
+      allow read: if signedIn() && (isOwner(resource.data.userId) || isAdmin());
       allow create: if signedIn();
-      allow update: if isAdmin() || isKycAgent();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
@@ -401,7 +330,7 @@ service cloud.firestore {
         (request.auth.uid == resource.data.mutedByUid || isAdmin());
     }
     
-    // Bookmarks (top-level)
+    // Bookmarks (top-level collection for posts, podcasts, books)
     match /bookmarks/{bookmarkId} {
       allow read: if signedIn() && 
         (request.auth.uid == resource.data.userId || isAdmin());
@@ -409,12 +338,12 @@ service cloud.firestore {
         request.auth.uid == request.resource.data.userId &&
         request.resource.data.keys().hasAll(['userId', 'type', 'itemId', 'createdAt']) &&
         request.resource.data.type in ['post', 'podcast', 'book'];
-      allow update: if false;
+      allow update: if false; // Bookmarks are immutable (create or delete only)
       allow delete: if signedIn() && 
         (request.auth.uid == resource.data.userId || isAdmin());
     }
     
-    // Drafts
+    // Drafts (for posts and podcasts)
     match /drafts/{draftId} {
       allow read: if signedIn() && 
         (request.auth.uid == resource.data.userId || isAdmin());
@@ -424,102 +353,38 @@ service cloud.firestore {
         request.resource.data.type in ['post', 'podcast'];
       allow update: if signedIn() && 
         (request.auth.uid == resource.data.userId || isAdmin()) &&
-        request.resource.data.userId == resource.data.userId;
+        request.resource.data.userId == resource.data.userId; // Cannot change owner
       allow delete: if signedIn() && 
         (request.auth.uid == resource.data.userId || isAdmin());
     }
     
     // Support tickets
     match /support_tickets/{ticketId} {
-      // Consumers can read their own tickets, all office users can read all tickets
       allow read: if signedIn() && 
-        (request.auth.uid == resource.data.userId || isOfficeUser());
-      
-      // Consumers can create tickets
+        (request.auth.uid == resource.data.userId || isAdmin());
       allow create: if signedIn() && 
         request.auth.uid == request.resource.data.userId;
-      
-      // All office users can respond and update tickets (not just admins)
-      allow update: if isOfficeUser();
-      
-      // Only admins can delete tickets (safer option)
+      allow update: if isAdmin(); // Only admin can update (respond to) tickets
       allow delete: if isAdmin();
     }
     
     // Podcast playlists
     match /podcast_playlists/{playlistId} {
+      // Allow users to read their own playlists
       allow read: if signedIn() && request.auth.uid == resource.data.userId;
+      
+      // Allow users to create playlists (userId must match their own)
       allow create: if signedIn() && 
         request.auth.uid == request.resource.data.userId &&
         request.resource.data.keys().hasAll(['name', 'userId', 'isPrivate', 'podcastIds', 'createdAt', 'updatedAt']);
+      
+      // Allow users to update their own playlists (cannot change owner)
       allow update: if signedIn() && 
         request.auth.uid == resource.data.userId &&
         request.resource.data.userId == resource.data.userId;
+      
+      // Allow users to delete their own playlists
       allow delete: if signedIn() && request.auth.uid == resource.data.userId;
-    }
-    
-    // ============================================
-    // MONETIZATION COLLECTIONS
-    // ============================================
-    
-    // Monetization profiles
-    match /monetization_profiles/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow create: if signedIn() && request.auth.uid == userId;
-      allow update: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAdmin();
-    }
-    
-    // Earnings
-    match /earnings/{earningId} {
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      // Allow anyone signed in to create earnings (for content owners when their content is viewed)
-      allow create: if signedIn();
-      allow update: if isAdmin(); // Only admins can update status
-      allow delete: if isAdmin();
-    }
-    
-    // Earnings summaries
-    match /earnings_summaries/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      // Allow anyone signed in to create/update summaries (for aggregating content owner earnings)
-      allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
-    }
-    
-    // Payouts
-    match /payouts/{payoutId} {
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow create: if signedIn() && request.auth.uid == request.resource.data.userId;
-      allow update: if isAdmin(); // Only admins can update payout status
-      allow delete: if isAdmin();
-    }
-    
-    // Premium subscriptions
-    match /premium_subscriptions/{subscriptionId} {
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow create: if signedIn() && request.auth.uid == request.resource.data.userId;
-      allow update: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow delete: if isAdmin();
-    }
-    
-    // Content monetization stats
-    match /content_monetization_stats/{contentId} {
-      // Content owners and admins can read their stats
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-      // Anyone signed in can create/update stats (for tracking views on any content)
-      allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
-    }
-    
-    // Analytics tracking collection (for individual view/engagement events)
-    match /content_analytics/{analyticsId} {
-      allow read: if signedIn();
-      allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
     }
   }
 }

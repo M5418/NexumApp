@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'monetization_analytics_page.dart';
 import 'payout_setup_page.dart';
+import 'repositories/interfaces/monetization_repository.dart';
+import 'repositories/interfaces/auth_repository.dart';
+import 'repositories/models/monetization_models.dart';
 
 class MonetizationPage extends StatefulWidget {
   const MonetizationPage({super.key});
@@ -14,17 +17,93 @@ class MonetizationPage extends StatefulWidget {
 }
 
 class _MonetizationPageState extends State<MonetizationPage> {
-  final bool _eligible = true;
-  bool _contentMonetized = true;
-  bool _adsEnabled = true;
-  bool _sponsorshipsEnabled = false;
+  MonetizationProfile? _profile;
+  EarningsSummary? _summary;
+  bool _loading = true;
+  String? _userId;
 
-  final bool _reqFollowers = true;
-  final bool _reqPosts = true;
-  final bool _reqKyc = false;
-  final bool _req2FA = true;
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
 
-  String? _payoutMethod; // e.g., 'Stripe'
+  Future<void> _loadData() async {
+    final authRepo = context.read<AuthRepository>();
+    final monetizationRepo = context.read<MonetizationRepository>();
+
+    final user = authRepo.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
+    }
+
+    _userId = user.uid;
+
+    try {
+      // Check eligibility requirements first
+      await monetizationRepo.checkEligibilityRequirements(user.uid);
+
+      // Get monetization profile
+      var profile = await monetizationRepo.getMonetizationProfile(user.uid);
+      
+      // Create default profile if doesn't exist
+      if (profile == null) {
+        profile = MonetizationProfile(
+          userId: user.uid,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        await monetizationRepo.updateMonetizationProfile(profile);
+      }
+
+      // Get earnings summary
+      final summary = await monetizationRepo.getEarningsSummary(user.uid);
+
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _summary = summary;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('❌ Error loading monetization data: $e');
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _updateSettings({bool? contentMonetized, bool? adsEnabled, bool? sponsorshipsEnabled}) async {
+    if (_profile == null || _userId == null) return;
+
+    final monetizationRepo = context.read<MonetizationRepository>();
+    
+    final updatedProfile = MonetizationProfile(
+      userId: _userId!,
+      isEligible: _profile!.isEligible,
+      isContentMonetized: contentMonetized ?? _profile!.isContentMonetized,
+      isAdsEnabled: adsEnabled ?? _profile!.isAdsEnabled,
+      isSponsorshipsEnabled: sponsorshipsEnabled ?? _profile!.isSponsorshipsEnabled,
+      payoutMethod: _profile!.payoutMethod,
+      payoutAccountId: _profile!.payoutAccountId,
+      eligibleSince: _profile!.eligibleSince,
+      createdAt: _profile!.createdAt,
+      updatedAt: DateTime.now(),
+      hasMinFollowers: _profile!.hasMinFollowers,
+      hasMinPosts: _profile!.hasMinPosts,
+      isKycVerified: _profile!.isKycVerified,
+      has2FA: _profile!.has2FA,
+    );
+
+    try {
+      await monetizationRepo.updateMonetizationProfile(updatedProfile);
+      setState(() => _profile = updatedProfile);
+    } catch (e) {
+      debugPrint('❌ Error updating monetization settings: $e');
+      _snack('Failed to update settings');
+    }
+  }
 
   bool _isDesktopLayout(BuildContext context) {
     if (kIsWeb) {
@@ -63,7 +142,9 @@ class _MonetizationPageState extends State<MonetizationPage> {
         ),
         centerTitle: true,
       ),
-      body: desktop ? _buildDesktop(card) : _buildMobile(card),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
+          : desktop ? _buildDesktop(card) : _buildMobile(card),
     );
   }
 
@@ -120,6 +201,9 @@ class _MonetizationPageState extends State<MonetizationPage> {
   // ============= Cards (Left column) =============
 
   Widget _eligibilityCard(Color card) {
+    if (_profile == null) return const SizedBox.shrink();
+    
+    final isEligible = _profile!.isEligible;
     return _card(
       color: card,
       child: Column(
@@ -128,12 +212,12 @@ class _MonetizationPageState extends State<MonetizationPage> {
           Row(
             children: [
               Icon(
-                _eligible ? Icons.verified_outlined : Icons.info_outline,
-                color: _eligible ? const Color(0xFFBFAE01) : Colors.orange,
+                isEligible ? Icons.verified_outlined : Icons.info_outline,
+                color: isEligible ? const Color(0xFFBFAE01) : Colors.orange,
               ),
               const SizedBox(width: 8),
               Text(
-                _eligible ? Provider.of<LanguageProvider>(context, listen: false).t('monetization.eligible') : Provider.of<LanguageProvider>(context, listen: false).t('monetization.review'),
+                isEligible ? Provider.of<LanguageProvider>(context, listen: false).t('monetization.eligible') : Provider.of<LanguageProvider>(context, listen: false).t('monetization.review'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -143,7 +227,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            _eligible
+            isEligible
                 ? Provider.of<LanguageProvider>(context, listen: false).t('monetization.eligible_desc')
                 : Provider.of<LanguageProvider>(context, listen: false).t('monetization.review_desc'),
             style: GoogleFonts.inter(
@@ -172,11 +256,11 @@ class _MonetizationPageState extends State<MonetizationPage> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.this_month'), '\$482.40'),
+              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.this_month'), '\$${(_summary?.thisMonth ?? 0.0).toStringAsFixed(2)}'),
               const SizedBox(width: 16),
-              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.pending'), '\$127.10'),
+              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.pending'), '\$${(_summary?.pending ?? 0.0).toStringAsFixed(2)}'),
               const SizedBox(width: 16),
-              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.lifetime'), '\$6,921.75'),
+              _metric(Provider.of<LanguageProvider>(context, listen: false).t('monetization.lifetime'), '\$${(_summary?.lifetime ?? 0.0).toStringAsFixed(2)}'),
             ],
           ),
           const SizedBox(height: 12),
@@ -213,7 +297,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
               ],
               Expanded(
                 child: ElevatedButton(
-                                    onPressed: _payoutMethod == null
+                  onPressed: _profile?.payoutMethod == null
                       ? () async {
                           final desktop = _isDesktopLayout(context);
                           bool? ok;
@@ -249,13 +333,31 @@ class _MonetizationPageState extends State<MonetizationPage> {
                               ),
                             );
                           }
-                          if (ok == true && mounted) {
-                            setState(() => _payoutMethod = 'Stripe');
+                          if (ok == true && mounted && _profile != null) {
+                            final monetizationRepo = context.read<MonetizationRepository>();
+                            final updatedProfile = MonetizationProfile(
+                              userId: _profile!.userId,
+                              isEligible: _profile!.isEligible,
+                              isContentMonetized: _profile!.isContentMonetized,
+                              isAdsEnabled: _profile!.isAdsEnabled,
+                              isSponsorshipsEnabled: _profile!.isSponsorshipsEnabled,
+                              payoutMethod: 'stripe',
+                              payoutAccountId: 'stripe_account_id',
+                              eligibleSince: _profile!.eligibleSince,
+                              createdAt: _profile!.createdAt,
+                              updatedAt: DateTime.now(),
+                              hasMinFollowers: _profile!.hasMinFollowers,
+                              hasMinPosts: _profile!.hasMinPosts,
+                              isKycVerified: _profile!.isKycVerified,
+                              has2FA: _profile!.has2FA,
+                            );
+                            await monetizationRepo.updateMonetizationProfile(updatedProfile);
+                            setState(() => _profile = updatedProfile);
+                            if (!mounted) return;
                             _snack(Provider.of<LanguageProvider>(context, listen: false).t('monetization.payout_connected'));
                           }
                         }
                       : () => _snack(Provider.of<LanguageProvider>(context, listen: false).t('monetization.manage_payout_placeholder')),
-                      
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFBFAE01),
                     foregroundColor: Colors.black,
@@ -265,7 +367,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
                     ),
                   ),
                   child: Text(
-                    _payoutMethod == null ? Provider.of<LanguageProvider>(context, listen: false).t('monetization.setup_payout') : Provider.of<LanguageProvider>(context, listen: false).t('monetization.manage_payout'),
+                    _profile?.payoutMethod == null ? Provider.of<LanguageProvider>(context, listen: false).t('monetization.setup_payout') : Provider.of<LanguageProvider>(context, listen: false).t('monetization.manage_payout'),
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -293,18 +395,18 @@ class _MonetizationPageState extends State<MonetizationPage> {
           const SizedBox(height: 8),
           _switch(
             Provider.of<LanguageProvider>(context, listen: false).t('monetization.enable_new_posts'),
-            _contentMonetized,
-            (v) => setState(() => _contentMonetized = v),
+            _profile?.isContentMonetized ?? false,
+            (v) => _updateSettings(contentMonetized: v),
           ),
           _switch(
             Provider.of<LanguageProvider>(context, listen: false).t('monetization.enable_ads'),
-            _adsEnabled,
-            (v) => setState(() => _adsEnabled = v),
+            _profile?.isAdsEnabled ?? false,
+            (v) => _updateSettings(adsEnabled: v),
           ),
           _switch(
             Provider.of<LanguageProvider>(context, listen: false).t('monetization.allow_sponsorships'),
-            _sponsorshipsEnabled,
-            (v) => setState(() => _sponsorshipsEnabled = v),
+            _profile?.isSponsorshipsEnabled ?? false,
+            (v) => _updateSettings(sponsorshipsEnabled: v),
           ),
         ],
       ),
@@ -325,10 +427,10 @@ class _MonetizationPageState extends State<MonetizationPage> {
             ),
           ),
           const SizedBox(height: 8),
-          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_followers'), _reqFollowers),
-          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_posts'), _reqPosts),
-          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_kyc'), _reqKyc),
-          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_2fa'), _req2FA),
+          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_followers'), _profile?.hasMinFollowers ?? false),
+          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_posts'), _profile?.hasMinPosts ?? false),
+          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_kyc'), _profile?.isKycVerified ?? false),
+          _req(Provider.of<LanguageProvider>(context, listen: false).t('monetization.req_2fa'), _profile?.has2FA ?? false),
         ],
       ),
     );

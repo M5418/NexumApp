@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'providers/follow_state.dart';
 import 'core/i18n/language_provider.dart';
-import 'widgets/badge_icon.dart';
 import 'widgets/segmented_tabs.dart';
 import 'widgets/animated_navbar.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
@@ -36,10 +35,13 @@ class MyConnectionUser {
   });
 
   factory MyConnectionUser.fromJson(Map<String, dynamic> json) {
+    final nameStr = (json['name'] as String?)?.trim() ?? '';
+    final usernameStr = (json['username'] as String?)?.trim() ?? '';
+    
     return MyConnectionUser(
       id: (json['id'] as String?)?.trim() ?? '',
-      name: json['name'] ?? 'User',
-      username: json['username'] ?? '@user',
+      name: nameStr.isNotEmpty ? nameStr : (usernameStr.isNotEmpty ? usernameStr : 'User'),
+      username: usernameStr.isNotEmpty ? '@$usernameStr' : '@user',
       avatarUrl: json['avatarUrl'],
       coverUrl: json['coverUrl'],
       avatarLetter: json['avatarLetter'] ?? 'U',
@@ -107,7 +109,9 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
       if (ids.isNotEmpty) {
         final profiles = await userRepo.getUsers(ids);
         for (final p in profiles) {
-          final display = (p.displayName ?? p.username ?? 'User');
+          // Handle empty displayName - fallback to username or 'User'
+          final displayName = p.displayName?.trim() ?? '';
+          final display = displayName.isNotEmpty ? displayName : (p.username ?? 'User');
           final letter = display.isNotEmpty ? display[0].toUpperCase() : 'U';
           mapped.add(
             MyConnectionUser(
@@ -211,6 +215,27 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // Back button
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFF666666),
+                  width: 0.6,
+                ),
+              ),
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: Icon(
+                  Icons.arrow_back,
+                  size: 18,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+                padding: EdgeInsets.zero,
+              ),
+            ),
             Text(
               lang.t('my_connections.title'),
               style: GoogleFonts.inter(
@@ -219,35 +244,25 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
                 color: isDark ? Colors.white : Colors.black,
               ),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF666666),
-                      width: 0.6,
-                    ),
-                  ),
-                  child: IconButton(
-                    onPressed: () {},
-                    icon: const Icon(
-                      Icons.search,
-                      size: 18,
-                      color: Color(0xFF666666),
-                    ),
-                    padding: EdgeInsets.zero,
-                  ),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFF666666),
+                  width: 0.6,
                 ),
-                const SizedBox(width: 12),
-                const BadgeIcon(
-                  icon: Icons.notifications_outlined,
-                  badgeCount: 6,
+              ),
+              child: IconButton(
+                onPressed: () {},
+                icon: const Icon(
+                  Icons.search,
+                  size: 18,
+                  color: Color(0xFF666666),
                 ),
-              ],
+                padding: EdgeInsets.zero,
+              ),
             ),
           ],
         ),
@@ -260,49 +275,17 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
       padding: const EdgeInsets.all(16),
       child: SizedBox(
         height: 48,
-        child: Stack(
-          children: [
-            // Centered segmented tabs
-            Align(
-              alignment: Alignment.center,
-              child: SegmentedTabs(
-                tabs: [Provider.of<LanguageProvider>(context, listen: false).t('my_connections.tab_connected_to_me'), Provider.of<LanguageProvider>(context, listen: false).t('my_connections.tab_i_connect')],
-                selectedIndex: _selectedTabIndex,
-                onTabSelected: (index) {
-                  setState(() {
-                    _selectedTabIndex = index;
-                    _tabController.animateTo(index);
-                  });
-                },
-              ),
-            ),
-            // Back button inside the tab bar area (left)
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF666666),
-                    width: 0.6,
-                  ),
-                ),
-                child: IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(
-                    Icons.arrow_back,
-                    size: 18,
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-          ],
+        child: Center(
+          child: SegmentedTabs(
+            tabs: [Provider.of<LanguageProvider>(context, listen: false).t('my_connections.tab_connected_to_me'), Provider.of<LanguageProvider>(context, listen: false).t('my_connections.tab_i_connect')],
+            selectedIndex: _selectedTabIndex,
+            onTabSelected: (index) {
+              setState(() {
+                _selectedTabIndex = index;
+                _tabController.animateTo(index);
+              });
+            },
+          ),
         ),
       ),
     );

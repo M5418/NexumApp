@@ -40,6 +40,8 @@ class FirebaseUserRepository implements UserRepository {
       postsCount: d['postsCount'],
       createdAt: ts(d['createdAt']),
       fcmTokens: (d['fcmTokens'] as List?)?.cast<String>(),
+      isPremium: d['isPremium'] ?? false,
+      premiumSince: ts(d['premiumSince']),
     );
   }
 

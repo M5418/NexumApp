@@ -861,6 +861,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
   String _coverPhotoUrl = '';
 
   int _connectionsInboundCount = 0;
+  int _connectionsOutboundCount = 0;
   int _connectionsTotalCount = 0;
 
   List<Map<String, dynamic>> _experiences = [];
@@ -904,6 +905,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       _coverPhotoUrl = '';
 
       _connectionsInboundCount = 0;
+      _connectionsOutboundCount = 0;
       _connectionsTotalCount = 0;
 
       _experiences = [];
@@ -1030,6 +1032,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
         _interests = interests;
 
         _connectionsInboundCount = _toInt(data['connections_inbound_count']);
+        _connectionsOutboundCount = _toInt(data['connections_outbound_count']);
         _connectionsTotalCount = _toInt(data['connections_total_count']);
 
         _loadingProfileData = false;
@@ -1402,11 +1405,11 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             _buildStatColumn(
-                                _formatCount(_connectionsTotalCount),
+                                _formatCount(_connectionsInboundCount),
                                 'Connections'),
                             const SizedBox(width: 40),
                             _buildStatColumn(
-                                _formatCount(_connectionsInboundCount),
+                                _formatCount(_connectionsOutboundCount),
                                 'Connected'),
                           ],
                         ),

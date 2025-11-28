@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'core/profile_api.dart';
 import 'interest_selection_page.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'core/admin_config.dart';
 
 class ExperienceItem {
   final String title;
@@ -812,8 +814,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
             ),
             const SizedBox(height: 16),
 
-            // Experiences
-            Padding(
+            // Experiences (hidden for admin)
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
@@ -838,7 +841,8 @@ class _EditProfilPageState extends State<EditProfilPage> {
                 ],
               ),
             ),
-            Padding(
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: _experiences.asMap().entries.map((entry) {
@@ -878,10 +882,12 @@ class _EditProfilPageState extends State<EditProfilPage> {
                 }).toList(),
               ),
             ),
-            const SizedBox(height: 8),
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              const SizedBox(height: 8),
 
-            // Trainings
-            Padding(
+            // Trainings (hidden for admin)
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
@@ -906,7 +912,8 @@ class _EditProfilPageState extends State<EditProfilPage> {
                 ],
               ),
             ),
-            Padding(
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: _trainings.asMap().entries.map((entry) {
@@ -946,10 +953,12 @@ class _EditProfilPageState extends State<EditProfilPage> {
                 }).toList(),
               ),
             ),
-            const SizedBox(height: 8),
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              const SizedBox(height: 8),
 
-            // Interests
-            Padding(
+            // Interests (hidden for admin)
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
@@ -994,8 +1003,10 @@ class _EditProfilPageState extends State<EditProfilPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            Padding(
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              const SizedBox(height: 8),
+            if (!AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+              Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Wrap(
                 spacing: 8,

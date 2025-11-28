@@ -371,8 +371,14 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
                   Text(
                     () {
                       final rb = widget.post.repostedBy!;
-                      final hasAction = (rb.actionType ?? '').isNotEmpty;
-                      if (hasAction) return 'You reposted this';
+                      final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                      
+                      // Check if current user is the one who reposted
+                      if (currentUserId != null && currentUserId == rb.userId) {
+                        return 'You reposted this';
+                      }
+                      
+                      // Otherwise show reposter's username
                       final name = rb.userName.trim();
                       if (name.isNotEmpty) return '$name reposted this';
                       return 'Reposted';

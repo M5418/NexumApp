@@ -101,6 +101,13 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
     
+    // Support ticket attachments (screenshots, error images)
+    match /support_attachments/{fileName} {
+      allow read: if signedIn();  // Users can see attachments in their tickets, office users can see all
+      allow write: if signedIn() && isImage() && request.resource.size < 5 * 1024 * 1024; // 5MB limit
+      allow delete: if isAdmin();  // Only admins can delete support attachments
+    }
+    
     // Temporary uploads (auto-deleted after 24 hours via lifecycle rule)
     match /temp/{uid}/{allPaths=**} {
       allow read: if isOwner(uid);

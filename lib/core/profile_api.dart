@@ -31,21 +31,20 @@ class ProfileApi {
           .get();
       final followingCount = followingSnap.count ?? 0;
       
-      // Total connections = unique users you have any relationship with
-      // For simplicity, we'll use inbound + outbound
-      // (In reality should be union, but this gives good approximation)
-      final totalConnections = followersCount + followingCount;
-      
       // Update counts in data
-      data['connections_total_count'] = totalConnections;
-      data['connections_inbound_count'] = followingCount;
+      // Inbound = people connected to me (followers)
+      // Outbound = people I'm connected to (following)
+      data['connections_inbound_count'] = followersCount;
+      data['connections_outbound_count'] = followingCount;
+      data['connections_total_count'] = followersCount + followingCount;
       
-      debugPrint('👥 Connection counts: Total=$totalConnections, Following=$followingCount, Followers=$followersCount');
+      debugPrint('👥 Connection counts: Total=${followersCount + followingCount}, Following=$followingCount, Followers=$followersCount');
     } catch (e) {
       debugPrint('⚠️ Error fetching connection counts: $e');
       // Fallback to stored values or 0
-      data['connections_total_count'] = data['connections_total_count'] ?? 0;
       data['connections_inbound_count'] = data['connections_inbound_count'] ?? 0;
+      data['connections_outbound_count'] = data['connections_outbound_count'] ?? 0;
+      data['connections_total_count'] = data['connections_total_count'] ?? 0;
     }
     
     return {'ok': true, 'data': {'id': u.uid, 'email': u.email, ...data}};
@@ -306,8 +305,13 @@ class ProfileApi {
     out['trainings'] = d['trainings'] ?? [];
     
     // Include connection counts - always set them, default to 0 if not present
-    out['connections_total_count'] = d['followersCount'] ?? 0;
-    out['connections_inbound_count'] = d['followingCount'] ?? 0;
+    // Inbound = followers (people connected to me)
+    // Outbound = following (people I'm connected to)
+    final followersCount = d['followersCount'] ?? 0;
+    final followingCount = d['followingCount'] ?? 0;
+    out['connections_inbound_count'] = followersCount;
+    out['connections_outbound_count'] = followingCount;
+    out['connections_total_count'] = followersCount + followingCount;
     out['posts_count'] = d['postsCount'] ?? 0;
     
     return out;

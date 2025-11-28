@@ -28,12 +28,15 @@ import 'dart:async';
 import 'repositories/firebase/firebase_kyc_repository.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'core/admin_config.dart';
 import 'repositories/interfaces/podcast_repository.dart';
 import 'widgets/badge_icon.dart';
 import 'notification_page.dart';
 import 'conversations_page.dart';
 import 'connections_page.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'support_page.dart';
+import 'help_center_page.dart';
 
 class ProfilePage extends StatefulWidget {
   final bool hideDesktopTopNav;
@@ -1168,14 +1171,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                         children: [
                                           _buildStatColumn(
                                             _formatCount(
-                                              p['connections_total_count'],
+                                              p['connections_inbound_count'],
                                             ),
                                             'Connections',
                                           ),
                                           const SizedBox(width: 40),
                                           _buildStatColumn(
                                             _formatCount(
-                                              p['connections_inbound_count'],
+                                              p['connections_outbound_count'],
                                             ),
                                             'Connected',
                                           ),
@@ -1654,8 +1657,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ],
                                 ),
                               ),
-                              // Professional Experiences Section
-                              Padding(
+                              // Professional Experiences Section (hidden for admin)
+                              if (!AdminConfig.isAdmin(_myUserId))
+                                Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 20,
                                 ),
@@ -1743,8 +1747,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ],
                                 ),
                               ),
-                              // Trainings Section
-                              Padding(
+                              // Trainings Section (hidden for admin)
+                              if (!AdminConfig.isAdmin(_myUserId))
+                                Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 20,
                                 ),
@@ -1831,8 +1836,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ],
                                 ),
                               ),
-                              // Interest Section
-                              Padding(
+                              // Interest Section (hidden for admin)
+                              if (!AdminConfig.isAdmin(_myUserId))
+                                Padding(
                                 padding: const EdgeInsets.fromLTRB(
                                   20,
                                   0,
@@ -2276,14 +2282,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                               children: [
                                                 _buildStatColumn(
                                                   _formatCount(
-                                                    p['connections_total_count'],
+                                                    p['connections_inbound_count'],
                                                   ),
                                                   'Connections',
                                                 ),
                                                 const SizedBox(width: 40),
                                                 _buildStatColumn(
                                                   _formatCount(
-                                                    p['connections_inbound_count'],
+                                                    p['connections_outbound_count'],
                                                   ),
                                                   'Connected',
                                                 ),
@@ -2799,8 +2805,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                       ),
                                     ),
 
-                                    // Professional Experiences Section
-                                    Padding(
+                                    // Professional Experiences Section (hidden for admin)
+                                    if (!AdminConfig.isAdmin(_myUserId))
+                                      Padding(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 20,
                                       ),
@@ -2894,8 +2901,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                       ),
                                     ),
 
-                                    // Trainings Section
-                                    Padding(
+                                    // Trainings Section (hidden for admin)
+                                    if (!AdminConfig.isAdmin(_myUserId))
+                                      Padding(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 20,
                                       ),
@@ -2989,8 +2997,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                       ),
                                     ),
 
-                                    // Interest Section
-                                    Padding(
+                                    // Interest Section (hidden for admin)
+                                    if (!AdminConfig.isAdmin(_myUserId))
+                                      Padding(
                                       padding: const EdgeInsets.fromLTRB(
                                         20,
                                         0,
@@ -3274,12 +3283,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       GestureDetector(
                         onTap: () {
                           Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                Provider.of<LanguageProvider>(context, listen: false).t('profile.menu.help_center'),
-                                style: GoogleFonts.inter(),
-                              ),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HelpCenterPage(),
                             ),
                           );
                         },
@@ -3294,12 +3301,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       GestureDetector(
                         onTap: () {
                           Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                Provider.of<LanguageProvider>(context, listen: false).t('profile.menu.support'),
-                                style: GoogleFonts.inter(),
-                              ),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SupportPage(),
                             ),
                           );
                         },

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'core/i18n/language_provider.dart';
+import 'repositories/interfaces/monetization_repository.dart';
+import 'repositories/interfaces/auth_repository.dart';
+import 'repositories/models/monetization_models.dart';
 
 class MonetizationAnalyticsPage extends StatelessWidget {
   const MonetizationAnalyticsPage({super.key});
@@ -49,100 +52,59 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
   final List<String> _periods = ['7d', '30d', '90d', '12m'];
   String _selectedPeriod = '30d';
 
-  final List<String> _types = ['All', 'Text', 'Image', 'Video', 'Podcast'];
+  final List<String> _types = ['All', 'post', 'podcast', 'book'];
   String _selectedType = 'All';
 
-  // Demo dataset
-  final List<_ItemStat> _items = const [
-    _ItemStat(
-      title: 'Morning routine tips',
-      type: 'Text',
-      earnings: 26.80,
-      impressions: 4820,
-      likes: 320,
-      comments: 51,
-      shares: 22,
-      bookmarks: 40,
-      ageDays: 5,
-    ),
-    _ItemStat(
-      title: 'Healthy snacks list',
-      type: 'Text',
-      earnings: 18.30,
-      impressions: 3950,
-      likes: 270,
-      comments: 34,
-      shares: 18,
-      bookmarks: 27,
-      ageDays: 14,
-    ),
-    _ItemStat(
-      title: 'Gym progress photo',
-      type: 'Image',
-      earnings: 43.10,
-      impressions: 8900,
-      likes: 860,
-      comments: 72,
-      shares: 37,
-      bookmarks: 66,
-      ageDays: 9,
-    ),
-    _ItemStat(
-      title: 'Quick salad ideas',
-      type: 'Image',
-      earnings: 35.75,
-      impressions: 7120,
-      likes: 640,
-      comments: 41,
-      shares: 25,
-      bookmarks: 52,
-      ageDays: 26,
-    ),
-    _ItemStat(
-      title: '10-min HIIT demo',
-      type: 'Video',
-      earnings: 59.40,
-      impressions: 12040,
-      likes: 980,
-      comments: 87,
-      shares: 61,
-      bookmarks: 74,
-      ageDays: 3,
-    ),
-    _ItemStat(
-      title: 'Core workout basics',
-      type: 'Video',
-      earnings: 48.95,
-      impressions: 10480,
-      likes: 870,
-      comments: 64,
-      shares: 49,
-      bookmarks: 69,
-      ageDays: 32,
-    ),
-    _ItemStat(
-      title: 'Mindfulness 101',
-      type: 'Podcast',
-      earnings: 62.70,
-      impressions: 10560,
-      likes: 410,
-      comments: 56,
-      shares: 22,
-      bookmarks: 88,
-      ageDays: 11,
-    ),
-    _ItemStat(
-      title: 'Sleep hacks ep.3',
-      type: 'Podcast',
-      earnings: 44.25,
-      impressions: 8890,
-      likes: 330,
-      comments: 39,
-      shares: 16,
-      bookmarks: 59,
-      ageDays: 44,
-    ),
-  ];
+  List<ContentMonetizationStats> _contentStats = [];
+  Map<String, double> _revenueTrend = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final authRepo = context.read<AuthRepository>();
+    final monetizationRepo = context.read<MonetizationRepository>();
+
+    final user = authRepo.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
+    }
+
+    try {
+      final days = _selectedPeriod == '7d' ? 7 : _selectedPeriod == '30d' ? 30 : _selectedPeriod == '90d' ? 90 : 365;
+      
+      // Get content stats
+      final stats = await monetizationRepo.getContentStats(
+        userId: user.uid,
+        contentType: _selectedType == 'All' ? null : _selectedType,
+        sortBy: 'totalEarnings',
+        limit: 50,
+      );
+
+      // Get revenue trend
+      final trend = await monetizationRepo.getRevenueTrend(
+        userId: user.uid,
+        days: days,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _contentStats = stats;
+        _revenueTrend = trend;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('❌ Error loading analytics: $e');
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -150,30 +112,27 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
     final background = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final card = isDark ? const Color(0xFF000000) : Colors.white;
 
-    final maxDays = _selectedPeriod == '7d'
-        ? 7
-        : _selectedPeriod == '30d'
-            ? 30
-            : _selectedPeriod == '90d'
-                ? 90
-                : 365;
+    if (_loading) {
+      return Container(
+        color: background,
+        child: const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01))),
+      );
+    }
 
-    final filtered = _items.where((e) {
-      final within = e.ageDays <= maxDays;
-      if (_selectedType == 'All') return within;
-      return within && e.type == _selectedType;
-    }).toList();
-
-    final totalEarnings = filtered.fold<double>(0.0, (s, e) => s + e.earnings);
-    final totalImpressions = filtered.fold<int>(0, (s, e) => s + e.impressions);
-    final totalEngagement =
-        filtered.fold<int>(0, (s, e) => s + e.likes + e.comments + e.shares + e.bookmarks);
+    final totalEarnings = _contentStats.fold<double>(0.0, (s, e) => s + e.totalEarnings);
+    final totalImpressions = _contentStats.fold<int>(0, (s, e) => s + e.impressions);
+    final totalEngagement = _contentStats.fold<int>(0, (s, e) => s + e.totalEngagement);
 
     final cpm = totalImpressions > 0 ? (totalEarnings / (totalImpressions / 1000)).toDouble() : 0.0;
 
-    final revenueTrend = [
-      12.0, 18.0, 14.0, 22.0, 26.0, 19.0, 31.0, 28.0, 34.0, 30.0, 36.0, 42.0,
-    ];
+    // Convert trend map to sorted list of values
+    final sortedDates = _revenueTrend.keys.toList()..sort();
+    final revenueTrend = sortedDates.map((key) => _revenueTrend[key]!).toList();
+    
+    // Pad with zeros if we have less than 12 data points
+    while (revenueTrend.length < 12) {
+      revenueTrend.insert(0, 0.0);
+    }
 
     return Container(
       color: background,
@@ -195,7 +154,10 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
                       ),
                     ),
                     items: _periods.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                    onChanged: (v) => setState(() => _selectedPeriod = v ?? '30d'),
+                    onChanged: (v) {
+                      setState(() => _selectedPeriod = v ?? '30d');
+                      _loadData();
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -208,8 +170,11 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
                     ),
-                    items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                    onChanged: (v) => setState(() => _selectedType = v ?? 'All'),
+                    items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t == 'post' ? 'Post' : t == 'podcast' ? 'Podcast' : t == 'book' ? 'Book' : 'All'))).toList(),
+                    onChanged: (v) {
+                      setState(() => _selectedType = v ?? 'All');
+                      _loadData();
+                    },
                   ),
                 ),
               ],
@@ -263,12 +228,12 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                ...filtered.map((e) => _itemTile(e)),
-                if (filtered.isEmpty)
+                ..._contentStats.map((stats) => _realItemTile(stats)),
+                if (_contentStats.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
-                      'No items in this period for selected type.',
+                      'No monetized content yet. Create posts and enable monetization to start earning.',
                       style: GoogleFonts.inter(color: const Color(0xFF666666)),
                     ),
                   ),
@@ -328,13 +293,12 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
         child: child,
       );
 
-  Widget _itemTile(_ItemStat e) {
-    final engagement = e.likes + e.comments + e.shares + e.bookmarks;
-    final icon = e.type == 'Podcast'
+  Widget _realItemTile(ContentMonetizationStats stats) {
+    final icon = stats.contentType == 'podcast'
         ? Icons.podcasts
-        : (e.type == 'Video'
-            ? Icons.play_circle_fill
-            : (e.type == 'Image' ? Icons.image_outlined : Icons.text_snippet_outlined));
+        : (stats.contentType == 'book'
+            ? Icons.menu_book_outlined
+            : Icons.article_outlined);
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       leading: Icon(icon),
@@ -342,7 +306,7 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
         children: [
           Expanded(
             child: Text(
-              e.title,
+              'Content ${stats.contentId.substring(0, 8)}',
               style: GoogleFonts.inter(fontWeight: FontWeight.w500),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -356,7 +320,7 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
               border: Border.all(color: const Color(0xFFE0E0E0)),
             ),
             child: Text(
-              e.type,
+              stats.contentType.toUpperCase(),
               style: GoogleFonts.inter(
                 fontSize: 12,
                 color: const Color(0xFF666666),
@@ -371,9 +335,9 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
           spacing: 8,
           runSpacing: 6,
           children: [
-            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.earnings'), '\$${e.earnings.toStringAsFixed(2)}'),
-            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.views'), e.impressions.toString()),
-            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.engagement'), engagement.toString()),
+            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.earnings'), '\$${stats.totalEarnings.toStringAsFixed(2)}'),
+            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.views'), stats.impressions.toString()),
+            _pill(Provider.of<LanguageProvider>(context, listen: false).t('monetization.engagement'), stats.totalEngagement.toString()),
           ],
         ),
       ),
@@ -388,29 +352,6 @@ class _MonetizationAnalyticsViewState extends State<MonetizationAnalyticsView> {
         ),
         child: Text('$k: $v', style: GoogleFonts.inter(fontSize: 12)),
       );
-}
-
-class _ItemStat {
-  final String title;
-  final String type; // Text, Image, Video, Podcast
-  final double earnings;
-  final int impressions;
-  final int likes;
-  final int comments;
-  final int shares;
-  final int bookmarks;
-  final int ageDays; // approximate recency to filter by period
-  const _ItemStat({
-    required this.title,
-    required this.type,
-    required this.earnings,
-    required this.impressions,
-    required this.likes,
-    required this.comments,
-    required this.shares,
-    required this.bookmarks,
-    required this.ageDays,
-  });
 }
 
 class _MiniBarChart extends StatelessWidget {

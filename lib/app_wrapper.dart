@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
 import 'home_feed_page.dart';
 import 'sign_in_page.dart';
-import 'theme_provider.dart';
+import 'repositories/interfaces/post_repository.dart';
+import 'repositories/interfaces/story_repository.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 class AppWrapper extends StatefulWidget {
   const AppWrapper({super.key});
@@ -19,14 +21,30 @@ class _AppWrapperState extends State<AppWrapper> {
   @override
   void initState() {
     super.initState();
-    _initializeAuth();
+    _initializeAndPreload();
   }
 
-  Future<void> _initializeAuth() async {
+  Future<void> _initializeAndPreload() async {
+    final startTime = DateTime.now();
+    
+    // Initialize auth first
     await _authService.initialize();
     if (_authService.isLoggedIn) {
       await _authService.refreshUser();
     }
+    
+    // Preload home feed data in parallel with minimum splash time
+    await Future.wait([
+      _preloadHomeFeed(),
+      Future.delayed(const Duration(seconds: 2)), // Minimum 2 seconds splash
+    ]);
+    
+    // Ensure at least 2 seconds, max 3 seconds
+    final elapsed = DateTime.now().difference(startTime);
+    if (elapsed < const Duration(seconds: 2)) {
+      await Future.delayed(const Duration(seconds: 2) - elapsed);
+    }
+    
     if (mounted) {
       setState(() {
         _isInitializing = false;
@@ -34,19 +52,45 @@ class _AppWrapperState extends State<AppWrapper> {
     }
   }
 
+  Future<void> _preloadHomeFeed() async {
+    try {
+      final currentUser = fb.FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        debugPrint('📱 No user logged in, skipping preload');
+        return;
+      }
+      
+      if (!mounted) return;
+      
+      debugPrint('🚀 Preloading home feed data...');
+      
+      // Get repositories
+      final postRepo = context.read<PostRepository>();
+      final storyRepo = context.read<StoryRepository>();
+      
+      // Preload first page of posts and stories in parallel
+      try {
+        await Future.wait([
+          postRepo.getFeed(limit: 15),
+          storyRepo.getStoryRings(),
+        ]);
+      } catch (e) {
+        debugPrint('⚠️ Feed/story preload error (non-critical): $e');
+      }
+      
+      debugPrint('✅ Home feed data preloaded');
+    } catch (e) {
+      debugPrint('⚠️ Preload error (non-critical): $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
     if (_isInitializing) {
+      // Native splash is showing, return transparent scaffold
       return Scaffold(
-        backgroundColor:
-            themeProvider.isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
-        body: const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
-          ),
-        ),
+        backgroundColor: Colors.white,
+        body: Container(),
       );
     }
 

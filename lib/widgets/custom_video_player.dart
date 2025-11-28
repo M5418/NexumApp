@@ -11,6 +11,9 @@ class CustomVideoPlayer extends StatefulWidget {
   // New: startMuted and callback
   final bool startMuted;
   final ValueChanged<bool>? onMuteChanged;
+  
+  // Long press callback (for reactions in video scroll)
+  final VoidCallback? onLongPressCallback;
 
   const CustomVideoPlayer({
     super.key,
@@ -20,6 +23,7 @@ class CustomVideoPlayer extends StatefulWidget {
     this.onUnlike,
     this.startMuted = false,
     this.onMuteChanged,
+    this.onLongPressCallback,
   });
 
   @override
@@ -95,6 +99,11 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
     }
   }
 
+  // Public method to toggle play/pause from parent widget
+  void togglePlayPause() {
+    _togglePlayPause();
+  }
+
   // New: mute toggle
   void _toggleMute() {
     setState(() {
@@ -123,6 +132,13 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
   }
 
   void _handleLongPress() {
+    // If external callback provided (e.g., for reactions), use that
+    if (widget.onLongPressCallback != null) {
+      widget.onLongPressCallback!();
+      return;
+    }
+    
+    // Otherwise show speed options
     setState(() {
       _showSpeedOptions = true;
     });
@@ -183,6 +199,28 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
             ),
           ),
         ),
+
+        // Progress bar overlay - show when paused
+        if (!_controller!.value.isPlaying)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.8),
+                  ],
+                ),
+              ),
+              padding: const EdgeInsets.only(bottom: 20),
+              child: buildProgressBar(),
+            ),
+          ),
 
         // Play/Pause indicator
         if (!_controller!.value.isPlaying)
@@ -341,20 +379,69 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         children: [
-          // Progress bar
-          Container(
-            height: 3,
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(77),
-              borderRadius: BorderRadius.circular(1.5),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: progress.clamp(0.0, 1.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFBFAE01),
-                  borderRadius: BorderRadius.circular(1.5),
+          // Seekable Progress bar
+          GestureDetector(
+            onHorizontalDragUpdate: (details) {
+              if (!_isInitialized || _controller == null) return;
+              
+              final RenderBox box = context.findRenderObject() as RenderBox;
+              final localPosition = box.globalToLocal(details.globalPosition);
+              final boxWidth = box.size.width - 32; // Account for margins
+              final tapPosition = (localPosition.dx - 16).clamp(0.0, boxWidth);
+              final seekProgress = tapPosition / boxWidth;
+              final seekPosition = duration * seekProgress;
+              
+              _controller!.seekTo(seekPosition);
+            },
+            onTapUp: (details) {
+              if (!_isInitialized || _controller == null) return;
+              
+              final RenderBox box = context.findRenderObject() as RenderBox;
+              final localPosition = box.globalToLocal(details.globalPosition);
+              final boxWidth = box.size.width - 32; // Account for margins
+              final tapPosition = (localPosition.dx - 16).clamp(0.0, boxWidth);
+              final seekProgress = tapPosition / boxWidth;
+              final seekPosition = duration * seekProgress;
+              
+              _controller!.seekTo(seekPosition);
+            },
+            child: Container(
+              height: 20,
+              color: Colors.transparent,
+              child: Center(
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(77),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: Stack(
+                    children: [
+                      FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: progress.clamp(0.0, 1.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFBFAE01),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      // Seek indicator
+                      if (progress > 0)
+                        Positioned(
+                          left: (progress.clamp(0.0, 1.0) * (MediaQuery.of(context).size.width - 32)) - 6,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFBFAE01),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -367,15 +454,16 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
               Text(
                 _formatDuration(position),
                 style: GoogleFonts.inter(
-                  color: Colors.white.withAlpha(179),
-                  fontSize: 11,
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               Text(
                 _formatDuration(duration),
                 style: GoogleFonts.inter(
                   color: Colors.white.withAlpha(179),
-                  fontSize: 11,
+                  fontSize: 12,
                 ),
               ),
             ],

@@ -5,7 +5,11 @@ import '../repositories/interfaces/book_repository.dart';
 import 'book_details_page.dart';
 import 'create_book_page.dart';
 import 'book_search_page.dart';
+import 'book_categories_page.dart';
+import 'book_favorites_page.dart';
 import '../responsive/responsive_breakpoints.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import '../core/admin_config.dart';
 
 class Book {
   final String id;
@@ -221,6 +225,20 @@ class _BooksHomePageState extends State<BooksHomePage> {
     _rightNavKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => BookDetailsPage(book: b)),
       (route) => false,
+    );
+  }
+
+  void _openCategories() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BookCategoriesPage()),
+    );
+  }
+
+  void _openFavorites() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BookFavoritesPage()),
     );
   }
 
@@ -631,16 +649,6 @@ class _BooksHomePageState extends State<BooksHomePage> {
                     },
                     icon: Icon(Icons.search, color: isDark ? Colors.white : const Color(0xFF666666)),
                   ),
-                  _LanguageFilter(
-                    selected: _selectedLanguage,
-                    options: _languages,
-                    onChanged: (v) => setState(() => _selectedLanguage = v),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _openCreateMobile,
-                    icon: Icon(Icons.add, color: isDark ? Colors.white : const Color(0xFF666666)),
-                  ),
                 ],
               ),
             ),
@@ -659,7 +667,42 @@ class _BooksHomePageState extends State<BooksHomePage> {
                   ),
                 ],
               )
-            : ListView.separated(
+            : Column(
+                children: [
+                  // Quick action chips
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _QuickActionChip(
+                            icon: Icons.category_outlined,
+                            label: 'Categories',
+                            isDark: isDark,
+                            onTap: _openCategories,
+                          ),
+                          const SizedBox(width: 8),
+                          if (AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
+                            _QuickActionChip(
+                              icon: Icons.add_circle_outline,
+                              label: 'Add Book',
+                              isDark: isDark,
+                              onTap: _openCreateMobile,
+                            ),
+                          const SizedBox(width: 8),
+                          _QuickActionChip(
+                            icon: Icons.favorite_border,
+                            label: 'Favorites',
+                            isDark: isDark,
+                            onTap: _openFavorites,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.separated(
                 controller: _controller,
                 padding: const EdgeInsets.all(16),
                 itemCount: _filteredBooks.length + (_loading ? 1 : 0),
@@ -849,6 +892,56 @@ class _BooksHomePageState extends State<BooksHomePage> {
                   );
                 },
               ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _QuickActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _QuickActionChip({
+    required this.icon,
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: const Color(0xFFBFAE01)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

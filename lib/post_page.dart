@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_storage/firebase_storage.dart' as fs;
+import 'package:ionicons/ionicons.dart';
+import 'package:readmore/readmore.dart';
 
 import 'dart:async';
 
@@ -33,6 +35,7 @@ import 'repositories/models/post_model.dart';
 import 'repositories/interfaces/comment_repository.dart';
 import 'repositories/interfaces/bookmark_repository.dart';
 import 'repositories/models/bookmark_model.dart';
+import 'services/content_analytics_service.dart';
 
 class PostPage extends StatefulWidget {
   final Post? post;
@@ -104,6 +107,7 @@ class _PostPageState extends State<PostPage> {
     await _loadCurrentUserId();
     if (widget.post != null) {
       _applyPost(widget.post!);
+      _trackView(widget.post!);
       _subscribeToPost(widget.post!.id);
       _subscribeToComments(widget.post!.id);
       await _loadComments();
@@ -118,6 +122,80 @@ class _PostPageState extends State<PostPage> {
       }
     }
   }
+
+  // ============ Analytics Tracking ============
+
+  void _trackView(Post post) {
+    if (!mounted) return;
+    try {
+      final analytics = context.read<ContentAnalyticsService>();
+      analytics.trackView(
+        contentId: post.id,
+        contentType: 'post',
+        userId: post.authorId,
+      );
+    } catch (e) {
+      debugPrint('❌ Error tracking view: $e');
+    }
+  }
+
+  void _trackLike(String postId, String authorId) {
+    if (!mounted) return;
+    try {
+      final analytics = context.read<ContentAnalyticsService>();
+      analytics.trackLike(
+        contentId: postId,
+        contentType: 'post',
+        userId: authorId,
+      );
+    } catch (e) {
+      debugPrint('❌ Error tracking like: $e');
+    }
+  }
+
+  void _trackComment(String postId, String authorId) {
+    if (!mounted) return;
+    try {
+      final analytics = context.read<ContentAnalyticsService>();
+      analytics.trackComment(
+        contentId: postId,
+        contentType: 'post',
+        userId: authorId,
+      );
+    } catch (e) {
+      debugPrint('❌ Error tracking comment: $e');
+    }
+  }
+
+  void _trackShare(String postId, String authorId) {
+    if (!mounted) return;
+    try {
+      final analytics = context.read<ContentAnalyticsService>();
+      analytics.trackShare(
+        contentId: postId,
+        contentType: 'post',
+        userId: authorId,
+      );
+    } catch (e) {
+      debugPrint('❌ Error tracking share: $e');
+    }
+  }
+
+  void _trackBookmark(String postId, String authorId) {
+    if (!mounted) return;
+    try {
+      final analytics = context.read<ContentAnalyticsService>();
+      analytics.trackBookmark(
+        contentId: postId,
+        contentType: 'post',
+        userId: authorId,
+      );
+    } catch (e) {
+      debugPrint('❌ Error tracking bookmark: $e');
+    }
+  }
+
+  // ============================================
 
   bool _isDesktopLayout(BuildContext context) {
     if (kIsWeb) {
@@ -666,6 +744,8 @@ class _PostPageState extends State<PostPage> {
         await _postRepo.unlikePost(postId);
       } else {
         await _postRepo.likePost(postId);
+        // Track like analytics
+        _trackLike(postId, original.authorId);
       }
     } catch (e) {
       if (!mounted) return;
@@ -732,6 +812,8 @@ class _PostPageState extends State<PostPage> {
           authorName: original.authorName,
           coverUrl: original.imageUrls.isNotEmpty ? original.imageUrls.first : null,
         );
+        // Track bookmark analytics
+        _trackBookmark(postId, original.authorId);
       } else {
         await _postRepo.unbookmarkPost(postId);
         // Remove from bookmarks collection
@@ -756,6 +838,11 @@ class _PostPageState extends State<PostPage> {
   }
 
   void _showShareOptions() {
+    // Track share analytics when share dialog is opened
+    if (_post != null) {
+      _trackShare(_post!.id, _post!.authorId);
+    }
+    
     ShareBottomSheet.show(
       context,
       onStories: () {
@@ -856,6 +943,8 @@ class _PostPageState extends State<PostPage> {
     try {
       await _commentRepo.createComment(
           postId: _post!.id, text: reply, parentCommentId: commentId);
+      // Track comment analytics
+      _trackComment(_post!.id, _post!.authorId);
       await _loadComments();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -883,6 +972,8 @@ class _PostPageState extends State<PostPage> {
 
     try {
       await _commentRepo.createComment(postId: _post!.id, text: text);
+      // Track comment analytics
+      _trackComment(_post!.id, _post!.authorId);
       _commentController.clear();
       _commentFocusNode.unfocus();
 
@@ -1222,10 +1313,18 @@ class _PostPageState extends State<PostPage> {
   Widget _buildPostCard(bool isDark, {required bool showPreviewComments}) {
     final surfaceColor = isDark ? Colors.black : Colors.white;
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
       width: double.infinity,
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black.withValues(alpha: 0) : Colors.black.withValues(alpha: 0.05),
+            blurRadius: 1,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -1256,16 +1355,22 @@ class _PostPageState extends State<PostPage> {
                       );
                     }
                   },
-                  child: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      image: DecorationImage(
-                        image: NetworkImage(_post!.authorAvatarUrl),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundImage: _post!.authorAvatarUrl.isNotEmpty
+                        ? NetworkImage(_post!.authorAvatarUrl)
+                        : null,
+                    backgroundColor: const Color(0xFFBFAE01),
+                    child: _post!.authorAvatarUrl.isEmpty
+                        ? Text(
+                            _post!.authorName.isNotEmpty ? _post!.authorName[0].toUpperCase() : 'U',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          )
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1299,7 +1404,7 @@ class _PostPageState extends State<PostPage> {
                           _post!.authorName,
                           style: GoogleFonts.inter(
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
@@ -1316,13 +1421,25 @@ class _PostPageState extends State<PostPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 6),
             if (_post!.text.isNotEmpty) ...[
-              Text(
+              ReadMoreText(
                 _showTranslation ? (_translatedText ?? _post!.text) : _post!.text,
-                style: GoogleFonts.inter(
+                trimMode: TrimMode.Length,
+                trimLength: 300,
+                colorClickableText: const Color(0xFFBFAE01),
+                trimCollapsedText: 'Read more',
+                trimExpandedText: 'Read less',
+                style: GoogleFonts.inter(fontSize: 16, color: isDark ? Colors.white : Colors.black),
+                moreStyle: GoogleFonts.inter(
                   fontSize: 16,
-                  color: isDark ? Colors.white : Colors.black,
+                  color: const Color(0xFFBFAE01),
+                  fontWeight: FontWeight.w500,
+                ),
+                lessStyle: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: const Color(0xFFBFAE01),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1339,7 +1456,7 @@ class _PostPageState extends State<PostPage> {
                     ),
                   ),
                 ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
             ],
             if (_post!.mediaType != MediaType.none) ...[
               if ((_post!.mediaType == MediaType.image ||
@@ -1357,8 +1474,13 @@ class _PostPageState extends State<PostPage> {
                   height: 300,
                   borderRadius: BorderRadius.circular(25),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
             ],
+            Container(
+              height: 1,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              color: const Color(0xFF666666).withAlpha(76),
+            ),
             Row(
               children: [
                 GestureDetector(
@@ -1367,8 +1489,8 @@ class _PostPageState extends State<PostPage> {
                     children: [
                       Icon(
                         _isLiked
-                            ? Icons.thumb_up_alt
-                            : Icons.thumb_up_alt_outlined,
+                            ? Ionicons.heart
+                            : Ionicons.heart_outline,
                         size: 20,
                         color: _isLiked
                             ? const Color(0xFFBFAE01)
@@ -1390,7 +1512,7 @@ class _PostPageState extends State<PostPage> {
                 Row(
                   children: [
                     const Icon(
-                        Icons.chat_bubble_outline,
+                        Ionicons.chatbubble_outline,
                         size: 20,
                         color: Color(0xFF666666),
                       ),
@@ -1410,7 +1532,7 @@ class _PostPageState extends State<PostPage> {
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.share_outlined,
+                        Ionicons.arrow_redo_outline,
                         size: 20,
                         color: Color(0xFF666666),
                       ),
@@ -1429,7 +1551,7 @@ class _PostPageState extends State<PostPage> {
                 Row(
                   children: [
                     const Icon(
-                      Icons.repeat,
+                      Ionicons.repeat_outline,
                       size: 20,
                       color: Color(0xFF666666),
                     ),
@@ -1449,7 +1571,7 @@ class _PostPageState extends State<PostPage> {
                   child: Row(
                     children: [
                       Icon(
-                        _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                        _isBookmarked ? Ionicons.bookmark : Ionicons.bookmark_outline,
                         size: 20,
                         color: _isBookmarked
                             ? const Color(0xFFBFAE01)
@@ -1467,19 +1589,6 @@ class _PostPageState extends State<PostPage> {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              TimeUtils.relativeLabel(_post!.createdAt, locale: 'en_short'),
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: const Color(0xFF666666),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              height: 0.2,
-              color: const Color(0xFF666666).withValues(alpha: 0.2),
             ),
             const SizedBox(height: 20),
             if (showPreviewComments) ...[

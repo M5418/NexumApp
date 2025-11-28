@@ -57,7 +57,12 @@ import 'repositories/interfaces/mute_repository.dart';
 import 'repositories/firebase/firebase_mute_repository.dart';
 import 'repositories/interfaces/analytics_repository.dart';
 import 'repositories/firebase/firebase_analytics_repository.dart';
+import 'repositories/interfaces/support_repository.dart';
+import 'repositories/firebase/firebase_support_repository.dart';
+import 'repositories/interfaces/monetization_repository.dart';
+import 'repositories/firebase/firebase_monetization_repository.dart';
 import 'services/community_interest_sync_service.dart';
+import 'services/content_analytics_service.dart';
 import 'fix_communities.dart';
 import 'providers/follow_state.dart';
 import 'config/cache_config.dart';
@@ -264,6 +269,12 @@ class MyApp extends StatelessWidget {
         Provider<BlockRepository>(create: (_) => FirebaseBlockRepository()),
         Provider<MuteRepository>(create: (_) => FirebaseMuteRepository()),
         Provider<AnalyticsRepository>(create: (_) => FirebaseAnalyticsRepository()),
+        Provider<SupportRepository>(create: (_) => FirebaseSupportRepository()),
+        Provider<MonetizationRepository>(create: (_) => FirebaseMonetizationRepository()),
+        ProxyProvider<MonetizationRepository, ContentAnalyticsService>(
+          update: (context, monetizationRepo, previous) =>
+              ContentAnalyticsService(monetizationRepo),
+        ),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

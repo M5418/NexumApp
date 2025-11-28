@@ -1,7 +1,6 @@
 import 'dart:io' show File, Platform;
 import 'dart:typed_data';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -10,6 +9,9 @@ import 'package:provider/provider.dart';
 import 'package:pdfx/pdfx.dart';
 import '../core/files_api.dart';
 import '../repositories/interfaces/book_repository.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import '../core/admin_config.dart';
+import '../data/interest_domains.dart';
 
 class CreateBookPage extends StatefulWidget {
   const CreateBookPage({super.key});
@@ -57,58 +59,38 @@ class _CreateBookPageState extends State<CreateBookPage> {
   final _authorCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
 
-  int? _readingMinutes;
-  int? _audioDurationSec;
   String _language = 'English';
+  List<String> _selectedCategories = [];
 
   // Native (mobile/desktop)
   File? _coverFile;
-  File? _epubFile;
   File? _pdfFile;
   File? _audioFile;
 
   // Web (bytes)
   Uint8List? _coverBytes;
-  Uint8List? _epubBytes;
   Uint8List? _pdfBytes;
   Uint8List? _audioBytes;
 
   // Friendly names + extensions (used across platforms)
-  String? _epubName;
   String? _pdfName;
   String? _audioName;
   String? _coverExt;
-  String? _epubExt;
   String? _pdfExt;
   String? _audioExt;
 
   // Uploaded URLs
   String? _coverUrl;
-  String? _epubUrl;
   String? _pdfUrl;
   String? _audioUrl;
 
-  // Audio preview
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlayingPreview = false;
-
   bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _audioPlayer.onPlayerComplete.listen((_) {
-      if (!mounted) return;
-      setState(() => _isPlayingPreview = false);
-    });
-  }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
     _authorCtrl.dispose();
     _descCtrl.dispose();
-    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -133,30 +115,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
     });
   }
 
-  Future<void> _pickEpub() async {
-    final res = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['epub'],
-      allowMultiple: false,
-      withData: kIsWeb,
-    );
-    if (res == null || res.files.isEmpty) return;
-
-    final f = res.files.first;
-    setState(() {
-      _epubName = f.name;
-      _epubExt = (f.extension ?? 'epub').toLowerCase();
-      if (kIsWeb) {
-        _epubBytes = f.bytes;
-        _epubFile = null;
-      } else if (f.path != null) {
-        _epubFile = File(f.path!);
-        _epubBytes = null;
-      }
-    });
-  }
-
-  Future<void> _pickPdf() async {
+  Future<void> _pickPdf() async{
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['pdf'],
@@ -202,32 +161,99 @@ class _CreateBookPageState extends State<CreateBookPage> {
     });
   }
 
-  Future<void> _toggleAudioPreview() async {
-    try {
-      if (_isPlayingPreview) {
-        await _audioPlayer.stop();
-        if (mounted) setState(() => _isPlayingPreview = false);
-        return;
-      }
-
-      if (kIsWeb && _audioBytes != null) {
-        await _audioPlayer.play(BytesSource(_audioBytes!));
-      } else if (_audioFile != null) {
-        await _audioPlayer.play(DeviceFileSource(_audioFile!.path));
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No audio selected', style: GoogleFonts.inter())),
+  Future<void> _pickCategory() async {
+    final selected = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String query = '';
+        final tempSelected = List<String>.from(_selectedCategories);
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            final filtered = interestDomains
+                .where((d) => d.toLowerCase().contains(query.toLowerCase()))
+                .toList();
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
+            return Container(
+              height: MediaQuery.of(ctx).size.height * 0.75,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 12)],
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            autofocus: true,
+                            decoration: const InputDecoration(
+                              hintText: 'Search categories',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (val) => setModal(() => query = val),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, tempSelected),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFBFAE01),
+                            foregroundColor: Colors.black,
+                          ),
+                          child: Text('Done (${tempSelected.length})', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (tempSelected.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Text(
+                        '${tempSelected.length} selected',
+                        style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFFBFAE01), fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (ctx, i) {
+                        final v = filtered[i];
+                        final isSelected = tempSelected.contains(v);
+                        return CheckboxListTile(
+                          title: Text(v, style: GoogleFonts.inter()),
+                          value: isSelected,
+                          activeColor: const Color(0xFFBFAE01),
+                          onChanged: (checked) {
+                            setModal(() {
+                              if (checked == true) {
+                                tempSelected.add(v);
+                              } else {
+                                tempSelected.remove(v);
+                              }
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
-        return;
-      }
-
-      if (mounted) setState(() => _isPlayingPreview = true);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Audio preview failed: $e', style: GoogleFonts.inter())),
-      );
+      },
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _selectedCategories = selected;
+      });
     }
   }
 
@@ -273,18 +299,42 @@ class _CreateBookPageState extends State<CreateBookPage> {
   }
 
   Future<void> _submit() async {
+    // Validate all required fields
     if (_titleCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Title is required', style: GoogleFonts.inter())),
       );
       return;
     }
-    final hasEpub = _epubFile != null || _epubBytes != null;
+    if (_authorCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Author is required', style: GoogleFonts.inter())),
+      );
+      return;
+    }
+    if (_descCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Description is required', style: GoogleFonts.inter())),
+      );
+      return;
+    }
+    if (_selectedCategories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('At least one category is required', style: GoogleFonts.inter())),
+      );
+      return;
+    }
+    if (_coverFile == null && _coverBytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Cover image is required', style: GoogleFonts.inter())),
+      );
+      return;
+    }
     final hasPdf = _pdfFile != null || _pdfBytes != null;
     final hasAudio = _audioFile != null || _audioBytes != null;
-    if (!hasEpub && !hasPdf && !hasAudio) {
+    if (!hasPdf && !hasAudio) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Attach at least an EPUB, PDF, or audio file', style: GoogleFonts.inter())),
+        SnackBar(content: Text('Attach at least a PDF or audio file', style: GoogleFonts.inter())),
       );
       return;
     }
@@ -301,15 +351,6 @@ class _CreateBookPageState extends State<CreateBookPage> {
       } else if (_coverBytes != null) {
         final up = await filesApi.uploadBytes(_coverBytes!, ext: _coverExt ?? 'jpg');
         _coverUrl = up['url'];
-      }
-
-      // EPUB upload
-      if (_epubFile != null) {
-        final up = await filesApi.uploadFile(_epubFile!);
-        _epubUrl = up['url'];
-      } else if (_epubBytes != null) {
-        final up = await filesApi.uploadBytes(_epubBytes!, ext: _epubExt ?? 'epub');
-        _epubUrl = up['url'];
       }
 
       // PDF upload
@@ -334,19 +375,16 @@ class _CreateBookPageState extends State<CreateBookPage> {
       final bookRepo = navContext.read<BookRepository>();
       await bookRepo.createBook(
         title: _titleCtrl.text.trim(),
-        author: _authorCtrl.text.trim().isEmpty ? null : _authorCtrl.text.trim(),
-        description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-        coverUrl: (_coverUrl ?? '').isEmpty ? null : _coverUrl,
-        epubUrl: (_epubUrl ?? '').isEmpty ? null : _epubUrl,
+        author: _authorCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        coverUrl: _coverUrl!,
         pdfUrl: (_pdfUrl ?? '').isEmpty ? null : _pdfUrl,
         audioUrl: (_audioUrl ?? '').isEmpty ? null : _audioUrl,
         language: _language,
-        category: null,
+        category: _selectedCategories.join(', '),
         tags: const [],
         price: null,
         isPublished: true,
-        readingMinutes: _readingMinutes,
-        audioDurationSec: _audioDurationSec,
       );
       if (!navContext.mounted) return;
       ScaffoldMessenger.of(navContext).showSnackBar(
@@ -370,6 +408,67 @@ class _CreateBookPageState extends State<CreateBookPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
+    
+    // Only admins can create books
+    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (!AdminConfig.isAdmin(currentUserId)) {
+      return Scaffold(
+        backgroundColor: bg,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lock_outlined,
+                  size: 64,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Admin Only',
+                  style: GoogleFonts.inter(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Only administrators can create books.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFBFAE01),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Go Back',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: bg,
       appBar: PreferredSize(
@@ -461,7 +560,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
               maxLines: null,
               style: GoogleFonts.inter(),
               decoration: InputDecoration(
-                hintText: 'Description (optional)',
+                hintText: 'Description',
                 hintStyle: GoogleFonts.inter(color: const Color(0xFF999999)),
                 border: InputBorder.none,
               ),
@@ -471,81 +570,44 @@ class _CreateBookPageState extends State<CreateBookPage> {
 
           // Cover + reading time (Wrap to avoid overflow)
           _InputCard(
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            child: Row(
               children: [
                 _SquareButton(icon: Icons.image_outlined, label: 'Cover', onTap: _pickCover),
-                if (kIsWeb && _coverBytes != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.memory(_coverBytes!, width: 64, height: 64, fit: BoxFit.cover),
-                  )
-                else if (_coverFile != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.file(_coverFile!, width: 64, height: 64, fit: BoxFit.cover),
-                  ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF111111) : const Color(0xFFF7F7F7),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
-                  ),
+                const SizedBox(width: 8),
+                Expanded(
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.access_time, size: 16, color: Color(0xFFBFAE01)),
-                      const SizedBox(width: 6),
-                      Text(
-                        _readingMinutes == null
-                            ? 'Reading hrs/min'
-                            : '${_readingMinutes! ~/ 60} hr, ${_readingMinutes! % 60} min',
-                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                      if (kIsWeb && _coverBytes != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.memory(_coverBytes!, width: 64, height: 64, fit: BoxFit.cover),
+                          ),
+                        )
+                      else if (_coverFile != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.file(_coverFile!, width: 64, height: 64, fit: BoxFit.cover),
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          (_coverFile != null || _coverBytes != null) ? 'Cover selected' : 'No cover selected',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                SizedBox(
-                  width: 96,
-                  child: TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(hintText: 'mins', isDense: true),
-                    onChanged: (v) {
-                      final n = int.tryParse(v.trim());
-                      setState(() => _readingMinutes = n);
-                    },
-                  ),
-                ),
               ],
             ),
           ),
 
-          const SizedBox(height: 12),
-
-          // Upload EPUB section
-          _InputCard(
-            child: Row(
-              children: [
-                _SquareButton(icon: Icons.menu_book, label: 'EPUB', onTap: _pickEpub),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    kIsWeb
-                        ? (_epubName ?? 'No EPUB selected')
-                        : (_epubFile != null
-                            ? _epubFile!.path.split(Platform.pathSeparator).last
-                            : 'No EPUB selected'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 12),
 
           // Upload Book PDF section with preview button (web-friendly)
@@ -596,24 +658,6 @@ class _CreateBookPageState extends State<CreateBookPage> {
                     style: GoogleFonts.inter(),
                   ),
                 ),
-                if ((kIsWeb && _audioBytes != null) || (!kIsWeb && _audioFile != null))
-                  IconButton(
-                    tooltip: _isPlayingPreview ? 'Pause' : 'Play preview',
-                    onPressed: _toggleAudioPreview,
-                    icon: Icon(_isPlayingPreview ? Icons.pause_circle : Icons.play_circle),
-                  ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 96,
-                  child: TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(hintText: 'sec', isDense: true),
-                    onChanged: (v) {
-                      final n = int.tryParse(v.trim());
-                      setState(() => _audioDurationSec = n);
-                    },
-                  ),
-                ),
               ],
             ),
           ),
@@ -637,6 +681,71 @@ class _CreateBookPageState extends State<CreateBookPage> {
                     onChanged: (v) => setState(() => _language = v ?? 'English'),
                   ),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _InputCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: _pickCategory,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF111111) : const Color(0xFFF7F7F7),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.category_outlined, color: Color(0xFFBFAE01), size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _selectedCategories.isEmpty
+                                ? 'Select categories (tap to choose)'
+                                : '${_selectedCategories.length} categor${_selectedCategories.length == 1 ? 'y' : 'ies'} selected',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: _selectedCategories.isEmpty
+                                  ? const Color(0xFF999999)
+                                  : (isDark ? Colors.white : Colors.black),
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF666666)),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_selectedCategories.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _selectedCategories.map((category) {
+                      return Chip(
+                        label: Text(
+                          category,
+                          style: GoogleFonts.inter(fontSize: 12, color: Colors.black),
+                        ),
+                        backgroundColor: const Color(0xFFBFAE01).withValues(alpha: 0.2),
+                        deleteIconColor: const Color(0xFFBFAE01),
+                        onDeleted: () {
+                          setState(() {
+                            _selectedCategories.remove(category);
+                          });
+                        },
+                        side: const BorderSide(color: Color(0xFFBFAE01), width: 1),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ],
             ),
           ),

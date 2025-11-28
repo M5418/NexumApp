@@ -410,13 +410,16 @@ class _PostCardState extends State<PostCard> {
       final rb = widget.post.repostedBy;
       if (rb == null) return 'Reposted';
 
-      final isSelf = ((rb.userId != null &&
-              widget.currentUserId != null &&
-              rb.userId == widget.currentUserId) ||
-          ((rb.actionType ?? '').isNotEmpty));
-
-      if (isSelf) return 'You reposted this!';
-      if (rb.userName.trim().isNotEmpty) return '${rb.userName} reposted this!';
+      // Get current user ID from parameter or Firebase Auth
+      final currentUserId = widget.currentUserId ?? fb.FirebaseAuth.instance.currentUser?.uid;
+      
+      // Check if current user is the one who reposted
+      if (currentUserId != null && rb.userId != null && currentUserId == rb.userId) {
+        return 'You reposted this';
+      }
+      
+      // Otherwise show reposter's username
+      if (rb.userName.trim().isNotEmpty) return '${rb.userName} reposted this';
       return 'Reposted';
     }
 

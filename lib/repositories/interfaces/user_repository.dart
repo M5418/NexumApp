@@ -67,6 +67,8 @@ class UserProfile {
   final DateTime? createdAt;
   final DateTime? lastActive;
   final List<String>? fcmTokens;
+  final bool? isPremium;
+  final DateTime? premiumSince;
   
   UserProfile({
     required this.uid,
@@ -88,6 +90,8 @@ class UserProfile {
     this.createdAt,
     this.lastActive,
     this.fcmTokens,
+    this.isPremium = false,
+    this.premiumSince,
   });
   
   Map<String, dynamic> toMap() {
@@ -111,6 +115,8 @@ class UserProfile {
       'createdAt': createdAt?.toIso8601String(),
       'lastActive': lastActive?.toIso8601String(),
       'fcmTokens': fcmTokens,
+      'isPremium': isPremium,
+      'premiumSince': premiumSince?.toIso8601String(),
     };
   }
 }

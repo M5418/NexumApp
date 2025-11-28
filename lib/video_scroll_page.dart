@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
+import 'package:ionicons/ionicons.dart';
 
 import 'models/post.dart';
 import 'models/comment.dart';
@@ -18,6 +19,9 @@ import 'widgets/comment_bottom_sheet.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'other_user_profile_page.dart';
 import 'profile_page.dart';
+import 'services/content_analytics_service.dart';
+import 'core/post_events.dart';
+import 'dart:async';
 
 class VideoScrollPage extends StatefulWidget {
   const VideoScrollPage({super.key});
@@ -26,7 +30,7 @@ class VideoScrollPage extends StatefulWidget {
   State<VideoScrollPage> createState() => _VideoScrollPageState();
 }
 
-class _VideoScrollPageState extends State<VideoScrollPage> {
+class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderStateMixin {
   late PageController _pageController;
   bool _showReactionPicker = false;
   String? _reactionPickerPostId;
@@ -34,28 +38,95 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
   final Map<String, bool> _expandedTexts = {};
   final Map<String, CustomVideoPlayer> _videoPlayers = {};
   final Map<String, GlobalKey<CustomVideoPlayerState>> _videoPlayerKeys = {};
+  
+  // Like animation state
+  bool _showLikeAnimation = false;
+  late AnimationController _likeAnimationController;
+  late Animation<double> _likeAnimation;
 
   List<Post> _videoPosts = [];
   String? _currentUserId;
+
+  // Pagination state
+  bool _isLoadingMore = false;
+  bool _hasMoreVideos = true;
+  PostModel? _lastVideoPost;
+  static const int _videosPerPage = 5; // Load 5 videos at a time
+  int _currentVideoIndex = 0;
+
+  // Cache for loaded posts to avoid reloading
+  final Map<String, Post> _postCache = {};
 
   final FirebasePostRepository _postRepo = FirebasePostRepository();
   final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
   final FirebaseUserRepository _userRepo = FirebaseUserRepository();
 
+  // PostEvents subscription for syncing across pages
+  StreamSubscription<PostUpdateEvent>? _postEventsSub;
+
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    _loadCurrentUserId();
-    _loadVideoPosts();
+    _pageController.addListener(_onPageScroll);
+    
+    // Initialize like animation
+    _likeAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _likeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _likeAnimationController,
+        curve: Curves.elasticOut,
+      ),
+    );
+
+    // Subscribe to post update events to keep video scroll in sync
+    _postEventsSub = PostEvents.stream.listen((e) {
+      if (!mounted) return;
+      setState(() {
+        // Update all posts that match the originalPostId
+        for (int i = 0; i < _videoPosts.length; i++) {
+          final post = _videoPosts[i];
+          final postId = post.originalPostId ?? post.id;
+          if (postId == e.originalPostId) {
+            _videoPosts[i] = post.copyWith(
+              counts: e.counts,
+              userReaction: e.userReaction,
+              isBookmarked: e.isBookmarked ?? post.isBookmarked,
+            );
+          }
+        }
+      });
+    });
+    () async {
+      await _loadCurrentUserId();
+      await _loadVideoPosts();
+    }();
   }
 
   @override
   void dispose() {
+    _pageController.removeListener(_onPageScroll);
     _pageController.dispose();
+    _likeAnimationController.dispose();
+    _postEventsSub?.cancel();
+    // Clear video players to free memory
     _videoPlayers.clear();
     _videoPlayerKeys.clear();
+    _postCache.clear();
     super.dispose();
+  }
+
+  // Pagination listener
+  void _onPageScroll() {
+    // Load more when approaching the last 2 videos
+    if (_currentVideoIndex >= _videoPosts.length - 2 &&
+        !_isLoadingMore &&
+        _hasMoreVideos) {
+      _loadMoreVideos();
+    }
   }
 
   Future<void> _loadCurrentUserId() async {
@@ -75,14 +146,54 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
   Future<void> _loadVideoPosts() async {
     try {
-      final models = await _postRepo.getFeed(limit: 50);
-      final posts = await _mapModelsToPosts(models);
-      final onlyVideos = posts.where((p) => p.mediaType == MediaType.video).toList();
+      // Load posts in batches, filtering for videos
+      List<Post> videos = [];
+      PostModel? lastPost;
+      int fetchCount = 0;
+      const maxFetches = 5; // Max 5 batches to find initial videos
+
+      // Keep fetching until we have enough videos or hit max
+      while (videos.length < _videosPerPage && fetchCount < maxFetches) {
+        final models = await _postRepo.getFeed(
+          limit: 20, // Fetch 20 posts per batch
+          lastPost: lastPost,
+        );
+        
+        if (models.isEmpty) {
+          _hasMoreVideos = false;
+          break;
+        }
+
+        fetchCount++;
+        lastPost = models.last;
+
+        // Filter for videos and add to list
+        for (final model in models) {
+          if (await _isVideoPost(model)) {
+            final post = await _toPost(model);
+            videos.add(post);
+            _postCache[post.id] = post; // Cache the post
+            _lastVideoPost = model; // Track for pagination
+            
+            if (videos.length >= _videosPerPage) break;
+          }
+        }
+      }
+
+      debugPrint('📹 Video Scroll: Loaded ${videos.length} video posts ($fetchCount fetches)');
+      
       if (!mounted) return;
       setState(() {
-        _videoPosts = onlyVideos;
+        _videoPosts = videos;
+        _hasMoreVideos = videos.length == _videosPerPage;
       });
+      
+      // Track view of first video
+      if (videos.isNotEmpty && mounted) {
+        _trackVideoView(videos[0]);
+      }
     } catch (e) {
+      debugPrint('❌ Video Scroll error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -93,12 +204,118 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     }
   }
 
-  Future<List<Post>> _mapModelsToPosts(List<PostModel> models) async {
-    final out = <Post>[];
-    for (final m in models) {
-      out.add(await _toPost(m));
+  // Load more videos (pagination)
+  Future<void> _loadMoreVideos() async {
+    if (_isLoadingMore || !_hasMoreVideos || _lastVideoPost == null) return;
+
+    setState(() => _isLoadingMore = true);
+    
+    try {
+      List<Post> moreVideos = [];
+      PostModel? lastPost = _lastVideoPost;
+      int fetchCount = 0;
+      const maxFetches = 3;
+
+      while (moreVideos.length < _videosPerPage && fetchCount < maxFetches) {
+        final models = await _postRepo.getFeed(
+          limit: 20,
+          lastPost: lastPost,
+        );
+        
+        if (models.isEmpty) {
+          _hasMoreVideos = false;
+          break;
+        }
+
+        fetchCount++;
+        lastPost = models.last;
+
+        for (final model in models) {
+          if (await _isVideoPost(model)) {
+            final post = await _toPost(model);
+            moreVideos.add(post);
+            _postCache[post.id] = post;
+            _lastVideoPost = model;
+            
+            if (moreVideos.length >= _videosPerPage) break;
+          }
+        }
+      }
+
+      debugPrint('📹 Loaded ${moreVideos.length} more videos');
+      
+      if (!mounted) return;
+      setState(() {
+        _videoPosts.addAll(moreVideos);
+        _hasMoreVideos = moreVideos.length == _videosPerPage;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('❌ Error loading more videos: $e');
+      if (!mounted) return;
+      setState(() => _isLoadingMore = false);
     }
-    return out;
+  }
+
+  // Check if post has video
+  Future<bool> _isVideoPost(PostModel model) async {
+    if (model.mediaUrls.isEmpty) return false;
+    return model.mediaUrls.any((u) {
+      final l = u.toLowerCase();
+      // Check if URL contains video extensions (handles URLs with query params)
+      return l.contains('.mp4') || 
+             l.contains('.mov') || 
+             l.contains('.webm') ||
+             l.contains('.avi') ||
+             l.contains('.mkv') ||
+             // Check for Firebase Storage video paths
+             l.contains('/videos/') ||
+             l.contains('video_') ||
+             // Check for video mime types in URL
+             l.contains('video%2f') ||
+             l.contains('video/');
+    });
+  }
+
+  // Track video view with analytics
+  void _trackVideoView(Post post) {
+    if (!mounted) return;
+    try {
+      final analytics = context.read<ContentAnalyticsService>();
+      analytics.trackView(
+        contentId: post.id,
+        contentType: 'post',
+        userId: post.authorId,
+      );
+    } catch (e) {
+      debugPrint('❌ Error tracking video view: $e');
+    }
+  }
+
+  // Cleanup video players that are far from current video to save memory
+  void _cleanupDistantVideos(int currentIndex) {
+    const keepRange = 2; // Keep players for current +/- 2 videos
+    
+    final videosToRemove = <String>[];
+    
+    for (int i = 0; i < _videoPosts.length; i++) {
+      if ((i < currentIndex - keepRange || i > currentIndex + keepRange)) {
+        final videoUrl = _videoPosts[i].videoUrl;
+        if (videoUrl != null && _videoPlayers.containsKey(videoUrl)) {
+          videosToRemove.add(videoUrl);
+        }
+      }
+    }
+    
+    // Remove distant video players
+    for (final url in videosToRemove) {
+      _videoPlayers.remove(url);
+      _videoPlayerKeys.remove(url);
+    }
+    
+    if (videosToRemove.isNotEmpty) {
+      debugPrint('🧹 Cleaned up ${videosToRemove.length} distant video players');
+    }
   }
 
   Future<Post> _toPost(PostModel m) async {
@@ -121,14 +338,20 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
     } else {
       final hasVideo = m.mediaUrls.any((u) {
         final l = u.toLowerCase();
-        return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+        return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
+               l.contains('.avi') || l.contains('.mkv') ||
+               l.contains('/videos/') || l.contains('video_') ||
+               l.contains('video%2f') || l.contains('video/');
       });
       if (hasVideo) {
         mediaType = MediaType.video;
         videoUrl = m.mediaUrls.firstWhere(
           (u) {
             final l = u.toLowerCase();
-            return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+            return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
+                   l.contains('.avi') || l.contains('.mkv') ||
+                   l.contains('/videos/') || l.contains('video_') ||
+                   l.contains('video%2f') || l.contains('video/');
           },
           orElse: () => m.mediaUrls.first,
         );
@@ -222,6 +445,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       });
       try {
         await _postRepo.likePost(original.id);
+        // Emit event for other pages to sync
+        PostEvents.emit(PostUpdateEvent(
+          originalPostId: original.originalPostId ?? original.id,
+          counts: updatedCounts,
+          userReaction: reaction,
+          isBookmarked: original.isBookmarked,
+        ));
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -255,6 +485,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       });
       try {
         await _postRepo.unlikePost(original.id);
+        // Emit event for other pages to sync
+        PostEvents.emit(PostUpdateEvent(
+          originalPostId: original.originalPostId ?? original.id,
+          counts: updatedCounts,
+          userReaction: null,
+          isBookmarked: original.isBookmarked,
+        ));
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -300,6 +537,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       });
       try {
         await _postRepo.likePost(post.id);
+        // Emit event for other pages to sync
+        PostEvents.emit(PostUpdateEvent(
+          originalPostId: original.originalPostId ?? original.id,
+          counts: updatedCounts,
+          userReaction: ReactionType.heart,
+          isBookmarked: original.isBookmarked,
+        ));
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -389,6 +633,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       } else {
         await _postRepo.unbookmarkPost(postId);
       }
+      // Emit event for other pages to sync
+      PostEvents.emit(PostUpdateEvent(
+        originalPostId: original.originalPostId ?? original.id,
+        counts: updatedCounts,
+        userReaction: original.userReaction,
+        isBookmarked: willBookmark,
+      ));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -418,6 +669,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
           // Handle double-tap unlike from player
           _handleUnlikeFromPlayer(post);
         },
+        // No onLongPressCallback - uses default speed options
       );
     }
     return _videoPlayers[videoUrl]!;
@@ -437,7 +689,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
           statusBarIconBrightness: Brightness.light,
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Ionicons.arrow_back_outline, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -450,7 +702,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: Colors.white),
+            icon: const Icon(Ionicons.search_outline, color: Colors.white),
             onPressed: () {
               // optional search for videos
             },
@@ -459,11 +711,32 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       ),
       body: _videoPosts.isEmpty
           ? Center(
-              child: Text(
-                Provider.of<LanguageProvider>(context, listen: false).t('video.no_videos'),
-                style: GoogleFonts.inter(
-                  color: isDark ? Colors.white70 : Colors.black54,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Ionicons.videocam_outline,
+                    size: 64,
+                    color: Colors.white30,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    Provider.of<LanguageProvider>(context, listen: false).t('video.no_videos'),
+                    style: GoogleFonts.inter(
+                      color: isDark ? Colors.white70 : Colors.black54,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Create a post with video to see it here',
+                    style: GoogleFonts.inter(
+                      color: isDark ? Colors.white38 : Colors.black38,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             )
           : Stack(
@@ -472,7 +745,17 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                   controller: _pageController,
                   scrollDirection: Axis.vertical,
                   itemCount: _videoPosts.length,
-                  onPageChanged: (index) {},
+                  onPageChanged: (index) {
+                    _currentVideoIndex = index;
+                    
+                    // Track video view
+                    if (index < _videoPosts.length) {
+                      _trackVideoView(_videoPosts[index]);
+                    }
+                    
+                    // Cleanup distant video players to save memory
+                    _cleanupDistantVideos(index);
+                  },
                   itemBuilder: (context, index) {
                     final post = _videoPosts[index];
                     return _buildVideoItem(context, post, isDark);
@@ -527,9 +810,48 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
           // Video player
           if (post.videoUrl != null)
             Positioned.fill(
+              child: _getVideoPlayer(post.videoUrl!, post),
+            ),
+
+          // Transparent gesture area (covers screen except action buttons)
+          // Handles: tap (pause/play), double-tap (like)
+          // Long press handled by video player (speed options)
+          if (post.videoUrl != null)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 100, // Leave space for action buttons on the right
+              bottom: 0,
               child: GestureDetector(
-                onLongPress: () => _showReactions(post.id),
-                child: _getVideoPlayer(post.videoUrl!, post),
+                behavior: HitTestBehavior.translucent,
+                // Single tap → Pause/Play
+                onTap: () {
+                  final playerKey = _videoPlayerKeys[post.videoUrl];
+                  if (playerKey != null && playerKey.currentState != null) {
+                    playerKey.currentState!.togglePlayPause();
+                  }
+                },
+                // Double tap → Like/Unlike
+                onDoubleTap: () {
+                  // Show heart animation
+                  setState(() {
+                    _showLikeAnimation = true;
+                  });
+                  _likeAnimationController.forward().then((_) {
+                    _likeAnimationController.reset();
+                    setState(() {
+                      _showLikeAnimation = false;
+                    });
+                  });
+                  
+                  // Handle like/unlike
+                  if (post.userReaction == null) {
+                    _handleLikeFromPlayer(post);
+                  } else {
+                    _handleUnlikeFromPlayer(post);
+                  }
+                },
+                child: Container(color: Colors.transparent),
               ),
             ),
 
@@ -552,6 +874,27 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
               ),
             ),
           ),
+
+          // Like animation (appears on double-tap)
+          if (_showLikeAnimation)
+            Center(
+              child: AnimatedBuilder(
+                animation: _likeAnimation,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _likeAnimation.value,
+                    child: Opacity(
+                      opacity: (1.0 - _likeAnimation.value).clamp(0.0, 1.0),
+                      child: const Icon(
+                        Ionicons.heart,
+                        color: Colors.red,
+                        size: 120,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
 
           // User info and actions
           Positioned(
@@ -588,7 +931,20 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundImage: NetworkImage(post.userAvatarUrl),
+                        backgroundColor: const Color(0xFFBFAE01),
+                        backgroundImage: post.userAvatarUrl.isNotEmpty 
+                          ? NetworkImage(post.userAvatarUrl) 
+                          : null,
+                        child: post.userAvatarUrl.isEmpty
+                          ? Text(
+                              post.userName.isNotEmpty ? post.userName[0].toUpperCase() : 'U',
+                              style: GoogleFonts.inter(
+                                color: Colors.black,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -717,21 +1073,21 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
             right: 16,
             child: Column(
               children: [
-                // Like button
+                // Like button - long press to show reactions
                 _buildActionButton(
                   icon: post.userReaction == null
-                      ? Icons.favorite_border
-                      : Icons.favorite,
+                      ? Ionicons.heart_outline
+                      : Ionicons.heart,
                   count: post.counts.likes,
                   isActive: post.userReaction != null,
-                  onTap: () => _showReactions(post.id),
+                  onLongPress: () => _showReactions(post.id),
                   isDark: isDark,
                 ),
                 const SizedBox(height: 20),
 
                 // Comment button
                 _buildActionButton(
-                  icon: Icons.chat_bubble_outline,
+                  icon: Ionicons.chatbubble_outline,
                   count: post.counts.comments,
                   onTap: () {
                     _showComments(context, post.id);
@@ -742,7 +1098,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
                 // Share button
                 _buildActionButton(
-                  icon: Icons.share_outlined,
+                  icon: Ionicons.arrow_redo_outline,
                   count: post.counts.shares,
                   onTap: () {
                     ShareBottomSheet.show(
@@ -827,7 +1183,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
 
                 // Bookmark button
                 _buildActionButton(
-                  icon: post.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                  icon: post.isBookmarked ? Ionicons.bookmark : Ionicons.bookmark_outline,
                   count: post.counts.bookmarks,
                   isActive: post.isBookmarked,
                   onTap: () => _toggleBookmark(post.id),
@@ -844,7 +1200,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
   Widget _buildActionButton({
     required IconData icon,
     required int count,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
     required bool isDark,
     bool isActive = false,
   }) {
@@ -852,6 +1209,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
       children: [
         GestureDetector(
           onTap: onTap,
+          onLongPress: onLongPress,
           child: Container(
             width: 48,
             height: 48,
@@ -863,9 +1221,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
             ),
             child: Icon(
               icon,
-              color: isActive
-                  ? const Color(0xFFBFAE01)
-                  : const Color(0xFF666666),
+              color: Colors.white,
               size: 24,
             ),
           ),
@@ -926,6 +1282,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> {
           setState(() {
             _videoPosts[idx] = p.copyWith(counts: updatedCounts);
           });
+          // Emit event for other pages to sync
+          PostEvents.emit(PostUpdateEvent(
+            originalPostId: p.originalPostId ?? p.id,
+            counts: updatedCounts,
+            userReaction: p.userReaction,
+            isBookmarked: p.isBookmarked,
+          ));
         }
 
         if (!ctx.mounted) return;
