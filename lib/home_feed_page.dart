@@ -1643,8 +1643,24 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                   );
                                 },
                               );
+                            } else {
+                              // No stories - show type picker
+                              StoryTypePicker.show(
+                                context,
+                                onSelected: (type) async {
+                                  if (_useDesktopPopup(context)) {
+                                    await StoryComposerPopup.show(context,
+                                        type: type);
+                                  } else {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) => _composerPage(type)),
+                                    );
+                                  }
+                                },
+                              );
                             }
-                            // If no stories, tapping ring does nothing
                           } else {
                             if (_useDesktopPopup(context)) {
                               await StoryViewerPopup.show(
@@ -2082,8 +2098,26 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                           );
                                         },
                                       );
+                                    } else {
+                                      // No active stories - show type picker
+                                      StoryTypePicker.show(
+                                        context,
+                                        onSelected: (type) async {
+                                          if (_useDesktopPopup(context)) {
+                                            await StoryComposerPopup.show(
+                                                context,
+                                                type: type);
+                                          } else {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      _composerPage(type)),
+                                            );
+                                          }
+                                        },
+                                      );
                                     }
-                                    // If no stories, tapping ring does nothing
                                   } else {
                                     if (_useDesktopPopup(context)) {
                                       await StoryViewerPopup.show(
