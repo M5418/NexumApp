@@ -33,8 +33,8 @@ class ToolsOverlay {
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
-                      // Transparent blur: no dimming overlay, only blur.
-                      color: Colors.transparent,
+                      // Semi-transparent overlay to help blur work better with videos
+                      color: Colors.black.withValues(alpha: 0.3),
                     ),
                   ),
                 ),
