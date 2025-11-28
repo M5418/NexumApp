@@ -158,26 +158,18 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
       final inboundIds = followers.map((f) => f.followerId).toSet();
       final outboundIds = following.map((f) => f.followedId).toSet();
-      final allIds = <String>{...inboundIds, ...outboundIds}..remove(currentUid);
 
       debugPrint('👥 Connection Stats:');
       debugPrint('   Followers (who follow you): ${inboundIds.length}');
       debugPrint('   Following (you follow them): ${outboundIds.length}');
-      debugPrint('   Total unique connections: ${allIds.length}');
 
-      if (allIds.isEmpty) {
-        debugPrint('ℹ️  No connections found - showing empty list');
-        if (!mounted) return;
-        setState(() {
-          users = [];
-          _loading = false;
-        });
-        return;
-      }
+      // Fetch ALL users from the database (not just connections)
+      debugPrint('🔍 Fetching all users from database...');
+      final allProfiles = await userRepo.getSuggestedUsers(limit: 100);
+      debugPrint('📋 Fetched ${allProfiles.length} total users');
 
-      final profiles = await userRepo.getUsers(allIds.toList());
-      final returnedIds = profiles.map((p) => p.uid).toSet();
-      final missingIds = allIds.difference(returnedIds);
+      // Convert to list and filter out current user
+      final profiles = allProfiles.where((p) => p.uid != currentUid).toList();
 
       final mapped = profiles.map((p) {
         final id = p.uid;
@@ -200,41 +192,38 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
           isConnected: outboundIds.contains(id),
           theyConnectToYou: inboundIds.contains(id),
         );
-      }).toList()
-      ..addAll(missingIds.map((id) => User(
-            id: id,
-            fullName: 'User',
-            username: '@user',
-            bio: '',
-            avatarUrl: '',
-            coverUrl: '',
-            isConnected: outboundIds.contains(id),
-            theyConnectToYou: inboundIds.contains(id),
-          )));
+      }).toList();
 
-      // ⚡ FILTER: Exclude mutually connected users (full connections)
-      // Only show users who are NOT fully connected (one-way or no connection)
+      // ⚡ FILTER: Exclude ONLY mutually connected users
+      // Show ALL other users: one-way connections AND no connections
       debugPrint('📊 Filtering ${mapped.length} users:');
       int mutualCount = 0;
       int oneWayCount = 0;
+      int noConnectionCount = 0;
       
       final filteredUsers = mapped.where((user) {
         // Exclude if BOTH users follow each other (mutual connection)
         final isMutuallyConnected = user.isConnected && user.theyConnectToYou;
+        final hasNoConnection = !user.isConnected && !user.theyConnectToYou;
+        
         if (isMutuallyConnected) {
           mutualCount++;
           debugPrint('   ❌ ${user.fullName}: Mutual (excluded)');
+        } else if (hasNoConnection) {
+          noConnectionCount++;
+          debugPrint('   ✅ ${user.fullName}: No connection (shown)');
         } else {
           oneWayCount++;
-          final type = user.isConnected ? 'You follow them' : (user.theyConnectToYou ? 'They follow you' : 'No connection');
-          debugPrint('   ✅ ${user.fullName}: $type');
+          final type = user.isConnected ? 'You follow them' : 'They follow you';
+          debugPrint('   ✅ ${user.fullName}: $type (shown)');
         }
-        return !isMutuallyConnected; // Only show if NOT mutually connected
+        return !isMutuallyConnected; // Show if NOT mutually connected
       }).toList();
 
       debugPrint('📋 Filter Results:');
       debugPrint('   Mutual connections (hidden): $mutualCount');
       debugPrint('   One-way connections (shown): $oneWayCount');
+      debugPrint('   No connections (shown): $noConnectionCount');
       debugPrint('   Final list size: ${filteredUsers.length}');
 
       if (!mounted) return;
