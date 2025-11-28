@@ -160,7 +160,13 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       final outboundIds = following.map((f) => f.followedId).toSet();
       final allIds = <String>{...inboundIds, ...outboundIds}..remove(currentUid);
 
+      debugPrint('👥 Connection Stats:');
+      debugPrint('   Followers (who follow you): ${inboundIds.length}');
+      debugPrint('   Following (you follow them): ${outboundIds.length}');
+      debugPrint('   Total unique connections: ${allIds.length}');
+
       if (allIds.isEmpty) {
+        debugPrint('ℹ️  No connections found - showing empty list');
         if (!mounted) return;
         setState(() {
           users = [];
@@ -208,11 +214,28 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
       // ⚡ FILTER: Exclude mutually connected users (full connections)
       // Only show users who are NOT fully connected (one-way or no connection)
+      debugPrint('📊 Filtering ${mapped.length} users:');
+      int mutualCount = 0;
+      int oneWayCount = 0;
+      
       final filteredUsers = mapped.where((user) {
         // Exclude if BOTH users follow each other (mutual connection)
         final isMutuallyConnected = user.isConnected && user.theyConnectToYou;
+        if (isMutuallyConnected) {
+          mutualCount++;
+          debugPrint('   ❌ ${user.fullName}: Mutual (excluded)');
+        } else {
+          oneWayCount++;
+          final type = user.isConnected ? 'You follow them' : (user.theyConnectToYou ? 'They follow you' : 'No connection');
+          debugPrint('   ✅ ${user.fullName}: $type');
+        }
         return !isMutuallyConnected; // Only show if NOT mutually connected
       }).toList();
+
+      debugPrint('📋 Filter Results:');
+      debugPrint('   Mutual connections (hidden): $mutualCount');
+      debugPrint('   One-way connections (shown): $oneWayCount');
+      debugPrint('   Final list size: ${filteredUsers.length}');
 
       if (!mounted) return;
       setState(() {
