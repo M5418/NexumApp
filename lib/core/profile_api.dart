@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:firebase_storage/firebase_storage.dart' as fs;
+import 'package:flutter/foundation.dart';
 
 class ProfileApi {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -52,27 +52,90 @@ class ProfileApi {
     void setIf(String key, String newKey) {
       if (data.containsKey(key)) updates[newKey] = data[key];
     }
+    
+    // Basic profile info
     setIf('first_name', 'firstName');
     setIf('last_name', 'lastName');
     setIf('bio', 'bio');
+    setIf('status', 'status');
     setIf('profile_photo_url', 'avatarUrl');
     setIf('cover_photo_url', 'coverUrl');
     setIf('email', 'email');
+    setIf('displayName', 'displayName');
+    
+    // Personal details
+    setIf('birthday', 'dateOfBirth');
+    setIf('date_of_birth', 'dateOfBirth');
+    setIf('gender', 'gender');
+    
+    // Location fields - map from various possible names
+    if (data.containsKey('street')) {
+      updates['address'] = data['street'];
+    } else {
+      setIf('address', 'address');
+    }
+    setIf('city', 'city');
+    if (data.containsKey('state')) {
+      // Some forms might use 'state', map it to city or a dedicated field if needed
+      // For now, we'll keep state separate or combine with city
+    }
+    setIf('postal_code', 'postalCode');
+    setIf('country', 'country');
+    
+    // Username with lowercase variant
     if (data.containsKey('username')) {
       final v = (data['username'] ?? '').toString();
       updates['username'] = v;
       updates['usernameLower'] = v.toLowerCase();
     }
+    
+    // Interest domains
     if (data.containsKey('interest_domains')) {
       updates['interestDomains'] = List<String>.from(
         (data['interest_domains'] as List?)?.map((e) => e.toString()) ?? const [],
       );
     }
+    
+    // Professional experiences
+    if (data.containsKey('professional_experiences')) {
+      updates['professionalExperiences'] = data['professional_experiences'];
+    }
+    if (data.containsKey('professionalExperiences')) {
+      updates['professionalExperiences'] = data['professionalExperiences'];
+    }
+    
+    // Trainings
+    if (data.containsKey('trainings')) {
+      updates['trainings'] = data['trainings'];
+    }
+    
+    // Social counters
+    if (data.containsKey('followersCount')) {
+      updates['followersCount'] = data['followersCount'];
+    }
+    if (data.containsKey('followingCount')) {
+      updates['followingCount'] = data['followingCount'];
+    }
+    if (data.containsKey('postsCount')) {
+      updates['postsCount'] = data['postsCount'];
+    }
+    
+    // Flags
+    if (data.containsKey('isVerified')) {
+      updates['isVerified'] = data['isVerified'];
+    }
+    
+    // Settings
     for (final k in ['show_reposts', 'show_suggested_posts', 'prioritize_interests']) {
       if (data.containsKey(k)) updates[k] = data[k];
     }
+    
     updates['lastActive'] = FieldValue.serverTimestamp();
+    
+    debugPrint('💾 Updating Firestore with fields: ${updates.keys.toList()}');
     await _db.collection('users').doc(u.uid).set(updates, SetOptions(merge: true));
+    debugPrint('✅ Firestore update successful');
+    
     final fresh = await _db.collection('users').doc(u.uid).get();
     final d = _legacyFromFirestore(fresh.data() ?? {});
     return {'ok': true, 'data': {'id': u.uid, 'email': u.email, ...d}};
