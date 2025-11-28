@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../config/cache_config.dart';
+import 'post_options_bottom_sheet.dart';
+import 'package:flutter/services.dart';
 import 'package:readmore/readmore.dart';
 import 'package:ionicons/ionicons.dart';
 import '../models/post.dart';
@@ -287,6 +289,93 @@ class _PostCardState extends State<PostCard> {
     return widgets;
   }
 
+  void _showPostOptions(BuildContext context) {
+    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+    final isOwnPost = currentUserId == widget.post.authorId;
+
+    PostOptionsBottomSheet.show(
+      context,
+      isOwnPost: isOwnPost,
+      isBookmarked: _isBookmarked,
+      onBookmark: () {
+        setState(() {
+          _isBookmarked = !_isBookmarked;
+        });
+        widget.onBookmarkToggle?.call(_effectivePostId());
+      },
+      onShare: () {
+        widget.onShare?.call(_effectivePostId());
+      },
+      onCopyLink: () {
+        final postId = _effectivePostId();
+        // Copy link to clipboard
+        Clipboard.setData(ClipboardData(text: 'https://nexum.app/post/$postId'));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Link copied to clipboard'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      },
+      onEdit: isOwnPost ? () {
+        // TODO: Implement edit functionality
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Edit functionality coming soon')),
+        );
+      } : null,
+      onDelete: isOwnPost ? () {
+        // Show confirmation dialog
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Delete Post'),
+            content: const Text('Are you sure you want to delete this post?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  // TODO: Implement delete functionality
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Delete functionality coming soon')),
+                  );
+                },
+                child: const Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+      } : null,
+      onReport: !isOwnPost ? () {
+        // TODO: Implement report functionality
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report functionality coming soon')),
+        );
+      } : null,
+      onMuteUser: !isOwnPost ? () {
+        // TODO: Implement mute functionality
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mute functionality coming soon')),
+        );
+      } : null,
+      onBlockUser: !isOwnPost ? () {
+        // TODO: Implement block functionality
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Block functionality coming soon')),
+        );
+      } : null,
+      onHidePost: !isOwnPost ? () {
+        // TODO: Implement hide functionality
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Hide functionality coming soon')),
+        );
+      } : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode =
@@ -449,7 +538,7 @@ class _PostCardState extends State<PostCard> {
                   ),
                 ),
                 IconButton(
-                  onPressed: () {},
+                  onPressed: () => _showPostOptions(context),
                   icon: Icon(Icons.more_horiz, color: secondaryTextColor),
                 ),
               ],

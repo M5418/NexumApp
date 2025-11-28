@@ -11,6 +11,9 @@ import '../repositories/firebase/firebase_translate_repository.dart';
 import '../core/i18n/language_provider.dart';
 import '../core/time_utils.dart';
 import 'auto_play_video.dart';
+import 'post_options_bottom_sheet.dart';
+import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 class HomePostCard extends StatefulWidget {
   final Post post;
@@ -291,6 +294,82 @@ class _HomePostCardState extends State<HomePostCard> {
     return widgets;
   }
 
+  void _showPostOptions(BuildContext context) {
+    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+    final isOwnPost = currentUserId == widget.post.authorId;
+
+    PostOptionsBottomSheet.show(
+      context,
+      isOwnPost: isOwnPost,
+      isBookmarked: widget.post.isBookmarked,
+      onBookmark: () {
+        widget.onBookmarkToggle?.call(_effectivePostId());
+      },
+      onShare: () {
+        widget.onShare?.call(_effectivePostId());
+      },
+      onCopyLink: () {
+        final postId = _effectivePostId();
+        Clipboard.setData(ClipboardData(text: 'https://nexum.app/post/$postId'));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Link copied to clipboard'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      },
+      onEdit: isOwnPost ? () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Edit functionality coming soon')),
+        );
+      } : null,
+      onDelete: isOwnPost ? () {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Delete Post'),
+            content: const Text('Are you sure you want to delete this post?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Delete functionality coming soon')),
+                  );
+                },
+                child: const Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+      } : null,
+      onReport: !isOwnPost ? () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report functionality coming soon')),
+        );
+      } : null,
+      onMuteUser: !isOwnPost ? () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mute functionality coming soon')),
+        );
+      } : null,
+      onBlockUser: !isOwnPost ? () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Block functionality coming soon')),
+        );
+      } : null,
+      onHidePost: !isOwnPost ? () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Hide functionality coming soon')),
+        );
+      } : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -410,7 +489,7 @@ class _HomePostCardState extends State<HomePostCard> {
                 ),
               ),
               IconButton(
-                onPressed: () {},
+                onPressed: () => _showPostOptions(context),
                 icon: Icon(Icons.more_horiz, color: _getTextColor()),
               ),
             ],
