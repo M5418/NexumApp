@@ -12,9 +12,7 @@ import 'responsive/responsive_breakpoints.dart';
 import 'other_user_profile_page.dart';
 import 'profile_page.dart';
 import 'home_feed_page.dart';
-
-// Official Nexum account ID for welcome messages
-const String kNexumOfficialAccountId = 'nexum_official';
+import 'core/admin_config.dart';
 
 class ConnectFriendsPage extends StatefulWidget {
   final String firstName;
@@ -110,14 +108,14 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
       final db = FirebaseFirestore.instance;
 
       // Check if official account exists
-      final officialAccount = await userRepo.getUserProfile(kNexumOfficialAccountId);
+      final officialAccount = await userRepo.getUserProfile(AdminConfig.adminUserId);
       if (officialAccount == null) {
         debugPrint('⚠️ Nexum official account not found, skipping welcome message');
         return;
       }
 
       // Create or get conversation with Nexum official account
-      final conversationId = await conversationRepo.createOrGet(kNexumOfficialAccountId);
+      final conversationId = await conversationRepo.createOrGet(AdminConfig.adminUserId);
       debugPrint('📝 Conversation created/retrieved: $conversationId');
 
       // Get user's first name for personalized greeting
@@ -146,7 +144,7 @@ Happy connecting! 🚀''';
       // Create message document directly in Firestore (sent by official account)
       final messageData = {
         'conversationId': conversationId,
-        'senderId': kNexumOfficialAccountId,
+        'senderId': AdminConfig.adminUserId,
         'senderName': officialName,
         'senderAvatarUrl': officialAvatar,
         'content': welcomeText,
@@ -166,7 +164,7 @@ Happy connecting! 🚀''';
             ? '${welcomeText.substring(0, 100)}...' 
             : welcomeText,
         'lastMessageAt': FieldValue.serverTimestamp(),
-        'lastFromUserId': kNexumOfficialAccountId,
+        'lastFromUserId': AdminConfig.adminUserId,
         'updatedAt': FieldValue.serverTimestamp(),
         'unread.${currentUser.uid}': FieldValue.increment(1),
       }, SetOptions(merge: true));
