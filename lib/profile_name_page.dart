@@ -382,6 +382,10 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
 
     setState(() => _isSaving = true);
     try {
+      debugPrint('🆕 INITIALIZING NEW USER PROFILE WITH ALL FIELDS');
+      debugPrint('   Name: $first $last');
+      debugPrint('   Username: $username');
+      
       // First profile update - initialize ALL fields with defaults
       await ProfileApi().update({
         'first_name': first,
@@ -406,6 +410,8 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
         // Initialize flags
         'isVerified': false,
       });
+      
+      debugPrint('✅ USER PROFILE INITIALIZED SUCCESSFULLY WITH ALL FIELDS');
       if (!mounted) return;
 
       final next = ProfileBirthdayPage(firstName: first, lastName: last);
