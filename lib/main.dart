@@ -58,6 +58,8 @@ import 'repositories/firebase/firebase_analytics_repository.dart';
 import 'services/community_interest_sync_service.dart';
 import 'fix_communities.dart';
 import 'providers/follow_state.dart';
+import 'config/cache_config.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Firebase App Check reCAPTCHA Enterprise site key
 // Pass via --dart-define when running:
@@ -76,6 +78,10 @@ void _sanityLogFirebase() {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Configure caching for better performance
+  CacheConfig.configureImageCache();
+  debugPrint('✅ Image cache configured: 500 images, 200MB');
+  
   // Prevent duplicate Firebase initialization on hot reload
   try {
     await Firebase.initializeApp(
@@ -84,6 +90,19 @@ Future<void> main() async {
   } catch (e) {
     // App already initialized (hot restart), ignore
     debugPrint('Firebase already initialized: $e');
+  }
+  
+  // Enable Firestore offline persistence for faster loads
+  if (!kIsWeb) {
+    try {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+      debugPrint('✅ Firestore offline persistence enabled');
+    } catch (e) {
+      debugPrint('⚠️ Firestore persistence setup failed: $e');
+    }
   }
   
   // Sanity check (dev only)

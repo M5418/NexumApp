@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -1440,17 +1439,19 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
-  // Background upload: doesn't block UI
+  // Background upload: doesn't block UI - PARALLEL UPLOADS FOR SPEED
   Future<void> _uploadMediaInBackground(String postId, String text, List<MediaItem> items) async {
     try {
-      final mediaUrls = <String>[];
+      debugPrint('💾 Starting parallel upload of ${items.length} media items');
       
-      for (int i = 0; i < items.length; i++) {
-        final item = items[i];
+      // Upload all media in parallel for faster performance
+      final uploadFutures = items.asMap().entries.map((entry) async {
+        final i = entry.key;
+        final item = entry.value;
         final xf = item.xfile;
         final path = item.path;
         
-        if (xf == null && (path == null || path.isEmpty)) continue;
+        if (xf == null && (path == null || path.isEmpty)) return null;
 
         String? url;
         if (xf != null) {
@@ -1462,10 +1463,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
           url = path; // Already uploaded
         }
 
-        if (url != null && url.isNotEmpty) {
-          mediaUrls.add(url);
-        }
-      }
+        return url;
+      }).toList();
+      
+      // Wait for all uploads to complete
+      final urls = await Future.wait(uploadFutures);
+      final mediaUrls = urls.whereType<String>().where((u) => u.isNotEmpty).toList();
 
       if (mediaUrls.isEmpty) {
         debugPrint('⚠️ No media URLs to update');

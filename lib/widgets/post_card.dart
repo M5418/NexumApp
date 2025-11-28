@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../config/cache_config.dart';
 import 'package:readmore/readmore.dart';
 import 'package:ionicons/ionicons.dart';
 import '../models/post.dart';
@@ -195,6 +196,9 @@ class _PostCardState extends State<PostCard> {
           clipBehavior: Clip.antiAlias,
           child: CachedNetworkImage(
             imageUrl: validImageUrls.first,
+            cacheManager: CacheConfig.customCacheManager,
+            maxWidthDiskCache: 1200,
+            maxHeightDiskCache: 1200,
             fit: BoxFit.cover,
             placeholder: (context, url) => Container(
               color: secondaryTextColor.withAlpha(51),
@@ -239,6 +243,9 @@ class _PostCardState extends State<PostCard> {
                 clipBehavior: Clip.antiAlias,
                 child: CachedNetworkImage(
                   imageUrl: validImageUrls[index],
+                  cacheManager: CacheConfig.customCacheManager,
+                  maxWidthDiskCache: 600,
+                  maxHeightDiskCache: 800,
                   fit: BoxFit.cover,
                   placeholder: (context, url) => Container(
                     color: secondaryTextColor.withAlpha(51),
