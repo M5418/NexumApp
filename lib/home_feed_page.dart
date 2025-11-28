@@ -602,6 +602,15 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         ? '$firstName $lastName'.trim()
         : (author?.displayName ?? author?.username ?? author?.email ?? 'User');
     
+    // Debug logging for video posts
+    if (mediaType == MediaType.video) {
+      debugPrint('📦 CREATING VIDEO POST:');
+      debugPrint('  postId: ${m.id}');
+      debugPrint('  mediaType: $mediaType');
+      debugPrint('  videoUrl: $videoUrl');
+      debugPrint('  imageUrls: $imageUrls');
+      debugPrint('  normUrls: $normUrls');
+    }
     
     return Post(
       id: m.id,

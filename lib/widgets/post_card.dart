@@ -140,6 +140,16 @@ class _PostCardState extends State<PostCard> {
         ? widget.post.videoUrl
         : null;
 
+    // Debug logging for video posts
+    if (widget.post.mediaType == MediaType.video) {
+      debugPrint('🎥 VIDEO POST DEBUG:');
+      debugPrint('  mediaType: ${widget.post.mediaType}');
+      debugPrint('  videoUrl: ${widget.post.videoUrl}');
+      debugPrint('  validVideoUrl: $validVideoUrl');
+      debugPrint('  imageUrls: ${widget.post.imageUrls}');
+      debugPrint('  validImageUrls: $validImageUrls');
+    }
+
     // Show loading indicator if media is still uploading
     final hasPlaceholders = widget.post.imageUrls.any(_isPlaceholderUrl) ||
         (widget.post.videoUrl != null && _isPlaceholderUrl(widget.post.videoUrl!));
