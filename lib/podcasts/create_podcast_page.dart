@@ -180,9 +180,38 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   }
 
   Future<void> _publish() async {
+    // Validate required fields
     if (_titleCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Title is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    
+    if (_authorCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Author is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    
+    if (_descCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Description is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    
+    if (_languageCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Language is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    
+    if (_categoryCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Category is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
@@ -197,12 +226,12 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
 
       await podcastRepo.createPodcast(
         title: _titleCtrl.text.trim(),
-        author: _authorCtrl.text.trim().isEmpty ? null : _authorCtrl.text.trim(),
-        description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+        author: _authorCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
         coverUrl: _coverUrl,
         audioUrl: _audioUrl,
-        language: _languageCtrl.text.trim().isEmpty ? null : _languageCtrl.text.trim(),
-        category: _categoryCtrl.text.trim().isEmpty ? null : _categoryCtrl.text.trim(),
+        language: _languageCtrl.text.trim(),
+        category: _categoryCtrl.text.trim(),
         tags: tags.isEmpty ? null : tags,
         isPublished: true,
       );
@@ -547,7 +576,15 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                   decoration: InputDecoration(
                     labelText: 'Title *',
                     labelStyle: GoogleFonts.inter(),
-                    border: const OutlineInputBorder(),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFBFAE01), width: 2),
+                    ),
                     filled: true,
                     fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
                   ),
@@ -559,9 +596,17 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                   controller: _authorCtrl,
                   style: GoogleFonts.inter(),
                   decoration: InputDecoration(
-                    labelText: 'Author (optional)',
+                    labelText: 'Author *',
                     labelStyle: GoogleFonts.inter(),
-                    border: const OutlineInputBorder(),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFBFAE01), width: 2),
+                    ),
                     filled: true,
                     fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
                   ),
@@ -575,9 +620,17 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                   minLines: 3,
                   style: GoogleFonts.inter(),
                   decoration: InputDecoration(
-                    labelText: 'Description (optional)',
+                    labelText: 'Description *',
                     labelStyle: GoogleFonts.inter(),
-                    border: const OutlineInputBorder(),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFBFAE01), width: 2),
+                    ),
                     filled: true,
                     fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
                     alignLabelWithHint: true,
@@ -585,20 +638,41 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Language + Category (Category is searchable dropdown)
+                // Language + Category (Both are dropdowns)
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: _languageCtrl,
-                        style: GoogleFonts.inter(),
-                        decoration: InputDecoration(
-                          labelText: 'Language',
+                      child: DropdownMenu<String>(
+                        initialSelection: _languageCtrl.text.isEmpty ? null : _languageCtrl.text,
+                        dropdownMenuEntries: const [
+                          DropdownMenuEntry(value: 'English', label: 'English'),
+                          DropdownMenuEntry(value: 'French', label: 'Français'),
+                        ],
+                        onSelected: (value) {
+                          setState(() {
+                            _languageCtrl.text = value ?? '';
+                          });
+                        },
+                        textStyle: GoogleFonts.inter(color: isDark ? Colors.white : Colors.black),
+                        menuStyle: MenuStyle(
+                          backgroundColor: WidgetStateProperty.all(isDark ? const Color(0xFF1A1A1A) : Colors.white),
+                        ),
+                        inputDecorationTheme: InputDecorationTheme(
                           labelStyle: GoogleFonts.inter(),
-                          border: const OutlineInputBorder(),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFFBFAE01), width: 2),
+                          ),
                           filled: true,
                           fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
                         ),
+                        label: Text('Language *', style: GoogleFonts.inter()),
+                        expandedInsets: EdgeInsets.zero,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -609,10 +683,18 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                         onTap: _pickCategory,
                         style: GoogleFonts.inter(),
                         decoration: InputDecoration(
-                          labelText: 'Category',
+                          labelText: 'Category *',
                           labelStyle: GoogleFonts.inter(),
                           suffixIcon: const Icon(Icons.arrow_drop_down, color: Color(0xFFBFAE01)),
-                          border: const OutlineInputBorder(),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFFBFAE01), width: 2),
+                          ),
                           filled: true,
                           fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
                         ),
@@ -627,11 +709,19 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                   controller: _tagsCtrl,
                   style: GoogleFonts.inter(),
                   decoration: InputDecoration(
-                    labelText: 'Tags (comma separated)',
+                    labelText: 'Tags (comma separated, optional)',
                     labelStyle: GoogleFonts.inter(),
                     hintText: 'technology, education, business',
                     hintStyle: GoogleFonts.inter(color: const Color(0xFF999999)),
-                    border: const OutlineInputBorder(),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFBFAE01), width: 2),
+                    ),
                     filled: true,
                     fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
                   ),
