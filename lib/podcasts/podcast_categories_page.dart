@@ -154,67 +154,281 @@ class _CategoryPodcastsPageState extends State<CategoryPodcastsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        elevation: 0,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-        title: Text(widget.category,
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : Colors.black,
-            )),
+      backgroundColor: bg,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black : Colors.white,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.category,
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${_podcasts.length} ${_podcasts.length == 1 ? 'podcast' : 'podcasts'}',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: const Color(0xFF999999),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFBFAE01).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFBFAE01).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.podcasts, size: 14, color: Color(0xFFBFAE01)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'CATEGORY',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFBFAE01),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
       body: _error != null
-          ? Center(child: Text(_error!, style: GoogleFonts.inter(color: Colors.red)))
-          : ListView.separated(
-              controller: _controller,
-              padding: const EdgeInsets.all(16),
-              itemCount: _podcasts.length + (_loading ? 1 : 0),
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (ctx, idx) {
-                if (idx >= _podcasts.length) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
-                    ),
-                  );
-                }
-                final p = _podcasts[idx];
-                return ListTile(
-                  tileColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      width: 54,
-                      height: 54,
-                      child: (p.coverUrl ?? '').isNotEmpty
-                          ? Image.network(p.coverUrl!, fit: BoxFit.cover)
-                          : Container(
-                              color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                              child: const Icon(Icons.podcasts, color: Color(0xFFBFAE01)),
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text(_error!, style: GoogleFonts.inter(color: Colors.red), textAlign: TextAlign.center),
+                ],
+              ),
+            )
+          : RefreshIndicator(
+              color: const Color(0xFFBFAE01),
+              onRefresh: () => _fetch(reset: true),
+              child: _podcasts.isEmpty && !_loading
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.podcasts,
+                            size: 80,
+                            color: isDark ? Colors.white.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.2),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No podcasts in this category',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              color: isDark ? Colors.white70 : Colors.black54,
                             ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GridView.builder(
+                      controller: _controller,
+                      padding: const EdgeInsets.all(16),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: 0.65,
+                      ),
+                      itemCount: _podcasts.length + (_loading && _podcasts.isNotEmpty ? 2 : 0),
+                      itemBuilder: (ctx, idx) {
+                        if (idx >= _podcasts.length) {
+                          return const Center(
+                            child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
+                          );
+                        }
+                        final p = _podcasts[idx];
+                        return _buildPodcastCard(p, isDark);
+                      },
+                    ),
+            ),
+    );
+  }
+
+  Widget _buildPodcastCard(Podcast podcast, bool isDark) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PodcastDetailsPage(podcast: podcast)),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.black : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            if (!isDark)
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Cover Image
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: (podcast.coverUrl ?? '').isNotEmpty
+                        ? Image.network(
+                            podcast.coverUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                              child: const Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 48),
+                            ),
+                          )
+                        : Container(
+                            color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                            child: const Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 48),
+                          ),
+                  ),
+                ),
+                // Play Button Overlay
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () {
+                      if ((podcast.audioUrl ?? '').isNotEmpty) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => PlayerPage(podcast: podcast)),
+                        );
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFBFAE01),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow,
+                        color: Colors.black,
+                        size: 20,
+                      ),
                     ),
                   ),
-                  title: Text(p.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter()),
-                  subtitle: Text(p.author ?? 'Unknown', style: GoogleFonts.inter(color: const Color(0xFF888888))),
-                  trailing: IconButton(
-                    onPressed: () => (p.audioUrl ?? '').isNotEmpty
-                        ? Navigator.push(ctx, MaterialPageRoute(builder: (_) => PlayerPage(podcast: p)))
-                        : null,
-                    icon: const Icon(Icons.play_circle_fill, color: Color(0xFFBFAE01)),
-                  ),
-                  onTap: () => Navigator.push(
-                    ctx,
-                    MaterialPageRoute(builder: (_) => PodcastDetailsPage(podcast: p)),
-                  ),
-                );
-              },
+                ),
+              ],
             ),
+            // Podcast Info
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      podcast.title,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      podcast.author ?? 'Unknown',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF999999),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    // Stats
+                    Row(
+                      children: [
+                        const Icon(Icons.favorite, size: 14, color: Colors.pink),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${podcast.likes}',
+                          style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999)),
+                        ),
+                        const SizedBox(width: 12),
+                        const Icon(Icons.play_arrow, size: 14, color: Color(0xFFBFAE01)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${podcast.plays}',
+                          style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF999999)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
