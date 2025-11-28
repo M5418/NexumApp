@@ -23,7 +23,7 @@ class _PlayerPageState extends State<PlayerPage> {
   String? _error;
 
   Duration _position = Duration.zero;
-  Duration _duration = const Duration(seconds: 1);
+  Duration _duration = Duration.zero;
   double _playbackSpeed = 1.0;
 
   @override
@@ -66,17 +66,35 @@ class _PlayerPageState extends State<PlayerPage> {
       } catch (_) {}
 
       await _player.setUrl(url);
-      if (_duration.inSeconds <= 1) {
-        _duration = _player.duration ?? _duration;
+      
+      // Get duration from player, or use podcast's durationSec as fallback
+      final playerDuration = _player.duration;
+      if (playerDuration != null && playerDuration.inSeconds > 0) {
+        _duration = playerDuration;
+      } else if (widget.podcast.durationSec != null && widget.podcast.durationSec! > 0) {
+        _duration = Duration(seconds: widget.podcast.durationSec!);
       }
+      
       if (_position > Duration.zero) {
         await _player.seek(_position);
       }
 
       _posSub = _player.positionStream.listen((pos) {
-        setState(() => _position = pos);
+        if (mounted) {
+          setState(() => _position = pos);
+        }
       });
-      _stateSub = _player.playerStateStream.listen((_) => mounted ? setState(() {}) : null);
+      
+      _stateSub = _player.playerStateStream.listen((_) {
+        if (mounted) setState(() {});
+      });
+      
+      // Listen to duration changes (for streaming)
+      _player.durationStream.listen((duration) {
+        if (mounted && duration != null && duration.inSeconds > 0) {
+          setState(() => _duration = duration);
+        }
+      });
 
       setState(() {
         _loading = false;
@@ -147,7 +165,10 @@ class _PlayerPageState extends State<PlayerPage> {
     final coverMaxWidth = isWide ? 300.0 : double.infinity;
 
     final playing = _player.playerState.playing;
-    final totalSeconds = (_duration.inSeconds <= 0 ? 1 : _duration.inSeconds).toDouble();
+    // Use actual duration, or podcast's durationSec, or 1 as last resort
+    final totalSeconds = _duration.inSeconds > 0 
+        ? _duration.inSeconds.toDouble() 
+        : (widget.podcast.durationSec ?? 1).toDouble();
 
     return Scaffold(
       backgroundColor: bg,
@@ -343,7 +364,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                   ),
                                 ),
                                 Text(
-                                  _formatDuration(_duration),
+                                  _formatDuration(Duration(seconds: totalSeconds.toInt())),
                                   style: GoogleFonts.inter(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
