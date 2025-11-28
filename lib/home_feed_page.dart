@@ -1584,7 +1584,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                             ? 'Your Story'
                             : (ring.userName.isNotEmpty
                                 ? ring.userName
-                                : '@user'),
+                                : ring.stories.isNotEmpty
+                                    ? ring.stories.first.userName
+                                    : 'User'),
                         isMine: isMine,
                         isSeen: !ring.hasUnseen,
                         onAddTap: isMine
@@ -2058,7 +2060,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                         ? 'Your Story'
                                         : (ring.userName.isNotEmpty
                                             ? ring.userName
-                                            : '@user'),
+                                            : ring.stories.isNotEmpty
+                                                ? ring.stories.first.userName
+                                                : 'User'),
                                     isMine: isMine,
                                     isSeen: !ring.hasUnseen,
 
