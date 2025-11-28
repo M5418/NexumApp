@@ -142,23 +142,77 @@ class _PlayerPageState extends State<PlayerPage> {
     final isWide = MediaQuery.of(context).size.width >= 1000;
     final bg = isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
 
-    // Desktop: limit cover width to 250px
-    final coverMaxWidth = isWide ? 250.0 : double.infinity;
+    // Desktop: limit cover width to 300px
+    final coverMaxWidth = isWide ? 300.0 : double.infinity;
 
     final playing = _player.playerState.playing;
     final totalSeconds = (_duration.inSeconds <= 0 ? 1 : _duration.inSeconds).toDouble();
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        title: Text(
-          'Now Playing',
-          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black : Colors.white,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Now Playing',
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFBFAE01).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFBFAE01).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.podcasts, size: 14, color: Color(0xFFBFAE01)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'AUDIO',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFBFAE01),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
         ),
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
@@ -207,95 +261,246 @@ class _PlayerPageState extends State<PlayerPage> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Progress bar
-                      Column(
-                        children: [
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              activeTrackColor: const Color(0xFFBFAE01),
-                              inactiveTrackColor: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
-                              thumbColor: const Color(0xFFBFAE01),
-                              overlayColor: const Color(0xFFBFAE01).withValues(alpha: 0.2),
-                              trackHeight: 4,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                            ),
-                            child: Slider(
-                              value: _position.inSeconds.clamp(0, totalSeconds.toInt()).toDouble(),
-                              max: totalSeconds,
-                              onChanged: (v) => _seekTo(v),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // Progress bar with modern design
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.black : Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            if (!isDark)
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // Modern progress bar
+                            Stack(
                               children: [
-                                Text(_formatDuration(_position), style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666))),
-                                Text(_formatDuration(_duration), style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666))),
+                                // Background track
+                                Container(
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                // Progress track with gradient
+                                FractionallySizedBox(
+                                  widthFactor: (_position.inSeconds.clamp(0, totalSeconds.toInt()) / totalSeconds).clamp(0.0, 1.0),
+                                  child: Container(
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFFD4C100), Color(0xFFBFAE01)],
+                                        begin: Alignment.centerLeft,
+                                        end: Alignment.centerRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFBFAE01).withValues(alpha: 0.4),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                // Invisible slider for interaction
+                                SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    activeTrackColor: Colors.transparent,
+                                    inactiveTrackColor: Colors.transparent,
+                                    thumbColor: const Color(0xFFBFAE01),
+                                    overlayColor: const Color(0xFFBFAE01).withValues(alpha: 0.2),
+                                    trackHeight: 8,
+                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                                  ),
+                                  child: Slider(
+                                    value: _position.inSeconds.clamp(0, totalSeconds.toInt()).toDouble(),
+                                    max: totalSeconds,
+                                    onChanged: (v) => _seekTo(v),
+                                  ),
+                                ),
                               ],
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _formatDuration(_position),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFFBFAE01),
+                                  ),
+                                ),
+                                Text(
+                                  _formatDuration(_duration),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF999999),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
 
                       const SizedBox(height: 32),
 
-                      // Controls
+                      // Controls with modern rounded buttons
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          // Speed control
                           GestureDetector(
                             onTap: _changeSpeed,
                             child: Container(
-                              width: 48,
-                              height: 48,
+                              width: 54,
+                              height: 54,
                               decoration: BoxDecoration(
                                 color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                                shape: BoxShape.circle,
+                                borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
-                                  if (!isDark)
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.13),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    ),
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
                                 ],
                               ),
                               child: Center(
                                 child: Text(
                                   '${_playbackSpeed}x',
-                                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFFBFAE01),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
 
-                          IconButton(
-                            onPressed: () => _seekTo((_position.inSeconds - 15).clamp(0, _duration.inSeconds).toDouble()),
-                            icon: const Icon(Icons.replay_10, size: 32),
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
+                          const SizedBox(width: 16),
 
+                          // Rewind 15s
                           GestureDetector(
-                            onTap: _togglePlayPause,
+                            onTap: () => _seekTo((_position.inSeconds - 15).clamp(0, _duration.inSeconds).toDouble()),
                             child: Container(
-                              width: 64,
-                              height: 64,
-                              decoration: const BoxDecoration(color: Color(0xFFBFAE01), shape: BoxShape.circle),
-                              child: Icon(playing ? Icons.pause : Icons.play_arrow, color: Colors.black, size: 32),
+                              width: 54,
+                              height: 54,
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.replay_10,
+                                size: 28,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
                             ),
                           ),
 
-                          IconButton(
-                            onPressed: () => _seekTo((_position.inSeconds + 15).clamp(0, _duration.inSeconds).toDouble()),
-                            icon: const Icon(Icons.forward_10, size: 32),
-                            color: isDark ? Colors.white : Colors.black,
+                          const SizedBox(width: 20),
+
+                          // Play/Pause button with gradient
+                          GestureDetector(
+                            onTap: _togglePlayPause,
+                            child: Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFD4C100), Color(0xFFBFAE01)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFBFAE01).withValues(alpha: 0.4),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                color: Colors.black,
+                                size: 36,
+                              ),
+                            ),
                           ),
 
-                          IconButton(
-                            onPressed: () {},
-                            icon: const Icon(Icons.bookmark_border, size: 28),
-                            color: isDark ? Colors.white : Colors.black,
+                          const SizedBox(width: 20),
+
+                          // Forward 15s
+                          GestureDetector(
+                            onTap: () => _seekTo((_position.inSeconds + 15).clamp(0, _duration.inSeconds).toDouble()),
+                            child: Container(
+                              width: 54,
+                              height: 54,
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.forward_10,
+                                size: 28,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(width: 16),
+
+                          // Bookmark
+                          GestureDetector(
+                            onTap: () {},
+                            child: Container(
+                              width: 54,
+                              height: 54,
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.bookmark_border_rounded,
+                                size: 26,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
                           ),
                         ],
                       ),
