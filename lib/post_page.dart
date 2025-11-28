@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:firebase_storage/firebase_storage.dart' as fs;
 import 'package:ionicons/ionicons.dart';
 import 'package:readmore/readmore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'dart:async';
 
@@ -72,6 +73,12 @@ class _PostPageState extends State<PostPage> {
   String? _currentUserId;
 
   String? _lastUgcCode;
+  
+  // Cache for faster loading
+  static final Map<String, PostDetail> _postCache = {};
+  static final Map<String, List<Comment>> _commentsCache = {};
+  static final Map<String, DateTime> _cacheTimestamps = {};
+  static const Duration _cacheDuration = Duration(minutes: 5);
 
   @override
   void initState() {
@@ -112,6 +119,25 @@ class _PostPageState extends State<PostPage> {
       _subscribeToComments(widget.post!.id);
       await _loadComments();
     } else {
+      // Try cache first for faster loading
+      final postId = widget.postId!;
+      if (_isCacheValid(postId)) {
+        final cachedPost = _postCache[postId];
+        final cachedComments = _commentsCache[postId];
+        if (cachedPost != null) {
+          setState(() {
+            _post = cachedPost;
+            _isBookmarked = cachedPost.isBookmarked;
+            if (cachedComments != null) {
+              _comments = cachedComments;
+              _loadingComments = false;
+            }
+            _loadingPost = false;
+          });
+        }
+      }
+      
+      // Load fresh data in background
       await _loadPostById();
       if (widget.postId != null) {
         _subscribeToPost(widget.postId!);
@@ -121,6 +147,18 @@ class _PostPageState extends State<PostPage> {
         await _loadComments();
       }
     }
+  }
+  
+  bool _isCacheValid(String key) {
+    final timestamp = _cacheTimestamps[key];
+    if (timestamp == null) return false;
+    return DateTime.now().difference(timestamp) < _cacheDuration;
+  }
+  
+  void _updateCache(String postId, PostDetail post, List<Comment> comments) {
+    _postCache[postId] = post;
+    _commentsCache[postId] = comments;
+    _cacheTimestamps[postId] = DateTime.now();
   }
 
   // ============ Analytics Tracking ============
@@ -424,6 +462,10 @@ class _PostPageState extends State<PostPage> {
       setState(() {
         _post = detail;
       });
+      // Update cache
+      if (widget.postId != null) {
+        _updateCache(widget.postId!, detail, _comments);
+      }
     });
   }
 
@@ -452,6 +494,10 @@ class _PostPageState extends State<PostPage> {
       setState(() {
         _comments = comments;
       });
+      // Update cache
+      if (_post != null && widget.postId != null) {
+        _updateCache(widget.postId!, _post!, comments);
+      }
     });
   }
 
@@ -484,6 +530,10 @@ class _PostPageState extends State<PostPage> {
       setState(() {
         _comments = comments;
       });
+      // Update cache
+      if (_post != null && widget.postId != null) {
+        _updateCache(widget.postId!, _post!, comments);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1358,7 +1408,7 @@ class _PostPageState extends State<PostPage> {
                   child: CircleAvatar(
                     radius: 20,
                     backgroundImage: _post!.authorAvatarUrl.isNotEmpty
-                        ? NetworkImage(_post!.authorAvatarUrl)
+                        ? CachedNetworkImageProvider(_post!.authorAvatarUrl)
                         : null,
                     backgroundColor: const Color(0xFFBFAE01),
                     child: _post!.authorAvatarUrl.isEmpty

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:readmore/readmore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'models/post_detail.dart';
 import 'models/comment.dart';
@@ -73,6 +74,11 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
   final FirebasePostRepository _postRepo = FirebasePostRepository();
   final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
   final FirebaseUserRepository _userRepo = FirebaseUserRepository();
+  
+  // Cache for faster loading
+  static final Map<String, PostDetail> _postCache = {};
+  static final Map<String, DateTime> _cacheTimestamps = {};
+  static const Duration _cacheDuration = Duration(minutes: 5);
 
   @override
   void initState() {
@@ -105,16 +111,54 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
   Future<void> _init() async {
     await _loadCurrentUserId();
     if (widget.post != null) {
+      // Try cache first for faster loading
+      final postId = widget.post!.id;
+      if (_isCacheValid(postId)) {
+        final cachedPost = _postCache[postId];
+        if (cachedPost != null) {
+          setState(() {
+            _post = cachedPost;
+            _isLiked = cachedPost.userReaction != null;
+            _isBookmarked = cachedPost.isBookmarked;
+            _loadingPost = false;
+          });
+        }
+      }
+      
       // Map provided Post into PostDetail and load comments
       _applyPost(widget.post!);
       await _loadComments();
     } else {
+      // Try cache first for faster loading
+      if (widget.postId != null && _isCacheValid(widget.postId!)) {
+        final cachedPost = _postCache[widget.postId!];
+        if (cachedPost != null) {
+          setState(() {
+            _post = cachedPost;
+            _isLiked = cachedPost.userReaction != null;
+            _isBookmarked = cachedPost.isBookmarked;
+            _loadingPost = false;
+          });
+        }
+      }
+      
       // Fallback: fetch by id from community API
       await _loadPostById();
       if (_post != null) {
         await _loadComments();
       }
     }
+  }
+  
+  bool _isCacheValid(String key) {
+    final timestamp = _cacheTimestamps[key];
+    if (timestamp == null) return false;
+    return DateTime.now().difference(timestamp) < _cacheDuration;
+  }
+  
+  void _updateCache(String postId, PostDetail post) {
+    _postCache[postId] = post;
+    _cacheTimestamps[postId] = DateTime.now();
   }
 
   Future<void> _loadCurrentUserId() async {
@@ -151,6 +195,8 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     setState(() {
       _post = detail;
       _isLiked = detail.userReaction != null;
+      // Update cache
+      _updateCache(p.id, detail);
       _isBookmarked = detail.isBookmarked;
     });
   }
@@ -822,7 +868,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                         child: CircleAvatar(
                                           radius: 20,
                                           backgroundImage: _post!.authorAvatarUrl.isNotEmpty
-                                              ? NetworkImage(_post!.authorAvatarUrl)
+                                              ? CachedNetworkImageProvider(_post!.authorAvatarUrl)
                                               : null,
                                           backgroundColor: const Color(0xFFBFAE01),
                                           child: _post!.authorAvatarUrl.isEmpty
