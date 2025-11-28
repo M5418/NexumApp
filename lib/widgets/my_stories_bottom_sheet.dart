@@ -161,6 +161,68 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
     return story.mediaType == 'image' ? 'Image story' : 'Video story';
   }
 
+  Future<void> _confirmDelete(StoryModel story) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Story?', style: GoogleFonts.inter()),
+        content: Text(
+          'This story will be permanently deleted. This action cannot be undone.',
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: const Color(0xFF666666))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text('Delete', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteStory(story);
+    }
+  }
+
+  Future<void> _deleteStory(StoryModel story) async {
+    try {
+      final storyRepo = context.read<StoryRepository>();
+      await storyRepo.deleteStory(story.id);
+      
+      // Remove from local list
+      setState(() {
+        _items.removeWhere((s) => s.id == story.id);
+      });
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Story deleted', style: GoogleFonts.inter()),
+            backgroundColor: const Color(0xFFBFAE01),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete story', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -272,6 +334,16 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
                               ),
                             ],
                           ),
+                        ),
+                        // Delete button
+                        IconButton(
+                          icon: Icon(
+                            Icons.delete_outline,
+                            size: 20,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                          onPressed: () => _confirmDelete(it),
+                          tooltip: 'Delete story',
                         ),
                       ],
                     );
