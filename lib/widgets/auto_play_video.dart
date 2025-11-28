@@ -124,8 +124,11 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
   }
 
   void _onVisibilityChanged(VisibilityInfo info) {
+    if (!mounted) return; // Check if widget is still mounted
+    
     final nowVisible = info.visibleFraction >= 0.5;
     if (_isVisible != nowVisible) {
+      if (!mounted) return; // Double-check before setState
       setState(() {
         _isVisible = nowVisible;
       });
