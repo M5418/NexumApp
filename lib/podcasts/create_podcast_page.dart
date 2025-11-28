@@ -25,11 +25,11 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   final _authorCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _languageCtrl = TextEditingController();
-  final _categoryCtrl = TextEditingController();
   final _tagsCtrl = TextEditingController();
 
   String? _coverUrl;
   String? _audioUrl;
+  List<String> _selectedCategories = [];
 
   bool _creating = false;
   bool _uploadingCover = false;
@@ -52,7 +52,9 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
     _descCtrl.text = draft.body;
     _coverUrl = draft.coverUrl;
     _audioUrl = draft.audioUrl;
-    _categoryCtrl.text = draft.category ?? '';
+    if (draft.category != null && draft.category!.isNotEmpty) {
+      _selectedCategories = [draft.category!];
+    }
     setState(() {});
   }
 
@@ -62,7 +64,6 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
     _authorCtrl.dispose();
     _descCtrl.dispose();
     _languageCtrl.dispose();
-    _categoryCtrl.dispose();
     _tagsCtrl.dispose();
     super.dispose();
   }
@@ -151,7 +152,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
           description: _descCtrl.text.trim(),
           coverUrl: _coverUrl,
           audioUrl: _audioUrl,
-          category: _categoryCtrl.text.trim().isEmpty ? null : _categoryCtrl.text.trim(),
+          category: _selectedCategories.isEmpty ? null : _selectedCategories.first,
         );
       } else {
         // Create new draft
@@ -160,7 +161,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
           description: _descCtrl.text.trim(),
           coverUrl: _coverUrl,
           audioUrl: _audioUrl,
-          category: _categoryCtrl.text.trim().isEmpty ? null : _categoryCtrl.text.trim(),
+          category: _selectedCategories.isEmpty ? null : _selectedCategories.first,
         );
       }
 
@@ -209,9 +210,9 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
       return;
     }
     
-    if (_categoryCtrl.text.trim().isEmpty) {
+    if (_selectedCategories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Category is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text('At least one category is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
@@ -231,7 +232,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
         coverUrl: _coverUrl,
         audioUrl: _audioUrl,
         language: _languageCtrl.text.trim(),
-        category: _categoryCtrl.text.trim(),
+        category: _selectedCategories.join(', '),
         tags: tags.isEmpty ? null : tags,
         isPublished: true,
       );
@@ -263,21 +264,23 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   }
 
   Future<void> _pickCategory() async {
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showModalBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         String query = '';
+        final tempSelected = List<String>.from(_selectedCategories);
         return StatefulBuilder(
           builder: (ctx, setModal) {
             final filtered = interestDomains
                 .where((d) => d.toLowerCase().contains(query.toLowerCase()))
                 .toList();
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
             return Container(
               height: MediaQuery.of(ctx).size.height * 0.75,
               decoration: BoxDecoration(
-                color: Theme.of(ctx).brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
+                color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 12)],
               ),
@@ -285,25 +288,59 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: TextField(
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        hintText: 'Search category',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (val) => setModal(() => query = val),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            autofocus: true,
+                            decoration: const InputDecoration(
+                              hintText: 'Search categories',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (val) => setModal(() => query = val),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, tempSelected),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFBFAE01),
+                            foregroundColor: Colors.black,
+                          ),
+                          child: Text('Done (${tempSelected.length})', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                        ),
+                      ],
                     ),
                   ),
+                  if (tempSelected.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Text(
+                        '${tempSelected.length} selected',
+                        style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFFBFAE01), fontWeight: FontWeight.w600),
+                      ),
+                    ),
                   Expanded(
                     child: ListView.separated(
                       itemCount: filtered.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (ctx, i) {
                         final v = filtered[i];
-                        return ListTile(
+                        final isSelected = tempSelected.contains(v);
+                        return CheckboxListTile(
                           title: Text(v, style: GoogleFonts.inter()),
-                          onTap: () => Navigator.pop(ctx, v),
+                          value: isSelected,
+                          activeColor: const Color(0xFFBFAE01),
+                          onChanged: (checked) {
+                            setModal(() {
+                              if (checked == true) {
+                                tempSelected.add(v);
+                              } else {
+                                tempSelected.remove(v);
+                              }
+                            });
+                          },
                         );
                       },
                     ),
@@ -317,7 +354,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
     );
     if (selected != null && mounted) {
       setState(() {
-        _categoryCtrl.text = selected;
+        _selectedCategories = selected;
       });
     }
   }
@@ -677,27 +714,65 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: TextField(
-                        controller: _categoryCtrl,
-                        readOnly: true,
-                        onTap: _pickCategory,
-                        style: GoogleFonts.inter(),
-                        decoration: InputDecoration(
-                          labelText: 'Category *',
-                          labelStyle: GoogleFonts.inter(),
-                          suffixIcon: const Icon(Icons.arrow_drop_down, color: Color(0xFFBFAE01)),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                          enabledBorder: OutlineInputBorder(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          InkWell(
+                            onTap: _pickCategory,
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1)),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1),
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                color: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _selectedCategories.isEmpty 
+                                          ? 'Select Categories *' 
+                                          : '${_selectedCategories.length} selected',
+                                      style: GoogleFonts.inter(
+                                        color: _selectedCategories.isEmpty 
+                                            ? const Color(0xFF999999)
+                                            : (isDark ? Colors.white : Colors.black),
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_drop_down, color: Color(0xFFBFAE01)),
+                                ],
+                              ),
+                            ),
                           ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: Color(0xFFBFAE01), width: 2),
-                          ),
-                          filled: true,
-                          fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
-                        ),
+                          if (_selectedCategories.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _selectedCategories.map((category) {
+                                return Chip(
+                                  label: Text(
+                                    category,
+                                    style: GoogleFonts.inter(fontSize: 12, color: Colors.black),
+                                  ),
+                                  backgroundColor: const Color(0xFFBFAE01).withValues(alpha: 0.2),
+                                  deleteIconColor: const Color(0xFFBFAE01),
+                                  onDeleted: () {
+                                    setState(() {
+                                      _selectedCategories.remove(category);
+                                    });
+                                  },
+                                  side: const BorderSide(color: Color(0xFFBFAE01), width: 1),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
