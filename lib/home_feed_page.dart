@@ -263,6 +263,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final storyRepo = context.read<StoryRepository>();
     List<StoryRingModel> rings = [];
     String? errMsg;
+    
+    // FORCE console output to verify app restarted
+    // ignore: avoid_print
+    print('🚀 HOME FEED _loadData() CALLED - Build timestamp: ${DateTime.now()}');
 
     // LOG CURRENT USER STATUS (critical for TestFlight debugging)
     debugPrint('🔐 =================================');

@@ -200,15 +200,22 @@ class _PostCardState extends State<PostCard> {
 
     final widgets = <Widget>[];
     
-    // TEMPORARY: Show debug info for video posts
-    if (widget.post.mediaType == MediaType.video) {
+    // TEMPORARY: Show debug info for ALL posts with media
+    if (widget.post.imageUrls.isNotEmpty || widget.post.videoUrl != null) {
       widgets.add(
         Container(
           padding: const EdgeInsets.all(8),
-          color: Colors.orange.withValues(alpha: 128),
+          color: widget.post.mediaType == MediaType.video 
+              ? Colors.green.withValues(alpha: 200) 
+              : Colors.red.withValues(alpha: 200),
           child: Text(
-            'DEBUG: Video Post\nvideoUrl: ${widget.post.videoUrl}\nimageUrls: ${widget.post.imageUrls}\nvalidVideoUrl: $validVideoUrl',
-            style: const TextStyle(fontSize: 10, color: Colors.white),
+            'DEBUG INFO:\n'
+            'mediaType: ${widget.post.mediaType}\n'
+            'videoUrl: ${widget.post.videoUrl}\n'
+            'imageUrls: ${widget.post.imageUrls}\n'
+            'validVideoUrl: $validVideoUrl\n'
+            'validImageUrls: $validImageUrls',
+            style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
       );
