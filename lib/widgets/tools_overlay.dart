@@ -115,12 +115,12 @@ class _ToolsCircle extends StatelessWidget {
     // Books (top), Videos (top-right), Podcasts (bottom-right),
     // Live (bottom), Communities (bottom-left), Mentorship (top-left)
     const items = [
-      _Tool(label: 'Books', icon: Icons.auto_stories_rounded),
-      _Tool(label: 'Videos', icon: Icons.play_circle_rounded),
-      _Tool(label: 'Podcasts', icon: Icons.podcasts_rounded),
-      _Tool(label: 'Live', icon: Icons.sensors_rounded),
-      _Tool(label: 'Communities', icon: Icons.diversity_3_rounded),
-      _Tool(label: 'Mentorship', icon: Icons.supervisor_account_rounded),
+      _Tool(label: 'Books', icon: Icons.menu_book_outlined),
+      _Tool(label: 'Videos', icon: Icons.ondemand_video_outlined),
+      _Tool(label: 'Podcasts', icon: Icons.mic_none_outlined),
+      _Tool(label: 'Live', icon: Icons.live_tv_outlined),
+      _Tool(label: 'Communities', icon: Icons.hub_outlined),
+      _Tool(label: 'Mentorship', icon: Icons.groups_outlined),
     ];
 
     return Container(
@@ -199,37 +199,13 @@ class _ToolTile extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Circular icon container with gradient
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFFD4C100), Color(0xFFBFAE01)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFBFAE01).withValues(alpha: 0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(
-              tool.icon,
-              color: Colors.black,
-              size: 26,
-            ),
-          ),
-          const SizedBox(height: 8),
+          Icon(tool.icon, color: Colors.black, size: 24),
+          const SizedBox(height: 6),
           Text(
             tool.label,
             style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
               color: Colors.black,
             ),
             textAlign: TextAlign.center,
