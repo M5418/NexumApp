@@ -15,25 +15,37 @@ class ProfileApi {
     final doc = await _db.collection('users').doc(u.uid).get();
     final data = _legacyFromFirestore(doc.data() ?? {});
     
-    // Fetch real-time connection counts if not in user document
-    if (!data.containsKey('connections_total_count') || data['connections_total_count'] == 0) {
-      try {
-        final followersSnap = await _db.collection('follows')
-            .where('followedUid', isEqualTo: u.uid)
-            .count()
-            .get();
-        data['connections_total_count'] = followersSnap.count ?? 0;
-      } catch (_) {}
-    }
-    
-    if (!data.containsKey('connections_inbound_count') || data['connections_inbound_count'] == 0) {
-      try {
-        final followingSnap = await _db.collection('follows')
-            .where('followerUid', isEqualTo: u.uid)
-            .count()
-            .get();
-        data['connections_inbound_count'] = followingSnap.count ?? 0;
-      } catch (_) {}
+    // ALWAYS fetch real-time connection counts from follows collection
+    try {
+      // Get followers count (people who follow you - inbound connections)
+      final followersSnap = await _db.collection('follows')
+          .where('followedId', isEqualTo: u.uid)
+          .count()
+          .get();
+      final followersCount = followersSnap.count ?? 0;
+      
+      // Get following count (people you follow - outbound connections)
+      final followingSnap = await _db.collection('follows')
+          .where('followerId', isEqualTo: u.uid)
+          .count()
+          .get();
+      final followingCount = followingSnap.count ?? 0;
+      
+      // Total connections = unique users you have any relationship with
+      // For simplicity, we'll use inbound + outbound
+      // (In reality should be union, but this gives good approximation)
+      final totalConnections = followersCount + followingCount;
+      
+      // Update counts in data
+      data['connections_total_count'] = totalConnections;
+      data['connections_inbound_count'] = followingCount;
+      
+      debugPrint('👥 Connection counts: Total=$totalConnections, Following=$followingCount, Followers=$followersCount');
+    } catch (e) {
+      debugPrint('⚠️ Error fetching connection counts: $e');
+      // Fallback to stored values or 0
+      data['connections_total_count'] = data['connections_total_count'] ?? 0;
+      data['connections_inbound_count'] = data['connections_inbound_count'] ?? 0;
     }
     
     return {'ok': true, 'data': {'id': u.uid, 'email': u.email, ...data}};
