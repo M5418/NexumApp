@@ -171,10 +171,33 @@ class FirebaseStoryRepository implements StoryRepository {
       if (stories.docs.isNotEmpty) {
         final storyModels = stories.docs.map(_storyFromDoc).toList();
         
+        // Get userName from ring data, fallback to user document if empty
+        String userName = (d['userName'] ?? '').toString();
+        String? userAvatar = d['userAvatar']?.toString();
+        
+        if (userName.isEmpty) {
+          // Fetch from user document if not in ring
+          try {
+            final userDoc = await _db.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+              final userData = userDoc.data() ?? {};
+              userName = userData['displayName']?.toString() ?? 
+                         userData['username']?.toString() ?? 
+                         'User';
+              userAvatar = userData['avatarUrl']?.toString();
+              
+              // Update the ring with correct data
+              await _updateStoryRing(userId);
+            }
+          } catch (e) {
+            userName = 'User';
+          }
+        }
+        
         rings.add(StoryRingModel(
           userId: userId,
-          userName: (d['userName'] ?? '').toString(),
-          userAvatar: d['userAvatar']?.toString(),
+          userName: userName,
+          userAvatar: userAvatar,
           hasUnseen: storyModels.any((s) => !s.viewed),
           lastStoryAt: (d['lastStoryAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
           thumbnailUrl: d['thumbnailUrl']?.toString(),
@@ -512,10 +535,33 @@ class FirebaseStoryRepository implements StoryRepository {
         if (stories.docs.isNotEmpty) {
           final storyModels = stories.docs.map(_storyFromDoc).toList();
           
+          // Get userName from ring data, fallback to user document if empty
+          String userName = (d['userName'] ?? '').toString();
+          String? userAvatar = d['userAvatar']?.toString();
+          
+          if (userName.isEmpty) {
+            // Fetch from user document if not in ring
+            try {
+              final userDoc = await _db.collection('users').doc(userId).get();
+              if (userDoc.exists) {
+                final userData = userDoc.data() ?? {};
+                userName = userData['displayName']?.toString() ?? 
+                           userData['username']?.toString() ?? 
+                           'User';
+                userAvatar = userData['avatarUrl']?.toString();
+                
+                // Update the ring with correct data
+                await _updateStoryRing(userId);
+              }
+            } catch (e) {
+              userName = 'User';
+            }
+          }
+          
           rings.add(StoryRingModel(
             userId: userId,
-            userName: (d['userName'] ?? '').toString(),
-            userAvatar: d['userAvatar']?.toString(),
+            userName: userName,
+            userAvatar: userAvatar,
             hasUnseen: storyModels.any((s) => !s.viewed),
             lastStoryAt: (d['lastStoryAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
             thumbnailUrl: d['thumbnailUrl']?.toString(),
