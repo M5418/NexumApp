@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/playlist_repository.dart';
 import 'podcasts_home_page.dart' show Podcast;
 
 Future<void> showAddToPlaylistSheet(BuildContext context, Podcast podcast) async {
@@ -23,8 +26,6 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
   bool _loading = true;
   String? _error;
   List<_PlaylistRow> _rows = [];
-  final _nameCtrl = TextEditingController();
-  bool _creating = false;
 
   @override
   void initState() {
@@ -32,53 +33,134 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
     _load();
   }
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
-    setState(() {
-      _loading = false;
-      _error = null;
-      // Start with an empty set of playlists; user can create locally below.
-      _rows = [];
-    });
+    setState(() => _loading = true);
+    try {
+      final playlistRepo = context.read<PlaylistRepository>();
+      final playlists = await playlistRepo.getUserPlaylists();
+      
+      final rows = <_PlaylistRow>[];
+      for (final playlist in playlists) {
+        final contains = playlist.podcastIds.contains(widget.podcast.id);
+        rows.add(_PlaylistRow(
+          id: playlist.id,
+          name: playlist.name,
+          isPrivate: playlist.isPrivate,
+          contains: contains,
+          itemsCount: playlist.podcastIds.length,
+        ));
+      }
+      
+      setState(() {
+        _rows = rows;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load playlists: $e';
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _toggle(String playlistId, bool nextVal) async {
-    // Local state update only; backend integration removed with legacy API.
-    setState(() {
-      _rows = _rows.map((r) => r.id == playlistId ? r.copyWith(contains: nextVal) : r).toList();
-    });
-    final msg = nextVal ? 'Added to playlist' : 'Removed from playlist';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg, style: GoogleFonts.inter())),
-    );
+    try {
+      final playlistRepo = context.read<PlaylistRepository>();
+      
+      if (nextVal) {
+        await playlistRepo.addPodcastToPlaylist(playlistId, widget.podcast.id);
+      } else {
+        await playlistRepo.removePodcastFromPlaylist(playlistId, widget.podcast.id);
+      }
+      
+      setState(() {
+        _rows = _rows.map((r) => r.id == playlistId ? r.copyWith(contains: nextVal) : r).toList();
+      });
+      
+      final msg = nextVal ? 'Added to playlist' : 'Removed from playlist';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg, style: GoogleFonts.inter())),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+    }
   }
 
-  Future<void> _createPlaylist() async {
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
-    setState(() => _creating = true);
-    // Create locally and auto-add current podcast.
-    final pid = DateTime.now().millisecondsSinceEpoch.toString();
-    final newRow = _PlaylistRow(
-      id: pid,
-      name: name,
-      isPrivate: false,
-      contains: true,
-      itemsCount: 1,
+  Future<void> _showCreatePlaylistDialog() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final nameCtrl = TextEditingController();
+    
+    final name = await showCupertinoDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return CupertinoAlertDialog(
+          title: Text(
+            'New Playlist',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: CupertinoTextField(
+              controller: nameCtrl,
+              placeholder: 'Playlist name',
+              autofocus: true,
+              style: GoogleFonts.inter(color: isDark ? Colors.white : Colors.black),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.all(12),
+            ),
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: GoogleFonts.inter()),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()),
+              child: Text('Create', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+      },
     );
-    setState(() {
-      _rows = [newRow, ..._rows];
-      _creating = false;
-      _nameCtrl.clear();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Playlist created', style: GoogleFonts.inter())),
-    );
+    
+    if (name == null || name.isEmpty) return;
+    
+    if (!mounted) return;
+    
+    try {
+      final playlistRepo = context.read<PlaylistRepository>();
+      final playlistId = await playlistRepo.createPlaylist(name);
+      
+      // Auto-add current podcast to new playlist
+      await playlistRepo.addPodcastToPlaylist(playlistId, widget.podcast.id);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Playlist created', style: GoogleFonts.inter())),
+      );
+      
+      // Reload playlists
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error creating playlist: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -131,32 +213,35 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (ctx, idx) {
                     if (idx == 0) {
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _nameCtrl,
-                              decoration: const InputDecoration(
-                                hintText: 'New playlist name',
-                                isDense: true,
-                                border: OutlineInputBorder(),
+                      // Create New Playlist Button
+                      return GestureDetector(
+                        onTap: _showCreatePlaylistDialog,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFBFAE01).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFBFAE01).withValues(alpha: 0.4),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.add_circle_outline, color: Color(0xFFBFAE01), size: 22),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Create New Playlist',
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFFBFAE01),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: _creating ? null : _createPlaylist,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFBFAE01),
-                              foregroundColor: Colors.black,
-                              elevation: 0,
-                            ),
-                            child: _creating
-                                ? const SizedBox(
-                                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                                : Text('Create', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                          ),
-                        ],
+                        ),
                       );
                     }
                     final r = _rows[idx - 1];

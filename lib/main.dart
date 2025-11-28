@@ -20,6 +20,7 @@ import 'repositories/interfaces/community_repository.dart';
 import 'repositories/interfaces/mentorship_repository.dart';
 import 'repositories/interfaces/book_repository.dart';
 import 'repositories/interfaces/podcast_repository.dart';
+import 'repositories/interfaces/playlist_repository.dart';
 import 'repositories/interfaces/story_repository.dart';
 import 'repositories/firebase/firebase_auth_repository.dart';
 import 'repositories/firebase/firebase_storage_repository.dart';
@@ -34,6 +35,7 @@ import 'repositories/firebase/firebase_community_repository.dart';
 import 'repositories/firebase/firebase_mentorship_repository.dart';
 import 'repositories/firebase/firebase_book_repository.dart';
 import 'repositories/firebase/firebase_podcast_repository.dart';
+import 'repositories/firebase/firebase_playlist_repository.dart';
 import 'repositories/firebase/firebase_story_repository.dart';
 import 'repositories/firebase/firebase_kyc_repository.dart';
 import 'repositories/firebase/firebase_report_repository.dart';
@@ -245,6 +247,7 @@ class MyApp extends StatelessWidget {
         Provider<MentorshipRepository>(create: (_) => FirebaseMentorshipRepository()),
         Provider<BookRepository>(create: (_) => FirebaseBookRepository()),
         Provider<PodcastRepository>(create: (_) => FirebasePodcastRepository()),
+        Provider<PlaylistRepository>(create: (_) => FirebasePlaylistRepository()),
         ProxyProvider2<MessageRepository, FollowRepository, StoryRepository>(
           update: (context, messageRepo, followRepo, previous) => FirebaseStoryRepository(
             messageRepository: messageRepo,

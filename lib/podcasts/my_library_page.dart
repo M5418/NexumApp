@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/playlist_repository.dart';
 import 'my_episodes_page.dart';
 import 'favorite_playlist_page.dart';
 
@@ -23,44 +25,100 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = false;
-      _error = null;
-      _playlists = [];
-    });
+    setState(() => _loading = true);
+    try {
+      final playlistRepo = context.read<PlaylistRepository>();
+      final playlists = await playlistRepo.getUserPlaylists();
+      
+      final rows = <_PlaylistRow>[];
+      for (final playlist in playlists) {
+        rows.add(_PlaylistRow(
+          id: playlist.id,
+          name: playlist.name,
+          isPrivate: playlist.isPrivate,
+          itemsCount: playlist.podcastIds.length,
+        ));
+      }
+      
+      setState(() {
+        _playlists = rows;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load playlists: $e';
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _createPlaylist() async {
-    final nameCtrl = TextEditingController();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final name = await showDialog<String>(
+    final nameCtrl = TextEditingController();
+    
+    final name = await showCupertinoDialog<String>(
       context: context,
+      barrierDismissible: true,
       builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-          title: Text('New Playlist', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-          content: TextField(
-            controller: nameCtrl,
-            decoration: const InputDecoration(hintText: 'Playlist name'),
+        return CupertinoAlertDialog(
+          title: Text(
+            'New Playlist',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: CupertinoTextField(
+              controller: nameCtrl,
+              placeholder: 'Playlist name',
+              autofocus: true,
+              style: GoogleFonts.inter(color: isDark ? Colors.white : Colors.black),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.all(12),
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: GoogleFonts.inter()),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
               onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01), foregroundColor: Colors.black),
-              child: const Text('Create'),
+              child: Text('Create', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
             ),
           ],
         );
       },
     );
+    
     if (name == null || name.isEmpty) return;
-    // Placeholder: playlist creation will be handled elsewhere
+    
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Playlist created', style: GoogleFonts.inter())),
-    );
-    await _load();
+    
+    try {
+      final playlistRepo = context.read<PlaylistRepository>();
+      await playlistRepo.createPlaylist(name);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Playlist created', style: GoogleFonts.inter())),
+      );
+      
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
