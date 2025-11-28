@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:cached_network_image/cached_network_image.dart';
+import '../repositories/firebase/firebase_user_repository.dart';
+import '../repositories/interfaces/follow_repository.dart';
+import '../repositories/interfaces/message_repository.dart';
 
 class ShareUser {
   final String id;
@@ -63,43 +69,66 @@ class ShareBottomSheet extends StatefulWidget {
 
 class _ShareBottomSheetState extends State<ShareBottomSheet> {
   final TextEditingController _messageController = TextEditingController();
-  late List<ShareUser> _users;
+  List<ShareUser> _users = [];
+  bool _loading = true;
+  String _currentUserName = '';
+  String _currentUserAvatar = '';
+  
+  final FirebaseUserRepository _userRepo = FirebaseUserRepository();
 
   @override
   void initState() {
     super.initState();
-    _users = [
-      ShareUser(
-        id: '1',
-        name: '@ava_',
-        avatarUrl:
-            'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=200&h=200&fit=crop&crop=face',
-      ),
-      ShareUser(
-        id: '2',
-        name: '@ava_',
-        avatarUrl:
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
-      ),
-      ShareUser(
-        id: '3',
-        name: '@luc_',
-        avatarUrl:
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
-      ),
-      ShareUser(
-        id: '4',
-        name: '@an_',
-        avatarUrl:
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face',
-      ),
-      ShareUser(
-        id: '5',
-        name: '@ada_',
-        avatarUrl:
-            'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop&crop=face',
-      ),
-    ];
+    _loadData();
+  }
+  
+  Future<void> _loadData() async {
+    try {
+      final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId == null) return;
+      
+      // Get repo before async calls
+      final followRepo = context.read<FollowRepository>();
+      
+      // Load current user profile
+      final currentUser = await _userRepo.getUserProfile(currentUserId);
+      
+      // Load connections (people they follow)
+      final following = await followRepo.getFollowing(
+        userId: currentUserId,
+        limit: 50,
+      );
+      
+      // Get user profiles for all connections
+      final userIds = following.map((f) => f.followedId).toList();
+      if (userIds.isEmpty) {
+        setState(() {
+          _loading = false;
+          _currentUserName = currentUser?.displayName ?? currentUser?.username ?? 'User';
+          _currentUserAvatar = currentUser?.avatarUrl ?? '';
+        });
+        return;
+      }
+      
+      final users = await _userRepo.getUsers(userIds);
+      
+      if (!mounted) return;
+      setState(() {
+        _currentUserName = currentUser?.displayName ?? currentUser?.username ?? 'User';
+        _currentUserAvatar = currentUser?.avatarUrl ?? '';
+        _users = users.map((u) => ShareUser(
+          id: u.uid,
+          name: u.displayName ?? u.username ?? 'User',
+          avatarUrl: u.avatarUrl ?? '',
+        )).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -114,11 +143,50 @@ class _ShareBottomSheetState extends State<ShareBottomSheet> {
     });
   }
 
-  void _sendToSelectedUsers() {
+  Future<void> _sendToSelectedUsers() async {
     final selectedUsers = _users.where((user) => user.isSelected).toList();
-    if (selectedUsers.isNotEmpty) {
-      widget.onSendToUsers?.call(selectedUsers, _messageController.text);
+    if (selectedUsers.isEmpty) return;
+    
+    final message = _messageController.text.trim();
+    if (message.isEmpty) return;
+    
+    try {
+      final messageRepo = context.read<MessageRepository>();
+      
+      // Send message to each selected user
+      for (final user in selectedUsers) {
+        await messageRepo.sendText(
+          otherUserId: user.id,
+          text: message,
+        );
+      }
+      
+      // Call callback if provided
+      widget.onSendToUsers?.call(selectedUsers, message);
+      
+      if (!mounted) return;
       Navigator.pop(context);
+      
+      // Show success message
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sent to ${selectedUsers.length} ${selectedUsers.length == 1 ? "person" : "people"}',
+            style: GoogleFonts.inter(),
+          ),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to send messages', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -149,21 +217,25 @@ class _ShareBottomSheetState extends State<ShareBottomSheet> {
 
           const SizedBox(height: 20),
 
-          // Author info (Shavvya Malik)
+          // Current user info
           Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  image: DecorationImage(
-                    image: NetworkImage(
-                      'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=200&h=200&fit=crop&crop=face',
-                    ),
-                    fit: BoxFit.cover,
-                  ),
-                ),
+              CircleAvatar(
+                radius: 20,
+                backgroundImage: _currentUserAvatar.isNotEmpty
+                    ? CachedNetworkImageProvider(_currentUserAvatar)
+                    : null,
+                backgroundColor: const Color(0xFFBFAE01),
+                child: _currentUserAvatar.isEmpty
+                    ? Text(
+                        _currentUserName.isNotEmpty ? _currentUserName[0].toUpperCase() : 'U',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -171,7 +243,7 @@ class _ShareBottomSheetState extends State<ShareBottomSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Shavvya Malik',
+                      _currentUserName.isNotEmpty ? _currentUserName : 'Loading...',
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -188,7 +260,6 @@ class _ShareBottomSheetState extends State<ShareBottomSheet> {
                   ],
                 ),
               ),
-              Icon(Icons.keyboard_arrow_down, color: const Color(0xFF666666)),
             ],
           ),
 
@@ -223,10 +294,26 @@ class _ShareBottomSheetState extends State<ShareBottomSheet> {
           // Users list
           SizedBox(
             height: 80,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _users.length,
-              itemBuilder: (context, index) {
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFFBFAE01),
+                    ),
+                  )
+                : _users.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No connections to share with',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: const Color(0xFF666666),
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _users.length,
+                        itemBuilder: (context, index) {
                 final user = _users[index];
                 return Padding(
                   padding: const EdgeInsets.only(right: 16),
@@ -236,16 +323,22 @@ class _ShareBottomSheetState extends State<ShareBottomSheet> {
                       children: [
                         Stack(
                           children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                image: DecorationImage(
-                                  image: NetworkImage(user.avatarUrl),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
+                            CircleAvatar(
+                              radius: 25,
+                              backgroundImage: user.avatarUrl.isNotEmpty
+                                  ? CachedNetworkImageProvider(user.avatarUrl)
+                                  : null,
+                              backgroundColor: const Color(0xFFBFAE01),
+                              child: user.avatarUrl.isEmpty
+                                  ? Text(
+                                      user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : null,
                             ),
                             if (user.isSelected)
                               Positioned(
@@ -283,8 +376,8 @@ class _ShareBottomSheetState extends State<ShareBottomSheet> {
                     ),
                   ),
                 );
-              },
-            ),
+                      },
+                    ),
           ),
 
           const SizedBox(height: 20),
