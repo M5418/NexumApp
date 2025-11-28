@@ -41,6 +41,9 @@ post_install do |installer|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
       config.build_settings['ENABLE_BITCODE'] = 'NO'
       
+      # Fix for Xcode 15+ "Create Symlinks to Header Folders" error
+      config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+      
       # Force Swift 5 for all pods to avoid Swift 6 mode errors in dependencies
       config.build_settings['SWIFT_VERSION'] = '5.0'
       # Relax strict concurrency for older pods that are not Swift 6-ready
