@@ -372,10 +372,20 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     final storyRepo = context.read<StoryRepository>();
     
     _disposePlayers();
+    
+    // Preload next story media for smooth transitions
+    _preloadNextStory();
+    
     if (frame.item.type == StoryMediaType.video) {
       final url = frame.item.videoUrl;
       if (url == null) return;
-      final c = VideoPlayerController.networkUrl(Uri.parse(url));
+      final c = VideoPlayerController.networkUrl(
+        Uri.parse(url),
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
+      );
       _videoController = c;
       await c.initialize();
       await c.setLooping(true);
@@ -398,14 +408,33 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         }
       }
     }
-    // Mark as viewed
+    
+    // Mark as viewed asynchronously without blocking
     final sid = frame.storyId;
     if (sid != null) {
-      try {
-        await storyRepo.viewStory(sid);
-      } catch (_) {}
+      unawaited(storyRepo.viewStory(sid).catchError((_) {}));
     }
+    
     _startProgressForFrame(frame);
+  }
+  
+  // Preload next story for smooth transitions
+  void _preloadNextStory() {
+    if (_currentIndex + 1 < _frames.length) {
+      final nextFrame = _frames[_currentIndex + 1];
+      // Preload images using cached_network_image precache
+      if (nextFrame.item.type == StoryMediaType.image) {
+        final imageUrl = nextFrame.item.imageUrl;
+        if (imageUrl != null) {
+          unawaited(
+            precacheImage(
+              CachedNetworkImageProvider(imageUrl),
+              context,
+            ).catchError((_) {}),
+          );
+        }
+      }
+    }
   }
 
   void _toggleMute() {
@@ -432,6 +461,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     final controller = AnimationController(
       vsync: this,
       duration: _durationForItem(frame.item),
+      animationBehavior: AnimationBehavior.preserve,
     );
     _progressController = controller;
     controller.addStatusListener((status) {
@@ -439,17 +469,14 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         _goToNextStory();
       }
     });
-    controller.addListener(() {
-      if (mounted) setState(() {});
-    });
     controller.forward();
   }
 
   void _goToNextStory() {
     if (_currentIndex < _frames.length - 1) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
       );
     } else {
       Navigator.of(context).maybePop();
@@ -459,8 +486,8 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   void _goToPreviousStory() {
     if (_currentIndex > 0) {
       _pageController.previousPage(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
       );
     } else {
       Navigator.of(context).maybePop();
