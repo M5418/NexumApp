@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
@@ -11,13 +12,22 @@ class CacheConfig {
   }
 
   /// Custom cache manager with longer duration
-  static final customCacheManager = CacheManager(
-    Config(
-      'nexum_cache',
-      stalePeriod: const Duration(days: 7), // Keep files for 7 days
-      maxNrOfCacheObjects: 500, // Up to 500 files
-      repo: JsonCacheInfoRepository(databaseName: 'nexum_cache'),
-      fileService: HttpFileService(),
-    ),
-  );
+  static final customCacheManager = kIsWeb
+      ? CacheManager(
+          Config(
+            'nexum_cache_web',
+            stalePeriod: const Duration(days: 1), // Shorter cache for web
+            maxNrOfCacheObjects: 200, // Fewer files for web
+            fileService: HttpFileService(),
+          ),
+        )
+      : CacheManager(
+          Config(
+            'nexum_cache',
+            stalePeriod: const Duration(days: 7), // Keep files for 7 days
+            maxNrOfCacheObjects: 500, // Up to 500 files
+            repo: JsonCacheInfoRepository(databaseName: 'nexum_cache'),
+            fileService: HttpFileService(),
+          ),
+        );
 }
