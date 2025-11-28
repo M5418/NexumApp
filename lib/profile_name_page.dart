@@ -382,36 +382,16 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
 
     setState(() => _isSaving = true);
     try {
-      debugPrint('🆕 INITIALIZING NEW USER PROFILE WITH ALL FIELDS');
-      debugPrint('   Name: $first $last');
-      debugPrint('   Username: $username');
+      debugPrint('📝 Updating user profile: $first $last (@$username)');
       
-      // First profile update - initialize ALL fields with defaults
+      // Update only the name and username fields
       await ProfileApi().update({
         'first_name': first,
         'last_name': last,
         'username': username,
-        // Initialize remaining fields with empty values
-        'bio': '',
-        'status': '',
-        'gender': '',
-        'date_of_birth': '',
-        'address': '',
-        'city': '',
-        'country': '',
-        // Initialize counters
-        'followersCount': 0,
-        'followingCount': 0,
-        'postsCount': 0,
-        // Initialize arrays
-        'professionalExperiences': [],
-        'trainings': [],
-        'interestDomains': [],
-        // Initialize flags
-        'isVerified': false,
       });
       
-      debugPrint('✅ USER PROFILE INITIALIZED SUCCESSFULLY WITH ALL FIELDS');
+      debugPrint('✅ Name and username saved successfully');
       if (!mounted) return;
 
       final next = ProfileBirthdayPage(firstName: first, lastName: last);

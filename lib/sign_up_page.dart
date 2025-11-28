@@ -546,12 +546,47 @@ class _SignUpPageState extends State<SignUpPage> {
         return;
       }
       final uid = authRes.user!.uid;
+      
+      debugPrint('🆕 Creating new user document with ALL fields initialized');
+      debugPrint('   UID: $uid');
+      debugPrint('   Email: $email');
+      
+      // Create complete user document with ALL fields initialized
       await userRepo.updateUserProfile(uid, {
         'uid': uid,
         'email': email,
         'createdAt': FieldValue.serverTimestamp(),
         'lastActive': FieldValue.serverTimestamp(),
+        // Basic info - will be updated during profile flow
+        'firstName': '',
+        'lastName': '',
+        'username': '',
+        'displayName': '',
+        'bio': '',
+        'status': '',
+        // Personal details
+        'dateOfBirth': '',
+        'gender': '',
+        // Location
+        'address': '',
+        'city': '',
+        'country': '',
+        // Media
+        'avatarUrl': '',
+        'coverUrl': '',
+        // Social counters
+        'followersCount': 0,
+        'followingCount': 0,
+        'postsCount': 0,
+        // Arrays
+        'professionalExperiences': [],
+        'trainings': [],
+        'interestDomains': [],
+        // Flags
+        'isVerified': false,
       });
+      
+      debugPrint('✅ User document created successfully with all fields');
 
       // Navigate to profile setup; user is already signed in with Firebase
       if (mounted) {
