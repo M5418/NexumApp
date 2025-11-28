@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'services/community_interest_sync_service.dart';
 import 'widgets/post_card.dart';
 import 'widgets/home_post_card.dart';
@@ -3786,7 +3787,27 @@ class _ProfilePageState extends State<ProfilePage> {
           },
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.network(item['imageUrl']!, fit: BoxFit.cover),
+            child: CachedNetworkImage(
+              imageUrl: item['imageUrl']!,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: isDark ? Colors.white30 : Colors.black26,
+                  size: 32,
+                ),
+              ),
+            ),
           ),
         );
       }).toList(),
