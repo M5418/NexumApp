@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'widgets/story_ring.dart' as story_widget;
-import 'widgets/post_card.dart';
+import 'widgets/home_post_card.dart';
 import 'widgets/badge_icon.dart';
 import 'widgets/animated_navbar.dart';
 import 'widgets/share_bottom_sheet.dart';
@@ -14,7 +14,6 @@ import 'connections_page.dart';
 import 'create_post_page.dart';
 import 'conversations_page.dart';
 import 'profile_page.dart';
-import 'post_page.dart';
 // removed PostsApi usage
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_comment_repository.dart';
@@ -1243,15 +1242,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
-  void _onPostTap(String originalId) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => PostPage(postId: originalId)),
-    );
-    // Refresh after returning from Post page
-    await _loadData();
-  }
-
   // ----------------------------
   // BUILD
   // ----------------------------
@@ -1739,16 +1729,14 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         itemBuilder: (context, index) {
           // Show posts
           if (index < _posts.length) {
-            return PostCard(
+            return HomePostCard(
               post: _posts[index],
               onReactionChanged: _onReactionChanged,
               onBookmarkToggle: _onBookmarkToggle,
-              onTap: _onPostTap,
               onShare: _onShare,
               onComment: _onComment,
               onRepost: _onRepost,
               isDarkMode: isDark,
-              currentUserId: _currentUserId,
             );
           }
           
@@ -1963,10 +1951,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       color: const Color(0xFFBFAE01),
       child: NotificationListener<ScrollNotification>(
         onNotification: (ScrollNotification notification) {
-          if (notification is ScrollStartNotification) {
-            // Hide reaction picker when scrolling starts
-            ReactionPickerManager.hideReactions();
-          }
+          // No need to manage reaction picker with HomePostCard
           return false;
         },
         child: CustomScrollView(
@@ -2187,16 +2172,14 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             padding: const EdgeInsets.only(top: 10, bottom: 20),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
-                return PostCard(
+                return HomePostCard(
                   post: _posts[index],
                   onReactionChanged: _onReactionChanged,
                   onBookmarkToggle: _onBookmarkToggle,
-                  onTap: _onPostTap,
                   onShare: _onShare,
                   onComment: _onComment,
                   onRepost: _onRepost,
                   isDarkMode: isDark,
-                  currentUserId: _currentUserId,
                 );
               }, childCount: _posts.length),
             ),
