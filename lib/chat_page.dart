@@ -350,35 +350,59 @@ void dispose() {
   }
 
   Future<void> _sendMessage(String content) async {
+    // OPTIMISTIC UI: Show message immediately for instant feedback
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final currentUid = fb.FirebaseAuth.instance.currentUser?.uid ?? 'me';
+    final optimisticMsg = Message(
+      id: tempId,
+      senderId: currentUid,
+      senderName: 'You',
+      senderAvatar: null,
+      content: content,
+      type: MessageType.text,
+      attachments: const [],
+      timestamp: DateTime.now(),
+      status: MessageStatus.sending,
+      isFromCurrentUser: true,
+      replyTo: _replyToMessage != null
+          ? ReplyTo(
+              messageId: _replyToMessage!.id,
+              senderName: _replyToMessage!.senderName,
+              content: _replyToMessage!.content,
+              type: _replyToMessage!.type,
+              mediaUrl: _replyToMessage!.attachments.isNotEmpty
+                  ? _replyToMessage!.attachments.first.url
+                  : null,
+            )
+          : null,
+    );
+    
+    setState(() {
+      _messages.add(optimisticMsg);
+      _replyToMessage = null;
+    });
+    _scrollToBottom();
+    
+    // Send in background
     try {
       final convId = await _requireConversationId();
-      final record = await _msgRepo.sendText(
+      await _msgRepo.sendText(
         conversationId: convId,
         otherUserId: null,
         text: content,
-        replyToMessageId: _replyToMessage?.id,
+        replyToMessageId: optimisticMsg.replyTo?.messageId,
       );
-      final msg = _toUiMessage(record).copyWith(
-        replyTo: _replyToMessage != null
-            ? ReplyTo(
-                messageId: _replyToMessage!.id,
-                senderName: _replyToMessage!.senderName,
-                content: _replyToMessage!.content,
-                type: _replyToMessage!.type,
-                mediaUrl: _replyToMessage!.attachments.isNotEmpty
-                    ? _replyToMessage!.attachments.first.url
-                    : null,
-              )
-            : null,
-      );
+      
+      // Remove temp message and refresh with real message
       setState(() {
-        _messages.add(msg);
-        _replyToMessage = null;
+        _messages.removeWhere((m) => m.id == tempId);
       });
-      _scrollToBottom();
-      // Force instant refresh
       await _refreshMessages();
     } catch (e) {
+      // Remove failed message
+      setState(() {
+        _messages.removeWhere((m) => m.id == tempId);
+      });
       if (mounted) _showSnack('Failed to send: $e');
     }
   }
@@ -760,7 +784,9 @@ void dispose() {
         }
       }
 
-      for (final mediaFile in mediaFiles) {
+      // OPTIMIZATION: Upload all media in parallel for speed
+      debugPrint('📤 Starting parallel upload of ${mediaFiles.length} media files');
+      final uploadFutures = mediaFiles.map((mediaFile) async {
         final nameOrPath =
             mediaFile.name.isNotEmpty ? mediaFile.name : mediaFile.path;
 
@@ -857,14 +883,19 @@ void dispose() {
           }
         }
 
-        attachments.add({
+        return {
           'type': isVideo ? 'video' : 'image',
           'url': url,
           'fileName': mediaFile.name,
           'fileSize': fileSize,
           if (thumbUrl != null) 'thumbnail': thumbUrl,
-        });
-      }
+        };
+      }).toList();
+      
+      // Wait for all uploads to complete in parallel
+      final uploadedAttachments = await Future.wait(uploadFutures);
+      attachments.addAll(uploadedAttachments);
+      debugPrint('✅ All ${attachments.length} media files uploaded');
 
       final convId = await _requireConversationId();
       final record = await _msgRepo.sendTextWithAttachments(
