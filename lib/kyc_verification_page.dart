@@ -35,16 +35,14 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
   String? _selfieUrl;
 
   // Input controllers
+  final _fullNameController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _cityOfBirthController = TextEditingController();
   final _documentNumberController = TextEditingController();
   final _expiryDateController = TextEditingController();
 
   bool _submitting = false;
   bool _loadingUserData = true;
-
-  // User data fetched from profile
-  String? _fullName;
-  String? _address;
-  String? _cityOfBirth;
 
   @override
   void initState() {
@@ -62,14 +60,14 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
       final userDoc = await userRepo.getUserProfile(user.uid);
       
       if (userDoc != null && mounted) {
-        setState(() {
-          _fullName = '${userDoc.firstName ?? ''} ${userDoc.lastName ?? ''}'.trim();
-          _address = userDoc.bio; // Using bio as address placeholder
-          _cityOfBirth = userDoc.bio; // Using bio as cityOfBirth placeholder
-        });
+        // Pre-fill with profile data if available
+        final fullName = '${userDoc.firstName ?? ''} ${userDoc.lastName ?? ''}'.trim();
+        if (fullName.isNotEmpty) {
+          _fullNameController.text = fullName;
+        }
       }
     } catch (e) {
-      // Ignore error
+      debugPrint('Error fetching user data: $e');
     } finally {
       if (mounted) setState(() => _loadingUserData = false);
     }
@@ -77,6 +75,9 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
 
   @override
   void dispose() {
+    _fullNameController.dispose();
+    _addressController.dispose();
+    _cityOfBirthController.dispose();
     _documentNumberController.dispose();
     _expiryDateController.dispose();
     super.dispose();
@@ -203,7 +204,19 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
                         ),
                         const SizedBox(height: 24),
 
-                        // New fields (keep design language)
+                        // Personal Information
+                        _buildSectionTitle('Personal Information', isDarkMode),
+                        const SizedBox(height: 16),
+                        _textField(isDarkMode, _fullNameController, 'Full Name'),
+                        const SizedBox(height: 16),
+                        _textField(isDarkMode, _addressController, 'Residential Address'),
+                        const SizedBox(height: 16),
+                        _textField(isDarkMode, _cityOfBirthController, 'City of Birth'),
+                        const SizedBox(height: 24),
+
+                        // Document Details
+                        _buildSectionTitle('Document Details', isDarkMode),
+                        const SizedBox(height: 16),
                         _textField(isDarkMode, _documentNumberController, Provider.of<LanguageProvider>(context, listen: false).t('kyc.document_number')),
                         const SizedBox(height: 16),
                         _textField(isDarkMode, _expiryDateController, Provider.of<LanguageProvider>(context, listen: false).t('kyc.expiry_date')),
@@ -664,16 +677,16 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
     if (!_canSubmit()) return;
 
     // Validate required user data
-    if (_fullName == null || _fullName!.isEmpty) {
-      _showSnack('Full name not found. Please update your profile.');
+    if (_fullNameController.text.trim().isEmpty) {
+      _showSnack('Please enter your full name.');
       return;
     }
-    if (_address == null || _address!.isEmpty) {
-      _showSnack('Address not found. Please update your profile bio.');
+    if (_addressController.text.trim().isEmpty) {
+      _showSnack('Please enter your address.');
       return;
     }
-    if (_cityOfBirth == null || _cityOfBirth!.isEmpty) {
-      _showSnack('City of birth not found. Please update your profile.');
+    if (_cityOfBirthController.text.trim().isEmpty) {
+      _showSnack('Please enter your city of birth.');
       return;
     }
 
@@ -703,14 +716,14 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
       final kycRepo = FirebaseKycRepository();
       await kycRepo.submitKyc(
         userId: user.uid,
-        fullName: _fullName!,
+        fullName: _fullNameController.text.trim(),
         documentType: docType,
         documentNumber: _documentNumberController.text.trim(),
         issueCountry: _selectedIssuingCountry!.name,
         expiryDate: _expiryDateController.text.trim().isEmpty ? null : _expiryDateController.text.trim(),
         countryOfResidence: _selectedResidenceCountry!.name,
-        address: _address!,
-        cityOfBirth: _cityOfBirth!,
+        address: _addressController.text.trim(),
+        cityOfBirth: _cityOfBirthController.text.trim(),
         frontUrl: _frontUrl,
         backUrl: _backUrl,
         selfieUrl: _selfieUrl!,
