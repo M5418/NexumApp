@@ -120,9 +120,21 @@ class FirebaseStoryRepository implements StoryRepository {
     
     final lastStory = activeStories.docs.first.data();
     
+    // Build display name with multiple fallbacks
+    String displayName = (userData['displayName'] ?? '').toString();
+    if (displayName.isEmpty) {
+      final firstName = (userData['firstName'] ?? '').toString();
+      final lastName = (userData['lastName'] ?? '').toString();
+      if (firstName.isNotEmpty || lastName.isNotEmpty) {
+        displayName = '$firstName $lastName'.trim();
+      } else {
+        displayName = (userData['username'] ?? userData['email'] ?? 'User').toString();
+      }
+    }
+    
     await _storyRings.doc(userId).set({
       'userId': userId,
-      'userName': userData['displayName'] ?? userData['username'] ?? 'User',
+      'userName': displayName,
       'userAvatar': userData['avatarUrl'],
       'lastStoryAt': lastStory['createdAt'],
       'thumbnailUrl': lastStory['thumbnailUrl'] ?? lastStory['mediaUrl'],
@@ -181,9 +193,18 @@ class FirebaseStoryRepository implements StoryRepository {
             final userDoc = await _db.collection('users').doc(userId).get();
             if (userDoc.exists) {
               final userData = userDoc.data() ?? {};
-              userName = userData['displayName']?.toString() ?? 
-                         userData['username']?.toString() ?? 
-                         'User';
+              // Try displayName first
+              userName = (userData['displayName'] ?? '').toString();
+              if (userName.isEmpty) {
+                // Build from firstName + lastName
+                final firstName = (userData['firstName'] ?? '').toString();
+                final lastName = (userData['lastName'] ?? '').toString();
+                if (firstName.isNotEmpty || lastName.isNotEmpty) {
+                  userName = '$firstName $lastName'.trim();
+                } else {
+                  userName = (userData['username'] ?? userData['email'] ?? 'User').toString();
+                }
+              }
               userAvatar = userData['avatarUrl']?.toString();
               
               // Update the ring with correct data

@@ -49,12 +49,24 @@ class FirebaseConversationRepository implements ConversationRepository {
     final unread = Map<String, dynamic>.from(d['unread'] ?? {});
     final muted = Map<String, dynamic>.from(d['muted'] ?? {});
 
+    // Build display name with firstName + lastName fallback
+    String displayName = (other['displayName'] ?? other['name'] ?? '').toString();
+    if (displayName.isEmpty) {
+      final firstName = (other['firstName'] ?? '').toString();
+      final lastName = (other['lastName'] ?? '').toString();
+      if (firstName.isNotEmpty || lastName.isNotEmpty) {
+        displayName = '$firstName $lastName'.trim();
+      } else {
+        displayName = (other['username'] ?? other['email'] ?? 'User').toString();
+      }
+    }
+    
     return ConversationSummaryModel(
       id: doc.id,
       otherUserId: otherId,
       otherUser: ConversationUserSummary(
         id: otherId,
-        name: (other['displayName'] ?? other['name'] ?? other['username'] ?? other['email'] ?? 'User').toString(),
+        name: displayName,
         username: (other['username'] ?? '').toString(),
         avatarUrl: (other['avatarUrl'] ?? '').toString().isNotEmpty ? other['avatarUrl'].toString() : null,
       ),

@@ -75,6 +75,28 @@ class FirebaseMessageRepository implements MessageRepository {
     if (me == null) return;
     final other = await _otherParticipant(conversationId);
     final convRef = _db.collection('conversations').doc(conversationId);
+    
+    // Refresh current user's profile data in participantDetails
+    try {
+      final myProfile = await _db.collection('users').doc(me).get();
+      if (myProfile.exists) {
+        final data = myProfile.data() ?? {};
+        await convRef.set({
+          'participantDetails.$me': {
+            'displayName': data['displayName'] ?? '',
+            'firstName': data['firstName'] ?? '',
+            'lastName': data['lastName'] ?? '',
+            'name': data['displayName'] ?? data['firstName'] ?? data['username'] ?? '',
+            'username': data['username'] ?? '',
+            'avatarUrl': data['avatarUrl'] ?? '',
+            'email': data['email'] ?? '',
+          }
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to update participant details: $e');
+    }
+    
     final updates = {
       'lastMessageType': type,
       'lastMessageText': text,
