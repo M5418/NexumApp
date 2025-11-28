@@ -563,9 +563,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
     MediaType mediaType;
     String? videoUrl;
+    List<String> imageUrls;
+    
     if (normUrls.isEmpty) {
       mediaType = MediaType.none;
       videoUrl = null;
+      imageUrls = [];
     } else {
       final hasVideo = normUrls.any((u) {
         final l = u.toLowerCase();
@@ -580,9 +583,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           },
           orElse: () => normUrls.first,
         );
+        imageUrls = []; // Clear imageUrls for videos
       } else {
         mediaType = (normUrls.length == 1) ? MediaType.image : MediaType.images;
         videoUrl = null;
+        imageUrls = normUrls;
       }
     }
     int clamp(int v) => v < 0 ? 0 : v;
@@ -606,7 +611,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       createdAt: m.createdAt,
       text: m.text,
       mediaType: mediaType,
-      imageUrls: normUrls,
+      imageUrls: imageUrls,
       videoUrl: videoUrl,
       counts: PostCounts(
         likes: clamp(m.summary.likes),
