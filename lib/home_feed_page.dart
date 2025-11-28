@@ -601,24 +601,26 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       imageUrls = [];
       debugPrint('🎬 MEDIA TYPE: none (no URLs)');
     } else {
-      // Check each URL for video extensions
+      // Check each URL for video extensions (handle Firebase Storage query params)
       debugPrint('🎬 CHECKING FOR VIDEO:');
       for (var url in normUrls) {
         final lower = url.toLowerCase();
-        final isMp4 = lower.endsWith('.mp4');
-        final isMov = lower.endsWith('.mov');
-        final isWebm = lower.endsWith('.webm');
+        // Check if URL contains video extension (not just ends with, due to query params)
+        final isMp4 = lower.contains('.mp4');
+        final isMov = lower.contains('.mov');
+        final isWebm = lower.contains('.webm');
         final isVideo = isMp4 || isMov || isWebm;
         debugPrint('  URL: $url');
-        debugPrint('    ends with .mp4? $isMp4');
-        debugPrint('    ends with .mov? $isMov');
-        debugPrint('    ends with .webm? $isWebm');
+        debugPrint('    contains .mp4? $isMp4');
+        debugPrint('    contains .mov? $isMov');
+        debugPrint('    contains .webm? $isWebm');
         debugPrint('    IS VIDEO? $isVideo');
       }
       
       final hasVideo = normUrls.any((u) {
         final l = u.toLowerCase();
-        return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+        // Use contains instead of endsWith to handle query parameters like ?alt=media&token=...
+        return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
       });
       
       debugPrint('🎬 FINAL hasVideo: $hasVideo');
@@ -628,7 +630,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         videoUrl = normUrls.firstWhere(
           (u) {
             final l = u.toLowerCase();
-            return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+            return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
           },
           orElse: () => normUrls.first,
         );
