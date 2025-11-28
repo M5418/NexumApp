@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:readmore/readmore.dart';
@@ -148,6 +149,12 @@ class _PostCardState extends State<PostCard> {
       debugPrint('  validVideoUrl: $validVideoUrl');
       debugPrint('  imageUrls: ${widget.post.imageUrls}');
       debugPrint('  validImageUrls: $validImageUrls');
+      
+      // Web-specific console log
+      if (kIsWeb) {
+        // ignore: avoid_print
+        print('🎥 VIDEO POST: mediaType=${widget.post.mediaType}, videoUrl=${widget.post.videoUrl}, validVideoUrl=$validVideoUrl, imageUrls=${widget.post.imageUrls}');
+      }
     }
 
     // Show loading indicator if media is still uploading
@@ -192,6 +199,20 @@ class _PostCardState extends State<PostCard> {
     }
 
     final widgets = <Widget>[];
+    
+    // TEMPORARY: Show debug info for video posts
+    if (widget.post.mediaType == MediaType.video) {
+      widgets.add(
+        Container(
+          padding: const EdgeInsets.all(8),
+          color: Colors.orange.withValues(alpha: 128),
+          child: Text(
+            'DEBUG: Video Post\nvideoUrl: ${widget.post.videoUrl}\nimageUrls: ${widget.post.imageUrls}\nvalidVideoUrl: $validVideoUrl',
+            style: const TextStyle(fontSize: 10, color: Colors.white),
+          ),
+        ),
+      );
+    }
 
     // Single image
     if (widget.post.mediaType == MediaType.image && validImageUrls.isNotEmpty) {
