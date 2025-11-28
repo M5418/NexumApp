@@ -1262,12 +1262,30 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           ),
           floatingActionButton:
               (_selectedNavIndex == 0 || _selectedNavIndex == 1)
-                  ? FloatingActionButton(
-                      heroTag: 'toolsFabMain',
-                      onPressed: _showToolsOverlay,
-                      backgroundColor: const Color(0xFFBFAE01),
-                      foregroundColor: Colors.black,
-                      child: const Icon(Icons.widgets_outlined),
+                  ? Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFD4C100), Color(0xFFBFAE01)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFBFAE01).withValues(alpha: 0.5),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: FloatingActionButton(
+                        heroTag: 'toolsFabMain',
+                        onPressed: _showToolsOverlay,
+                        backgroundColor: Colors.transparent,
+                        elevation: 0,
+                        foregroundColor: Colors.black,
+                        child: const Icon(Icons.apps_rounded, size: 28),
+                      ),
                     )
                   : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -1365,12 +1383,30 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         ],
       ),
             floatingActionButton: (_desktopSectionIndex == 0 || _desktopSectionIndex == 1)
-          ? FloatingActionButton(
-              heroTag: 'toolsFabWeb',
-              onPressed: _showToolsOverlay,
-              backgroundColor: const Color(0xFFBFAE01),
-              foregroundColor: Colors.black,
-              child: const Icon(Icons.widgets_outlined),
+          ? Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFD4C100), Color(0xFFBFAE01)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFBFAE01).withValues(alpha: 0.5),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: FloatingActionButton(
+                heroTag: 'toolsFabWeb',
+                onPressed: _showToolsOverlay,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                foregroundColor: Colors.black,
+                child: const Icon(Icons.apps_rounded, size: 28),
+              ),
             )
           : null,
     );
