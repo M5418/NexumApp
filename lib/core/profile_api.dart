@@ -214,6 +214,16 @@ class ProfileApi {
     mapKey('lastName', 'last_name');
     mapKey('avatarUrl', 'profile_photo_url');
     mapKey('coverUrl', 'cover_photo_url');
+    mapKey('dateOfBirth', 'date_of_birth');
+    
+    // Always include these fields, default to empty string if not present
+    out['username'] = d['username'] ?? '';
+    out['bio'] = d['bio'] ?? '';
+    out['status'] = d['status'] ?? '';
+    out['gender'] = d['gender'] ?? '';
+    out['address'] = d['address'] ?? '';
+    out['city'] = d['city'] ?? '';
+    out['country'] = d['country'] ?? '';
     
     // Always include these arrays, default to empty if not present
     out['interest_domains'] = d['interestDomains'] ?? [];
