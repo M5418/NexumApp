@@ -1,3 +1,4 @@
+import 'dart:io' show File;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -125,6 +126,8 @@ class MediaThumb extends StatelessWidget {
   Widget _buildVideoContent() {
     if (videoThumbnailUrl != null && videoThumbnailUrl!.isNotEmpty) {
       final url = videoThumbnailUrl!;
+      
+      // Handle HTTP URLs
       if (url.startsWith('http')) {
         return CachedNetworkImage(
           imageUrl: url,
@@ -137,6 +140,8 @@ class MediaThumb extends StatelessWidget {
               Container(color: Colors.grey[300], child: const Icon(Icons.error)),
         );
       }
+      
+      // Handle web blob/data URLs
       if (kIsWeb && (url.startsWith('blob:') || url.startsWith('data:'))) {
         return Image.network(
           url,
@@ -146,6 +151,22 @@ class MediaThumb extends StatelessWidget {
             child: const Icon(Icons.error),
           ),
         );
+      }
+      
+      // Handle local file paths (mobile)
+      if (!kIsWeb) {
+        try {
+          return Image.file(
+            File(url),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stack) => Container(
+              color: Colors.grey[300],
+              child: const Icon(Icons.error),
+            ),
+          );
+        } catch (e) {
+          // If file access fails, show placeholder
+        }
       }
     }
 

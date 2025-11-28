@@ -669,6 +669,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final datasetHasTags = items.any((p) => _extractTags(p.text).isNotEmpty);
 
     return items.where((p) {
+      // Filter out posts still uploading (have placeholder URLs)
+      final hasPlaceholderImages = p.imageUrls.any((url) => url.startsWith('uploading_'));
+      final hasPlaceholderVideo = p.videoUrl != null && p.videoUrl!.startsWith('uploading_');
+      if (hasPlaceholderImages || hasPlaceholderVideo) return false;
+      
       // Filter out blocked users
       if (_blockedUserIds.contains(p.authorId)) return false;
       

@@ -903,12 +903,29 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (!mounted) return;
 
       if (video != null) {
+        // Generate thumbnail for video preview
+        String? thumbnailPath;
+        if (!kIsWeb) {
+          try {
+            final thumbnail = await VideoCompress.getFileThumbnail(
+              video.path,
+              quality: 50,
+            );
+            thumbnailPath = thumbnail.path;
+          } catch (e) {
+            debugPrint('⚠️ Failed to generate video thumbnail: $e');
+          }
+        }
+        
         setState(() {
           // Only one video allowed, replace any existing media
           _mediaItems
             ..clear()
             ..add(MediaItem(
-                type: MediaType.video, path: video.path, xfile: video));
+                type: MediaType.video, 
+                path: video.path, 
+                xfile: video,
+                thumbnailUrl: thumbnailPath ?? video.path)); // Use thumbnail or fallback to video path
         });
       }
     } on PlatformException catch (e) {
