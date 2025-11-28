@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/message.dart';
 import '../image_swipe_page.dart';
 import '../core/time_utils.dart';
+import '../config/cache_config.dart';
 
 // Platform helper for safe access
 String _platformName() {
@@ -1128,6 +1129,9 @@ class _MessageBubbleState extends State<MessageBubble>
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(
                     imageUrl: mediaUrl,
+                    cacheManager: CacheConfig.customCacheManager,
+                    maxWidthDiskCache: 100,
+                    maxHeightDiskCache: 100,
                     width: 50,
                     height: 50,
                     fit: BoxFit.cover,
@@ -1196,6 +1200,9 @@ class _MessageBubbleState extends State<MessageBubble>
       borderRadius: BorderRadius.circular(16),
       child: CachedNetworkImage(
         imageUrl: attachment.url,
+        cacheManager: CacheConfig.customCacheManager,
+        maxWidthDiskCache: 800,
+        maxHeightDiskCache: 600,
         width: maxW,
         height: 140,
         fit: BoxFit.cover,
@@ -1274,6 +1281,9 @@ class _MessageBubbleState extends State<MessageBubble>
                 )
               : CachedNetworkImage(
                   imageUrl: displayUrl,
+                  cacheManager: CacheConfig.customCacheManager,
+                  maxWidthDiskCache: 600,
+                  maxHeightDiskCache: 400,
                   width: width,
                   height: height,
                   fit: BoxFit.cover,

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../conversations_page.dart';
 import '../models/message.dart';
+import '../config/cache_config.dart';
 
 class ChatCard extends StatelessWidget {
   final ChatItem chat;
@@ -43,6 +44,9 @@ class ChatCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               child: CachedNetworkImage(
                 imageUrl: chat.avatarUrl,
+                cacheManager: CacheConfig.customCacheManager,
+                maxWidthDiskCache: 96,
+                maxHeightDiskCache: 96,
                 width: 48,
                 height: 48,
                 fit: BoxFit.cover,
