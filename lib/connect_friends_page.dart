@@ -33,6 +33,10 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
   // Loaded from backend
   List<Map<String, dynamic>> _friends = [];
   bool _loading = true;
+  
+  // Cache admin profile to avoid redundant fetches
+  static Map<String, dynamic>? _cachedAdminProfile;
+  static DateTime? _adminProfileCacheTime;
 
   Future<void> _loadUsers() async {
     debugPrint('🔍 ConnectFriendsPage: Starting to load users...');
@@ -107,12 +111,33 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
       final userRepo = FirebaseUserRepository();
       final db = FirebaseFirestore.instance;
 
-      // Check if official account exists
-      final officialAccount = await userRepo.getUserProfile(AdminConfig.adminUserId);
-      if (officialAccount == null) {
-        debugPrint('⚠️ Nexum official account not found, skipping welcome message');
-        return;
+      // ⚡ OPTIMIZATION: Use cached admin profile if available (valid for 1 hour)
+      final cacheValid = _adminProfileCacheTime != null && 
+          DateTime.now().difference(_adminProfileCacheTime!).inHours < 1;
+      
+      dynamic officialAccount;
+      if (cacheValid && _cachedAdminProfile != null) {
+        debugPrint('✨ Using cached admin profile');
+        officialAccount = _cachedAdminProfile;
+      } else {
+        debugPrint('🔍 Fetching admin profile');
+        officialAccount = await userRepo.getUserProfile(AdminConfig.adminUserId);
+        if (officialAccount == null) {
+          debugPrint('⚠️ Nexum official account not found, skipping welcome message');
+          return;
+        }
+        // Cache for future use
+        _cachedAdminProfile = officialAccount.toMap();
+        _adminProfileCacheTime = DateTime.now();
       }
+
+      // Get official account details for the message
+      final officialName = (officialAccount is Map) 
+          ? (officialAccount['displayName'] ?? 'Nexum')
+          : (officialAccount.displayName ?? 'Nexum');
+      final officialAvatar = (officialAccount is Map)
+          ? (officialAccount['avatarUrl'] ?? '')
+          : (officialAccount.avatarUrl ?? '');
 
       // Create or get conversation with Nexum official account
       final conversationId = await conversationRepo.createOrGet(AdminConfig.adminUserId);
@@ -121,21 +146,21 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
       // Get user's first name for personalized greeting
       final userName = widget.firstName.isNotEmpty ? widget.firstName : 'there';
 
-      // Get official account details for the message
-      final officialName = officialAccount.displayName ?? 'Nexum';
-      final officialAvatar = officialAccount.avatarUrl ?? '';
-
-      // Send welcome message
+      // Send welcome message with Nexum slogan
       final welcomeText = '''👋 Hi $userName!
 
-Welcome to Nexum! We're thrilled to have you here.
+Welcome to Nexum - A New Way to Connect the World! 🌍
 
-🎉 Your account is all set up and ready to go. Here's what you can do:
+We're thrilled to have you here. Your account is all set up and ready to go!
+
+🎉 Here's what you can do:
 
 • 📝 Share your thoughts and connect with others
 • 📚 Explore books and podcasts
 • 💬 Start conversations and build your network
 • 🎯 Discover content tailored to your interests
+
+Nexum is more than just a platform—it's a new way to connect the world. Join our community and start making meaningful connections today!
 
 If you have any questions or need help, feel free to reach out to us anytime.
 
@@ -177,10 +202,11 @@ Happy connecting! 🚀''';
   }
 
   Future<void> _completeAccountCreation() async {
-    // Send welcome message from Nexum official account
-    await _sendWelcomeMessage();
+    // ⚡ OPTIMIZATION: Send welcome message asynchronously without blocking navigation
+    // Fire and forget - don't await, let it complete in background
+    unawaited(_sendWelcomeMessage());
 
-    // Navigate to home feed
+    // Navigate to home feed immediately - smooth, no delay
     if (!mounted) return;
     final next = const HomeFeedPage();
     if (context.isMobile) {
@@ -192,6 +218,17 @@ Happy connecting! 🚀''';
     } else {
       _pushAndRemoveAllWithPopup(context, next);
     }
+  }
+  
+  // Wrapper to explicitly mark async operation as unawaited
+  void unawaited(Future<void> future) {
+    // Explicitly ignore the future to avoid lint warnings
+    // The operation completes in background
+    future.then((_) {
+      debugPrint('🎉 Background welcome message completed');
+    }).catchError((error) {
+      debugPrint('⚠️ Background welcome message failed: $error');
+    });
   }
 
   @override
