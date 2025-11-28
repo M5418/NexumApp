@@ -36,17 +36,18 @@ class StoryRing extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: isMine
                     ? null
-                    : SweepGradient(
-                        colors: isSeen
+                    : LinearGradient(
+                        colors: !isSeen  // if has unseen stories
                             ? [
-                                const Color(0xFF666666).withValues(alpha: 0.5),
-                                const Color(0xFF666666).withValues(alpha: 0.5),
+                                const Color(0xFFBFAE01),
+                                const Color(0xFFBFAE01),
                               ]
                             : [
-                                const Color(0xFFBFAE01),
-                                const Color(0xFF666666),
+                                const Color(0xFF666666).withValues(alpha: 0.5),
+                                const Color(0xFF666666).withValues(alpha: 0.5),
                               ],
-                        stops: const [0.0, 1.0],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
                 border: isMine
                     ? Border.all(

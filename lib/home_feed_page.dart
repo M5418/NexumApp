@@ -316,18 +316,18 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       errMsg = errMsg == null ? s : '$errMsg | $s';
     }
 
-    // Always put "Your Story" ring first, at the left
+    // Sort rings into 3 sections: Your Story | Unseen | All Seen
     if (_currentUserId != null) {
       // Find user's ring if it exists
       final myRingIndex = rings.indexWhere((r) => r.userId == _currentUserId);
+      StoryRingModel? myRing;
       
-      if (myRingIndex > 0) {
-        // User has stories but not in first position - move to front
-        final myRing = rings.removeAt(myRingIndex);
-        rings.insert(0, myRing);
-      } else if (myRingIndex == -1) {
-        // User has no stories - add empty "Your Story" ring at front
-        rings.insert(0, StoryRingModel(
+      if (myRingIndex >= 0) {
+        // User has stories - remove from current position
+        myRing = rings.removeAt(myRingIndex);
+      } else {
+        // User has no stories - create empty ring
+        myRing = StoryRingModel(
           userId: _currentUserId!,
           userName: '',
           userAvatar: null,
@@ -336,9 +336,15 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           thumbnailUrl: null,
           storyCount: 0,
           stories: const [],
-        ));
+        );
       }
-      // If myRingIndex == 0, it's already first - do nothing
+      
+      // Separate remaining rings into unseen and all seen
+      final unseenRings = rings.where((r) => r.hasUnseen).toList();
+      final seenRings = rings.where((r) => !r.hasUnseen).toList();
+      
+      // Rebuild rings in order: Your Story -> Unseen -> All Seen
+      rings = [myRing, ...unseenRings, ...seenRings];
     }
 
     if (!mounted) return;
