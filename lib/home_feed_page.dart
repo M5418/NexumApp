@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'widgets/story_ring.dart' as story_widget;
-import 'widgets/home_post_card.dart';
+import 'widgets/post_card.dart';
 import 'widgets/badge_icon.dart';
 import 'widgets/animated_navbar.dart';
 import 'widgets/share_bottom_sheet.dart';
@@ -1734,7 +1734,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         itemBuilder: (context, index) {
           // Show posts
           if (index < _posts.length) {
-            return HomePostCard(
+            return PostCard(
               post: _posts[index],
               onReactionChanged: _onReactionChanged,
               onBookmarkToggle: _onBookmarkToggle,
@@ -1742,6 +1742,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
               onComment: _onComment,
               onRepost: _onRepost,
               isDarkMode: isDark,
+              currentUserId: _currentUserId,
             );
           }
           
@@ -2177,7 +2178,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             padding: const EdgeInsets.only(top: 10, bottom: 20),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
-                return HomePostCard(
+                return PostCard(
                   post: _posts[index],
                   onReactionChanged: _onReactionChanged,
                   onBookmarkToggle: _onBookmarkToggle,
@@ -2185,6 +2186,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                   onComment: _onComment,
                   onRepost: _onRepost,
                   isDarkMode: isDark,
+                  currentUserId: _currentUserId,
                 );
               }, childCount: _posts.length),
             ),
