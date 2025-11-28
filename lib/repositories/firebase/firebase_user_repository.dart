@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:firebase_storage/firebase_storage.dart' as fs;
+import 'package:flutter/foundation.dart';
 import '../interfaces/user_repository.dart';
 
 class FirebaseUserRepository implements UserRepository {
@@ -63,21 +63,43 @@ class FirebaseUserRepository implements UserRepository {
   
   @override
   Future<List<UserProfile>> getSuggestedUsers({int limit = 12}) async {
-    // Get recent active users as suggestions
-    final snap = await _users
-        .orderBy('lastActive', descending: true)
-        .limit(limit * 2) // Get more to filter out current user
-        .get();
-    
-    final currentUid = _auth.currentUser?.uid;
-    final users = snap.docs
-        .map(_fromDoc)
-        .whereType<UserProfile>()
-        .where((u) => u.uid != currentUid) // Exclude current user
-        .take(limit)
-        .toList();
-    
-    return users;
+    try {
+      final currentUid = _auth.currentUser?.uid;
+      
+      // Try to get recent active users as suggestions
+      final snap = await _users
+          .orderBy('createdAt', descending: true) // Use createdAt instead of lastActive
+          .limit(limit * 3) // Get more to filter out current user
+          .get();
+      
+      final users = snap.docs
+          .map(_fromDoc)
+          .whereType<UserProfile>()
+          .where((u) => u.uid != currentUid) // Exclude current user
+          .take(limit)
+          .toList();
+      
+      return users;
+    } catch (e) {
+      debugPrint('⚠️ Error fetching suggested users: $e');
+      // Fallback: get any users without ordering
+      try {
+        final currentUid = _auth.currentUser?.uid;
+        final snap = await _users.limit(limit * 2).get();
+        
+        final users = snap.docs
+            .map(_fromDoc)
+            .whereType<UserProfile>()
+            .where((u) => u.uid != currentUid)
+            .take(limit)
+            .toList();
+        
+        return users;
+      } catch (fallbackError) {
+        debugPrint('❌ Fallback also failed: $fallbackError');
+        return [];
+      }
+    }
   }
 
   @override
