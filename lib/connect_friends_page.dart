@@ -6,10 +6,15 @@ import 'core/i18n/language_provider.dart';
 import 'providers/follow_state.dart';
 
 import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/interfaces/conversation_repository.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'other_user_profile_page.dart';
 import 'profile_page.dart';
 import 'home_feed_page.dart';
+
+// Official Nexum account ID for welcome messages
+const String kNexumOfficialAccountId = 'nexum_official';
 
 class ConnectFriendsPage extends StatefulWidget {
   final String firstName;
@@ -95,7 +100,90 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
     }
   }
 
-  void _completeAccountCreation() {
+  Future<void> _sendWelcomeMessage() async {
+    try {
+      final currentUser = fb.FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      final conversationRepo = context.read<ConversationRepository>();
+      final userRepo = FirebaseUserRepository();
+      final db = FirebaseFirestore.instance;
+
+      // Check if official account exists
+      final officialAccount = await userRepo.getUserProfile(kNexumOfficialAccountId);
+      if (officialAccount == null) {
+        debugPrint('⚠️ Nexum official account not found, skipping welcome message');
+        return;
+      }
+
+      // Create or get conversation with Nexum official account
+      final conversationId = await conversationRepo.createOrGet(kNexumOfficialAccountId);
+      debugPrint('📝 Conversation created/retrieved: $conversationId');
+
+      // Get user's first name for personalized greeting
+      final userName = widget.firstName.isNotEmpty ? widget.firstName : 'there';
+
+      // Get official account details for the message
+      final officialName = officialAccount.displayName ?? 'Nexum';
+      final officialAvatar = officialAccount.avatarUrl ?? '';
+
+      // Send welcome message
+      final welcomeText = '''👋 Hi $userName!
+
+Welcome to Nexum! We're thrilled to have you here.
+
+🎉 Your account is all set up and ready to go. Here's what you can do:
+
+• 📝 Share your thoughts and connect with others
+• 📚 Explore books and podcasts
+• 💬 Start conversations and build your network
+• 🎯 Discover content tailored to your interests
+
+If you have any questions or need help, feel free to reach out to us anytime.
+
+Happy connecting! 🚀''';
+
+      // Create message document directly in Firestore (sent by official account)
+      final messageData = {
+        'conversationId': conversationId,
+        'senderId': kNexumOfficialAccountId,
+        'senderName': officialName,
+        'senderAvatarUrl': officialAvatar,
+        'content': welcomeText,
+        'type': 'text',
+        'createdAt': FieldValue.serverTimestamp(),
+        'reactions': [],
+        'attachments': [],
+        'isStarred': false,
+      };
+
+      await db.collection('messages').add(messageData);
+
+      // Update conversation summary
+      await db.collection('conversations').doc(conversationId).set({
+        'lastMessageType': 'text',
+        'lastMessageText': welcomeText.length > 100 
+            ? '${welcomeText.substring(0, 100)}...' 
+            : welcomeText,
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'lastFromUserId': kNexumOfficialAccountId,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'unread.${currentUser.uid}': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+
+      debugPrint('✅ Welcome message sent successfully to $userName');
+    } catch (e) {
+      debugPrint('❌ Error sending welcome message: $e');
+      // Don't block account creation if welcome message fails
+    }
+  }
+
+  Future<void> _completeAccountCreation() async {
+    // Send welcome message from Nexum official account
+    await _sendWelcomeMessage();
+
+    // Navigate to home feed
+    if (!mounted) return;
     final next = const HomeFeedPage();
     if (context.isMobile) {
       Navigator.pushAndRemoveUntil(
