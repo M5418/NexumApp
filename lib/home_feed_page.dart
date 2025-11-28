@@ -14,6 +14,7 @@ import 'connections_page.dart';
 import 'create_post_page.dart';
 import 'conversations_page.dart';
 import 'profile_page.dart';
+import 'post_page.dart';
 // removed PostsApi usage
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_comment_repository.dart';
@@ -1715,6 +1716,16 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
               onShare: _onShare,
               onComment: _onComment,
               onRepost: _onRepost,
+              onTap: (postId) async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PostPage(postId: postId),
+                  ),
+                );
+                // Refresh feed after returning from post page
+                await _loadData();
+              },
               isDarkMode: isDark,
               currentUserId: _currentUserId,
             );
@@ -2159,6 +2170,16 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                   onShare: _onShare,
                   onComment: _onComment,
                   onRepost: _onRepost,
+                  onTap: (postId) async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PostPage(postId: postId),
+                      ),
+                    );
+                    // Refresh feed after returning from post page
+                    await _loadData();
+                  },
                   isDarkMode: isDark,
                   currentUserId: _currentUserId,
                 );
