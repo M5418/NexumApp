@@ -176,9 +176,10 @@ Happy connecting! 🚀''';
       final messageData = {
         'conversationId': conversationId,
         'senderId': AdminConfig.adminUserId,
+        'receiverId': currentUser.uid,
         'senderName': officialName,
         'senderAvatarUrl': officialAvatar,
-        'content': welcomeText,
+        'text': welcomeText,  // Use 'text' not 'content' - matches MessageRecordModel
         'type': 'text',
         'createdAt': FieldValue.serverTimestamp(),
         'reactions': [],
