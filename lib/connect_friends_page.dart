@@ -172,6 +172,7 @@ If you have any questions or need help, feel free to reach out to us anytime.
 Happy connecting! 🚀''';
 
       // Create message document directly in Firestore (sent by official account)
+      // Messages are stored as subcollection: conversations/{id}/messages
       final messageData = {
         'conversationId': conversationId,
         'senderId': AdminConfig.adminUserId,
@@ -185,7 +186,8 @@ Happy connecting! 🚀''';
         'isStarred': false,
       };
 
-      await db.collection('messages').add(messageData);
+      final messageRef = await db.collection('conversations').doc(conversationId).collection('messages').add(messageData);
+      debugPrint('📨 Message created with ID: ${messageRef.id}');
 
       // Update conversation summary
       await db.collection('conversations').doc(conversationId).set({
@@ -198,7 +200,8 @@ Happy connecting! 🚀''';
         'updatedAt': FieldValue.serverTimestamp(),
         'unread.${currentUser.uid}': FieldValue.increment(1),
       }, SetOptions(merge: true));
-
+      
+      debugPrint('📊 Conversation summary updated');
       debugPrint('✅ Welcome message sent successfully to $userName');
     } catch (e) {
       debugPrint('❌ Error sending welcome message: $e');
