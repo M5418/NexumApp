@@ -21,6 +21,8 @@ import 'other_user_profile_page.dart';
 import 'profile_page.dart';
 import 'services/content_analytics_service.dart';
 import 'core/post_events.dart';
+import 'providers/follow_state.dart';
+import 'repositories/interfaces/follow_repository.dart';
 import 'dart:async';
 
 class VideoScrollPage extends StatefulWidget {
@@ -983,23 +985,71 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFBFAE01),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          Provider.of<LanguageProvider>(context, listen: false).t('video.connect'),
-                          style: GoogleFonts.inter(
-                            color: Colors.black,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      // Connection button - only show if not fully connected and not own post
+                      Consumer<FollowState>(
+                        builder: (context, followState, _) {
+                          final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+                          
+                          // Hide if viewing own post
+                          if (currentUserId == post.authorId) {
+                            return const SizedBox.shrink();
+                          }
+                          
+                          final youConnectTo = followState.isConnected(post.authorId);
+                          final theyConnectToYou = followState.theyConnectToYou(post.authorId);
+                          final fullyConnected = youConnectTo && theyConnectToYou;
+                          
+                          // Hide button if fully connected (mutual connection)
+                          if (fullyConnected) {
+                            return const SizedBox.shrink();
+                          }
+                          
+                          return GestureDetector(
+                            onTap: () async {
+                              final repo = context.read<FollowRepository>();
+                              final messenger = ScaffoldMessenger.of(context);
+                              try {
+                                if (youConnectTo) {
+                                  // Disconnect
+                                  await repo.unfollowUser(post.authorId);
+                                } else {
+                                  // Connect or Connect Back
+                                  await repo.followUser(post.authorId);
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to update connection', style: GoogleFonts.inter()),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: youConnectTo ? Colors.grey[700] : const Color(0xFFBFAE01),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                youConnectTo
+                                    ? Provider.of<LanguageProvider>(context, listen: false).t('connections.disconnect')
+                                    : (theyConnectToYou
+                                        ? Provider.of<LanguageProvider>(context, listen: false).t('connections.connect_back')
+                                        : Provider.of<LanguageProvider>(context, listen: false).t('connections.connect')),
+                                style: GoogleFonts.inter(
+                                  color: youConnectTo ? Colors.white : Colors.black,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
