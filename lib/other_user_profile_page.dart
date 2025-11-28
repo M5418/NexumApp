@@ -64,10 +64,14 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   List<Post> _activityPosts = [];
   bool _loadingActivity = true;
   String? _errorActivity;
+  bool _isLoadingMoreActivity = false;
+  final ScrollController _activityScrollController = ScrollController();
 
   List<Post> _userPosts = [];
   bool _loadingPosts = true;
   String? _errorPosts;
+  bool _isLoadingMorePosts = false;
+  final ScrollController _postsScrollController = ScrollController();
 
   List<String> _mediaImageUrls = [];
   bool _loadingMedia = true;
@@ -75,6 +79,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   List<Map<String, dynamic>> _podcasts = [];
   bool _loadingPodcasts = true;
   String? _errorPodcasts;
+  
+  // Cache for user profiles to avoid redundant fetches
+  final Map<String, dynamic> _userProfileCache = {};
 
   @override
   void initState() {
@@ -92,6 +99,47 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     _loadUserPosts();     // posts authored by this user (with repost hydration)
     _loadActivity();      // "their activity": likes/bookmarks/reposts they did
     _loadPodcasts();      // podcasts authored by this user
+    
+    // Setup scroll listeners for pagination
+    _postsScrollController.addListener(_onPostsScroll);
+    _activityScrollController.addListener(_onActivityScroll);
+  }
+  
+  @override
+  void dispose() {
+    _postsScrollController.dispose();
+    _activityScrollController.dispose();
+    super.dispose();
+  }
+  
+  // Pagination for posts tab
+  void _onPostsScroll() {
+    if (_isLoadingMorePosts || _loadingPosts) return;
+    if (_postsScrollController.position.pixels >= _postsScrollController.position.maxScrollExtent * 0.8) {
+      _loadMorePosts();
+    }
+  }
+  
+  // Pagination for activity tab
+  void _onActivityScroll() {
+    if (_isLoadingMoreActivity || _loadingActivity) return;
+    if (_activityScrollController.position.pixels >= _activityScrollController.position.maxScrollExtent * 0.8) {
+      _loadMoreActivity();
+    }
+  }
+  
+  Future<void> _loadMorePosts() async {
+    if (_userPosts.isEmpty) return;
+    setState(() => _isLoadingMorePosts = true);
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) setState(() => _isLoadingMorePosts = false);
+  }
+  
+  Future<void> _loadMoreActivity() async {
+    if (_activityPosts.isEmpty) return;
+    setState(() => _isLoadingMoreActivity = true);
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) setState(() => _isLoadingMoreActivity = false);
   }
 
   // Utilities
@@ -204,13 +252,57 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       // Fetch this user's reposts
       final reposts = await postRepo.getUserReposts(uid: widget.userId, limit: 50);
 
+      if (reposts.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _activityPosts = [];
+          _loadingActivity = false;
+        });
+        return;
+      }
+
+      // ⚡ OPTIMIZATION: Batch fetch all original posts in parallel
+      final originalPostIds = reposts
+          .where((r) => r.repostOf != null && r.repostOf!.isNotEmpty)
+          .map((r) => r.repostOf!)
+          .toSet();
+      
+      final originalPostFutures = originalPostIds.map((postId) async {
+        final post = await postRepo.getPost(postId);
+        return MapEntry(postId, post);
+      });
+      final originalPosts = Map.fromEntries(await Future.wait(originalPostFutures));
+      
+      if (!mounted) return;
+      
+      // ⚡ OPTIMIZATION: Batch fetch all author profiles in parallel
+      final authorIds = originalPosts.values
+          .whereType<dynamic>()
+          .where((p) => p != null)
+          .map((p) => p.authorId as String)
+          .toSet();
+      
+      final authorFutures = authorIds.map((authorId) async {
+        if (_userProfileCache.containsKey(authorId)) {
+          return MapEntry(authorId, _userProfileCache[authorId]);
+        }
+        final profile = await userRepo.getUserProfile(authorId);
+        if (profile != null) {
+          _userProfileCache[authorId] = profile;
+        }
+        return MapEntry(authorId, profile);
+      });
+      final authors = Map.fromEntries(await Future.wait(authorFutures));
+      
+      if (!mounted) return;
+
       final posts = <Post>[];
       for (final model in reposts) {
         final ogId = model.repostOf;
         if (ogId == null || ogId.isEmpty) continue;
-        final original = await postRepo.getPost(ogId);
+        final original = originalPosts[ogId];
         if (original == null) continue;
-        final origAuthor = await userRepo.getUserProfile(original.authorId);
+        final origAuthor = authors[original.authorId];
 
         final origFirst = (origAuthor?.firstName ?? '').trim();
         final origLast = (origAuthor?.lastName ?? '').trim();
@@ -1039,10 +1131,19 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       return Center(child: Text(Provider.of<LanguageProvider>(context).t('profile.no_activity')));
     }
     return ListView.builder(
+      controller: _activityScrollController,
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: _activityPosts.length,
+      itemCount: _activityPosts.length + (_isLoadingMoreActivity ? 1 : 0),
       itemBuilder: (context, index) {
+        // Show loading indicator at the bottom
+        if (index == _activityPosts.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
         final post = _activityPosts[index];
         return GestureDetector(
           onTap: () {
@@ -1086,10 +1187,19 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       return Center(child: Text(Provider.of<LanguageProvider>(context).t('profile.no_posts')));
     }
     return ListView.builder(
+      controller: _postsScrollController,
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: _userPosts.length,
+      itemCount: _userPosts.length + (_isLoadingMorePosts ? 1 : 0),
       itemBuilder: (context, index) {
+        // Show loading indicator at the bottom
+        if (index == _userPosts.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
         final post = _userPosts[index];
         return GestureDetector(
           onTap: () {
