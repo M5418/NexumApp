@@ -300,16 +300,69 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: isDark ? Colors.black : Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-        title: Text('Create Podcast',
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : Colors.black,
-            )),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black : Colors.white,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Create Podcast',
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFBFAE01).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFBFAE01).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.podcasts, size: 16, color: Color(0xFFBFAE01)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'PODCAST',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFBFAE01),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -332,26 +385,55 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Cover
-                Text('Cover', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                Text(
+                  'Cover Image',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 12),
                 GestureDetector(
                   onTap: _uploadingCover ? null : _pickCoverImage,
-                  child: AspectRatio(
-                    aspectRatio: 1,
+                  child: Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: (_coverUrl ?? '').isEmpty
+                            ? (isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1))
+                            : Colors.transparent,
+                        width: 2,
+                        strokeAlign: BorderSide.strokeAlignInside,
+                      ),
+                    ),
                     child: Stack(
                       children: [
                         Positioned.fill(
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             child: (_coverUrl ?? '').isNotEmpty
                                 ? Image.network(_coverUrl!, fit: BoxFit.cover)
                                 : Container(
                                     decoration: BoxDecoration(
                                       color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(14),
                                     ),
-                                    child: const Center(
-                                      child: Icon(Icons.image, color: Color(0xFFBFAE01), size: 36),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.add_photo_alternate_outlined, color: Color(0xFFBFAE01), size: 48),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Tap to upload cover',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: const Color(0xFF999999),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                           ),
@@ -360,8 +442,8 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                           Positioned.fill(
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.black.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01))),
                             ),
@@ -370,60 +452,138 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
                 // Audio
-                Text('Audio file', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        (_audioUrl ?? '').isEmpty ? 'No file selected' : 'Audio uploaded',
-                        style: GoogleFonts.inter(color: const Color(0xFF666666)),
-                      ),
+                Text(
+                  'Audio File',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF111111) : const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: (_audioUrl ?? '').isEmpty
+                          ? (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05))
+                          : const Color(0xFFBFAE01).withValues(alpha: 0.3),
+                      width: 1,
                     ),
-                    ElevatedButton.icon(
-                      onPressed: _uploadingAudio ? null : _pickAudioFile,
-                      icon: const Icon(Icons.upload_file, color: Colors.black, size: 18),
-                      label: Text('Upload', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFBFAE01),
-                        elevation: 0,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFBFAE01).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          (_audioUrl ?? '').isEmpty ? Icons.audiotrack : Icons.check_circle,
+                          color: const Color(0xFFBFAE01),
+                          size: 24,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          (_audioUrl ?? '').isEmpty ? 'No audio file selected' : 'Audio file uploaded ✓',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: (_audioUrl ?? '').isEmpty ? const Color(0xFF666666) : const Color(0xFFBFAE01),
+                            fontWeight: (_audioUrl ?? '').isEmpty ? FontWeight.w500 : FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: _uploadingAudio ? null : _pickAudioFile,
+                        icon: const Icon(Icons.upload_file, color: Colors.black, size: 18),
+                        label: Text('Upload', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600, fontSize: 14)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFBFAE01),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 if (_uploadingAudio) ...[
-                  const SizedBox(height: 8),
-                  const LinearProgressIndicator(color: Color(0xFFBFAE01), minHeight: 4),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: const LinearProgressIndicator(
+                      color: Color(0xFFBFAE01),
+                      backgroundColor: Color(0xFFEEEEEE),
+                      minHeight: 6,
+                    ),
+                  ),
                 ],
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
+
+                // Details Section Header
+                Text(
+                  'Podcast Details',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 12),
 
                 // Title
                 TextField(
                   controller: _titleCtrl,
-                  decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
+                  style: GoogleFonts.inter(),
+                  decoration: InputDecoration(
+                    labelText: 'Title *',
+                    labelStyle: GoogleFonts.inter(),
+                    border: const OutlineInputBorder(),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 // Author
                 TextField(
                   controller: _authorCtrl,
-                  decoration: const InputDecoration(labelText: 'Author (optional)', border: OutlineInputBorder()),
+                  style: GoogleFonts.inter(),
+                  decoration: InputDecoration(
+                    labelText: 'Author (optional)',
+                    labelStyle: GoogleFonts.inter(),
+                    border: const OutlineInputBorder(),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 // Description
                 TextField(
                   controller: _descCtrl,
-                  maxLines: null,
-                  decoration: const InputDecoration(
+                  maxLines: 4,
+                  minLines: 3,
+                  style: GoogleFonts.inter(),
+                  decoration: InputDecoration(
                     labelText: 'Description (optional)',
-                    border: OutlineInputBorder(),
+                    labelStyle: GoogleFonts.inter(),
+                    border: const OutlineInputBorder(),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
+                    alignLabelWithHint: true,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
 
                 // Language + Category (Category is searchable dropdown)
                 Row(
@@ -431,7 +591,14 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                     Expanded(
                       child: TextField(
                         controller: _languageCtrl,
-                        decoration: const InputDecoration(labelText: 'Language (optional)', border: OutlineInputBorder()),
+                        style: GoogleFonts.inter(),
+                        decoration: InputDecoration(
+                          labelText: 'Language',
+                          labelStyle: GoogleFonts.inter(),
+                          border: const OutlineInputBorder(),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -440,10 +607,14 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                         controller: _categoryCtrl,
                         readOnly: true,
                         onTap: _pickCategory,
-                        decoration: const InputDecoration(
-                          labelText: 'Category (choose from interests)',
-                          suffixIcon: Icon(Icons.arrow_drop_down),
-                          border: OutlineInputBorder(),
+                        style: GoogleFonts.inter(),
+                        decoration: InputDecoration(
+                          labelText: 'Category',
+                          labelStyle: GoogleFonts.inter(),
+                          suffixIcon: const Icon(Icons.arrow_drop_down, color: Color(0xFFBFAE01)),
+                          border: const OutlineInputBorder(),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
                         ),
                       ),
                     ),
@@ -454,35 +625,97 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                 // Tags
                 TextField(
                   controller: _tagsCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Tags (comma separated, optional)',
-                    border: OutlineInputBorder(),
+                  style: GoogleFonts.inter(),
+                  decoration: InputDecoration(
+                    labelText: 'Tags (comma separated)',
+                    labelStyle: GoogleFonts.inter(),
+                    hintText: 'technology, education, business',
+                    hintStyle: GoogleFonts.inter(color: const Color(0xFF999999)),
+                    border: const OutlineInputBorder(),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 24),
 
                 // Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _creating ? null : _saveDraft,
-                        child: Text('Save as Draft', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                      ),
+                SizedBox(
+                  width: double.infinity,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: _creating
+                          ? null
+                          : const LinearGradient(
+                              colors: [Color(0xFFD4C100), Color(0xFFBFAE01)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _creating ? null : _publish,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFBFAE01),
-                          foregroundColor: Colors.black,
-                          elevation: 0,
+                    child: ElevatedButton(
+                      onPressed: _creating ? null : _publish,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _creating ? (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05)) : Colors.transparent,
+                        foregroundColor: _creating ? (isDark ? Colors.grey : Colors.black45) : Colors.black,
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Text('Publish', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_creating)
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFBFAE01)),
+                            )
+                          else
+                            const Icon(Icons.publish, size: 22),
+                          const SizedBox(width: 10),
+                          Text(
+                            _creating ? 'Publishing...' : 'Publish Podcast',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _creating ? null : _saveDraft,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFBFAE01), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.drafts_outlined, size: 20, color: Color(0xFFBFAE01)),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Save as Draft',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFBFAE01),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
