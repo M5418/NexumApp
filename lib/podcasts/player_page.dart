@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
+import 'add_to_playlist_sheet.dart';
 
 class PlayerPage extends StatefulWidget {
   final Podcast podcast;
@@ -357,11 +358,11 @@ class _PlayerPageState extends State<PlayerPage> {
 
                       const SizedBox(height: 32),
 
-                      // Controls with modern rounded buttons
+                      // Controls with modern buttons
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Speed control
+                          // Speed control (Circle)
                           GestureDetector(
                             onTap: _changeSpeed,
                             child: Container(
@@ -369,7 +370,7 @@ class _PlayerPageState extends State<PlayerPage> {
                               height: 54,
                               decoration: BoxDecoration(
                                 color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
+                                shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
@@ -393,15 +394,15 @@ class _PlayerPageState extends State<PlayerPage> {
 
                           const SizedBox(width: 16),
 
-                          // Rewind 15s
+                          // Rewind 10s (Circle)
                           GestureDetector(
-                            onTap: () => _seekTo((_position.inSeconds - 15).clamp(0, _duration.inSeconds).toDouble()),
+                            onTap: () => _seekTo((_position.inSeconds - 10).clamp(0, _duration.inSeconds).toDouble()),
                             child: Container(
                               width: 54,
                               height: 54,
                               decoration: BoxDecoration(
                                 color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
+                                shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
@@ -420,7 +421,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
                           const SizedBox(width: 20),
 
-                          // Play/Pause button with gradient
+                          // Play/Pause button with gradient (25px radius)
                           GestureDetector(
                             onTap: _togglePlayPause,
                             child: Container(
@@ -432,7 +433,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(25),
                                 boxShadow: [
                                   BoxShadow(
                                     color: const Color(0xFFBFAE01).withValues(alpha: 0.4),
@@ -451,15 +452,15 @@ class _PlayerPageState extends State<PlayerPage> {
 
                           const SizedBox(width: 20),
 
-                          // Forward 15s
+                          // Forward 10s (Circle)
                           GestureDetector(
-                            onTap: () => _seekTo((_position.inSeconds + 15).clamp(0, _duration.inSeconds).toDouble()),
+                            onTap: () => _seekTo((_position.inSeconds + 10).clamp(0, _duration.inSeconds).toDouble()),
                             child: Container(
                               width: 54,
                               height: 54,
                               decoration: BoxDecoration(
                                 color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
+                                shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
@@ -478,15 +479,15 @@ class _PlayerPageState extends State<PlayerPage> {
 
                           const SizedBox(width: 16),
 
-                          // Bookmark
+                          // Add to Playlist (Circle)
                           GestureDetector(
-                            onTap: () {},
+                            onTap: () => showAddToPlaylistSheet(context, widget.podcast),
                             child: Container(
                               width: 54,
                               height: 54,
                               decoration: BoxDecoration(
                                 color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
+                                shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
@@ -496,8 +497,8 @@ class _PlayerPageState extends State<PlayerPage> {
                                 ],
                               ),
                               child: Icon(
-                                Icons.bookmark_border_rounded,
-                                size: 26,
+                                Icons.playlist_add,
+                                size: 28,
                                 color: isDark ? Colors.white : Colors.black,
                               ),
                             ),
