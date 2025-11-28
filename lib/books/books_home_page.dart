@@ -649,6 +649,12 @@ class _BooksHomePageState extends State<BooksHomePage> {
                     },
                     icon: Icon(Icons.search, color: isDark ? Colors.white : const Color(0xFF666666)),
                   ),
+                  const SizedBox(width: 8),
+                  _LanguageFilter(
+                    selected: _selectedLanguage,
+                    options: _languages,
+                    onChanged: (v) => setState(() => _selectedLanguage = v),
+                  ),
                 ],
               ),
             ),
