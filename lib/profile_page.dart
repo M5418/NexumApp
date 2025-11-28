@@ -530,13 +530,9 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     try {
-      debugPrint('📝 Loading posts for user: $_myUserId');
-      
       final postRepo = FirebasePostRepository();
       final userRepo = FirebaseUserRepository();
       final postModels = await postRepo.getUserPosts(uid: _myUserId!, limit: 50);
-      
-      debugPrint('📝 Found ${postModels.length} posts');
       
       if (!mounted) return;
 
@@ -577,7 +573,6 @@ class _ProfilePageState extends State<ProfilePage> {
         
         // SKIP reposts - they should only appear in Activity tab
         if (isRepost) {
-          debugPrint('📝 Skipping repost ${model.id} - reposts only in Activity tab');
           continue;
         }
         
@@ -640,35 +635,20 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       final posts = newItems.map(_mapRawPostToModel).toList();
-      
-      debugPrint('📝 Mapped ${posts.length} posts to Post models');
 
       // Build media grid: one thumbnail per post that has media
       // For multi-image posts, show only the first image
       final mediaItems = <Map<String, String>>[];
       for (final post in posts) {
-        debugPrint('📝 Post ${post.id}: mediaType=${post.mediaType}, imageUrls=${post.imageUrls.length}');
-        
         // Include all posts with images (single or multiple)
         if ((post.mediaType == MediaType.image || post.mediaType == MediaType.images) && 
             post.imageUrls.isNotEmpty) {
           // Always use the first image as thumbnail
           mediaItems.add({'imageUrl': post.imageUrls.first, 'postId': post.id});
-          debugPrint('   ✅ Added media thumbnail: ${post.imageUrls.first}');
-        } else if (post.mediaType == MediaType.video && post.videoUrl != null && post.videoUrl!.isNotEmpty) {
-          // For videos, we could use a video icon or thumbnail
-          // For now, skip videos as they need special handling
-          debugPrint('   ⚠️ Skipped - video post (needs thumbnail)');
-        } else {
-          debugPrint('   ⚠️ Skipped - no media');
         }
       }
-
-      debugPrint('📝 Built ${mediaItems.length} media items from ${posts.length} posts');
       
       if (!mounted) return;
-      
-      debugPrint('📝 Setting state with ${posts.length} posts');
       
       setState(() {
         _myPosts = posts;
@@ -676,8 +656,6 @@ class _ProfilePageState extends State<ProfilePage> {
         _loadingMyPosts = false;
         _loadingMedia = false;
       });
-      
-      debugPrint('📝 State set. Loading = $_loadingMyPosts, Posts = ${_myPosts.length}');
     } catch (e, stack) {
       debugPrint('❌ Error in _loadMyPosts: $e');
       debugPrint('Stack trace: $stack');

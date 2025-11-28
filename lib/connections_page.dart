@@ -167,9 +167,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       debugPrint('   Following (you follow them): ${outboundIds.length}');
 
       // ⚡ OPTIMIZATION: Fetch users with caching
-      debugPrint('🔍 Fetching all users from database...');
       final allProfiles = await userRepo.getSuggestedUsers(limit: 100);
-      debugPrint('📋 Fetched ${allProfiles.length} total users');
 
       // Convert to list and filter out current user
       final profiles = allProfiles.where((p) => p.uid != currentUid).toList();
@@ -178,11 +176,9 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       final uniqueUserIds = profiles.map((p) => p.uid).toSet();
       final userProfileFutures = uniqueUserIds.map((userId) async {
         if (_userProfileCache.containsKey(userId)) {
-          debugPrint('   ✅ Using cached profile for user: $userId');
           return MapEntry(userId, _userProfileCache[userId]);
         }
         // Fetch profile if not cached
-        debugPrint('   🔄 Fetching profile for user: $userId');
         final profile = profiles.firstWhere((p) => p.uid == userId);
         _userProfileCache[userId] = profile;
         return MapEntry(userId, profile);
@@ -217,35 +213,11 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
       // ⚡ FILTER: Exclude ONLY mutually connected users
       // Show ALL other users: one-way connections AND no connections
-      debugPrint('📊 Filtering ${mapped.length} users:');
-      int mutualCount = 0;
-      int oneWayCount = 0;
-      int noConnectionCount = 0;
-      
       final filteredUsers = mapped.where((user) {
         // Exclude if BOTH users follow each other (mutual connection)
         final isMutuallyConnected = user.isConnected && user.theyConnectToYou;
-        final hasNoConnection = !user.isConnected && !user.theyConnectToYou;
-        
-        if (isMutuallyConnected) {
-          mutualCount++;
-          debugPrint('   ❌ ${user.fullName}: Mutual (excluded)');
-        } else if (hasNoConnection) {
-          noConnectionCount++;
-          debugPrint('   ✅ ${user.fullName}: No connection (shown)');
-        } else {
-          oneWayCount++;
-          final type = user.isConnected ? 'You follow them' : 'They follow you';
-          debugPrint('   ✅ ${user.fullName}: $type (shown)');
-        }
         return !isMutuallyConnected; // Show if NOT mutually connected
       }).toList();
-
-      debugPrint('📋 Filter Results:');
-      debugPrint('   Mutual connections (hidden): $mutualCount');
-      debugPrint('   One-way connections (shown): $oneWayCount');
-      debugPrint('   No connections (shown): $noConnectionCount');
-      debugPrint('   Final list size: ${filteredUsers.length}');
 
       if (!mounted) return;
       setState(() {
