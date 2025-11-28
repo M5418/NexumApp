@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:readmore/readmore.dart';
@@ -141,22 +140,6 @@ class _PostCardState extends State<PostCard> {
         ? widget.post.videoUrl
         : null;
 
-    // Debug logging for video posts
-    if (widget.post.mediaType == MediaType.video) {
-      debugPrint('🎥 VIDEO POST DEBUG:');
-      debugPrint('  mediaType: ${widget.post.mediaType}');
-      debugPrint('  videoUrl: ${widget.post.videoUrl}');
-      debugPrint('  validVideoUrl: $validVideoUrl');
-      debugPrint('  imageUrls: ${widget.post.imageUrls}');
-      debugPrint('  validImageUrls: $validImageUrls');
-      
-      // Web-specific console log
-      if (kIsWeb) {
-        // ignore: avoid_print
-        print('🎥 VIDEO POST: mediaType=${widget.post.mediaType}, videoUrl=${widget.post.videoUrl}, validVideoUrl=$validVideoUrl, imageUrls=${widget.post.imageUrls}');
-      }
-    }
-
     // Show loading indicator if media is still uploading
     final hasPlaceholders = widget.post.imageUrls.any(_isPlaceholderUrl) ||
         (widget.post.videoUrl != null && _isPlaceholderUrl(widget.post.videoUrl!));
@@ -199,27 +182,6 @@ class _PostCardState extends State<PostCard> {
     }
 
     final widgets = <Widget>[];
-    
-    // TEMPORARY: Show debug info for ALL posts with media
-    if (widget.post.imageUrls.isNotEmpty || widget.post.videoUrl != null) {
-      widgets.add(
-        Container(
-          padding: const EdgeInsets.all(8),
-          color: widget.post.mediaType == MediaType.video 
-              ? Colors.green.withValues(alpha: 200) 
-              : Colors.red.withValues(alpha: 200),
-          child: Text(
-            'DEBUG INFO:\n'
-            'mediaType: ${widget.post.mediaType}\n'
-            'videoUrl: ${widget.post.videoUrl}\n'
-            'imageUrls: ${widget.post.imageUrls}\n'
-            'validVideoUrl: $validVideoUrl\n'
-            'validImageUrls: $validImageUrls',
-            style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
-    }
 
     // Single image
     if (widget.post.mediaType == MediaType.image && validImageUrls.isNotEmpty) {

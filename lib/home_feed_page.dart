@@ -45,7 +45,6 @@ import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
 import 'responsive/responsive_breakpoints.dart';
 import 'core/i18n/language_provider.dart';
-import 'services/auth_service.dart';
 
 class HomeFeedPage extends StatefulWidget {
   const HomeFeedPage({super.key});
@@ -263,23 +262,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final storyRepo = context.read<StoryRepository>();
     List<StoryRingModel> rings = [];
     String? errMsg;
-    
-    // FORCE console output to verify app restarted
-    // ignore: avoid_print
-    print('🚀 HOME FEED _loadData() CALLED - Build timestamp: ${DateTime.now()}');
-
-    // LOG CURRENT USER STATUS (critical for TestFlight debugging)
-    debugPrint('🔐 =================================');
-    debugPrint('🔐 HOME FEED LOADING DATA');
-    debugPrint('🔐 Current User ID: ${_currentUserId ?? "NOT SET"}');
-    debugPrint('🔐 Auth Service Logged In: ${AuthService().isLoggedIn}');
-    debugPrint('🔐 Auth Service User ID: ${AuthService().userId ?? "NULL"}');
-    debugPrint('🔐 =================================');
 
     try {
-      debugPrint('📊 Fetching initial feed from Firestore...');
       final models = await _postRepo.getFeed(limit: _postsPerPage);
-      debugPrint('📨 Fetched ${models.length} post models from Firebase');
       
       // Store last post for pagination
       if (models.isNotEmpty) {
@@ -289,27 +274,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         _hasMorePosts = false;
       }
       
-      if (models.isEmpty) {
-        debugPrint('⚠️ NO POSTS FOUND IN FIRESTORE - Check:');
-        debugPrint('   1. Are there posts in the "posts" collection?');
-        debugPrint('   2. Are Firestore rules allowing reads?');
-        debugPrint('   3. Is App Check blocking requests?');
-      }
-      
       posts = await _mapModelsToPosts(models);
-      debugPrint('📬 Mapped to ${posts.length} posts');
-      final repostCount = posts.where((p) => p.isRepost).length;
-      debugPrint('🔁 Found $repostCount reposts before hydration');
       posts = await _hydrateReposts(posts);
-      debugPrint('💧 After hydration: ${posts.length} posts');
       posts = _applyFeedFilters(posts);
-      debugPrint('🔍 After filters: ${posts.length} posts (reposts: ${posts.where((p) => p.isRepost).length})');
-      debugPrint('📄 Has more posts: $_hasMorePosts');
-    } catch (e, stackTrace) {
+    } catch (e) {
       errMsg = 'Posts failed: ${_toError(e)}';
-      debugPrint('❌ CRITICAL ERROR LOADING POSTS:');
-      debugPrint('   Error: $e');
-      debugPrint('   Stack: $stackTrace');
     }
 
     try {
@@ -533,22 +502,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   Future<Post> _toPost(PostModel m) async {
     final uid = fb.FirebaseAuth.instance.currentUser?.uid;
     
-    // DEBUG: Log raw Firestore data
-    debugPrint('📥 RAW POST DATA from Firestore:');
-    debugPrint('  postId: ${m.id}');
-    debugPrint('  mediaUrls: ${m.mediaUrls}');
-    debugPrint('  mediaUrls length: ${m.mediaUrls.length}');
-    if (m.mediaUrls.isNotEmpty) {
-      for (var i = 0; i < m.mediaUrls.length; i++) {
-        debugPrint('    [$i]: ${m.mediaUrls[i]}');
-      }
-    }
-    // Web console output
-    if (kIsWeb && m.mediaUrls.isNotEmpty) {
-      // ignore: avoid_print
-      print('📥 RAW: postId=${m.id}, mediaUrls=${m.mediaUrls}');
-    }
-    
     // Parallelize all async operations
     final results = await Future.wait([
       _userRepo.getUserProfile(m.authorId),
@@ -562,20 +515,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final isBookmarked = results[2] as bool;
     final isLiked = results[3] as bool;
     
-    // DEBUG: Log normalized URLs
-    debugPrint('📥 AFTER NORMALIZATION:');
-    debugPrint('  normUrls: $normUrls');
-    debugPrint('  normUrls length: ${normUrls.length}');
-    if (normUrls.isNotEmpty) {
-      for (var i = 0; i < normUrls.length; i++) {
-        debugPrint('    [$i]: ${normUrls[i]}');
-      }
-    }
-    
     // If this is a repost, get the reposter's info (the author of this repost entry)
     RepostedBy? repostedBy;
     if (m.repostOf != null && m.repostOf!.isNotEmpty) {
-      debugPrint('🔁 Processing repost: ${m.id} -> original: ${m.repostOf}');
       // Build full name for reposter
       final repostFirstName = author?.firstName?.trim() ?? '';
       final repostLastName = author?.lastName?.trim() ?? '';
@@ -599,31 +541,13 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       mediaType = MediaType.none;
       videoUrl = null;
       imageUrls = [];
-      debugPrint('🎬 MEDIA TYPE: none (no URLs)');
     } else {
-      // Check each URL for video extensions (handle Firebase Storage query params)
-      debugPrint('🎬 CHECKING FOR VIDEO:');
-      for (var url in normUrls) {
-        final lower = url.toLowerCase();
-        // Check if URL contains video extension (not just ends with, due to query params)
-        final isMp4 = lower.contains('.mp4');
-        final isMov = lower.contains('.mov');
-        final isWebm = lower.contains('.webm');
-        final isVideo = isMp4 || isMov || isWebm;
-        debugPrint('  URL: $url');
-        debugPrint('    contains .mp4? $isMp4');
-        debugPrint('    contains .mov? $isMov');
-        debugPrint('    contains .webm? $isWebm');
-        debugPrint('    IS VIDEO? $isVideo');
-      }
-      
+      // Check for video extensions (use contains to handle Firebase Storage query params)
       final hasVideo = normUrls.any((u) {
         final l = u.toLowerCase();
         // Use contains instead of endsWith to handle query parameters like ?alt=media&token=...
         return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
       });
-      
-      debugPrint('🎬 FINAL hasVideo: $hasVideo');
       
       if (hasVideo) {
         mediaType = MediaType.video;
@@ -635,21 +559,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           orElse: () => normUrls.first,
         );
         imageUrls = []; // Clear imageUrls for videos
-        debugPrint('🎬 MEDIA TYPE: video');
-        debugPrint('  videoUrl: $videoUrl');
-        debugPrint('  imageUrls: $imageUrls (cleared)');
-        // Web console output
-        if (kIsWeb) {
-          // ignore: avoid_print
-          print('🎬 VIDEO DETECTED: postId=${m.id}, videoUrl=$videoUrl, imageUrls=[] (cleared)');
-        }
       } else {
         mediaType = (normUrls.length == 1) ? MediaType.image : MediaType.images;
         videoUrl = null;
         imageUrls = normUrls;
-        debugPrint('🎬 MEDIA TYPE: $mediaType');
-        debugPrint('  videoUrl: $videoUrl (null)');
-        debugPrint('  imageUrls: $imageUrls');
       }
     }
     int clamp(int v) => v < 0 ? 0 : v;
@@ -663,16 +576,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
         ? '$firstName $lastName'.trim()
         : (author?.displayName ?? author?.username ?? author?.email ?? 'User');
-    
-    // Debug logging for video posts
-    if (mediaType == MediaType.video) {
-      debugPrint('📦 CREATING VIDEO POST:');
-      debugPrint('  postId: ${m.id}');
-      debugPrint('  mediaType: $mediaType');
-      debugPrint('  videoUrl: $videoUrl');
-      debugPrint('  imageUrls: $imageUrls');
-      debugPrint('  normUrls: $normUrls');
-    }
     
     return Post(
       id: m.id,
