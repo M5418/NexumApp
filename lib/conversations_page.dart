@@ -198,10 +198,27 @@ class _ConversationsPageState extends State<ConversationsPage>
     }
   }
 
-String _formatTime(DateTime? dt) {
-  if (dt == null) return '';
-  return TimeUtils.relativeLabel(dt, locale: 'en_short');
-}
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return '';
+    return TimeUtils.relativeLabel(dt, locale: 'en_short');
+  }
+
+  // Clean story reply text to show only message without media URL
+  String? _cleanLastMessageText(String? text) {
+    if (text == null) return null;
+    
+    // Check if it's a story reply with media URL
+    if (text.startsWith('📖 Story reply:')) {
+      // Extract only the message part before the media URL separator
+      // Format: "📖 Story reply: message|mediaUrl|mediaType"
+      final parts = text.split('|');
+      if (parts.isNotEmpty) {
+        return parts[0]; // Return "📖 Story reply: message"
+      }
+    }
+    
+    return text;
+  }
 
   // -----------------------------
   // Data loading
@@ -222,7 +239,7 @@ String _formatTime(DateTime? dt) {
               name: c.otherUser.name,
               avatarUrl: c.otherUser.avatarUrl ?? '',
               lastType: _mapLastType(c.lastMessageType),
-              lastText: c.lastMessageText,
+              lastText: _cleanLastMessageText(c.lastMessageText),
               lastTime: _formatTime(c.lastMessageAt),
               unreadCount: c.unreadCount,
               muted: c.muted,
