@@ -214,16 +214,16 @@ class ProfileApi {
     mapKey('lastName', 'last_name');
     mapKey('avatarUrl', 'profile_photo_url');
     mapKey('coverUrl', 'cover_photo_url');
-    mapKey('interestDomains', 'interest_domains');
-    mapKey('professionalExperiences', 'professional_experiences');
     
-    // Include connection counts if they exist in Firestore
-    if (d.containsKey('followersCount')) {
-      out['connections_total_count'] = d['followersCount'];
-    }
-    if (d.containsKey('followingCount')) {
-      out['connections_inbound_count'] = d['followingCount'];
-    }
+    // Always include these arrays, default to empty if not present
+    out['interest_domains'] = d['interestDomains'] ?? [];
+    out['professional_experiences'] = d['professionalExperiences'] ?? [];
+    out['trainings'] = d['trainings'] ?? [];
+    
+    // Include connection counts - always set them, default to 0 if not present
+    out['connections_total_count'] = d['followersCount'] ?? 0;
+    out['connections_inbound_count'] = d['followingCount'] ?? 0;
+    out['posts_count'] = d['postsCount'] ?? 0;
     
     return out;
   }

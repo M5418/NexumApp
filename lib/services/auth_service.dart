@@ -175,6 +175,9 @@ class AuthService extends ChangeNotifier {
                   'followersCount': 0,
                   'followingCount': 0,
                   'postsCount': 0,
+                  'professionalExperiences': [],
+                  'trainings': [],
+                  'interestDomains': [],
                 });
                 debugPrint('✅ User document created, retrying profile fetch...');
                 // Continue to next attempt to fetch the newly created profile
