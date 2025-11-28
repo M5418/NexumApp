@@ -54,11 +54,15 @@ class _ProfilePageState extends State<ProfilePage> {
   List<Post> _activityPosts = [];
   bool _loadingActivity = false;
   String? _errorActivity;
+  bool _isLoadingMoreActivity = false;
+  final ScrollController _activityScrollController = ScrollController();
 
   // Posts: created by me
   List<Post> _myPosts = [];
   bool _loadingMyPosts = false;
   String? _errorMyPosts;
+  bool _isLoadingMorePosts = false;
+  final ScrollController _postsScrollController = ScrollController();
 
   // Media grid: image URLs from my posts with post IDs
   List<Map<String, String>> _mediaItems = []; // {imageUrl, postId}
@@ -74,6 +78,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Notifications badge
   int _unreadNotifications = 0;
+  
+  // Caching for user profiles to avoid redundant fetches
+  final Map<String, dynamic> _userProfileCache = {};
 
   @override
   void initState() {
@@ -86,12 +93,50 @@ class _ProfilePageState extends State<ProfilePage> {
     
     _loadProfile();
     _loadUnreadNotifications();
+    
+    // Setup scroll listeners for pagination
+    _postsScrollController.addListener(_onPostsScroll);
+    _activityScrollController.addListener(_onActivityScroll);
   }
 
   @override
   void dispose() {
     _postEventsSub?.cancel();
+    _postsScrollController.dispose();
+    _activityScrollController.dispose();
     super.dispose();
+  }
+  
+  // Pagination for posts tab
+  void _onPostsScroll() {
+    if (_isLoadingMorePosts || _loadingMyPosts) return;
+    if (_postsScrollController.position.pixels >= _postsScrollController.position.maxScrollExtent * 0.8) {
+      _loadMorePosts();
+    }
+  }
+  
+  // Pagination for activity tab
+  void _onActivityScroll() {
+    if (_isLoadingMoreActivity || _loadingActivity) return;
+    if (_activityScrollController.position.pixels >= _activityScrollController.position.maxScrollExtent * 0.8) {
+      _loadMoreActivity();
+    }
+  }
+  
+  Future<void> _loadMorePosts() async {
+    if (_myPosts.isEmpty) return;
+    setState(() => _isLoadingMorePosts = true);
+    // Add pagination logic here when needed
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) setState(() => _isLoadingMorePosts = false);
+  }
+  
+  Future<void> _loadMoreActivity() async {
+    if (_activityPosts.isEmpty) return;
+    setState(() => _isLoadingMoreActivity = true);
+    // Add pagination logic here when needed
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) setState(() => _isLoadingMoreActivity = false);
   }
 
   Future<void> _loadProfile() async {
@@ -498,18 +543,45 @@ class _ProfilePageState extends State<ProfilePage> {
       final newItems = <Map<String, dynamic>>[];
       final originals = <String, Map<String, dynamic>>{};
 
+      // ⚡ OPTIMIZATION: Batch fetch all unique author profiles in parallel
+      final uniqueAuthorIds = postModels.map((m) => m.authorId).toSet();
+      final authorFutures = uniqueAuthorIds.map((authorId) async {
+        if (_userProfileCache.containsKey(authorId)) {
+          return MapEntry(authorId, _userProfileCache[authorId]);
+        }
+        final profile = await userRepo.getUserProfile(authorId);
+        if (profile != null) {
+          _userProfileCache[authorId] = profile;
+        }
+        return MapEntry(authorId, profile);
+      });
+      final authors = Map.fromEntries(await Future.wait(authorFutures));
+      
+      if (!mounted) return;
+
+      // ⚡ OPTIMIZATION: Batch check like/bookmark status for all posts in parallel
+      final likeBookmarkFutures = postModels.map((model) async {
+        final liked = _myUserId != null 
+            ? await postRepo.hasUserLikedPost(postId: model.id, uid: _myUserId!)
+            : false;
+        final bookmarked = _myUserId != null
+            ? await postRepo.hasUserBookmarkedPost(postId: model.id, uid: _myUserId!)
+            : false;
+        return MapEntry(model.id, {'liked': liked, 'bookmarked': bookmarked});
+      });
+      final likeBookmarkMap = Map.fromEntries(await Future.wait(likeBookmarkFutures));
+      
+      if (!mounted) return;
+
       for (final model in postModels) {
-        // Convert PostModel to Map format expected by UI
-        final author = await userRepo.getUserProfile(model.authorId);
+        // Get cached author profile
+        final author = authors[model.authorId];
         final isRepost = model.repostOf != null && model.repostOf!.isNotEmpty;
         
-        // Check backend for like/bookmark status
-        bool isLiked = false;
-        bool isBookmarked = false;
-        if (_myUserId != null) {
-          isLiked = await postRepo.hasUserLikedPost(postId: model.id, uid: _myUserId!);
-          isBookmarked = await postRepo.hasUserBookmarkedPost(postId: model.id, uid: _myUserId!);
-        }
+        // Get cached like/bookmark status
+        final status = likeBookmarkMap[model.id] ?? {'liked': false, 'bookmarked': false};
+        final isLiked = status['liked'] as bool;
+        final isBookmarked = status['bookmarked'] as bool;
         
         // Convert mediaUrls list to media array with proper structure
         final mediaArray = model.mediaUrls.map((url) {
@@ -670,15 +742,18 @@ class _ProfilePageState extends State<ProfilePage> {
       final postRepo = FirebasePostRepository();
       final userRepo = FirebaseUserRepository();
       
-      // Get liked posts, bookmarked posts, and reposts for activity
-      final likedPosts = await postRepo.getPostsLikedByUser(uid: _myUserId!, limit: 50);
+      // ⚡ OPTIMIZATION: Fetch all activity posts in parallel
+      final activityResults = await Future.wait([
+        postRepo.getPostsLikedByUser(uid: _myUserId!, limit: 50),
+        postRepo.getPostsBookmarkedByUser(uid: _myUserId!, limit: 50),
+        postRepo.getUserReposts(uid: _myUserId!, limit: 50),
+      ]);
+      
       if (!mounted) return;
       
-      final bookmarkedPosts = await postRepo.getPostsBookmarkedByUser(uid: _myUserId!, limit: 50);
-      if (!mounted) return;
-      
-      final reposts = await postRepo.getUserReposts(uid: _myUserId!, limit: 50);
-      if (!mounted) return;
+      final likedPosts = activityResults[0];
+      final bookmarkedPosts = activityResults[1];
+      final reposts = activityResults[2];
       
       // Combine all activity posts
       final allActivityModels = [...likedPosts, ...bookmarkedPosts, ...reposts];
@@ -694,18 +769,46 @@ class _ProfilePageState extends State<ProfilePage> {
       final filtered = <Map<String, dynamic>>[];
       final originals = <String, Map<String, dynamic>>{};
       
+      // ⚡ OPTIMIZATION: Batch fetch all unique author profiles in parallel
+      final activityAuthorIds = uniqueModels.take(100).map((m) => m.authorId).toSet();
+      final activityAuthorFutures = activityAuthorIds.map((authorId) async {
+        if (_userProfileCache.containsKey(authorId)) {
+          return MapEntry(authorId, _userProfileCache[authorId]);
+        }
+        final profile = await userRepo.getUserProfile(authorId);
+        if (profile != null) {
+          _userProfileCache[authorId] = profile;
+        }
+        return MapEntry(authorId, profile);
+      });
+      final activityAuthors = Map.fromEntries(await Future.wait(activityAuthorFutures));
+      
+      if (!mounted) return;
+      
+      // ⚡ OPTIMIZATION: Batch check like/bookmark status for all posts in parallel
+      final activityStatusFutures = uniqueModels.take(100).map((model) async {
+        final liked = _myUserId != null
+            ? await postRepo.hasUserLikedPost(postId: model.id, uid: _myUserId!)
+            : false;
+        final bookmarked = _myUserId != null
+            ? await postRepo.hasUserBookmarkedPost(postId: model.id, uid: _myUserId!)
+            : false;
+        return MapEntry(model.id, {'liked': liked, 'bookmarked': bookmarked});
+      });
+      final activityStatusMap = Map.fromEntries(await Future.wait(activityStatusFutures));
+      
+      if (!mounted) return;
+      
       for (final model in uniqueModels.take(100)) {
-        final author = await userRepo.getUserProfile(model.authorId);
+        // Get cached author profile
+        final author = activityAuthors[model.authorId];
         final repostId = model.repostOf;
         final isRepost = repostId != null && repostId.isNotEmpty;
         
-        // Check backend for like/bookmark status
-        bool isLiked = false;
-        bool isBookmarked = false;
-        if (_myUserId != null) {
-          isLiked = await postRepo.hasUserLikedPost(postId: model.id, uid: _myUserId!);
-          isBookmarked = await postRepo.hasUserBookmarkedPost(postId: model.id, uid: _myUserId!);
-        }
+        // Get cached like/bookmark status
+        final status = activityStatusMap[model.id] ?? {'liked': false, 'bookmarked': false};
+        final isLiked = status['liked'] as bool;
+        final isBookmarked = status['bookmarked'] as bool;
         
         // Build full name from firstName and lastName
         final activityFirstName = author?.firstName?.trim() ?? '';
@@ -3459,10 +3562,19 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     return ListView.builder(
+      controller: _activityScrollController,
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: _activityPosts.length,
+      itemCount: _activityPosts.length + (_isLoadingMoreActivity ? 1 : 0),
       itemBuilder: (context, index) {
+        // Show loading indicator at the bottom
+        if (index == _activityPosts.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
         final post = _activityPosts[index];
         return GestureDetector(
           onTap: () {
@@ -3524,10 +3636,19 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     return ListView.builder(
+      controller: _postsScrollController,
       primary: false,
       padding: const EdgeInsets.only(top: 10, bottom: 20),
-      itemCount: _myPosts.length,
+      itemCount: _myPosts.length + (_isLoadingMorePosts ? 1 : 0),
       itemBuilder: (context, index) {
+        // Show loading indicator at the bottom
+        if (index == _myPosts.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
         final post = _myPosts[index];
         return GestureDetector(
           onTap: () {
