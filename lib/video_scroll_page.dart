@@ -1280,7 +1280,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
         Text(
           _formatCount(count),
           style: GoogleFonts.inter(
-            color: isDark ? Colors.white : Colors.black,
+            color: Colors.white,
             fontSize: 12,
             fontWeight: FontWeight.w500,
           ),

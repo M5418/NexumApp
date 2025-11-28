@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/comment.dart';
 import '../repositories/firebase/firebase_comment_repository.dart';
 import '../repositories/firebase/firebase_user_repository.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'comment_widget.dart';
 
 class CommentBottomSheet extends StatefulWidget {
@@ -62,6 +63,8 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
   String? _replyingToUserName;
 
   List<Comment> _comments = [];
+  String? _currentUserAvatar;
+  String _currentUserName = 'User';
 
   final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
   final FirebaseUserRepository _userRepo = FirebaseUserRepository();
@@ -70,6 +73,24 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
   void initState() {
     super.initState();
     _comments = widget.comments;
+    _loadCurrentUserProfile();
+  }
+
+  Future<void> _loadCurrentUserProfile() async {
+    try {
+      final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId == null) return;
+      
+      final users = await _userRepo.getUsers([currentUserId]);
+      if (users.isNotEmpty && mounted) {
+        setState(() {
+          _currentUserAvatar = users.first.avatarUrl;
+          _currentUserName = users.first.displayName ?? users.first.username ?? 'User';
+        });
+      }
+    } catch (e) {
+      // Ignore error, will use fallback
+    }
   }
 
   @override
@@ -448,12 +469,23 @@ class _CommentBottomSheetState extends State<CommentBottomSheet> {
             child: SafeArea(
               child: Row(
                 children: [
-                  // Current user avatar (placeholder)
-                  const CircleAvatar(
+                  // Current user avatar
+                  CircleAvatar(
                     radius: 16,
-                    backgroundImage: NetworkImage(
-                      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-                    ),
+                    backgroundImage: _currentUserAvatar != null && _currentUserAvatar!.isNotEmpty
+                        ? NetworkImage(_currentUserAvatar!)
+                        : null,
+                    backgroundColor: const Color(0xFFBFAE01),
+                    child: _currentUserAvatar == null || _currentUserAvatar!.isEmpty
+                        ? Text(
+                            _currentUserName.isNotEmpty ? _currentUserName[0].toUpperCase() : 'U',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          )
+                        : null,
                   ),
 
                   const SizedBox(width: 12),
