@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-// Stories API removed - will be handled elsewhere
+import 'package:provider/provider.dart';
+import '../repositories/interfaces/story_repository.dart';
 
 class MyStoriesBottomSheet extends StatefulWidget {
   final String currentUserId;
@@ -35,7 +36,7 @@ class MyStoriesBottomSheet extends StatefulWidget {
 
 class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
   bool _loading = true;
-  List<dynamic> _items = [];
+  List<StoryModel> _items = [];
 
   @override
   void initState() {
@@ -44,16 +45,46 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
   }
 
   Future<void> _load() async {
-    // Placeholder: stories will be handled elsewhere
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    setState(() {
-      _items = [];
-      _loading = false;
-    });
+    try {
+      final storyRepo = context.read<StoryRepository>();
+      final rings = await storyRepo.getStoryRings();
+      
+      // Find the user's ring
+      final myRing = rings.where((r) => r.userId == widget.currentUserId).firstOrNull;
+      
+      if (myRing != null) {
+        // Filter for active stories only (< 24 hours old)
+        final now = DateTime.now();
+        final activeStories = myRing.stories.where((story) {
+          final age = now.difference(story.createdAt);
+          return age.inHours < 24;
+        }).toList();
+        
+        // Sort by most recent first
+        activeStories.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        
+        if (!mounted) return;
+        setState(() {
+          _items = activeStories;
+          _loading = false;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _items = [];
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _items = [];
+        _loading = false;
+      });
+    }
   }
 
-  Widget _storyThumbnail(dynamic item) {
+  Widget _storyThumbnail(StoryModel item) {
     if (item.mediaType == 'image') {
       final url = item.thumbnailUrl ?? item.mediaUrl ?? '';
       return ClipRRect(
@@ -61,12 +92,17 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
         child: SizedBox(
           width: 48,
           height: 48,
-          child: CachedNetworkImage(
-            imageUrl: url,
-            fit: BoxFit.cover,
-            placeholder: (_, __) => Container(color: const Color(0xFF666666).withAlpha(51)),
-            errorWidget: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white70),
-          ),
+          child: url.isNotEmpty
+              ? CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(color: const Color(0xFF666666).withValues(alpha: 51)),
+                  errorWidget: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white70),
+                )
+              : Container(
+                  color: const Color(0xFF666666).withValues(alpha: 51),
+                  child: const Icon(Icons.image, color: Colors.white70),
+                ),
         ),
       );
     }
@@ -80,12 +116,14 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
             SizedBox(
               width: 48,
               height: 48,
-              child: CachedNetworkImage(
-                imageUrl: thumb,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(color: const Color(0xFF666666).withAlpha(51)),
-                errorWidget: (_, __, ___) => Container(color: const Color(0xFF333333)),
-              ),
+              child: thumb.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: thumb,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(color: const Color(0xFF666666).withValues(alpha: 51)),
+                      errorWidget: (_, __, ___) => Container(color: const Color(0xFF333333)),
+                    )
+                  : Container(color: const Color(0xFF333333)),
             ),
             Container(
               width: 20,
@@ -97,27 +135,30 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
         ),
       );
     }
+    // Text story
     return Container(
       width: 48,
       height: 48,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFFE74C3C),
+        color: item.backgroundColor != null 
+            ? Color(int.parse(item.backgroundColor!.replaceFirst('#', '0xFF')))
+            : const Color(0xFFE74C3C),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        (item.textContent ?? 'T').isEmpty ? 'T' : item.textContent!.substring(0, 1),
-        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700),
+        (item.textContent ?? 'T').isEmpty ? 'T' : item.textContent!.substring(0, 1).toUpperCase(),
+        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 20),
       ),
     );
   }
 
-  String _label(dynamic it) {
-    if (it.mediaType == 'text') {
-      final t = (it.textContent ?? '').trim();
+  String _label(StoryModel story) {
+    if (story.mediaType == 'text') {
+      final t = (story.textContent ?? '').trim();
       return t.isEmpty ? 'Text story' : (t.length > 30 ? '${t.substring(0, 30)}...' : t);
     }
-    return it.mediaType == 'image' ? 'Image story' : 'Video story';
+    return story.mediaType == 'image' ? 'Image story' : 'Video story';
   }
 
   @override
