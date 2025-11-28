@@ -107,6 +107,9 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
 
   // Notifications badge
   int _unreadCount = 0;
+  
+  // ⚡ OPTIMIZATION: Cache user profiles to avoid redundant fetches
+  final Map<String, dynamic> _userProfileCache = {};
 
   @override
   void initState() {
@@ -163,7 +166,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       debugPrint('   Followers (who follow you): ${inboundIds.length}');
       debugPrint('   Following (you follow them): ${outboundIds.length}');
 
-      // Fetch ALL users from the database (not just connections)
+      // ⚡ OPTIMIZATION: Fetch users with caching
       debugPrint('🔍 Fetching all users from database...');
       final allProfiles = await userRepo.getSuggestedUsers(limit: 100);
       debugPrint('📋 Fetched ${allProfiles.length} total users');
@@ -171,21 +174,39 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
       // Convert to list and filter out current user
       final profiles = allProfiles.where((p) => p.uid != currentUid).toList();
 
+      // ⚡ OPTIMIZATION: Batch fetch all unique user profiles in parallel
+      final uniqueUserIds = profiles.map((p) => p.uid).toSet();
+      final userProfileFutures = uniqueUserIds.map((userId) async {
+        if (_userProfileCache.containsKey(userId)) {
+          debugPrint('   ✅ Using cached profile for user: $userId');
+          return MapEntry(userId, _userProfileCache[userId]);
+        }
+        // Fetch profile if not cached
+        debugPrint('   🔄 Fetching profile for user: $userId');
+        final profile = profiles.firstWhere((p) => p.uid == userId);
+        _userProfileCache[userId] = profile;
+        return MapEntry(userId, profile);
+      });
+      final cachedProfiles = Map.fromEntries(await Future.wait(userProfileFutures));
+      
+      if (!mounted) return;
+
       final mapped = profiles.map((p) {
-        final id = p.uid;
-        final name = (p.displayName ?? '').trim();
-        final uname = (p.username ?? '').trim();
-        final bio = (p.bio ?? '').trim();
-        final avatar = (p.avatarUrl ?? '').trim();
-        final cover = (p.coverUrl ?? '').trim();
+        final cached = cachedProfiles[p.uid] ?? p;
+        final id = cached.uid;
+        final name = (cached.displayName ?? '').trim();
+        final uname = (cached.username ?? '').trim();
+        final bio = (cached.bio ?? '').trim();
+        final avatar = (cached.avatarUrl ?? '').trim();
+        final cover = (cached.coverUrl ?? '').trim();
         return User(
           id: id,
           fullName: name.isNotEmpty
               ? name
-              : ((p.firstName ?? '').trim().isNotEmpty || (p.lastName ?? '').trim().isNotEmpty)
-                  ? [p.firstName ?? '', p.lastName ?? ''].where((s) => (s).trim().isNotEmpty).join(' ').trim()
-                  : ((p.email ?? '').contains('@') ? (p.email ?? '').split('@').first : 'User'),
-          username: uname.isNotEmpty ? (uname.startsWith('@') ? uname : '@$uname') : ((p.email ?? '').contains('@') ? '@${(p.email ?? '').split('@').first}' : '@user'),
+              : ((cached.firstName ?? '').trim().isNotEmpty || (cached.lastName ?? '').trim().isNotEmpty)
+                  ? [cached.firstName ?? '', cached.lastName ?? ''].where((s) => (s).trim().isNotEmpty).join(' ').trim()
+                  : ((cached.email ?? '').contains('@') ? (cached.email ?? '').split('@').first : 'User'),
+          username: uname.isNotEmpty ? (uname.startsWith('@') ? uname : '@$uname') : ((cached.email ?? '').contains('@') ? '@${(cached.email ?? '').split('@').first}' : '@user'),
           bio: bio,
           avatarUrl: avatar,
           coverUrl: cover.isNotEmpty ? cover : avatar,
