@@ -14,6 +14,7 @@ import 'auto_play_video.dart';
 import 'post_options_bottom_sheet.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import '../repositories/interfaces/post_repository.dart';
 
 class HomePostCard extends StatefulWidget {
   final Post post;
@@ -323,29 +324,49 @@ class _HomePostCardState extends State<HomePostCard> {
           const SnackBar(content: Text('Edit functionality coming soon')),
         );
       } : null,
-      onDelete: isOwnPost ? () {
-        showDialog(
+      onDelete: isOwnPost ? () async {
+        final confirmed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Delete Post'),
-            content: const Text('Are you sure you want to delete this post?'),
+            content: const Text('Are you sure you want to delete this post? This action cannot be undone.'),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancel'),
               ),
               TextButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Delete functionality coming soon')),
-                  );
-                },
+                onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('Delete', style: TextStyle(color: Colors.red)),
               ),
             ],
           ),
         );
+        
+        if (confirmed == true) {
+          try {
+            final postRepo = context.read<PostRepository>();
+            await postRepo.deletePost(_effectivePostId());
+            
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Post deleted successfully'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to delete post: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        }
       } : null,
       onReport: !isOwnPost ? () {
         ScaffoldMessenger.of(context).showSnackBar(
