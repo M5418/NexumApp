@@ -45,12 +45,17 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
       
       // Get suggested users
       final userModels = await userRepo.getSuggestedUsers(limit: 50);
-      final users = userModels.map((u) => {
-        'id': u.uid,
-        'name': u.displayName ?? u.username ?? 'User',
-        'username': u.username,
-        'profile_photo_url': u.avatarUrl,
-        'bio': u.bio,
+      final users = userModels.map((u) {
+        final name = u.displayName ?? u.username ?? 'User';
+        final firstLetter = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+        return {
+          'id': u.uid,
+          'name': name,
+          'username': u.username ?? '',
+          'avatarUrl': u.avatarUrl ?? '',
+          'avatarLetter': firstLetter,
+          'bio': u.bio ?? '',
+        };
       }).toList();
 
       if (mounted) {
@@ -435,6 +440,7 @@ Happy connecting! 🚀''';
                             // Profile Avatar
                             CircleAvatar(
                               radius: 24,
+                              backgroundColor: const Color(0xFFBFAE01),
                               backgroundImage: (user['avatarUrl'] != null && (user['avatarUrl'] as String).isNotEmpty)
                                   ? NetworkImage(user['avatarUrl'] as String)
                                   : null,
@@ -444,7 +450,7 @@ Happy connecting! 🚀''';
                                       style: GoogleFonts.inter(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                        color: Colors.black,
                                       ),
                                     )
                                   : null,
