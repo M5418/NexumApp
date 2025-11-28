@@ -382,10 +382,29 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
 
     setState(() => _isSaving = true);
     try {
+      // First profile update - initialize ALL fields with defaults
       await ProfileApi().update({
         'first_name': first,
         'last_name': last,
         'username': username,
+        // Initialize remaining fields with empty values
+        'bio': '',
+        'status': '',
+        'gender': '',
+        'date_of_birth': '',
+        'address': '',
+        'city': '',
+        'country': '',
+        // Initialize counters
+        'followersCount': 0,
+        'followingCount': 0,
+        'postsCount': 0,
+        // Initialize arrays
+        'professionalExperiences': [],
+        'trainings': [],
+        'interestDomains': [],
+        // Initialize flags
+        'isVerified': false,
       });
       if (!mounted) return;
 
