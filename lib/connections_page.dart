@@ -206,9 +206,17 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
             theyConnectToYou: inboundIds.contains(id),
           )));
 
+      // ⚡ FILTER: Exclude mutually connected users (full connections)
+      // Only show users who are NOT fully connected (one-way or no connection)
+      final filteredUsers = mapped.where((user) {
+        // Exclude if BOTH users follow each other (mutual connection)
+        final isMutuallyConnected = user.isConnected && user.theyConnectToYou;
+        return !isMutuallyConnected; // Only show if NOT mutually connected
+      }).toList();
+
       if (!mounted) return;
       setState(() {
-        users = List<User>.from(mapped);
+        users = List<User>.from(filteredUsers);
         _loading = false;
 
         if (_selectedUserId == null && kIsWeb && users.isNotEmpty) {
