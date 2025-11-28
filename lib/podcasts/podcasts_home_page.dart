@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../repositories/interfaces/podcast_repository.dart';
+import '../core/i18n/language_provider.dart';
 import 'podcast_details_page.dart';
 import 'create_podcast_page.dart';
 import 'player_page.dart';
@@ -98,6 +99,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
   String? _domainCategoryParam; // actual category string from interestDomains
 
   String _selectedLanguage = 'All';
+  bool _hasInitializedLanguage = false;
 
   @override
   void initState() {
@@ -105,6 +107,38 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
     _pickDomainSection();
     _loadTop();
     _loadDomain();
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasInitializedLanguage) {
+      _initializeLanguageFilter();
+      _hasInitializedLanguage = true;
+    }
+  }
+  
+  void _initializeLanguageFilter() {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final userLanguageCode = languageProvider.code;
+    
+    // Map language code to display name
+    final languageMap = {
+      'en': 'English',
+      'fr': 'Français',
+      'pt': 'Português',
+      'es': 'Español',
+      'de': 'Deutsch',
+    };
+    
+    final preferredLanguage = languageMap[userLanguageCode];
+    
+    // Set to user's preferred language if available in podcasts, otherwise keep 'All'
+    if (preferredLanguage != null && _languages.contains(preferredLanguage)) {
+      setState(() {
+        _selectedLanguage = preferredLanguage;
+      });
+    }
   }
 
   List<String> get _languages {

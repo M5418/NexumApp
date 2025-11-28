@@ -10,6 +10,7 @@ import 'book_favorites_page.dart';
 import '../responsive/responsive_breakpoints.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../core/admin_config.dart';
+import '../core/i18n/language_provider.dart';
 
 class Book {
   final String id;
@@ -101,6 +102,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
   late BookRepository _bookRepo;
 
   String _selectedLanguage = 'All';
+  bool _hasInitializedLanguage = false;
   List<Book> _books = [];
   bool _loading = true;
   String? _error;
@@ -120,6 +122,38 @@ class _BooksHomePageState extends State<BooksHomePage> {
     _bookRepo = context.read<BookRepository>();
     _fetchBooks(reset: true);
     _controller.addListener(_onScroll);
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasInitializedLanguage) {
+      _initializeLanguageFilter();
+      _hasInitializedLanguage = true;
+    }
+  }
+  
+  void _initializeLanguageFilter() {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final userLanguageCode = languageProvider.code;
+    
+    // Map language code to display name
+    final languageMap = {
+      'en': 'English',
+      'fr': 'Français',
+      'pt': 'Português',
+      'es': 'Español',
+      'de': 'Deutsch',
+    };
+    
+    final preferredLanguage = languageMap[userLanguageCode];
+    
+    // Set to user's preferred language if available in books, otherwise keep 'All'
+    if (preferredLanguage != null && _languages.contains(preferredLanguage)) {
+      setState(() {
+        _selectedLanguage = preferredLanguage;
+      });
+    }
   }
 
   @override
