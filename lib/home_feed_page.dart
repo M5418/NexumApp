@@ -529,6 +529,22 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   Future<Post> _toPost(PostModel m) async {
     final uid = fb.FirebaseAuth.instance.currentUser?.uid;
     
+    // DEBUG: Log raw Firestore data
+    debugPrint('📥 RAW POST DATA from Firestore:');
+    debugPrint('  postId: ${m.id}');
+    debugPrint('  mediaUrls: ${m.mediaUrls}');
+    debugPrint('  mediaUrls length: ${m.mediaUrls.length}');
+    if (m.mediaUrls.isNotEmpty) {
+      for (var i = 0; i < m.mediaUrls.length; i++) {
+        debugPrint('    [$i]: ${m.mediaUrls[i]}');
+      }
+    }
+    // Web console output
+    if (kIsWeb && m.mediaUrls.isNotEmpty) {
+      // ignore: avoid_print
+      print('📥 RAW: postId=${m.id}, mediaUrls=${m.mediaUrls}');
+    }
+    
     // Parallelize all async operations
     final results = await Future.wait([
       _userRepo.getUserProfile(m.authorId),
@@ -541,6 +557,16 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final normUrls = results[1] as List<String>;
     final isBookmarked = results[2] as bool;
     final isLiked = results[3] as bool;
+    
+    // DEBUG: Log normalized URLs
+    debugPrint('📥 AFTER NORMALIZATION:');
+    debugPrint('  normUrls: $normUrls');
+    debugPrint('  normUrls length: ${normUrls.length}');
+    if (normUrls.isNotEmpty) {
+      for (var i = 0; i < normUrls.length; i++) {
+        debugPrint('    [$i]: ${normUrls[i]}');
+      }
+    }
     
     // If this is a repost, get the reposter's info (the author of this repost entry)
     RepostedBy? repostedBy;
@@ -569,11 +595,30 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       mediaType = MediaType.none;
       videoUrl = null;
       imageUrls = [];
+      debugPrint('🎬 MEDIA TYPE: none (no URLs)');
     } else {
+      // Check each URL for video extensions
+      debugPrint('🎬 CHECKING FOR VIDEO:');
+      for (var url in normUrls) {
+        final lower = url.toLowerCase();
+        final isMp4 = lower.endsWith('.mp4');
+        final isMov = lower.endsWith('.mov');
+        final isWebm = lower.endsWith('.webm');
+        final isVideo = isMp4 || isMov || isWebm;
+        debugPrint('  URL: $url');
+        debugPrint('    ends with .mp4? $isMp4');
+        debugPrint('    ends with .mov? $isMov');
+        debugPrint('    ends with .webm? $isWebm');
+        debugPrint('    IS VIDEO? $isVideo');
+      }
+      
       final hasVideo = normUrls.any((u) {
         final l = u.toLowerCase();
         return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
       });
+      
+      debugPrint('🎬 FINAL hasVideo: $hasVideo');
+      
       if (hasVideo) {
         mediaType = MediaType.video;
         videoUrl = normUrls.firstWhere(
@@ -584,10 +629,21 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           orElse: () => normUrls.first,
         );
         imageUrls = []; // Clear imageUrls for videos
+        debugPrint('🎬 MEDIA TYPE: video');
+        debugPrint('  videoUrl: $videoUrl');
+        debugPrint('  imageUrls: $imageUrls (cleared)');
+        // Web console output
+        if (kIsWeb) {
+          // ignore: avoid_print
+          print('🎬 VIDEO DETECTED: postId=${m.id}, videoUrl=$videoUrl, imageUrls=[] (cleared)');
+        }
       } else {
         mediaType = (normUrls.length == 1) ? MediaType.image : MediaType.images;
         videoUrl = null;
         imageUrls = normUrls;
+        debugPrint('🎬 MEDIA TYPE: $mediaType');
+        debugPrint('  videoUrl: $videoUrl (null)');
+        debugPrint('  imageUrls: $imageUrls');
       }
     }
     int clamp(int v) => v < 0 ? 0 : v;
