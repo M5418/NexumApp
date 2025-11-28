@@ -33,29 +33,30 @@ class PostOptionsBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? Colors.black : Colors.white;
+    final surfaceColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
+    final iconColor = isDark ? Colors.white70 : Colors.black87;
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Handle bar
           Container(
-            width: 40,
-            height: 4,
+            margin: const EdgeInsets.only(top: 12),
+            width: 36,
+            height: 5,
             decoration: BoxDecoration(
-              color: const Color(0xFFE0E0E0),
-              borderRadius: BorderRadius.circular(2),
+              color: isDark ? Colors.white24 : const Color(0xFFD1D1D6),
+              borderRadius: BorderRadius.circular(2.5),
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
           // Options list
           if (isOwnPost) ...[
@@ -64,6 +65,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: Ionicons.create_outline,
               title: 'Edit Post',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onEdit?.call();
@@ -73,6 +75,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: isBookmarked ? Ionicons.bookmark : Ionicons.bookmark_outline,
               title: isBookmarked ? 'Remove Bookmark' : 'Bookmark',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onBookmark?.call();
@@ -82,6 +85,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: Ionicons.share_social_outline,
               title: 'Share Post',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onShare?.call();
@@ -91,16 +95,18 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: Ionicons.link_outline,
               title: 'Copy Link',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onCopyLink?.call();
               },
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: isDark ? Colors.white10 : const Color(0xFFE5E5EA)),
             _OptionTile(
               icon: Ionicons.trash_outline,
               title: 'Delete Post',
-              textColor: Colors.red,
+              textColor: const Color(0xFFFF3B30),
+              iconColor: const Color(0xFFFF3B30),
               onTap: () {
                 Navigator.pop(context);
                 onDelete?.call();
@@ -112,6 +118,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: isBookmarked ? Ionicons.bookmark : Ionicons.bookmark_outline,
               title: isBookmarked ? 'Remove Bookmark' : 'Bookmark',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onBookmark?.call();
@@ -121,6 +128,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: Ionicons.share_social_outline,
               title: 'Share Post',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onShare?.call();
@@ -130,6 +138,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: Ionicons.link_outline,
               title: 'Copy Link',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onCopyLink?.call();
@@ -139,6 +148,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: Ionicons.eye_off_outline,
               title: 'Hide Post',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onHidePost?.call();
@@ -148,16 +158,18 @@ class PostOptionsBottomSheet extends StatelessWidget {
               icon: Ionicons.volume_mute_outline,
               title: 'Mute User',
               textColor: textColor,
+              iconColor: iconColor,
               onTap: () {
                 Navigator.pop(context);
                 onMuteUser?.call();
               },
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: isDark ? Colors.white10 : const Color(0xFFE5E5EA)),
             _OptionTile(
               icon: Ionicons.flag_outline,
               title: 'Report Post',
-              textColor: Colors.red,
+              textColor: const Color(0xFFFF3B30),
+              iconColor: const Color(0xFFFF3B30),
               onTap: () {
                 Navigator.pop(context);
                 onReport?.call();
@@ -166,7 +178,8 @@ class PostOptionsBottomSheet extends StatelessWidget {
             _OptionTile(
               icon: Ionicons.ban_outline,
               title: 'Block User',
-              textColor: Colors.red,
+              textColor: const Color(0xFFFF3B30),
+              iconColor: const Color(0xFFFF3B30),
               onTap: () {
                 Navigator.pop(context);
                 onBlockUser?.call();
@@ -174,7 +187,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
             ),
           ],
 
-          const SizedBox(height: 10),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
         ],
       ),
     );
@@ -219,12 +232,14 @@ class _OptionTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color textColor;
+  final Color iconColor;
   final VoidCallback onTap;
 
   const _OptionTile({
     required this.icon,
     required this.title,
     required this.textColor,
+    required this.iconColor,
     required this.onTap,
   });
 
@@ -232,23 +247,26 @@ class _OptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.black.withValues(alpha: 0.05),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         child: Row(
           children: [
             Icon(
               icon,
-              size: 24,
-              color: textColor,
+              size: 22,
+              color: iconColor,
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 18),
             Expanded(
               child: Text(
                 title,
                 style: GoogleFonts.inter(
                   fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   color: textColor,
+                  letterSpacing: -0.3,
                 ),
               ),
             ),
