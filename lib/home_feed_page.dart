@@ -2045,86 +2045,39 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
                     const SizedBox(height: 8),
 
-                    // Stories row
+                    // Stories row with floating add button
                     SizedBox(
                       height: 90,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          itemCount: _storyRings.length,
-                          itemBuilder: (context, index) {
-                            final ring = _storyRings[index];
-                            final isMine = ring.userId == _currentUserId;
+                      child: Stack(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: _storyRings.length,
+                              itemBuilder: (context, index) {
+                                final ring = _storyRings[index];
+                                final isMine = ring.userId == _currentUserId;
 
-                            return Container(
-                              width: 70,
-                              margin: EdgeInsets.only(
-                                right: index < _storyRings.length - 1 ? 16 : 0,
-                              ),
-                              child: story_widget.StoryRing(
-                                imageUrl: ring.thumbnailUrl ?? ring.userAvatar,
-                                label: isMine
-                                    ? 'Your Story'
-                                    : (ring.userName.isNotEmpty
-                                        ? ring.userName
-                                        : '@user'),
-                                isMine: isMine,
-                                isSeen: !ring.hasUnseen,
+                                return Container(
+                                  width: 70,
+                                  margin: EdgeInsets.only(
+                                    right: index < _storyRings.length - 1 ? 16 : 0,
+                                  ),
+                                  child: story_widget.StoryRing(
+                                    imageUrl: ring.thumbnailUrl ?? ring.userAvatar,
+                                    label: isMine
+                                        ? 'Your Story'
+                                        : (ring.userName.isNotEmpty
+                                            ? ring.userName
+                                            : '@user'),
+                                    isMine: isMine,
+                                    isSeen: !ring.hasUnseen,
 
-                                // Full ring AND plus icon follow the same conditions
-                                onAddTap: isMine
-                                    ? () {
-                                        if (ring.storyCount > 0 &&
-                                            _currentUserId != null) {
-                                          MyStoriesBottomSheet.show(
-                                            context,
-                                            currentUserId: _currentUserId!,
-                                            onAddStory: () {
-                                              StoryTypePicker.show(
-                                                context,
-                                                onSelected: (type) async {
-                                                  if (_useDesktopPopup(
-                                                      context)) {
-                                                    await StoryComposerPopup
-                                                        .show(context,
-                                                            type: type);
-                                                  } else {
-                                                    await Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                          builder: (_) =>
-                                                              _composerPage(
-                                                                  type)),
-                                                    );
-                                                  }
-                                                },
-                                              );
-                                            },
-                                          );
-                                        } else {
-                                          StoryTypePicker.show(
-                                            context,
-                                            onSelected: (type) async {
-                                              if (_useDesktopPopup(context)) {
-                                                await StoryComposerPopup.show(
-                                                    context,
-                                                    type: type);
-                                              } else {
-                                                await Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          _composerPage(type)),
-                                                );
-                                              }
-                                            },
-                                          );
-                                        }
-                                      }
-                                    : null,
-                                onTap: () async {
+                                    // Remove the + icon from Your Story ring
+                                    onAddTap: null,
+                                    onTap: () async {
                                   if (isMine) {
                                     if (ring.storyCount > 0 &&
                                         _currentUserId != null) {
@@ -2216,6 +2169,81 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                             );
                           },
                         ),
+                      ),
+                  
+                    // Floating button near "Your Story" ring
+                    if (_storyRings.isNotEmpty && _storyRings[0].userId == _currentUserId)
+                      Positioned(
+                        left: 70,
+                        top: 8,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              final myRing = _storyRings[0];
+                              if (myRing.storyCount > 0 && _currentUserId != null) {
+                                // User has stories - show bottom sheet
+                                MyStoriesBottomSheet.show(
+                                  context,
+                                  currentUserId: _currentUserId!,
+                                  onAddStory: () {
+                                    StoryTypePicker.show(
+                                      context,
+                                      onSelected: (type) async {
+                                        if (_useDesktopPopup(context)) {
+                                          await StoryComposerPopup.show(context, type: type);
+                                        } else {
+                                          await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                          );
+                                        }
+                                      },
+                                    );
+                                  },
+                                );
+                              } else {
+                                // No stories - show type picker directly
+                                StoryTypePicker.show(
+                                  context,
+                                  onSelected: (type) async {
+                                    if (_useDesktopPopup(context)) {
+                                      await StoryComposerPopup.show(context, type: type);
+                                    } else {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => _composerPage(type)),
+                                      );
+                                    }
+                                  },
+                                );
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFBFAE01),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 77),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.add,
+                                color: Colors.black,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                        ],
                       ),
                     ),
 
