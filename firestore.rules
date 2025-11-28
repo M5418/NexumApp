@@ -341,5 +341,24 @@ service cloud.firestore {
       allow delete: if signedIn() && 
         (request.auth.uid == resource.data.userId || isAdmin());
     }
+    
+    // Podcast playlists
+    match /podcast_playlists/{playlistId} {
+      // Allow users to read their own playlists
+      allow read: if signedIn() && request.auth.uid == resource.data.userId;
+      
+      // Allow users to create playlists (userId must match their own)
+      allow create: if signedIn() && 
+        request.auth.uid == request.resource.data.userId &&
+        request.resource.data.keys().hasAll(['name', 'userId', 'isPrivate', 'podcastIds', 'createdAt', 'updatedAt']);
+      
+      // Allow users to update their own playlists (cannot change owner)
+      allow update: if signedIn() && 
+        request.auth.uid == resource.data.userId &&
+        request.resource.data.userId == resource.data.userId;
+      
+      // Allow users to delete their own playlists
+      allow delete: if signedIn() && request.auth.uid == resource.data.userId;
+    }
   }
 }
