@@ -185,19 +185,21 @@ class FirebasePostRepository implements PostRepository {
   @override
   Future<List<PostModel>> getPostsLikedByUser({required String uid, int limit = 50}) async {
     try {
+      // Query all likes, then filter by document ID (which is the user ID)
       final likes = await _db
           .collectionGroup('likes')
-          .where(FieldPath.documentId, isEqualTo: uid)
           .orderBy('createdAt', descending: true)
-          .limit(limit * 2)
+          .limit(limit * 5) // Get more to account for filtering
           .get();
 
-      // Collect parent post IDs
+      // Collect parent post IDs where the like document ID matches the user ID
       final ids = <String>{};
       for (final d in likes.docs) {
-        final postRef = d.reference.parent.parent; // posts/<postId>
-        if (postRef != null) ids.add(postRef.id);
-        if (ids.length >= limit) break;
+        if (d.id == uid) { // Document ID is the user ID
+          final postRef = d.reference.parent.parent; // posts/<postId>
+          if (postRef != null) ids.add(postRef.id);
+          if (ids.length >= limit) break;
+        }
       }
       if (ids.isEmpty) return [];
       return await _getPostsByIds(ids.toList());
@@ -209,18 +211,20 @@ class FirebasePostRepository implements PostRepository {
   @override
   Future<List<PostModel>> getPostsBookmarkedByUser({required String uid, int limit = 50}) async {
     try {
+      // Query all bookmarks, then filter by document ID (which is the user ID)
       final bookmarks = await _db
           .collectionGroup('bookmarks')
-          .where(FieldPath.documentId, isEqualTo: uid)
           .orderBy('createdAt', descending: true)
-          .limit(limit * 2)
+          .limit(limit * 5) // Get more to account for filtering
           .get();
 
       final ids = <String>{};
       for (final d in bookmarks.docs) {
-        final postRef = d.reference.parent.parent; // posts/<postId>
-        if (postRef != null) ids.add(postRef.id);
-        if (ids.length >= limit) break;
+        if (d.id == uid) { // Document ID is the user ID
+          final postRef = d.reference.parent.parent; // posts/<postId>
+          if (postRef != null) ids.add(postRef.id);
+          if (ids.length >= limit) break;
+        }
       }
       if (ids.isEmpty) return [];
       return await _getPostsByIds(ids.toList());
