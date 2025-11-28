@@ -634,14 +634,34 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
                           }
                         },
                       ),
-                      Text(
-                        Provider.of<LanguageProvider>(context).t('common.interests'),
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: isDarkMode ? Colors.white : Colors.black,
+                      Expanded(
+                        child: Text(
+                          Provider.of<LanguageProvider>(context).t('common.interests'),
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode ? Colors.white : Colors.black,
+                          ),
                         ),
                       ),
+                      // Continue button in app bar
+                      if (!widget.returnSelectedOnPop)
+                        TextButton(
+                          onPressed: _selectedInterests.isNotEmpty && !_isSaving ? _saveAndContinue : null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: _selectedInterests.isNotEmpty && !_isSaving
+                                ? const Color(0xFFBFAE01)
+                                : (isDarkMode ? Colors.grey : Colors.grey),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          ),
+                          child: Text(
+                            _isSaving ? lang.t('profile_bio.saving') : lang.t('interests.continue'),
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -652,57 +672,9 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
         ),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Scrollable content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24.0),
-                child: _contentBody(context, isDarkMode, lang, gridColumns: 3, includeContinueButton: false),
-              ),
-            ),
-            // Fixed Continue button at bottom
-            if (!widget.returnSelectedOnPop)
-              Container(
-                padding: const EdgeInsets.all(24.0),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? const Color(0xFF000000) : Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 13),
-                      blurRadius: 10,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: _selectedInterests.isNotEmpty && !_isSaving ? _saveAndContinue : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _selectedInterests.isNotEmpty && !_isSaving
-                          ? const Color(0xFFBFAE01)
-                          : (isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
-                      foregroundColor: _selectedInterests.isNotEmpty && !_isSaving
-                          ? Colors.black
-                          : (isDarkMode ? Colors.grey : Colors.grey),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                    ),
-                    child: Text(
-                      _isSaving ? lang.t('profile_bio.saving') : lang.t('interests.continue'),
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: _contentBody(context, isDarkMode, lang, gridColumns: 3, includeContinueButton: false),
         ),
       ),
     );
