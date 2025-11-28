@@ -541,7 +541,6 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!mounted) return;
 
       final newItems = <Map<String, dynamic>>[];
-      final originals = <String, Map<String, dynamic>>{};
 
       // ⚡ OPTIMIZATION: Batch fetch all unique author profiles in parallel
       final uniqueAuthorIds = postModels.map((m) => m.authorId).toSet();
@@ -574,9 +573,16 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!mounted) return;
 
       for (final model in postModels) {
+        final isRepost = model.repostOf != null && model.repostOf!.isNotEmpty;
+        
+        // SKIP reposts - they should only appear in Activity tab
+        if (isRepost) {
+          debugPrint('📝 Skipping repost ${model.id} - reposts only in Activity tab');
+          continue;
+        }
+        
         // Get cached author profile
         final author = authors[model.authorId];
-        final isRepost = model.repostOf != null && model.repostOf!.isNotEmpty;
         
         // Get cached like/bookmark status
         final status = likeBookmarkMap[model.id] ?? {'liked': false, 'bookmarked': false};
@@ -616,8 +622,8 @@ class _ProfilePageState extends State<ProfilePage> {
           'text': model.text,
           'media': mediaArray,
           'created_at': model.createdAt.toIso8601String(),
-          'is_repost': isRepost,
-          'original_post_id': model.repostOf,
+          'is_repost': false, // No reposts in Posts tab
+          'original_post_id': null,
           'counts': {
             'likes': model.summary.likes.clamp(0, 999999),
             'comments': model.summary.comments.clamp(0, 999999),
@@ -631,40 +637,6 @@ class _ProfilePageState extends State<ProfilePage> {
           },
         };
         newItems.add(mp);
-        
-        // Fetch original post if it's a repost
-        if (isRepost && model.repostOf != null) {
-          final original = await postRepo.getPost(model.repostOf!);
-          if (original != null) {
-            final origAuthor = await userRepo.getUserProfile(original.authorId);
-            // Build full name for original author
-            final origFirstName = origAuthor?.firstName?.trim() ?? '';
-            final origLastName = origAuthor?.lastName?.trim() ?? '';
-            final origFullName = (origFirstName.isNotEmpty || origLastName.isNotEmpty)
-                ? '$origFirstName $origLastName'.trim()
-                : (origAuthor?.displayName ?? origAuthor?.username ?? 'User');
-            
-            originals[model.repostOf!] = {
-              'id': original.id,
-              'user_id': original.authorId,
-              'user': {
-                'name': origFullName,
-                'profile_photo_url': origAuthor?.avatarUrl ?? '',
-              },
-              'text': original.text,
-              'media': original.mediaUrls,
-              'created_at': original.createdAt.toIso8601String(),
-            };
-          }
-        }
-      }
-
-      // Map originals to posts
-      for (final p in newItems) {
-        final opid = p['original_post_id']?.toString();
-        if (opid != null && originals.containsKey(opid)) {
-          p['original_post'] = originals[opid];
-        }
       }
 
       final posts = newItems.map(_mapRawPostToModel).toList();
