@@ -76,3 +76,4 @@ admin-tools/
 # Scripts (deployment scripts can stay but generated ones ignored)
 cors.json
 storage-cors.json
+node_modules

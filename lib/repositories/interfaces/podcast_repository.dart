@@ -8,6 +8,7 @@ class PodcastModel {
   final String? authorId;
   final String? description;
   final String? coverUrl;
+  final String? coverThumbUrl; // Small thumbnail for fast list loading
   final String? audioUrl;
   final int? durationSec;
   final String? language;
@@ -31,6 +32,7 @@ class PodcastModel {
     this.authorId,
     this.description,
     this.coverUrl,
+    this.coverThumbUrl,
     this.audioUrl,
     this.durationSec,
     this.language,
@@ -131,6 +133,7 @@ abstract class PodcastRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? coverThumbUrl,
     String? audioUrl,
     int? durationSec,
     String? language,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
+import 'services/profile_cache_service.dart';
 import 'home_feed_page.dart';
 import 'sign_in_page.dart';
 import 'repositories/interfaces/post_repository.dart';
@@ -38,28 +39,21 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeAndPreload() async {
-    final startTime = DateTime.now();
-    
     try {
       // Run auth initialization and preloading in parallel
+      // Standard splash duration: 500ms minimum for branding visibility
       await Future.wait([
         _initAuth(),
         _preloadHomeFeed(),
-        // Minimum 2 seconds for splash
-        Future.delayed(const Duration(seconds: 2)),
+        Future.delayed(const Duration(milliseconds: 500)),
       ]);
     } catch (e) {
       debugPrint('⚠️ Splash initialization error: $e');
-      // Still wait for minimum time
-      final elapsed = DateTime.now().difference(startTime);
-      if (elapsed < const Duration(seconds: 2)) {
-        await Future.delayed(const Duration(seconds: 2) - elapsed);
-      }
     }
     
     if (!mounted) return;
     
-    // Navigate to appropriate page
+    // Navigate immediately
     _navigateToNextScreen();
   }
 
@@ -84,7 +78,7 @@ class _SplashScreenState extends State<SplashScreen> {
         return;
       }
       
-      debugPrint('🚀 Preloading home feed data...');
+      debugPrint('🚀 Preloading home feed + profile data...');
       
       if (!mounted) return;
       
@@ -92,8 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
       final postRepo = context.read<PostRepository>();
       final storyRepo = context.read<StoryRepository>();
       
-      // Preload first page of posts and stories in parallel
-      // This will cache them for instant display when HomeFeedPage opens
+      // Preload EVERYTHING in parallel for instant display
       await Future.wait([
         // Preload first 15 posts from feed
         postRepo.getFeed(limit: 15).catchError((e) {
@@ -106,9 +99,14 @@ class _SplashScreenState extends State<SplashScreen> {
           debugPrint('⚠️ Story preload error: $e');
           return <StoryRingModel>[];
         }),
+        
+        // Preload current user's profile + posts into global cache
+        ProfileCacheService().preloadCurrentUserData(currentUser.uid).catchError((e) {
+          debugPrint('⚠️ Profile cache preload error: $e');
+        }),
       ]);
       
-      debugPrint('✅ Home feed data preloaded');
+      debugPrint('✅ Home feed + profile data preloaded');
     } catch (e) {
       debugPrint('⚠️ Preload error (non-critical): $e');
     }
@@ -143,30 +141,32 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Full screen, no safe area, bezel to bezel
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SizedBox.expand(
-        child: Image.asset(
-          'assets/splash/nexumAp.png',
-          fit: BoxFit.cover, // Cover entire screen
-          errorBuilder: (context, error, stackTrace) {
-            // Fallback to solid color if image fails to load
-            return Container(
-              color: const Color(0xFFBFAE01), // Nexum gold color
-              child: Center(
-                child: Text(
-                  'Nexum',
-                  style: TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+    // Full screen, no safe area, bezel to bezel - covers entire device including notch/bezels
+    return Container(
+      color: Colors.white,
+      child: Image.asset(
+        'assets/splash/nexumAp.png',
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        alignment: Alignment.center,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: double.infinity,
+            height: double.infinity,
+            color: const Color(0xFFBFAE01),
+            child: const Center(
+              child: Text(
+                'Nexum',
+                style: TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }

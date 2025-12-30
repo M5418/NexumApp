@@ -1043,23 +1043,30 @@ class _StoryViewerPageState extends State<StoryViewerPage>
           ),
         ),
         const SizedBox(width: 10),
-        // Like button
+        // Like button - FASTFEED: Optimistic update
         GestureDetector(
-          onTap: () async {
+          onTap: () {
             final sid = _frames.isNotEmpty ? _frames[_currentIndex].storyId : null;
             if (sid == null) return;
-            try {
-              if (_liked) {
-                await context.read<StoryRepository>().unlikeStory(sid);
-              } else {
-                await context.read<StoryRepository>().likeStory(sid);
-              }
-              if (!mounted) return;
-              setState(() {
-                _liked = !_liked;
+            
+            // Optimistic update - instant UI feedback
+            final wasLiked = _liked;
+            setState(() {
+              _liked = !wasLiked;
+            });
+            
+            // Background API call
+            final repo = context.read<StoryRepository>();
+            if (wasLiked) {
+              repo.unlikeStory(sid).catchError((_) {
+                // Revert on failure
+                if (mounted) setState(() => _liked = wasLiked);
               });
-            } catch (e) {
-              _snack('Failed to like', Colors.red);
+            } else {
+              repo.likeStory(sid).catchError((_) {
+                // Revert on failure
+                if (mounted) setState(() => _liked = wasLiked);
+              });
             }
           },
           child: Container(

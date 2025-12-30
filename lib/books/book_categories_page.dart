@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../repositories/interfaces/book_repository.dart';
+import '../repositories/firebase/firebase_book_repository.dart';
 
 class BookCategoriesPage extends StatefulWidget {
   const BookCategoriesPage({super.key});
@@ -15,43 +16,67 @@ class _BookCategoriesPageState extends State<BookCategoriesPage> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _cats = [];
+  
+  // FASTFEED: Direct repository access for cache-first loading
+  final FirebaseBookRepository _firebaseBookRepo = FirebaseBookRepository();
 
   @override
   void initState() {
     super.initState();
+    // FASTFEED: Load cached categories instantly, then refresh
+    _loadFromCacheInstantly();
     _load();
   }
 
+  /// INSTANT: Load cached books and extract categories (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final bookModels = await _firebaseBookRepo.listBooksFromCache(
+        limit: 500,
+        isPublished: true,
+      );
+      if (bookModels.isNotEmpty && mounted) {
+        final categoryList = _buildCategoryList(bookModels);
+        setState(() {
+          _cats = categoryList;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
+  }
+
+  List<Map<String, dynamic>> _buildCategoryList(List<BookModel> books) {
+    final categoryMap = <String, int>{};
+    for (final book in books) {
+      final category = book.category?.trim() ?? '';
+      if (category.isNotEmpty) {
+        final categories = category.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty);
+        for (final cat in categories) {
+          categoryMap[cat] = (categoryMap[cat] ?? 0) + 1;
+        }
+      }
+    }
+    return categoryMap.entries
+        .map((e) => {'category': e.key, 'count': e.value})
+        .toList()
+      ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+  }
+
   Future<void> _load() async {
-    setState(() => _loading = true);
+    if (_cats.isEmpty) {
+      setState(() => _loading = true);
+    }
     try {
       final bookRepo = context.read<BookRepository>();
-      
-      // Fetch all published books
       final bookModels = await bookRepo.listBooks(
         page: 1,
-        limit: 1000, // Get all books to count categories
+        limit: 1000,
         isPublished: true,
       );
       
-      // Aggregate categories and count
-      final categoryMap = <String, int>{};
-      for (final book in bookModels) {
-        final category = book.category?.trim() ?? '';
-        if (category.isNotEmpty) {
-          // Handle multi-category (comma-separated)
-          final categories = category.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty);
-          for (final cat in categories) {
-            categoryMap[cat] = (categoryMap[cat] ?? 0) + 1;
-          }
-        }
-      }
-      
-      // Convert to list and sort by count
-      final categoryList = categoryMap.entries
-          .map((e) => {'category': e.key, 'count': e.value})
-          .toList()
-        ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+      final categoryList = _buildCategoryList(bookModels);
       
       setState(() {
         _cats = categoryList;
@@ -59,10 +84,12 @@ class _BookCategoriesPageState extends State<BookCategoriesPage> {
         _error = null;
       });
     } catch (e) {
-      setState(() {
-        _error = 'Failed to load categories: $e';
-        _loading = false;
-      });
+      if (_cats.isEmpty) {
+        setState(() {
+          _error = 'Failed to load categories: $e';
+          _loading = false;
+        });
+      }
     }
   }
 

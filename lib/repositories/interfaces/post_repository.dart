@@ -6,6 +6,7 @@ abstract class PostRepository {
   Future<String> createPost({
     required String text,
     List<String>? mediaUrls,
+    List<String>? thumbUrls, // Thumbnail URLs for fast feed loading
     String? repostOf,
     String? communityId,
   });
@@ -18,6 +19,7 @@ abstract class PostRepository {
     required String postId,
     required String text,
     List<String>? mediaUrls,
+    List<String>? thumbUrls,
   });
   
   // Delete post

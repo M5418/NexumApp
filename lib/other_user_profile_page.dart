@@ -13,6 +13,7 @@ import 'repositories/interfaces/conversation_repository.dart';
 import 'repositories/interfaces/user_repository.dart';
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/models/post_model.dart';
 import 'providers/follow_state.dart';
 import 'models/message.dart' hide MediaType;
 import 'widgets/report_bottom_sheet.dart';
@@ -48,12 +49,19 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   late ConversationRepository _convRepo;
 
   // Backend profile data for OTHER user
-  Map<String, dynamic>? _userProfile;
-  String? _profilePhotoUrl;
-  final String _coverPhotoUrl = '';
+  // FASTFEED: Initialize with widget data so it displays instantly
+  late Map<String, dynamic>? _userProfile = {
+    'id': widget.userId,
+    'displayName': widget.userName,
+    'avatarUrl': widget.userAvatarUrl,
+    'bio': widget.userBio,
+    'coverUrl': widget.userCoverUrl,
+  };
+  late String? _profilePhotoUrl = widget.userAvatarUrl;
+  late final String _coverPhotoUrl = widget.userCoverUrl;
 
-  final int _connectionsInboundCount = 0;   // inbound to this user
-  final int _connectionsTotalCount = 0;
+  int _followersCount = 0;
+  int _followingCount = 0;
 
   final List<Map<String, dynamic>> _experiences = [];
   final List<Map<String, dynamic>> _trainings = [];
@@ -61,23 +69,29 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
 
 
   // Data: Activity (their engagements), Posts (created by other user), Media (images from posts), Podcasts
+  // FASTFEED: Start with false - cache loads instantly before first paint feels slow
   List<Post> _activityPosts = [];
-  bool _loadingActivity = true;
+  bool _loadingActivity = false;
   String? _errorActivity;
   bool _isLoadingMoreActivity = false;
   final ScrollController _activityScrollController = ScrollController();
 
   List<Post> _userPosts = [];
-  bool _loadingPosts = true;
+  bool _loadingPosts = false;
   String? _errorPosts;
   bool _isLoadingMorePosts = false;
   final ScrollController _postsScrollController = ScrollController();
 
   List<String> _mediaImageUrls = [];
-  bool _loadingMedia = true;
+  bool _loadingMedia = false;
+  
+  // Author profile cache for hydration (same pattern as home feed)
+  final Map<String, Map<String, String>> _authorProfilesCache = {};
+  final Map<String, PostModel> _hydratedOriginalPosts = {};
+  final FirebasePostRepository _postRepo = FirebasePostRepository();
 
   List<Map<String, dynamic>> _podcasts = [];
-  bool _loadingPodcasts = true;
+  bool _loadingPodcasts = false;
   String? _errorPodcasts;
   
   // Cache for user profiles to avoid redundant fetches
@@ -93,6 +107,10 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         context.read<FollowState>().initialize();
       }
     });
+    
+    // FASTFEED: Load cached data instantly, then refresh from server
+    _loadFromCacheInstantly();
+    
     // Load profile first so header and stats use real backend
     _loadUserProfile();
     // Kick off tabs
@@ -103,6 +121,159 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     // Setup scroll listeners for pagination
     _postsScrollController.addListener(_onPostsScroll);
     _activityScrollController.addListener(_onActivityScroll);
+  }
+
+  /// INSTANT: Load cached profile and posts (no network wait)
+  /// Only shows profile if we have valid name data
+  Future<void> _loadFromCacheInstantly() async {
+    // Load cached profile
+    try {
+      final userRepo = FirebaseUserRepository();
+      final profile = await userRepo.getUserProfileFromCache(widget.userId);
+      if (profile != null && mounted) {
+        // Check if we have valid name data
+        final fn = profile.firstName?.trim() ?? '';
+        final ln = profile.lastName?.trim() ?? '';
+        final dn = profile.displayName?.trim() ?? '';
+        final un = profile.username?.trim() ?? '';
+        final hasValidName = fn.isNotEmpty || ln.isNotEmpty || dn.isNotEmpty || un.isNotEmpty;
+        
+        // Only update UI if we have valid name data
+        if (hasValidName) {
+          setState(() {
+            _userProfile = {
+              'id': profile.uid,
+              'firstName': profile.firstName,
+              'lastName': profile.lastName,
+              'displayName': profile.displayName,
+              'username': profile.username,
+              'bio': profile.bio,
+              'avatarUrl': profile.avatarUrl,
+              'coverUrl': profile.coverUrl,
+              'followersCount': profile.followersCount ?? 0,
+              'followingCount': profile.followingCount ?? 0,
+              'postsCount': profile.postsCount ?? 0,
+            };
+            _profilePhotoUrl = profile.avatarUrl;
+            _followersCount = profile.followersCount ?? 0;
+            _followingCount = profile.followingCount ?? 0;
+          });
+        }
+      }
+    } catch (_) {}
+    
+    // Load cached posts - hydrate author data before displaying
+    try {
+      final postRepo = FirebasePostRepository();
+      final models = await postRepo.getUserPostsFromCache(uid: widget.userId, limit: 50);
+      if (models.isNotEmpty && mounted) {
+        // Hydrate author data before displaying
+        final hydratedModels = await _hydrateAllAuthorData(models);
+        
+        // Filter to only show posts with valid author data after hydration
+        final validModels = hydratedModels.where((m) => 
+          m.authorName != null && m.authorName!.isNotEmpty && m.authorName != 'User'
+        ).toList();
+        
+        if (validModels.isNotEmpty) {
+          final posts = _mapPostModelsFast(validModels);
+          final mediaUrls = <String>[];
+          for (final p in posts) {
+            if (!p.isRepost) mediaUrls.addAll(p.imageUrls);
+          }
+          setState(() {
+            _userPosts = posts;
+            _mediaImageUrls = mediaUrls;
+            _loadingPosts = false;
+            _loadingMedia = false;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// FAST: Convert PostModels to Posts synchronously using denormalized data
+  List<Post> _mapPostModelsFast(List<PostModel> models) {
+    final result = <Post>[];
+    for (final m in models) {
+      if (m.repostOf != null && m.repostOf!.isNotEmpty) continue;
+      
+      // Use denormalized data or check cache
+      String authorName = m.authorName ?? 'User';
+      String authorAvatarUrl = m.authorAvatarUrl ?? '';
+      
+      // Check cache for author data if missing
+      if ((authorName == 'User' || authorName.isEmpty) && _authorProfilesCache.containsKey(m.authorId)) {
+        final profile = _authorProfilesCache[m.authorId]!;
+        authorName = profile['name'] ?? 'User';
+        authorAvatarUrl = profile['avatarUrl'] ?? '';
+      }
+      
+      MediaType mediaType;
+      String? videoUrl;
+      List<String> imageUrls;
+      
+      if (m.mediaThumbs.isNotEmpty) {
+        final hasVideo = m.mediaThumbs.any((t) => t.type == 'video');
+        if (hasVideo) {
+          mediaType = MediaType.video;
+          videoUrl = m.mediaUrls.firstWhere(
+            (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
+            orElse: () => m.mediaUrls.isNotEmpty ? m.mediaUrls.first : '',
+          );
+          imageUrls = [];
+        } else {
+          mediaType = m.mediaThumbs.length == 1 ? MediaType.image : MediaType.images;
+          videoUrl = null;
+          imageUrls = m.mediaThumbs.map((t) => t.thumbUrl).toList();
+        }
+      } else if (m.mediaUrls.isNotEmpty) {
+        final hasVideo = m.mediaUrls.any((u) => 
+          u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov')
+        );
+        if (hasVideo) {
+          mediaType = MediaType.video;
+          videoUrl = m.mediaUrls.firstWhere(
+            (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
+            orElse: () => m.mediaUrls.first,
+          );
+          imageUrls = [];
+        } else {
+          mediaType = m.mediaUrls.length == 1 ? MediaType.image : MediaType.images;
+          videoUrl = null;
+          imageUrls = m.mediaUrls;
+        }
+      } else {
+        mediaType = MediaType.none;
+        videoUrl = null;
+        imageUrls = [];
+      }
+      
+      result.add(Post(
+        id: m.id,
+        authorId: m.authorId,
+        userName: authorName,
+        userAvatarUrl: authorAvatarUrl,
+        createdAt: m.createdAt,
+        text: m.text,
+        mediaType: mediaType,
+        imageUrls: imageUrls,
+        videoUrl: videoUrl,
+        counts: PostCounts(
+          likes: m.summary.likes,
+          comments: m.summary.comments,
+          shares: m.summary.shares,
+          reposts: m.summary.reposts,
+          bookmarks: m.summary.bookmarks,
+        ),
+        userReaction: null,
+        isBookmarked: false,
+        isRepost: false,
+        repostedBy: null,
+        originalPostId: null,
+      ));
+    }
+    return result;
   }
   
   @override
@@ -197,6 +368,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
           'full_name': fullName,
         };
         _profilePhotoUrl = user.avatarUrl;
+        _followersCount = user.followersCount ?? 0;
+        _followingCount = user.followingCount ?? 0;
         _experiences
           ..clear()
           ..addAll(user.professionalExperiences ?? const []);
@@ -213,6 +386,17 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   }
 
   Future<void> _loadUserPosts() async {
+    // Skip if cache already loaded posts
+    if (_userPosts.isNotEmpty) {
+      setState(() {
+        _loadingPosts = false;
+        _loadingMedia = false;
+      });
+      // Still refresh in background
+      _refreshUserPostsInBackground();
+      return;
+    }
+    
     setState(() {
       _loadingPosts = true;
       _errorPosts = null;
@@ -220,13 +404,23 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     });
 
     try {
-      // Simplified: Just load user posts directly from Firebase
-      // The PostRepository handles repost hydration internally
-      // For now, show empty state - full migration needed
+      final postRepo = FirebasePostRepository();
+      final models = await postRepo.getUserPosts(uid: widget.userId, limit: 50);
+      
       if (!mounted) return;
+      
+      // Hydrate author data BEFORE displaying
+      final hydratedModels = await _hydrateAllAuthorData(models);
+      
+      final posts = _mapPostModelsFast(hydratedModels);
+      final mediaUrls = <String>[];
+      for (final p in posts) {
+        if (!p.isRepost) mediaUrls.addAll(p.imageUrls);
+      }
+      
       setState(() {
-        _userPosts = [];
-        _mediaImageUrls = [];
+        _userPosts = posts;
+        _mediaImageUrls = mediaUrls;
         _loadingPosts = false;
         _loadingMedia = false;
       });
@@ -238,6 +432,107 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         _loadingMedia = false;
       });
     }
+  }
+  
+  /// SYNC: Hydrate ALL author data before displaying (same as home feed)
+  /// Handles both regular posts AND fetches original posts for reposts
+  Future<List<PostModel>> _hydrateAllAuthorData(List<PostModel> models) async {
+    final userRepo = FirebaseUserRepository();
+    
+    // Collect ALL author IDs we need (post authors + repost original authors)
+    final authorIds = <String>{};
+    final repostOriginalIds = <String>{};
+    
+    for (final m in models) {
+      // Always add the post author
+      if (m.authorName == null || m.authorName!.isEmpty || m.authorName == 'User') {
+        authorIds.add(m.authorId);
+      }
+      // Track reposts that need original post fetched
+      if (m.repostOf != null && m.repostOf!.isNotEmpty) {
+        repostOriginalIds.add(m.repostOf!);
+      }
+    }
+    
+    // Fetch original posts for reposts (to get their author IDs)
+    if (repostOriginalIds.isNotEmpty) {
+      await Future.wait(repostOriginalIds.map((postId) async {
+        if (_hydratedOriginalPosts.containsKey(postId)) return;
+        try {
+          final original = await _postRepo.getPost(postId);
+          if (original != null) {
+            _hydratedOriginalPosts[postId] = original;
+            // Add original author to fetch list if missing
+            if (original.authorName == null || original.authorName!.isEmpty || original.authorName == 'User') {
+              authorIds.add(original.authorId);
+            }
+          }
+        } catch (_) {}
+      }));
+    }
+    
+    // Fetch ALL author profiles in parallel
+    if (authorIds.isNotEmpty) {
+      debugPrint('💧 [OtherProfile] Hydrating ${authorIds.length} authors before display...');
+      await Future.wait(authorIds.map((authorId) async {
+        if (_authorProfilesCache.containsKey(authorId)) return;
+        try {
+          final profile = await userRepo.getUserProfile(authorId);
+          if (profile != null) {
+            final fn = profile.firstName?.trim() ?? '';
+            final ln = profile.lastName?.trim() ?? '';
+            final fullName = (fn.isNotEmpty || ln.isNotEmpty)
+                ? '$fn $ln'.trim()
+                : (profile.displayName ?? profile.username ?? 'User');
+            _authorProfilesCache[authorId] = {
+              'name': fullName,
+              'avatarUrl': profile.avatarUrl ?? '',
+            };
+          }
+        } catch (_) {}
+      }));
+    }
+    
+    // Update models with fetched data
+    return models.map((m) {
+      var updated = m;
+      
+      // Update post author if needed
+      if ((m.authorName == null || m.authorName!.isEmpty || m.authorName == 'User') && 
+          _authorProfilesCache.containsKey(m.authorId)) {
+        final profile = _authorProfilesCache[m.authorId]!;
+        updated = updated.copyWith(
+          authorName: profile['name'],
+          authorAvatarUrl: profile['avatarUrl'],
+        );
+      }
+      
+      return updated;
+    }).toList();
+  }
+  
+  /// Background refresh for posts (non-blocking)
+  Future<void> _refreshUserPostsInBackground() async {
+    try {
+      final postRepo = FirebasePostRepository();
+      final models = await postRepo.getUserPosts(uid: widget.userId, limit: 50);
+      
+      if (!mounted) return;
+      
+      // Hydrate author data before displaying
+      final hydratedModels = await _hydrateAllAuthorData(models);
+      
+      final posts = _mapPostModelsFast(hydratedModels);
+      final mediaUrls = <String>[];
+      for (final p in posts) {
+        if (!p.isRepost) mediaUrls.addAll(p.imageUrls);
+      }
+      
+      setState(() {
+        _userPosts = posts;
+        _mediaImageUrls = mediaUrls;
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadActivity() async {
@@ -604,20 +899,20 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                 ),
                               ),
 
-                              // Stats Row (real backend counts)
+                              // Stats Row (match ProfilePage style)
                               Transform.translate(
                                 offset: const Offset(0, -30),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     _buildStatColumn(
-                                      _formatCount(_connectionsTotalCount),
-                                      Provider.of<LanguageProvider>(context).t('profile.connections'),
+                                      _formatCount(_followersCount),
+                                      'Connections',
                                     ),
                                     const SizedBox(width: 40),
                                     _buildStatColumn(
-                                      _formatCount(_connectionsInboundCount),
-                                      Provider.of<LanguageProvider>(context).t('profile.connected'),
+                                      _formatCount(_followingCount),
+                                      'Connected',
                                     ),
                                   ],
                                 ),
@@ -662,7 +957,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                       ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      widget.userBio,
+                                      (_userProfile?['bio'] ?? widget.userBio ?? '').toString(),
                                       textAlign: TextAlign.center,
                                       style: GoogleFonts.inter(
                                         fontSize: 14,

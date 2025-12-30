@@ -26,7 +26,38 @@ import 'repositories/firebase/firebase_notification_repository.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'core/time_utils.dart';
 import 'services/community_interest_sync_service.dart';
+import 'services/app_cache_service.dart';
 import 'core/profile_api.dart';
+
+/// Global notifier for instant conversation list updates when messages are sent
+class ConversationUpdateNotifier extends ChangeNotifier {
+  static final ConversationUpdateNotifier _instance = ConversationUpdateNotifier._internal();
+  factory ConversationUpdateNotifier() => _instance;
+  ConversationUpdateNotifier._internal();
+
+  String? _lastUpdatedConversationId;
+  String? _lastMessageText;
+  String? _lastMessageType;
+  DateTime? _lastMessageTime;
+
+  /// Call this from ChatPage when a message is sent
+  void notifyMessageSent({
+    required String conversationId,
+    required String messageText,
+    String messageType = 'text',
+  }) {
+    _lastUpdatedConversationId = conversationId;
+    _lastMessageText = messageText;
+    _lastMessageType = messageType;
+    _lastMessageTime = DateTime.now();
+    notifyListeners();
+  }
+
+  String? get lastUpdatedConversationId => _lastUpdatedConversationId;
+  String? get lastMessageText => _lastMessageText;
+  String? get lastMessageType => _lastMessageType;
+  DateTime? get lastMessageTime => _lastMessageTime;
+}
 
 class ConversationsPage extends StatefulWidget {
   final bool? isDarkMode;
@@ -81,11 +112,15 @@ class _ConversationsPageState extends State<ConversationsPage>
   ChatItem? _selectedChat;
   CommunityItem? _selectedCommunity;
 
+  late final AppCacheService _appCache;
+  
   @override
   void initState() {
     super.initState();
     _convRepo = context.read<ConversationRepository>();
     _commRepo = context.read<CommunityRepository>();
+    _appCache = AppCacheService();
+    
     _tabController = TabController(
       length: 2,
       vsync: this,
@@ -96,23 +131,112 @@ class _ConversationsPageState extends State<ConversationsPage>
       // Update on any index change (tap or swipe)
       if (_tabController.index != _selectedTabIndex) {
         setState(() => _selectedTabIndex = _tabController.index);
-        // Refresh communities when switching to Communities tab
-        if (_tabController.index == 1) {
-          _loadCommunities();
-        }
       }
     });
     
     // Add scroll listener for communities pagination
     _communitiesScrollController.addListener(_onCommunitiesScroll);
+    
+    // FASTFEED: Listen for instant updates when messages are sent from ChatPage
+    ConversationUpdateNotifier().addListener(_onConversationUpdated);
+    
+    // Listen for cache updates
+    _appCache.addListener(_onAppCacheChanged);
 
+    // INSTANT: Apply cached data immediately
+    _applyCachedDataSync();
+    
+    // Background refresh
     _loadConversations();
     _loadCommunities();
     _loadUnreadNotifications();
   }
   
+  void _onAppCacheChanged() {
+    if (!mounted) return;
+    _applyCachedDataSync();
+  }
+  
+  void _applyCachedDataSync() {
+    // Apply cached conversations
+    if (_appCache.isConversationsLoaded && _appCache.conversations.isNotEmpty) {
+      final mapped = _appCache.conversations
+          .map((c) => ChatItem(
+                conversationId: c.id,
+                id: c.otherUserId,
+                name: c.otherUser.name,
+                avatarUrl: c.otherUser.avatarUrl ?? '',
+                lastType: _mapLastType(c.lastMessageType),
+                lastText: _cleanLastMessageText(c.lastMessageText),
+                lastTime: _formatTime(c.lastMessageAt),
+                unreadCount: c.unreadCount,
+                muted: c.muted,
+              ))
+          .toList();
+      _chats.clear();
+      _chats.addAll(mapped);
+      _loadingConversations = false;
+    }
+    
+    // Apply cached communities
+    if (_appCache.isCommunitiesLoaded && _appCache.communities.isNotEmpty) {
+      final mapped = _appCache.communities
+          .map((c) => CommunityItem(
+                id: c.id,
+                name: c.name,
+                avatarUrl: c.avatarUrl,
+                bio: c.bio,
+                friendsInCommon: c.friendsInCommon,
+                unreadPosts: c.unreadPosts,
+              ))
+          .toList();
+      _communities.clear();
+      _communities.addAll(mapped);
+      _loadingCommunities = false;
+    }
+    
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// INSTANT: Update conversation list when a message is sent from ChatPage
+  void _onConversationUpdated() {
+    final notifier = ConversationUpdateNotifier();
+    final convId = notifier.lastUpdatedConversationId;
+    final text = notifier.lastMessageText;
+    final type = notifier.lastMessageType;
+    final time = notifier.lastMessageTime;
+    
+    if (convId == null || !mounted) return;
+    
+    setState(() {
+      // Find the chat and update it
+      final idx = _chats.indexWhere((c) => c.conversationId == convId);
+      if (idx != -1) {
+        final chat = _chats[idx];
+        // Move to top with updated last message
+        _chats.removeAt(idx);
+        _chats.insert(0, ChatItem(
+          conversationId: chat.conversationId,
+          id: chat.id,
+          name: chat.name,
+          avatarUrl: chat.avatarUrl,
+          lastType: _mapLastType(type),
+          lastText: text,
+          lastTime: time != null ? _formatTime(time) : chat.lastTime,
+          unreadCount: 0, // Reset for current user
+          muted: chat.muted,
+        ));
+      }
+    });
+  }
+
+  
   @override
   void dispose() {
+    ConversationUpdateNotifier().removeListener(_onConversationUpdated);
+    _appCache.removeListener(_onAppCacheChanged);
     _tabController.dispose();
     _communitiesScrollController.dispose();
     super.dispose();
@@ -256,6 +380,9 @@ class _ConversationsPageState extends State<ConversationsPage>
           _selectedCommunity = null;
         }
       });
+      
+      // Update global cache for instant display next time
+      _appCache.updateConversations(list);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -308,6 +435,9 @@ class _ConversationsPageState extends State<ConversationsPage>
         _lastCommunityId = list.isNotEmpty ? list.last.id : null;
         _hasMoreCommunities = list.length == _communitiesPerPage;
       });
+      
+      // Update global cache for instant display next time
+      _appCache.updateCommunities(list);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1208,6 +1338,29 @@ class ChatListTile extends StatelessWidget {
     this.onLongPress,
   });
 
+  // Get display text for last message, handling story replies
+  String _getDisplayText(ChatItem item) {
+    final text = item.lastText;
+    if (text == null || text.isEmpty) {
+      // Fallback for media types
+      if (item.lastType == MessageType.image) return 'Photo';
+      if (item.lastType == MessageType.video) return 'Video';
+      if (item.lastType == MessageType.voice) return 'Voice message';
+      return '';
+    }
+    
+    // Story reply: extract just the message part
+    if (text.contains('Story reply:')) {
+      final idx = text.indexOf('Story reply:');
+      final afterPrefix = text.substring(idx + 'Story reply:'.length).trim();
+      final parts = afterPrefix.split('|');
+      final message = parts[0].trim();
+      return message.isNotEmpty ? message : 'Replied to story';
+    }
+    
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bgSelected = isDark ? const Color(0xFF151515) : const Color(0xFFF7F9FC);
@@ -1258,19 +1411,14 @@ class ChatListTile extends StatelessWidget {
                         else if (item.lastType == MessageType.image)
                           const Icon(Icons.image, size: 16, color: Color(0xFF666666))
                         else if (item.lastType == MessageType.voice)
-                          const Icon(Icons.mic, size: 16, color: Color(0xFF666666)),
-                        if (item.lastType != MessageType.text) const SizedBox(width: 4),
+                          const Icon(Icons.mic, size: 16, color: Color(0xFF666666))
+                        else if (item.lastText?.contains('Story reply') == true)
+                          const Icon(Icons.auto_stories, size: 16, color: Color(0xFF9D7BFF)),
+                        if (item.lastType != MessageType.text || item.lastText?.contains('Story reply') == true) 
+                          const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            item.lastText?.isNotEmpty == true
-                                ? item.lastText!
-                                : (item.lastType == MessageType.image
-                                    ? 'Images'
-                                    : item.lastType == MessageType.video
-                                        ? 'Video'
-                                        : item.lastType == MessageType.voice
-                                            ? 'Voice message'
-                                            : ''),
+                            _getDisplayText(item),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.inter(fontSize: 14, color: subColor),

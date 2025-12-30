@@ -27,6 +27,7 @@ class FirebaseBookRepository implements BookRepository {
       authorId: d['authorId']?.toString(),
       description: d['description']?.toString(),
       coverUrl: d['coverUrl']?.toString(),
+      coverThumbUrl: d['coverThumbUrl']?.toString(),
       epubUrl: d['epubUrl']?.toString(),
       pdfUrl: d['pdfUrl']?.toString(),
       audioUrl: d['audioUrl']?.toString(),
@@ -99,6 +100,37 @@ class FirebaseBookRepository implements BookRepository {
     }
   }
 
+  /// FAST: Get books from cache first (instant)
+  Future<List<BookModel>> listBooksFromCache({
+    int limit = 20,
+    String? category,
+    bool? isPublished,
+  }) async {
+    try {
+      Query<Map<String, dynamic>> q = _books;
+      
+      if (category != null) {
+        q = q.where('category', isEqualTo: category);
+      }
+      if (isPublished != null) {
+        q = q.where('isPublished', isEqualTo: isPublished);
+      }
+      q = q.orderBy('createdAt', descending: true).limit(limit);
+
+      try {
+        final snap = await q.get(const GetOptions(source: Source.cache));
+        return snap.docs.map(_bookFromDoc).toList();
+      } catch (_) {
+        // Try without ordering if index missing
+        final fallback = _books.limit(limit);
+        final snap = await fallback.get(const GetOptions(source: Source.cache));
+        return snap.docs.map(_bookFromDoc).toList();
+      }
+    } catch (_) {
+      return []; // Cache miss
+    }
+  }
+
   @override
   Future<BookModel?> getBook(String bookId) async {
     final doc = await _books.doc(bookId).get();
@@ -118,6 +150,7 @@ class FirebaseBookRepository implements BookRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? coverThumbUrl,
     String? epubUrl,
     String? pdfUrl,
     String? audioUrl,
@@ -139,6 +172,7 @@ class FirebaseBookRepository implements BookRepository {
       'authorId': uid,
       'description': description,
       'coverUrl': coverUrl,
+      'coverThumbUrl': coverThumbUrl,
       'epubUrl': epubUrl,
       'pdfUrl': pdfUrl,
       'audioUrl': audioUrl,

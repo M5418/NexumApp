@@ -13,12 +13,14 @@ class CachedPostRepository implements PostRepository {
   Future<String> createPost({
     required String text,
     List<String>? mediaUrls,
+    List<String>? thumbUrls,
     String? repostOf,
     String? communityId,
   }) async {
     final postId = await _source.createPost(
       text: text,
       mediaUrls: mediaUrls,
+      thumbUrls: thumbUrls,
       repostOf: repostOf,
       communityId: communityId,
     );
@@ -53,8 +55,9 @@ class CachedPostRepository implements PostRepository {
     required String postId,
     required String text,
     List<String>? mediaUrls,
+    List<String>? thumbUrls,
   }) async {
-    await _source.updatePost(postId: postId, text: text, mediaUrls: mediaUrls);
+    await _source.updatePost(postId: postId, text: text, mediaUrls: mediaUrls, thumbUrls: thumbUrls);
     await _cache.remove('post_$postId');
     await _cache.removePattern('feed_*');
   }

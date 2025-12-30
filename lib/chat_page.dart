@@ -11,7 +11,9 @@ import 'widgets/chat_input.dart';
 import 'widgets/message_actions_sheet.dart';
 import 'package:provider/provider.dart';
 import 'repositories/interfaces/message_repository.dart';
+import 'repositories/firebase/firebase_message_repository.dart';
 import 'repositories/interfaces/conversation_repository.dart';
+import 'conversations_page.dart' show ConversationUpdateNotifier;
 import 'repositories/interfaces/block_repository.dart';
 import 'repositories/interfaces/storage_repository.dart';
 import 'core/audio_recorder.dart';
@@ -20,6 +22,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io';
 import 'dart:async';
 import 'core/profile_api.dart';
+import 'repositories/firebase/firebase_user_repository.dart';
 import 'widgets/media_preview_page.dart';
 import 'core/video_utils_stub.dart' if (dart.library.io) 'core/video_utils_io.dart';
 import 'other_user_profile_page.dart';
@@ -54,6 +57,7 @@ class _ChatPageState extends State<ChatPage> {
   late ConversationRepository _convRepo;
   late BlockRepository _blockRepo;
   late StorageRepository _storageRepo;
+  final FirebaseMessageRepository _firebaseMsgRepo = FirebaseMessageRepository();
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _resolvedConversationId;
   bool _isRecording = false;
@@ -63,6 +67,10 @@ class _ChatPageState extends State<ChatPage> {
   bool _isRefreshing = false;
   bool _isBlocked = false;
   bool _isBlockedBy = false;
+  
+  // Hydrated user profile (fetched if widget.otherUser has incomplete data)
+  String? _hydratedName;
+  String? _hydratedAvatarUrl;
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -84,8 +92,48 @@ void initState() {
   _blockRepo = context.read<BlockRepository>();
   _storageRepo = context.read<StorageRepository>();
   _checkBlockStatus();
+  _hydrateUserProfile(); // Fetch real user profile if data is incomplete
   _initLoad();
   _startPolling();
+}
+
+/// Fetch real user profile if the provided name looks like an email or is empty
+Future<void> _hydrateUserProfile() async {
+  final name = widget.otherUser.name;
+  final avatar = widget.otherUser.avatarUrl;
+  
+  // Check if name looks like email or is empty
+  final needsHydration = name.isEmpty || 
+      name.contains('@') || 
+      avatar == null || 
+      avatar.isEmpty;
+  
+  if (!needsHydration) return;
+  
+  try {
+    final userRepo = FirebaseUserRepository();
+    final profile = await userRepo.getUserProfile(widget.otherUser.id);
+    
+    if (profile != null && mounted) {
+      String displayName = profile.displayName ?? '';
+      if (displayName.isEmpty) {
+        final firstName = profile.firstName ?? '';
+        final lastName = profile.lastName ?? '';
+        if (firstName.isNotEmpty || lastName.isNotEmpty) {
+          displayName = '$firstName $lastName'.trim();
+        } else {
+          displayName = profile.username ?? name;
+        }
+      }
+      
+      setState(() {
+        _hydratedName = displayName.isNotEmpty ? displayName : null;
+        _hydratedAvatarUrl = profile.avatarUrl;
+      });
+    }
+  } catch (_) {
+    // Ignore errors - will use original data
+  }
 }
 
 Future<void> _checkBlockStatus() async {
@@ -120,10 +168,41 @@ Future<void> _handleUnblock() async {
   void _initLoad() {
     if (widget.conversationId != null && widget.conversationId!.isNotEmpty) {
       _resolvedConversationId = widget.conversationId;
-      _loadMessages();
-      _markRead();
+      // FASTFEED: Load cached messages instantly, then refresh from server
+      _loadFromCacheInstantly().then((_) {
+        if (mounted) {
+          _loadMessages();
+          _markRead();
+        }
+      });
     } else {
       _ensureConversationAndLoad();
+    }
+  }
+
+  /// INSTANT: Load cached messages (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    if (_resolvedConversationId == null) return;
+    try {
+      final records = await _firebaseMsgRepo.listFromCache(_resolvedConversationId!);
+      if (records.isNotEmpty && mounted) {
+        final mapped = records.map(_toUiMessage).toList();
+        setState(() {
+          _messages.clear();
+          _messages.addAll(mapped);
+          for (final r in records) {
+            if ((r.reaction ?? '').isNotEmpty) {
+              _messageReactions[r.id] = r.reaction!;
+            } else if ((r.myReaction ?? '').isNotEmpty) {
+              _messageReactions[r.id] = r.myReaction!;
+            }
+          }
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (_) {
+      // Cache miss - will load from server
     }
   }
 
@@ -164,27 +243,23 @@ Future<void> _handleUnblock() async {
 
   Future<void> _loadMessages() async {
     try {
-      setState(() {
-        _isLoading = true;
-        _loadError = null;
-        _messages.clear();
-        _messageReactions.clear();
-      });
+      // Only show loading if we don't have cached messages
+      if (_messages.isEmpty) {
+        setState(() {
+          _isLoading = true;
+          _loadError = null;
+        });
+      }
       if (_resolvedConversationId == null) return;
       
-      debugPrint('💬 [Chat] Loading messages for conversation: $_resolvedConversationId');
       final records = await _msgRepo.list(_resolvedConversationId!);
-      debugPrint('💬 [Chat] Loaded ${records.length} messages from repository');
-      
-      for (var i = 0; i < records.length; i++) {
-        debugPrint('💬 [Chat] Message $i: id=${records[i].id}, type=${records[i].type}, text="${records[i].text}"');
-      }
-      
       final mapped = records.map(_toUiMessage).toList();
-      debugPrint('💬 [Chat] Mapped to ${mapped.length} UI messages');
       
+      if (!mounted) return;
       setState(() {
+        _messages.clear();
         _messages.addAll(mapped);
+        _messageReactions.clear();
         for (final r in records) {
           if ((r.reaction ?? '').isNotEmpty) {
             _messageReactions[r.id] = r.reaction!;
@@ -196,7 +271,6 @@ Future<void> _handleUnblock() async {
       });
       _scrollToBottom();
     } catch (e) {
-      debugPrint('💬 [Chat] Error loading messages: $e');
       if (!mounted) return;
       setState(() {
         _isLoading = false;
@@ -236,10 +310,21 @@ Future<void> _refreshMessages() async {
     final mapped = records.map(_toUiMessage).toList();
 
     if (!mounted) return;
+    
+    // Smart merge: Keep optimistic (temp_) messages until server data replaces them
+    // This prevents flicker when sending messages
+    final tempMessages = _messages.where((m) => m.id.startsWith('temp_')).toList();
+    final serverIds = mapped.map((m) => m.id).toSet();
+    
     setState(() {
-      _messages
-        ..clear()
-        ..addAll(mapped);
+      _messages.clear();
+      _messages.addAll(mapped);
+      // Re-add temp messages that aren't yet on server (still sending)
+      for (final temp in tempMessages) {
+        if (!serverIds.contains(temp.id)) {
+          _messages.add(temp);
+        }
+      }
       _messageReactions.clear();
       for (final r in records) {
         if ((r.reaction ?? '').isNotEmpty) {
@@ -271,9 +356,6 @@ void dispose() {
 }
 
   Message _toUiMessage(MessageRecordModel r) {
-    debugPrint('💬 [Chat] Converting message to UI: ${r.id}');
-    debugPrint('💬 [Chat] Message type: ${r.type}, text: "${r.text}"');
-    
     final isFromCurrentUser = r.senderId != widget.otherUser.id;
     String? senderAvatar = isFromCurrentUser ? null : widget.otherUser.avatarUrl;
 
@@ -393,11 +475,22 @@ void dispose() {
         replyToMessageId: optimisticMsg.replyTo?.messageId,
       );
       
-      // Remove temp message and refresh with real message
-      setState(() {
-        _messages.removeWhere((m) => m.id == tempId);
-      });
+      // FASTFEED: Notify conversation list instantly
+      ConversationUpdateNotifier().notifyMessageSent(
+        conversationId: convId,
+        messageText: content,
+        messageType: 'text',
+      );
+      
+      // Refresh to get the real message - keep optimistic until refresh completes
+      // The refresh will replace all messages including the temp one
       await _refreshMessages();
+      // Remove temp message only after refresh (in case real message has different ID)
+      if (mounted) {
+        setState(() {
+          _messages.removeWhere((m) => m.id == tempId);
+        });
+      }
     } catch (e) {
       // Remove failed message
       setState(() {
@@ -434,85 +527,144 @@ void dispose() {
   }
 
   Future<void> _sendVoiceMessage(VoiceRecordingResult recording) async {
-    try {
-      // Upload to Firebase Storage
-      final uid = fb.FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) throw Exception('User not authenticated');
-
-      String audioUrl;
-      int sizeBytes;
-      String contentType;
-
-      if (kIsWeb) {
-        // Get recorded bytes from web recorder singleton
-        final bytes = await ( _audioRecorder as dynamic ).takeRecordedBytes() as Uint8List?;
-        if (bytes == null || bytes.isEmpty) {
-          throw Exception('No recorded audio');
-        }
-        final path = _storageRepo.generateUniqueFileName(
-          uid: uid,
-          extension: 'webm',
-          prefix: 'voice_messages',
-        );
-        contentType = 'audio/webm';
-        audioUrl = await _storageRepo
-            .uploadFile(
-          path: path,
-          bytes: bytes,
-          contentType: contentType,
-        )
-            .timeout(const Duration(seconds: 20));
-        sizeBytes = bytes.length;
-      } else {
-        if (recording.filePath == null) {
-          throw Exception('Recording file path is null');
-        }
-        final file = File(recording.filePath!);
-        if (!await file.exists()) {
-          throw Exception('Recording file not found');
-        }
-        final path = _storageRepo.generateUniqueFileName(
-          uid: uid,
-          extension: 'm4a',
-          prefix: 'voice_messages',
-        );
-        contentType = 'audio/m4a';
-        audioUrl = await _storageRepo
-            .uploadFileFromPath(
-          path: path,
-          file: file,
-          contentType: contentType,
-        )
-            .timeout(const Duration(seconds: 20));
-        // Clean up temp file
-        try { await file.delete(); } catch (_) {}
-        sizeBytes = recording.fileSize;
-      }
-
-      final convId = await _requireConversationId();
-      final record = await _msgRepo
-          .sendVoice(
-        conversationId: convId,
-        otherUserId: null,
-        audioUrl: audioUrl,
-        durationSec: recording.duration.inSeconds,
-        fileSize: sizeBytes,
-        replyToMessageId: _replyToMessage?.id,
-      )
-          .timeout(const Duration(seconds: 15));
-
-      final msg = _toUiMessage(record);
-      setState(() {
-        _messages.add(msg);
-        _replyToMessage = null;
-      });
-      _scrollToBottom();
-      // Force instant refresh
-      await _refreshMessages();
-    } catch (e) {
-      if (!mounted) return;
-      _showSnack('Failed to send voice message: $e');
+    final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      _showSnack('User not authenticated');
+      return;
     }
+    
+    // OPTIMISTIC UI: Show voice message immediately
+    final tempId = 'temp_voice_${DateTime.now().millisecondsSinceEpoch}';
+    final durationSec = recording.duration.inSeconds;
+    final optimisticMsg = Message(
+      id: tempId,
+      senderId: uid,
+      senderName: 'You',
+      senderAvatar: null,
+      content: '',
+      type: MessageType.voice,
+      attachments: [
+        MediaAttachment(
+          id: 'temp_att',
+          url: recording.filePath ?? 'uploading',
+          type: MediaType.voice,
+          duration: recording.duration,
+          fileSize: recording.fileSize,
+        ),
+      ],
+      timestamp: DateTime.now(),
+      status: MessageStatus.sending,
+      isFromCurrentUser: true,
+      replyTo: _replyToMessage != null
+          ? ReplyTo(
+              messageId: _replyToMessage!.id,
+              senderName: _replyToMessage!.senderName,
+              content: _replyToMessage!.content,
+              type: _replyToMessage!.type,
+            )
+          : null,
+    );
+    
+    setState(() {
+      _messages.add(optimisticMsg);
+      _replyToMessage = null;
+    });
+    _scrollToBottom();
+    
+    // Get conversation ID early for notification
+    String? convId;
+    try {
+      convId = await _requireConversationId();
+    } catch (_) {}
+    
+    // FASTFEED: Notify conversation list instantly
+    if (convId != null) {
+      ConversationUpdateNotifier().notifyMessageSent(
+        conversationId: convId,
+        messageText: '🎤 Voice message',
+        messageType: 'voice',
+      );
+    }
+    
+    // BACKGROUND: Upload and save message
+    () async {
+      try {
+        String audioUrl;
+        int sizeBytes;
+        String contentType;
+
+        if (kIsWeb) {
+          final bytes = await (_audioRecorder as dynamic).takeRecordedBytes() as Uint8List?;
+          if (bytes == null || bytes.isEmpty) {
+            throw Exception('No recorded audio');
+          }
+          // Get actual extension from recorder (may be m4a on Safari, webm on Chrome)
+          final ext = (_audioRecorder as dynamic).currentExtension as String? ?? 'webm';
+          final path = _storageRepo.generateUniqueFileName(
+            uid: uid,
+            extension: ext,
+            prefix: 'voice_messages',
+          );
+          // Set content type based on extension
+          contentType = ext == 'm4a' || ext == 'aac' ? 'audio/mp4' : 'audio/webm';
+          audioUrl = await _storageRepo.uploadFile(
+            path: path,
+            bytes: bytes,
+            contentType: contentType,
+          );
+          sizeBytes = bytes.length;
+          debugPrint('📤 Uploaded web voice as .$ext');
+        } else {
+          if (recording.filePath == null) {
+            throw Exception('Recording file path is null');
+          }
+          final file = File(recording.filePath!);
+          if (!await file.exists()) {
+            throw Exception('Recording file not found');
+          }
+          final path = _storageRepo.generateUniqueFileName(
+            uid: uid,
+            extension: 'm4a',
+            prefix: 'voice_messages',
+          );
+          contentType = 'audio/m4a';
+          audioUrl = await _storageRepo.uploadFileFromPath(
+            path: path,
+            file: file,
+            contentType: contentType,
+          );
+          sizeBytes = recording.fileSize;
+          // Clean up temp file
+          try { await file.delete(); } catch (_) {}
+        }
+
+        final cId = convId ?? await _requireConversationId();
+        await _msgRepo.sendVoice(
+          conversationId: cId,
+          otherUserId: null,
+          audioUrl: audioUrl,
+          durationSec: durationSec,
+          fileSize: sizeBytes,
+          replyToMessageId: optimisticMsg.replyTo?.messageId,
+        );
+
+        // Remove temp message and refresh to get the real one
+        if (mounted) {
+          setState(() {
+            _messages.removeWhere((m) => m.id == tempId);
+          });
+          await _refreshMessages();
+        }
+      } catch (e) {
+        // Remove failed optimistic message
+        if (mounted) {
+          setState(() {
+            _messages.removeWhere((m) => m.id == tempId);
+          });
+          _showSnack('Failed to send voice message: $e');
+        }
+      }
+    }();
   }
 
   void _scrollToBottom() {
@@ -803,10 +955,18 @@ void dispose() {
         final isImage = MediaCompressionService.isImage(nameOrPath);
 
         if (kIsWeb) {
-          // Web: Compress images only (video compression not supported on web)
+          // Web: Compress images + generate thumbnails
           if (isImage) {
-            debugPrint('🖼️ Compressing image before sending: $nameOrPath');
             final originalBytes = await mediaFile.readAsBytes();
+            
+            // Generate thumbnail in parallel with compression
+            final thumbFuture = compressionService.generateFeedThumbnailFromBytes(
+              bytes: originalBytes,
+              filename: nameOrPath,
+              maxSize: 400,
+              quality: 60,
+            );
+            
             final compressedBytes = await compressionService.compressImageBytes(
               bytes: originalBytes,
               filename: nameOrPath,
@@ -815,9 +975,18 @@ void dispose() {
               minHeight: 1920,
             );
             
+            final thumbBytes = await thumbFuture;
             final bytes = compressedBytes ?? originalBytes;
             fileSize = bytes.length;
-            url = await profileApi.uploadBytes(bytes, ext: ext);
+            
+            // Upload full + thumbnail in parallel
+            final fullUpload = profileApi.uploadBytes(bytes, ext: ext);
+            final thumbUpload = thumbBytes != null 
+                ? profileApi.uploadBytes(thumbBytes, ext: 'jpg', contentType: 'image/jpeg')
+                : Future.value('');
+            final results = await Future.wait([fullUpload, thumbUpload]);
+            url = results[0];
+            if (results[1].isNotEmpty) thumbUrl = results[1];
           } else {
             // Video on web - upload without compression
             final bytes = await mediaFile.readAsBytes();
@@ -826,9 +995,18 @@ void dispose() {
             url = await profileApi.uploadBytes(bytes, ext: ext, contentType: ct);
           }
         } else {
-          // Mobile: Compress both images and videos
+          // Mobile: Compress both images and videos + generate thumbnails
           if (isImage) {
-            debugPrint('🖼️ Compressing image before sending: $nameOrPath');
+            final originalBytes = await mediaFile.readAsBytes();
+            
+            // Generate thumbnail (400px) in parallel with compression
+            final thumbFuture = compressionService.generateFeedThumbnailFromBytes(
+              bytes: originalBytes,
+              filename: nameOrPath,
+              maxSize: 400,
+              quality: 60,
+            );
+            
             final compressedBytes = await compressionService.compressImage(
               filePath: mediaFile.path,
               quality: 92,
@@ -836,13 +1014,26 @@ void dispose() {
               minHeight: 1920,
             );
             
+            final thumbBytes = await thumbFuture;
+            
             if (compressedBytes != null) {
               fileSize = compressedBytes.length;
-              url = await profileApi.uploadBytes(compressedBytes, ext: ext);
+              // Upload full image + thumbnail in parallel
+              final fullUpload = profileApi.uploadBytes(compressedBytes, ext: ext);
+              final thumbUpload = thumbBytes != null 
+                  ? profileApi.uploadBytes(thumbBytes, ext: 'jpg', contentType: 'image/jpeg')
+                  : Future.value('');
+              final results = await Future.wait([fullUpload, thumbUpload]);
+              url = results[0];
+              if (results[1].isNotEmpty) thumbUrl = results[1];
             } else {
               final file = File(mediaFile.path);
               fileSize = await file.length();
               url = await profileApi.uploadFile(file);
+              // Upload thumbnail if available
+              if (thumbBytes != null) {
+                thumbUrl = await profileApi.uploadBytes(thumbBytes, ext: 'jpg', contentType: 'image/jpeg');
+              }
             }
           } else if (isVideo) {
             debugPrint('🎥 Compressing video before sending: $nameOrPath');
@@ -912,6 +1103,13 @@ void dispose() {
         _replyToMessage = null;
       });
       _scrollToBottom();
+      
+      // FASTFEED: Notify conversation list instantly
+      ConversationUpdateNotifier().notifyMessageSent(
+        conversationId: convId,
+        messageText: caption.isNotEmpty ? caption : '📷 Media',
+        messageType: attachments.first['type'] ?? 'image',
+      );
 
       if (!mounted) return;
       _hideSnack();
@@ -1251,9 +1449,10 @@ void dispose() {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
-              child: widget.otherUser.avatarUrl != null
+              child: (_hydratedAvatarUrl ?? widget.otherUser.avatarUrl) != null &&
+                      (_hydratedAvatarUrl ?? widget.otherUser.avatarUrl)!.isNotEmpty
                   ? CachedNetworkImage(
-                      imageUrl: widget.otherUser.avatarUrl!,
+                      imageUrl: (_hydratedAvatarUrl ?? widget.otherUser.avatarUrl)!,
                       width: 40,
                       height: 40,
                       fit: BoxFit.cover,
@@ -1270,18 +1469,45 @@ void dispose() {
                           size: 20,
                         ),
                       ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFBFAE01).withValues(alpha: 51),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Center(
+                          child: Text(
+                            (_hydratedName ?? widget.otherUser.name).isNotEmpty
+                                ? (_hydratedName ?? widget.otherUser.name)[0].toUpperCase()
+                                : 'U',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFBFAE01),
+                            ),
+                          ),
+                        ),
+                      ),
                     )
                   : Container(
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF666666).withValues(alpha: 51),
+                        color: const Color(0xFFBFAE01).withValues(alpha: 51),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Icon(
-                        Icons.person,
-                        color: Color(0xFF666666),
-                        size: 20,
+                      child: Center(
+                        child: Text(
+                          (_hydratedName ?? widget.otherUser.name).isNotEmpty
+                              ? (_hydratedName ?? widget.otherUser.name)[0].toUpperCase()
+                              : 'U',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFBFAE01),
+                          ),
+                        ),
                       ),
                     ),
             ),
@@ -1291,7 +1517,7 @@ void dispose() {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.otherUser.name,
+                    _hydratedName ?? widget.otherUser.name,
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../repositories/interfaces/podcast_repository.dart';
+import '../repositories/firebase/firebase_podcast_repository.dart';
 import 'podcasts_home_page.dart';
 import 'podcast_details_page.dart';
 import 'player_page.dart';
@@ -18,43 +19,68 @@ class _PodcastsCategoriesPageState extends State<PodcastsCategoriesPage> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _cats = [];
+  
+  // FASTFEED: Direct repository access for cache-first loading
+  final FirebasePodcastRepository _firebasePodcastRepo = FirebasePodcastRepository();
 
   @override
   void initState() {
     super.initState();
+    // FASTFEED: Load cached categories instantly, then refresh
+    _loadFromCacheInstantly();
     _load();
   }
 
+  /// INSTANT: Load cached podcasts and extract categories (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final podcasts = await _firebasePodcastRepo.listPodcastsFromCache(
+        limit: 500,
+        isPublished: true,
+      );
+      if (podcasts.isNotEmpty && mounted) {
+        final categoryList = _buildCategoryList(podcasts);
+        setState(() {
+          _cats = categoryList;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
+  }
+
+  List<Map<String, dynamic>> _buildCategoryList(List<PodcastModel> podcasts) {
+    final categoryMap = <String, int>{};
+    for (final podcast in podcasts) {
+      final category = podcast.category?.trim() ?? '';
+      if (category.isNotEmpty) {
+        final categories = category.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty);
+        for (final cat in categories) {
+          categoryMap[cat] = (categoryMap[cat] ?? 0) + 1;
+        }
+      }
+    }
+    return categoryMap.entries
+        .map((e) => {'category': e.key, 'count': e.value})
+        .toList()
+      ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+  }
+
   Future<void> _load() async {
-    setState(() => _loading = true);
+    // Only show loading if we don't have cached data
+    if (_cats.isEmpty) {
+      setState(() => _loading = true);
+    }
     try {
       final podcastRepo = context.read<PodcastRepository>();
-      
-      // Fetch all published podcasts
       final podcasts = await podcastRepo.listPodcasts(
         page: 1,
-        limit: 1000, // Get all podcasts to count categories
+        limit: 1000,
         isPublished: true,
       );
       
-      // Aggregate categories and count
-      final categoryMap = <String, int>{};
-      for (final podcast in podcasts) {
-        final category = podcast.category?.trim() ?? '';
-        if (category.isNotEmpty) {
-          // Handle multi-category (comma-separated)
-          final categories = category.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty);
-          for (final cat in categories) {
-            categoryMap[cat] = (categoryMap[cat] ?? 0) + 1;
-          }
-        }
-      }
-      
-      // Convert to list and sort by count
-      final categoryList = categoryMap.entries
-          .map((e) => {'category': e.key, 'count': e.value})
-          .toList()
-        ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+      final categoryList = _buildCategoryList(podcasts);
       
       setState(() {
         _cats = categoryList;
@@ -62,10 +88,12 @@ class _PodcastsCategoriesPageState extends State<PodcastsCategoriesPage> {
         _error = null;
       });
     } catch (e) {
-      setState(() {
-        _error = 'Failed to load categories: $e';
-        _loading = false;
-      });
+      if (_cats.isEmpty) {
+        setState(() {
+          _error = 'Failed to load categories: $e';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -361,9 +389,10 @@ class _CategoryPodcastsPageState extends State<CategoryPodcastsPage> {
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: AspectRatio(
                     aspectRatio: 1,
-                    child: (podcast.coverUrl ?? '').isNotEmpty
+                    // FASTFEED: Use listCoverUrl (thumbnail) for fast list loading
+                    child: (podcast.listCoverUrl ?? '').isNotEmpty
                         ? Image.network(
-                            podcast.coverUrl!,
+                            podcast.listCoverUrl!,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                               color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),

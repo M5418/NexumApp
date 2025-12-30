@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../repositories/interfaces/book_repository.dart';
+import '../repositories/firebase/firebase_book_repository.dart';
 import 'book_details_page.dart';
 import 'create_book_page.dart';
 import 'book_search_page.dart';
@@ -18,6 +19,7 @@ class Book {
   final String? author;
   final String? description;
   final String? coverUrl;
+  final String? coverThumbUrl; // Small thumbnail for fast list loading
   final String? epubUrl;
   final String? pdfUrl;
   final String? audioUrl;
@@ -43,6 +45,7 @@ class Book {
     this.author,
     this.description,
     this.coverUrl,
+    this.coverThumbUrl,
     this.epubUrl,
     this.pdfUrl,
     this.audioUrl,
@@ -62,6 +65,9 @@ class Book {
     this.meFavorite = false,
   });
 
+  /// Get the best URL for list display (thumbnail if available, else full)
+  String? get listCoverUrl => coverThumbUrl ?? coverUrl;
+
   factory Book.fromModel(BookModel m) {
     return Book(
       id: m.id,
@@ -69,6 +75,7 @@ class Book {
       author: m.author,
       description: m.description,
       coverUrl: m.coverUrl,
+      coverThumbUrl: m.coverThumbUrl,
       epubUrl: m.epubUrl,
       pdfUrl: m.pdfUrl,
       audioUrl: m.audioUrl,
@@ -100,6 +107,9 @@ class BooksHomePage extends StatefulWidget {
 class _BooksHomePageState extends State<BooksHomePage> {
   final GlobalKey<NavigatorState> _rightNavKey = GlobalKey<NavigatorState>();
   late BookRepository _bookRepo;
+  
+  // FASTFEED: Direct repository access for cache-first loading
+  final FirebaseBookRepository _firebaseBookRepo = FirebaseBookRepository();
 
   String _selectedLanguage = 'All';
   bool _hasInitializedLanguage = false;
@@ -120,8 +130,28 @@ class _BooksHomePageState extends State<BooksHomePage> {
   void initState() {
     super.initState();
     _bookRepo = context.read<BookRepository>();
+    // FASTFEED: Load cached books instantly, then refresh
+    _loadFromCacheInstantly();
     _fetchBooks(reset: true);
     _controller.addListener(_onScroll);
+  }
+
+  /// INSTANT: Load cached books (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final models = await _firebaseBookRepo.listBooksFromCache(
+        limit: 20,
+        isPublished: true,
+      );
+      if (models.isNotEmpty && mounted) {
+        setState(() {
+          _books = models.map(Book.fromModel).toList();
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
   }
   
   @override
@@ -455,9 +485,10 @@ class _BooksHomePageState extends State<BooksHomePage> {
                                                       child: SizedBox(
                                                         width: 80,
                                                         height: 140,
-                                                        child: (b.coverUrl ?? '').isNotEmpty
+                                                        // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
+                                                        child: (b.listCoverUrl ?? '').isNotEmpty
                                                             ? Image.network(
-                                                                b.coverUrl!,
+                                                                b.listCoverUrl!,
                                                                 fit: BoxFit.cover,
                                                                 errorBuilder: (ctx, error, stackTrace) => Container(
                                                                   color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
@@ -789,9 +820,10 @@ class _BooksHomePageState extends State<BooksHomePage> {
                                 child: SizedBox(
                                   width: 80,
                                   height: 140,
-                                  child: b.coverUrl != null && b.coverUrl!.isNotEmpty
+                                  // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
+                                  child: b.listCoverUrl != null && b.listCoverUrl!.isNotEmpty
                                       ? Image.network(
-                                          b.coverUrl!,
+                                          b.listCoverUrl!,
                                           fit: BoxFit.cover,
                                           errorBuilder: (ctx, error, stackTrace) => Container(
                                             color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),

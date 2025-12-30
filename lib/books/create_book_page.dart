@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:pdfx/pdfx.dart';
 import '../core/files_api.dart';
 import '../repositories/interfaces/book_repository.dart';
+import '../services/media_compression_service.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../core/admin_config.dart';
 import '../data/interest_domains.dart';
@@ -81,10 +82,13 @@ class _CreateBookPageState extends State<CreateBookPage> {
 
   // Uploaded URLs
   String? _coverUrl;
+  String? _coverThumbUrl; // Small thumbnail for fast list loading
   String? _pdfUrl;
   String? _audioUrl;
 
   bool _saving = false;
+  
+  final MediaCompressionService _compressionService = MediaCompressionService();
 
   @override
   void dispose() {
@@ -344,13 +348,43 @@ class _CreateBookPageState extends State<CreateBookPage> {
       final navContext = context;
       final filesApi = FilesApi();
 
-      // Cover upload
-      if (_coverFile != null) {
-        final up = await filesApi.uploadFile(_coverFile!);
-        _coverUrl = up['url'];
-      } else if (_coverBytes != null) {
-        final up = await filesApi.uploadBytes(_coverBytes!, ext: _coverExt ?? 'jpg');
-        _coverUrl = up['url'];
+      // FASTFEED: Cover upload with compression + thumbnail generation in parallel
+      if (_coverFile != null || _coverBytes != null) {
+        final originalBytes = _coverFile != null 
+            ? await _coverFile!.readAsBytes()
+            : _coverBytes!;
+        
+        // Compress cover + generate thumbnail in parallel
+        final compressFuture = _compressionService.compressImageBytes(
+          bytes: originalBytes,
+          filename: 'cover.${_coverExt ?? 'jpg'}',
+          quality: 85,
+          minWidth: 1200,
+          minHeight: 1600,
+        );
+        
+        final thumbFuture = _compressionService.generateFeedThumbnailFromBytes(
+          bytes: originalBytes,
+          filename: 'cover.${_coverExt ?? 'jpg'}',
+          maxSize: 300,
+          quality: 60,
+        );
+        
+        final results = await Future.wait([compressFuture, thumbFuture]);
+        final compressedBytes = results[0] ?? originalBytes;
+        final thumbBytes = results[1];
+        
+        // Upload cover + thumbnail in parallel
+        final coverUpload = filesApi.uploadBytes(compressedBytes, ext: _coverExt ?? 'jpg');
+        final thumbUpload = thumbBytes != null 
+            ? filesApi.uploadBytes(thumbBytes, ext: 'jpg')
+            : Future.value(<String, dynamic>{'url': ''});
+        
+        final uploadResults = await Future.wait([coverUpload, thumbUpload]);
+        _coverUrl = uploadResults[0]['url'];
+        if ((uploadResults[1]['url'] ?? '').toString().isNotEmpty) {
+          _coverThumbUrl = uploadResults[1]['url'];
+        }
       }
 
       // PDF upload
@@ -378,6 +412,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
         author: _authorCtrl.text.trim(),
         description: _descCtrl.text.trim(),
         coverUrl: _coverUrl!,
+        coverThumbUrl: _coverThumbUrl,
         pdfUrl: (_pdfUrl ?? '').isEmpty ? null : _pdfUrl,
         audioUrl: (_audioUrl ?? '').isEmpty ? null : _audioUrl,
         language: _language,

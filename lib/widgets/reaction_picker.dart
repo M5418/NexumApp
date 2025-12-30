@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:animated_emoji/animated_emoji.dart';
 import '../models/post.dart';
 
 class ReactionPicker extends StatelessWidget {
@@ -57,29 +58,29 @@ class ReactionPicker extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _ReactionButton(
-                  icon: Icons.workspace_premium,
+                _AnimatedReactionButton(
+                  emoji: AnimatedEmojis.gemStone,
                   reactionType: ReactionType.diamond,
                   isSelected: currentReaction == ReactionType.diamond,
                   onTap: () => onReactionSelected(ReactionType.diamond),
                 ),
-                const SizedBox(width: 12),
-                _ReactionButton(
-                  icon: Icons.thumb_up_alt_outlined,
+                const SizedBox(width: 8),
+                _AnimatedReactionButton(
+                  emoji: AnimatedEmojis.thumbsUp,
                   reactionType: ReactionType.like,
                   isSelected: currentReaction == ReactionType.like,
                   onTap: () => onReactionSelected(ReactionType.like),
                 ),
-                const SizedBox(width: 12),
-                _ReactionButton(
-                  icon: Icons.favorite_border,
+                const SizedBox(width: 8),
+                _AnimatedReactionButton(
+                  emoji: AnimatedEmojis.redHeart,
                   reactionType: ReactionType.heart,
                   isSelected: currentReaction == ReactionType.heart,
                   onTap: () => onReactionSelected(ReactionType.heart),
                 ),
-                const SizedBox(width: 12),
-                _ReactionButton(
-                  icon: Icons.emoji_emotions_outlined,
+                const SizedBox(width: 8),
+                _AnimatedReactionButton(
+                  emoji: AnimatedEmojis.astonished,
                   reactionType: ReactionType.wow,
                   isSelected: currentReaction == ReactionType.wow,
                   onTap: () => onReactionSelected(ReactionType.wow),
@@ -93,14 +94,14 @@ class ReactionPicker extends StatelessWidget {
   }
 }
 
-class _ReactionButton extends StatelessWidget {
-  final IconData icon;
+class _AnimatedReactionButton extends StatelessWidget {
+  final AnimatedEmojiData emoji;
   final ReactionType reactionType;
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _ReactionButton({
-    required this.icon,
+  const _AnimatedReactionButton({
+    required this.emoji,
     required this.reactionType,
     required this.isSelected,
     required this.onTap,
@@ -112,7 +113,7 @@ class _ReactionButton extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           color: isSelected
               ? const Color(0xFFBFAE01).withValues(alpha: 0.2)
@@ -122,11 +123,15 @@ class _ReactionButton extends StatelessWidget {
         child: AnimatedScale(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
-          scale: isSelected ? 1.12 : 1.0,
-          child: Icon(
-            icon,
-            size: 24,
-            color: isSelected ? const Color(0xFFBFAE01) : const Color(0xFF666666),
+          scale: isSelected ? 1.15 : 1.0,
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: AnimatedEmoji(
+              emoji,
+              size: 32,
+              repeat: true,
+            ),
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'widgets/story_ring.dart' as story_widget;
 import 'widgets/post_card.dart';
+import 'widgets/post_skeleton.dart';
 import 'widgets/badge_icon.dart';
 import 'widgets/animated_navbar.dart';
 import 'widgets/share_bottom_sheet.dart';
@@ -19,9 +20,9 @@ import 'post_page.dart';
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_comment_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
-import 'repositories/interfaces/user_repository.dart';
 import 'repositories/models/post_model.dart';
 import 'repositories/interfaces/story_repository.dart';
+import 'repositories/firebase/firebase_story_repository.dart';
 import 'repositories/interfaces/bookmark_repository.dart';
 import 'repositories/models/bookmark_model.dart';
 import 'models/post.dart';
@@ -37,9 +38,9 @@ import 'podcasts/podcasts_home_page.dart';
 import 'books/books_home_page.dart';
 import 'mentorship/mentorship_home_page.dart';
 import 'video_scroll_page.dart';
+import 'livestream/livestream_list_page.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:firebase_storage/firebase_storage.dart' as fs;
 import 'repositories/firebase/firebase_notification_repository.dart';
 import 'repositories/interfaces/block_repository.dart';
 import 'core/post_events.dart';
@@ -57,6 +58,7 @@ class HomeFeedPage extends StatefulWidget {
 class _HomeFeedPageState extends State<HomeFeedPage> {
   int _selectedNavIndex = 0;
   List<Post> _posts = [];
+  bool _isInitialLoading = true; // Show skeletons on first load
   List<StoryRingModel> _storyRings = [];
   List<Map<String, dynamic>> _suggestedUsers = [];
   int _conversationsInitialTabIndex = 0; // 0: Chats, 1: Communities
@@ -93,22 +95,22 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   @override
   void initState() {
     super.initState();
-    // Load critical data first, then load secondary data in parallel
+    // ULTRA-FAST: Load cached posts INSTANTLY, then refresh
     () async {
-      // Load user ID first (required for everything else)
-      await _loadCurrentUserId();
+      // 1. INSTANT: Show cached posts immediately (no await on user ID)
+      await _loadFromCacheInstantly();
       
-      // Load everything else in parallel
-      await Future.wait([
-        _loadBlockedUsers(),
-        _loadFeedPrefs(),
-        _loadUnreadCount(),
-      ]);
-      
-      // Load feed data (depends on blocked users and prefs)
-      await _loadData();
-      
-      // Load suggested users in background (not critical)
+      // 2. PARALLEL: Load user ID + fresh posts + everything else simultaneously
+      _loadCurrentUserId();
+      _loadFreshPosts(); // Will update UI when ready
+      _loadBlockedUsers().then((_) {
+        if (mounted) setState(() => _posts = _applyFeedFilters(_posts));
+      });
+      _loadFeedPrefs().then((_) {
+        if (mounted) setState(() => _posts = _applyFeedFilters(_posts));
+      });
+      _loadUnreadCount();
+      _loadStoriesInBackground();
       _loadSuggestedUsers();
     }();
 
@@ -257,17 +259,36 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
-  Future<void> _loadData() async {
-    List<Post> posts = [];
-    // removed unused _myStoriesRing
-    final storyRepo = context.read<StoryRepository>();
-    List<StoryRingModel> rings = [];
-    String? errMsg;
+  /// INSTANT: Load from Firestore cache (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final models = await _postRepo.getFeedFromCache(limit: _postsPerPage);
+      if (models.isNotEmpty && mounted) {
+        // Only show posts that have complete author data (not "User" placeholder)
+        final postsWithValidData = models.where((m) => 
+          m.authorName != null && 
+          m.authorName!.isNotEmpty && 
+          m.authorName != 'User'
+        ).toList();
+        
+        if (postsWithValidData.isNotEmpty) {
+          final posts = _mapModelsToPostsFast(postsWithValidData);
+          setState(() {
+            _posts = posts;
+            _isInitialLoading = false; // Hide skeletons INSTANTLY
+          });
+        }
+        // If no valid posts in cache, keep showing skeletons until fresh data loads
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
+  }
 
+  /// BACKGROUND: Load fresh posts from server and update UI
+  Future<void> _loadFreshPosts() async {
     try {
       final models = await _postRepo.getFeed(limit: _postsPerPage);
-      
-      // Store last post for pagination
       if (models.isNotEmpty) {
         _lastPost = models.last;
         _hasMorePosts = models.length == _postsPerPage;
@@ -275,85 +296,317 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         _hasMorePosts = false;
       }
       
-      posts = await _mapModelsToPosts(models);
-      posts = await _hydrateReposts(posts);
-      posts = _applyFeedFilters(posts);
-    } catch (e) {
-      errMsg = 'Posts failed: ${_toError(e)}';
-    }
-
-    try {
-      rings = await storyRepo.getStoryRings();
-    } catch (e) {
-      final s = 'Stories failed: ${_toError(e)}';
-      errMsg = errMsg == null ? s : '$errMsg | $s';
-    }
-
-    // Sort rings into 3 sections: Your Story | Unseen | All Seen
-    if (_currentUserId != null) {
-      // Find user's ring if it exists
-      final myRingIndex = rings.indexWhere((r) => r.userId == _currentUserId);
-      StoryRingModel? myRing;
+      // Hydrate ALL author data BEFORE displaying (blocking) to avoid "User" flash
+      // This includes both regular posts AND original posts for reposts
+      final hydratedModels = await _hydrateAllAuthorData(models);
       
-      if (myRingIndex >= 0) {
-        // User has stories - remove from current position
-        myRing = rings.removeAt(myRingIndex);
-      } else {
-        // User has no stories - create empty ring
-        myRing = StoryRingModel(
-          userId: _currentUserId!,
-          userName: '',
-          userAvatar: null,
-          hasUnseen: false,
-          lastStoryAt: DateTime.now(),
-          thumbnailUrl: null,
-          storyCount: 0,
-          stories: const [],
+      final posts = _mapModelsToPostsFast(hydratedModels);
+      if (!mounted) return;
+      setState(() {
+        _posts = posts;
+        _isInitialLoading = false;
+      });
+      
+      // Prefetch next page in background
+      _prefetchNextBatch();
+    } catch (e) {
+      if (!mounted) return;
+      if (_posts.isEmpty) {
+        setState(() => _isInitialLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load posts: ${_toError(e)}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// BACKGROUND: Load stories without blocking posts
+  Future<void> _loadStoriesInBackground() async {
+    // FASTFEED: Load from cache first for instant display
+    await _loadStoriesFromCacheInstantly();
+    
+    // Then refresh from server
+    try {
+      final storyRepo = context.read<StoryRepository>();
+      var rings = await storyRepo.getStoryRings();
+      
+      rings = _sortStoryRings(rings);
+      
+      if (!mounted) return;
+      setState(() {
+        _storyRings = rings;
+      });
+    } catch (e) {
+      debugPrint('⚠️ [FastFeed] Stories failed: ${_toError(e)}');
+    }
+  }
+
+  /// INSTANT: Load cached stories (no network wait)
+  Future<void> _loadStoriesFromCacheInstantly() async {
+    try {
+      final storyRepo = context.read<StoryRepository>();
+      // Use the cache method if available (FirebaseStoryRepository)
+      if (storyRepo is FirebaseStoryRepository) {
+        var rings = await storyRepo.getStoryRingsFromCache();
+        if (rings.isNotEmpty && mounted) {
+          rings = _sortStoryRings(rings);
+          setState(() {
+            _storyRings = rings;
+          });
+        }
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
+  }
+
+  /// Sort story rings: Your Story | Unseen | All Seen
+  List<StoryRingModel> _sortStoryRings(List<StoryRingModel> rings) {
+    if (_currentUserId == null) return rings;
+    
+    final myRingIndex = rings.indexWhere((r) => r.userId == _currentUserId);
+    StoryRingModel? myRing;
+    
+    if (myRingIndex >= 0) {
+      myRing = rings.removeAt(myRingIndex);
+    } else {
+      myRing = StoryRingModel(
+        userId: _currentUserId!,
+        userName: '',
+        userAvatar: null,
+        hasUnseen: false,
+        lastStoryAt: DateTime.now(),
+        thumbnailUrl: null,
+        storyCount: 0,
+        stories: const [],
+      );
+    }
+    
+    final unseenRings = rings.where((r) => r.hasUnseen).toList();
+    final seenRings = rings.where((r) => !r.hasUnseen).toList();
+    return [myRing, ...unseenRings, ...seenRings];
+  }
+
+  /// BACKGROUND: Hydrate reposts without blocking first paint
+  Future<void> _hydrateRepostsInBackground() async {
+    if (_posts.isEmpty) return;
+    
+    // Find posts that need hydration (reposts with originalPostId)
+    final needsHydration = _posts.where((p) => 
+      p.isRepost && p.originalPostId != null && p.originalPostId!.isNotEmpty
+    ).toList();
+    
+    if (needsHydration.isEmpty) return;
+    
+    debugPrint('💧 [FastFeed] Hydrating ${needsHydration.length} reposts in background...');
+    
+    // Hydrate each repost and update UI incrementally
+    for (final repost in needsHydration) {
+      try {
+        final m = await _postRepo.getPost(repost.originalPostId!);
+        if (m == null || !mounted) continue;
+        
+        // Use fast conversion for original post (no N+1 queries)
+        final og = _toPostFast(m);
+        
+        // Update the repost with original content
+        setState(() {
+          _posts = _posts.map((p) {
+            if (p.id == repost.id) {
+              return p.copyWith(
+                authorId: og.authorId,
+                userName: og.userName,
+                userAvatarUrl: og.userAvatarUrl,
+                text: og.text,
+                mediaType: og.mediaType,
+                imageUrls: og.imageUrls,
+                videoUrl: og.videoUrl,
+                counts: og.counts,
+              );
+            }
+            return p;
+          }).toList();
+        });
+      } catch (_) {
+        // Skip failed hydrations
+      }
+    }
+    debugPrint('💧 [FastFeed] Repost hydration complete');
+  }
+
+  // Cache for hydrated original posts (used for reposts)
+  final Map<String, PostModel> _hydratedOriginalPosts = {};
+  final Map<String, Map<String, String>> _authorProfilesCache = {};
+
+  /// SYNC: Hydrate ALL author data before displaying (prevents "User" flash)
+  /// Handles both regular posts AND fetches original posts for reposts
+  Future<List<PostModel>> _hydrateAllAuthorData(List<PostModel> models) async {
+    final userRepo = FirebaseUserRepository();
+    
+    // Collect ALL author IDs we need (post authors + repost original authors)
+    final authorIds = <String>{};
+    final repostOriginalIds = <String>{};
+    
+    for (final m in models) {
+      // Always add the post author
+      if (m.authorName == null || m.authorName!.isEmpty || m.authorName == 'User') {
+        authorIds.add(m.authorId);
+      }
+      // Track reposts that need original post fetched
+      if (m.repostOf != null && m.repostOf!.isNotEmpty) {
+        repostOriginalIds.add(m.repostOf!);
+      }
+    }
+    
+    // Fetch original posts for reposts (to get their author IDs)
+    if (repostOriginalIds.isNotEmpty) {
+      await Future.wait(repostOriginalIds.map((postId) async {
+        if (_hydratedOriginalPosts.containsKey(postId)) return;
+        try {
+          final original = await _postRepo.getPost(postId);
+          if (original != null) {
+            _hydratedOriginalPosts[postId] = original;
+            // Add original author to fetch list if missing
+            if (original.authorName == null || original.authorName!.isEmpty || original.authorName == 'User') {
+              authorIds.add(original.authorId);
+            }
+          }
+        } catch (_) {}
+      }));
+    }
+    
+    // Fetch ALL author profiles in parallel
+    if (authorIds.isNotEmpty) {
+      debugPrint('💧 [FastFeed] Hydrating ${authorIds.length} authors before display...');
+      await Future.wait(authorIds.map((authorId) async {
+        if (_authorProfilesCache.containsKey(authorId)) return;
+        try {
+          final profile = await userRepo.getUserProfile(authorId);
+          if (profile != null) {
+            final fn = profile.firstName?.trim() ?? '';
+            final ln = profile.lastName?.trim() ?? '';
+            final fullName = (fn.isNotEmpty || ln.isNotEmpty)
+                ? '$fn $ln'.trim()
+                : (profile.displayName ?? profile.username ?? 'User');
+            _authorProfilesCache[authorId] = {
+              'name': fullName,
+              'avatarUrl': profile.avatarUrl ?? '',
+            };
+          }
+        } catch (_) {}
+      }));
+    }
+    
+    // Update models with fetched data
+    return models.map((m) {
+      var updated = m;
+      
+      // Update post author if needed
+      if ((m.authorName == null || m.authorName!.isEmpty || m.authorName == 'User') && 
+          _authorProfilesCache.containsKey(m.authorId)) {
+        final profile = _authorProfilesCache[m.authorId]!;
+        updated = updated.copyWith(
+          authorName: profile['name'],
+          authorAvatarUrl: profile['avatarUrl'],
         );
       }
       
-      // Separate remaining rings into unseen and all seen
-      final unseenRings = rings.where((r) => r.hasUnseen).toList();
-      final seenRings = rings.where((r) => !r.hasUnseen).toList();
-      
-      // Rebuild rings in order: Your Story -> Unseen -> All Seen
-      rings = [myRing, ...unseenRings, ...seenRings];
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _posts = posts;
-      _storyRings = rings;
-      _isLoadingMore = false;
-    });
-
-    if (errMsg != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errMsg, style: GoogleFonts.inter()),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+      return updated;
+    }).toList();
   }
+
+  /// BACKGROUND: Hydrate missing author names without blocking first paint
+  Future<void> _hydrateAuthorNamesInBackground() async {
+    if (_posts.isEmpty) return;
+    
+    // Find posts with missing author names (showing "User")
+    final needsHydration = _posts.where((p) => 
+      p.userName == 'User' || p.userName.isEmpty
+    ).toList();
+    
+    if (needsHydration.isEmpty) return;
+    
+    debugPrint('💧 [FastFeed] Hydrating ${needsHydration.length} author names in background...');
+    
+    // Batch fetch unique author IDs
+    final authorIds = needsHydration.map((p) => p.authorId).toSet().toList();
+    final authorProfiles = <String, Map<String, String>>{};
+    
+    final userRepo = FirebaseUserRepository();
+    for (final authorId in authorIds) {
+      try {
+        final profile = await userRepo.getUserProfile(authorId);
+        if (profile != null) {
+          final fn = profile.firstName?.trim() ?? '';
+          final ln = profile.lastName?.trim() ?? '';
+          final fullName = (fn.isNotEmpty || ln.isNotEmpty)
+              ? '$fn $ln'.trim()
+              : (profile.displayName ?? profile.username ?? 'User');
+          authorProfiles[authorId] = {
+            'name': fullName,
+            'avatarUrl': profile.avatarUrl ?? '',
+          };
+        }
+      } catch (_) {
+        // Skip failed lookups
+      }
+    }
+    
+    if (authorProfiles.isEmpty || !mounted) return;
+    
+    // Update posts with fetched author names
+    setState(() {
+      _posts = _posts.map((p) {
+        if ((p.userName == 'User' || p.userName.isEmpty) && authorProfiles.containsKey(p.authorId)) {
+          final profile = authorProfiles[p.authorId]!;
+          return p.copyWith(
+            userName: profile['name'],
+            userAvatarUrl: profile['avatarUrl'],
+          );
+        }
+        return p;
+      }).toList();
+    });
+    
+    debugPrint('💧 [FastFeed] Author name hydration complete');
+  }
+
+  // Legacy _loadData kept for refresh functionality
+  Future<void> _loadData() async {
+    await _loadFreshPosts();
+    _loadStoriesInBackground();
+  }
+
+  // Prefetched posts ready to display instantly
+  List<Post> _prefetchedPosts = [];
+  bool _isPrefetching = false;
 
   Future<void> _loadMorePosts() async {
     if (_isLoadingMore || !_hasMorePosts || _lastPost == null) return;
 
-    setState(() {
-      _isLoadingMore = true;
-    });
+    // If we have prefetched posts, use them instantly
+    if (_prefetchedPosts.isNotEmpty) {
+      setState(() {
+        _posts.addAll(_prefetchedPosts);
+        _prefetchedPosts = [];
+      });
+      // Prefetch next batch in background
+      _prefetchNextBatch();
+      return;
+    }
+
+    setState(() => _isLoadingMore = true);
 
     try {
-      debugPrint('📊 Loading more posts... (starting after: ${_lastPost!.id})');
       final models = await _postRepo.getFeed(
         limit: _postsPerPage,
         lastPost: _lastPost,
       );
-      debugPrint('📨 Fetched ${models.length} more posts');
 
       if (models.isEmpty) {
-        debugPrint('🏁 No more posts to load');
         if (!mounted) return;
         setState(() {
           _hasMorePosts = false;
@@ -362,32 +615,51 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         return;
       }
 
-      // Update last post for next pagination
       _lastPost = models.last;
       _hasMorePosts = models.length == _postsPerPage;
 
-      // Process new posts
-      var newPosts = await _mapModelsToPosts(models);
-      debugPrint('📬 Mapped ${newPosts.length} new posts');
-      newPosts = await _hydrateReposts(newPosts);
-      debugPrint('💧 Hydrated ${newPosts.length} new posts');
+      // FAST sync conversion - render immediately
+      var newPosts = _mapModelsToPostsFast(models);
       newPosts = _applyFeedFilters(newPosts);
-      debugPrint('🔍 After filters: ${newPosts.length} new posts');
 
       if (!mounted) return;
       setState(() {
         _posts.addAll(newPosts);
         _isLoadingMore = false;
       });
-      debugPrint('✅ Total posts in feed: ${_posts.length}');
-      debugPrint('📄 Has more posts: $_hasMorePosts');
-    } catch (e) {
-      debugPrint('❌ Error loading more posts: $e');
+      
+      // Prefetch next batch + hydrate reposts + author names in background
+      _prefetchNextBatch();
+      _hydrateRepostsInBackground();
+      _hydrateAuthorNamesInBackground();
+    } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _isLoadingMore = false;
-      });
+      setState(() => _isLoadingMore = false);
     }
+  }
+
+  /// Prefetch next page in background so it's ready instantly when user scrolls
+  Future<void> _prefetchNextBatch() async {
+    if (_isPrefetching || !_hasMorePosts || _lastPost == null) return;
+    _isPrefetching = true;
+    
+    try {
+      final models = await _postRepo.getFeed(
+        limit: _postsPerPage,
+        lastPost: _lastPost,
+      );
+      
+      if (models.isEmpty) {
+        _hasMorePosts = false;
+      } else {
+        _lastPost = models.last;
+        _hasMorePosts = models.length == _postsPerPage;
+        _prefetchedPosts = _applyFeedFilters(_mapModelsToPostsFast(models));
+      }
+    } catch (_) {
+      // Prefetch failed - will load on demand
+    }
+    _isPrefetching = false;
   }
 
   Future<void> _loadSuggestedUsers() async {
@@ -421,168 +693,128 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
-  // Fetch original posts for repost items when the backend didn't hydrate them.
-  Future<List<Post>> _hydrateReposts(List<Post> posts) async {
-    if (posts.isEmpty) return posts;
-    
-    // Process all reposts in parallel
-    final futures = <Future<Post>>[];
-    for (final p in posts) {
-      if (!p.isRepost || p.originalPostId == null || p.originalPostId!.isEmpty) {
-        futures.add(Future.value(p));
-        continue;
-      }
 
-      futures.add(() async {
-        try {
-          final m = await _postRepo.getPost(p.originalPostId!);
-          if (m == null) return p;
-          final og = await _toPost(m);
-          // Merge original post content but keep the repost metadata (repostedBy, etc.)
-          return p.copyWith(
-            authorId: og.authorId,  // Use original author's ID
-            userName: og.userName,
-            userAvatarUrl: og.userAvatarUrl,
-            text: og.text,
-            mediaType: og.mediaType,
-            imageUrls: og.imageUrls,
-            videoUrl: og.videoUrl,
-            counts: og.counts,
-            // Keep repostedBy from the original repost entry (p.repostedBy)
-          );
-        } catch (_) {
-          return p; // Return original on error
-        }
-      }());
-    }
 
-    return await Future.wait(futures);
+  /// FAST synchronous conversion using denormalized data
+  /// No async calls - uses authorName, authorAvatarUrl, mediaThumbs from post document
+  List<Post> _mapModelsToPostsFast(List<PostModel> models) {
+    return models.map((m) => _toPostFast(m)).toList();
   }
 
-  // Normalize storage URLs so UI can load images reliably
-  Future<String> _normalizeUrl(String u) async {
-    final s = u.trim();
-    if (s.isEmpty) return s;
-    // Auto-upgrade insecure http to https when possible
-    if (s.startsWith('http://')) {
-      final https = 'https://${s.substring('http://'.length)}';
-      return https;
-    }
-    // For firebase storage http URLs, resolve to a fresh tokened download URL
-    if (s.startsWith('https://') &&
-        (s.contains('firebasestorage.googleapis.com') ||
-         s.contains('firebasestorage.app') ||
-         s.contains('storage.googleapis.com'))) {
-      try {
-        return await fs.FirebaseStorage.instance.refFromURL(s).getDownloadURL();
-      } catch (_) {
-        // fallthrough
-      }
-      return s;
-    }
-    if (s.startsWith('http')) return s;
-    try {
-      if (s.startsWith('gs://')) {
-        return await fs.FirebaseStorage.instance.refFromURL(s).getDownloadURL();
-      }
-      // Treat as storage path like "uploads/uid/file.jpg"
-      return await fs.FirebaseStorage.instance.ref(s).getDownloadURL();
-    } catch (_) {
-      return s;
-    }
-  }
-
-  Future<List<String>> _normalizeUrls(List<String> urls) async {
-    // Parallelize URL normalization
-    final normalized = await Future.wait(
-      urls.map((u) => _normalizeUrl(u))
-    );
-    return normalized.where((n) => n.isNotEmpty).toList();
-  }
-
-  Future<Post> _toPost(PostModel m) async {
-    final uid = fb.FirebaseAuth.instance.currentUser?.uid;
-    
-    // Parallelize all async operations
-    final results = await Future.wait([
-      _userRepo.getUserProfile(m.authorId),
-      _normalizeUrls(m.mediaUrls),
-      if (uid != null) _postRepo.hasUserBookmarkedPost(postId: m.id, uid: uid) else Future.value(false),
-      if (uid != null) _postRepo.hasUserLikedPost(postId: m.id, uid: uid) else Future.value(false),
-    ]);
-    
-    final author = results[0] as UserProfile?;
-    final normUrls = results[1] as List<String>;
-    final isBookmarked = results[2] as bool;
-    final isLiked = results[3] as bool;
-    
-    // If this is a repost, get the reposter's info (the author of this repost entry)
-    RepostedBy? repostedBy;
-    if (m.repostOf != null && m.repostOf!.isNotEmpty) {
-      // Build full name for reposter
-      final repostFirstName = author?.firstName?.trim() ?? '';
-      final repostLastName = author?.lastName?.trim() ?? '';
-      final repostFullName = (repostFirstName.isNotEmpty || repostLastName.isNotEmpty)
-          ? '$repostFirstName $repostLastName'.trim()
-          : (author?.displayName ?? author?.username ?? 'User');
+  /// Convert PostModel to Post synchronously using denormalized data
+  /// Falls back to authorId if denormalized data is missing
+  /// For reposts, uses cached original post data
+  Post _toPostFast(PostModel m) {
+    // For reposts, use the original post's data
+    if (m.repostOf != null && m.repostOf!.isNotEmpty && _hydratedOriginalPosts.containsKey(m.repostOf)) {
+      final original = _hydratedOriginalPosts[m.repostOf]!;
       
-      repostedBy = RepostedBy(
-        userId: m.authorId,
-        userName: repostFullName,
-        userAvatarUrl: author?.avatarUrl ?? '',
-        actionType: 'reposted this',
-      );
+      // Get original author name from cache or original post
+      String origAuthorName = original.authorName ?? 'User';
+      String origAuthorAvatarUrl = original.authorAvatarUrl ?? '';
+      
+      if ((origAuthorName == 'User' || origAuthorName.isEmpty) && _authorProfilesCache.containsKey(original.authorId)) {
+        final profile = _authorProfilesCache[original.authorId]!;
+        origAuthorName = profile['name'] ?? 'User';
+        origAuthorAvatarUrl = profile['avatarUrl'] ?? '';
+      }
+      
+      // Get reposter name from cache
+      String reposterName = m.authorName ?? 'User';
+      String reposterAvatarUrl = m.authorAvatarUrl ?? '';
+      if ((reposterName == 'User' || reposterName.isEmpty) && _authorProfilesCache.containsKey(m.authorId)) {
+        final profile = _authorProfilesCache[m.authorId]!;
+        reposterName = profile['name'] ?? 'User';
+        reposterAvatarUrl = profile['avatarUrl'] ?? '';
+      }
+      
+      // Build the repost with original content
+      return _buildRepostFromOriginal(m, original, origAuthorName, origAuthorAvatarUrl, reposterName, reposterAvatarUrl);
     }
-
+    
+    // Regular post - use denormalized author data (no user query needed)
+    String authorName = m.authorName ?? 'User';
+    String authorAvatarUrl = m.authorAvatarUrl ?? '';
+    
+    // Check cache for author data
+    if ((authorName == 'User' || authorName.isEmpty) && _authorProfilesCache.containsKey(m.authorId)) {
+      final profile = _authorProfilesCache[m.authorId]!;
+      authorName = profile['name'] ?? 'User';
+      authorAvatarUrl = profile['avatarUrl'] ?? '';
+    }
+    
+    // Determine media type from mediaThumbs or mediaUrls
     MediaType mediaType;
     String? videoUrl;
     List<String> imageUrls;
     
-    if (normUrls.isEmpty) {
-      mediaType = MediaType.none;
-      videoUrl = null;
-      imageUrls = [];
-    } else {
-      // Check for video extensions (use contains to handle Firebase Storage query params)
-      final hasVideo = normUrls.any((u) {
+    if (m.mediaThumbs.isNotEmpty) {
+      // Use mediaThumbs for images (preferred - small thumbnails for fast feed)
+      // But use full mediaUrls for video playback
+      final hasVideo = m.mediaThumbs.any((t) => t.type == 'video');
+      if (hasVideo) {
+        mediaType = MediaType.video;
+        // Use full video URL for playback, not thumbnail
+        videoUrl = m.mediaUrls.firstWhere(
+          (u) {
+            final l = u.toLowerCase();
+            return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
+          },
+          orElse: () => m.mediaUrls.isNotEmpty ? m.mediaUrls.first : '',
+        );
+        imageUrls = [];
+      } else {
+        mediaType = m.mediaThumbs.length == 1 ? MediaType.image : MediaType.images;
+        videoUrl = null;
+        // Use thumbnails for images in feed (fast loading)
+        imageUrls = m.mediaThumbs.map((t) => t.thumbUrl).toList();
+      }
+    } else if (m.mediaUrls.isNotEmpty) {
+      // Fallback to mediaUrls (legacy posts without mediaThumbs)
+      final hasVideo = m.mediaUrls.any((u) {
         final l = u.toLowerCase();
-        // Use contains instead of endsWith to handle query parameters like ?alt=media&token=...
         return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
       });
       
       if (hasVideo) {
         mediaType = MediaType.video;
-        videoUrl = normUrls.firstWhere(
+        videoUrl = m.mediaUrls.firstWhere(
           (u) {
             final l = u.toLowerCase();
             return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
           },
-          orElse: () => normUrls.first,
+          orElse: () => m.mediaUrls.first,
         );
-        imageUrls = []; // Clear imageUrls for videos
+        imageUrls = [];
       } else {
-        mediaType = (normUrls.length == 1) ? MediaType.image : MediaType.images;
+        mediaType = m.mediaUrls.length == 1 ? MediaType.image : MediaType.images;
         videoUrl = null;
-        imageUrls = normUrls;
+        imageUrls = m.mediaUrls;
       }
+    } else {
+      mediaType = MediaType.none;
+      videoUrl = null;
+      imageUrls = [];
     }
+    
     int clamp(int v) => v < 0 ? 0 : v;
     
-    // Normalize avatar URL (still needs await but only one operation)
-    final avatarUrl = await _normalizeUrl(author?.avatarUrl ?? '');
-    
-    // Build full name from firstName and lastName
-    final firstName = author?.firstName?.trim() ?? '';
-    final lastName = author?.lastName?.trim() ?? '';
-    final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
-        ? '$firstName $lastName'.trim()
-        : (author?.displayName ?? author?.username ?? author?.email ?? 'User');
+    // Build repostedBy if this is a repost
+    RepostedBy? repostedBy;
+    if (m.repostOf != null && m.repostOf!.isNotEmpty) {
+      repostedBy = RepostedBy(
+        userId: m.authorId,
+        userName: authorName,
+        userAvatarUrl: authorAvatarUrl,
+        actionType: 'reposted this',
+      );
+    }
     
     return Post(
       id: m.id,
       authorId: m.authorId,
-      userName: fullName,
-      userAvatarUrl: avatarUrl,
+      userName: authorName,
+      userAvatarUrl: authorAvatarUrl,
       createdAt: m.createdAt,
       text: m.text,
       mediaType: mediaType,
@@ -595,18 +827,93 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         reposts: clamp(m.summary.reposts),
         bookmarks: clamp(m.summary.bookmarks),
       ),
-      userReaction: isLiked ? ReactionType.like : null,
-      isBookmarked: isBookmarked,
+      userReaction: null, // Will be checked lazily or on interaction
+      isBookmarked: false, // Will be checked lazily or on interaction
       isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
       repostedBy: repostedBy,
       originalPostId: m.repostOf,
     );
   }
 
-  Future<List<Post>> _mapModelsToPosts(List<PostModel> models) async {
-    // Parallelize post conversion
-    return await Future.wait(
-      models.map((m) => _toPost(m))
+  /// Build a Post from a repost using the original post's content
+  Post _buildRepostFromOriginal(
+    PostModel repost, 
+    PostModel original, 
+    String origAuthorName, 
+    String origAuthorAvatarUrl,
+    String reposterName,
+    String reposterAvatarUrl,
+  ) {
+    // Determine media type from original post
+    MediaType mediaType;
+    String? videoUrl;
+    List<String> imageUrls;
+    
+    if (original.mediaThumbs.isNotEmpty) {
+      final hasVideo = original.mediaThumbs.any((t) => t.type == 'video');
+      if (hasVideo) {
+        mediaType = MediaType.video;
+        videoUrl = original.mediaUrls.firstWhere(
+          (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
+          orElse: () => original.mediaUrls.isNotEmpty ? original.mediaUrls.first : '',
+        );
+        imageUrls = [];
+      } else {
+        mediaType = original.mediaThumbs.length == 1 ? MediaType.image : MediaType.images;
+        videoUrl = null;
+        imageUrls = original.mediaThumbs.map((t) => t.thumbUrl).toList();
+      }
+    } else if (original.mediaUrls.isNotEmpty) {
+      final hasVideo = original.mediaUrls.any((u) => 
+        u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov')
+      );
+      if (hasVideo) {
+        mediaType = MediaType.video;
+        videoUrl = original.mediaUrls.firstWhere(
+          (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
+          orElse: () => original.mediaUrls.first,
+        );
+        imageUrls = [];
+      } else {
+        mediaType = original.mediaUrls.length == 1 ? MediaType.image : MediaType.images;
+        videoUrl = null;
+        imageUrls = original.mediaUrls;
+      }
+    } else {
+      mediaType = MediaType.none;
+      videoUrl = null;
+      imageUrls = [];
+    }
+    
+    int clamp(int v) => v < 0 ? 0 : v;
+    
+    return Post(
+      id: repost.id,
+      authorId: original.authorId,
+      userName: origAuthorName,
+      userAvatarUrl: origAuthorAvatarUrl,
+      createdAt: repost.createdAt,
+      text: original.text,
+      mediaType: mediaType,
+      imageUrls: imageUrls,
+      videoUrl: videoUrl,
+      counts: PostCounts(
+        likes: clamp(original.summary.likes),
+        comments: clamp(original.summary.comments),
+        shares: clamp(original.summary.shares),
+        reposts: clamp(original.summary.reposts),
+        bookmarks: clamp(original.summary.bookmarks),
+      ),
+      userReaction: null,
+      isBookmarked: false,
+      isRepost: true,
+      repostedBy: RepostedBy(
+        userId: repost.authorId,
+        userName: reposterName,
+        userAvatarUrl: reposterAvatarUrl,
+        actionType: 'reposted this',
+      ),
+      originalPostId: repost.repostOf,
     );
   }
 
@@ -1319,6 +1626,10 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         Navigator.push(context,
             MaterialPageRoute(builder: (_) => const VideoScrollPage()));
       },
+      onLive: () {
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const LiveStreamListPage()));
+      },
     );
   }
 
@@ -1726,6 +2037,23 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   Widget _buildCenterFeedPanel(bool isDark) {
+    // Show skeleton placeholders during initial load
+    if (_isInitialLoading) {
+      return Container(
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: ListView.builder(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 24),
+          itemCount: 3,
+          itemBuilder: (context, index) => PostSkeleton(isDarkMode: isDark),
+        ),
+      );
+    }
+    
     // Calculate item count including loading and end indicators
     int itemCount = _posts.length;
     if (_isLoadingMore) itemCount++;
@@ -2194,34 +2522,46 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             ),
           ),
 
-          // Feed as a sliver list so it scrolls together with the header
-          SliverPadding(
-            padding: const EdgeInsets.only(top: 10, bottom: 20),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                return PostCard(
-                  post: _posts[index],
-                  onReactionChanged: _onReactionChanged,
-                  onBookmarkToggle: _onBookmarkToggle,
-                  onShare: _onShare,
-                  onComment: _onComment,
-                  onRepost: _onRepost,
-                  onTap: (postId) async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PostPage(postId: postId),
-                      ),
-                    );
-                    // Refresh feed after returning from post page
-                    await _loadData();
-                  },
-                  isDarkMode: isDark,
-                  currentUserId: _currentUserId,
-                );
-              }, childCount: _posts.length),
+          // Show skeleton placeholders during initial load for perceived < 1s
+          if (_isInitialLoading)
+            SliverPadding(
+              padding: const EdgeInsets.only(top: 10, bottom: 20),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => PostSkeleton(isDarkMode: isDark),
+                  childCount: 3, // Show 3 skeleton cards
+                ),
+              ),
+            )
+          else
+            // Feed as a sliver list so it scrolls together with the header
+            SliverPadding(
+              padding: const EdgeInsets.only(top: 10, bottom: 20),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  return PostCard(
+                    post: _posts[index],
+                    onReactionChanged: _onReactionChanged,
+                    onBookmarkToggle: _onBookmarkToggle,
+                    onShare: _onShare,
+                    onComment: _onComment,
+                    onRepost: _onRepost,
+                    onTap: (postId) async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PostPage(postId: postId),
+                        ),
+                      );
+                      // Refresh feed after returning from post page
+                      await _loadData();
+                    },
+                    isDarkMode: isDark,
+                    currentUserId: _currentUserId,
+                  );
+                }, childCount: _posts.length),
+              ),
             ),
-          ),
 
           // Loading indicator for pagination
           if (_isLoadingMore)

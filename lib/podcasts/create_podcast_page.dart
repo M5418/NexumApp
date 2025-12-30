@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../core/files_api.dart';
+import '../services/media_compression_service.dart';
 import '../data/interest_domains.dart';
 import '../repositories/interfaces/draft_repository.dart';
 import '../repositories/interfaces/podcast_repository.dart';
@@ -28,12 +29,15 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   final _tagsCtrl = TextEditingController();
 
   String? _coverUrl;
+  String? _coverThumbUrl; // Small thumbnail for fast list loading
   String? _audioUrl;
   List<String> _selectedCategories = [];
 
   bool _creating = false;
   bool _uploadingCover = false;
   bool _uploadingAudio = false;
+  
+  final MediaCompressionService _compressionService = MediaCompressionService();
   bool _isEditingDraft = false;
   String? _draftId;
 
@@ -78,12 +82,48 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   Future<void> _pickCoverImage() async {
     try {
       final picker = ImagePicker();
-      final XFile? file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 2048);
+      final XFile? file = await picker.pickImage(source: ImageSource.gallery);
       if (file == null) return;
       setState(() => _uploadingCover = true);
-      final bytes = await file.readAsBytes();
-      final res = await FilesApi().uploadBytes(bytes, ext: _ext(file.name));
-      setState(() => _coverUrl = res['url']);
+      
+      final originalBytes = await file.readAsBytes();
+      final filesApi = FilesApi();
+      
+      // FASTFEED: Compress cover + generate thumbnail in parallel
+      final compressFuture = _compressionService.compressImageBytes(
+        bytes: originalBytes,
+        filename: file.name,
+        quality: 85,
+        minWidth: 1200,
+        minHeight: 1200,
+      );
+      
+      final thumbFuture = _compressionService.generateFeedThumbnailFromBytes(
+        bytes: originalBytes,
+        filename: file.name,
+        maxSize: 300,
+        quality: 60,
+      );
+      
+      final results = await Future.wait([compressFuture, thumbFuture]);
+      final compressedBytes = results[0] ?? originalBytes;
+      final thumbBytes = results[1];
+      
+      // Upload cover + thumbnail in parallel
+      final coverUpload = filesApi.uploadBytes(compressedBytes, ext: _ext(file.name));
+      final thumbUpload = thumbBytes != null 
+          ? filesApi.uploadBytes(thumbBytes, ext: 'jpg')
+          : Future.value(<String, dynamic>{'url': ''});
+      
+      final uploadResults = await Future.wait([coverUpload, thumbUpload]);
+      
+      setState(() {
+        _coverUrl = uploadResults[0]['url'];
+        if ((uploadResults[1]['url'] ?? '').toString().isNotEmpty) {
+          _coverThumbUrl = uploadResults[1]['url'];
+        }
+      });
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Cover uploaded', style: GoogleFonts.inter())),
@@ -230,6 +270,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
         author: _authorCtrl.text.trim(),
         description: _descCtrl.text.trim(),
         coverUrl: _coverUrl,
+        coverThumbUrl: _coverThumbUrl,
         audioUrl: _audioUrl,
         language: _languageCtrl.text.trim(),
         category: _selectedCategories.join(', '),

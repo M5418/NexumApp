@@ -18,6 +18,84 @@ class FirebaseStoryRepository implements StoryRepository {
 
   CollectionReference<Map<String, dynamic>> get _stories => _db.collection('stories');
   CollectionReference<Map<String, dynamic>> get _storyRings => _db.collection('story_rings');
+
+  // ========== FASTFEED: Cache-first methods ==========
+  
+  /// INSTANT: Get story rings from cache (no network wait)
+  Future<List<StoryRingModel>> getStoryRingsFromCache() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return [];
+    
+    try {
+      final snap = await _storyRings
+          .orderBy('lastStoryAt', descending: true)
+          .limit(50)
+          .get(const GetOptions(source: Source.cache));
+      
+      final rings = <StoryRingModel>[];
+      
+      for (final ringDoc in snap.docs) {
+        final d = ringDoc.data();
+        final userId = d['userId'].toString();
+        
+        // Get cached stories for this user
+        try {
+          final now = DateTime.now();
+          final stories = await _stories
+              .where('userId', isEqualTo: userId)
+              .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
+              .orderBy('expiresAt')
+              .orderBy('createdAt', descending: true)
+              .get(const GetOptions(source: Source.cache));
+          
+          if (stories.docs.isNotEmpty) {
+            final storyModels = stories.docs.map(_storyFromDoc).toList();
+            
+            rings.add(StoryRingModel(
+              userId: userId,
+              userName: (d['userName'] ?? 'User').toString(),
+              userAvatar: d['userAvatar']?.toString(),
+              hasUnseen: storyModels.any((s) => !s.viewed),
+              lastStoryAt: (d['lastStoryAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+              thumbnailUrl: d['thumbnailUrl']?.toString(),
+              storyCount: storyModels.length,
+              stories: storyModels,
+            ));
+          }
+        } catch (_) {
+          // Skip if stories cache miss
+        }
+      }
+      
+      return rings;
+    } catch (_) {
+      return []; // Cache miss
+    }
+  }
+
+  /// INSTANT: Get user stories from cache (no network wait)
+  Future<List<StoryModel>> getUserStoriesFromCache(String userId) async {
+    try {
+      final now = DateTime.now();
+      final snap = await _stories
+          .where('userId', isEqualTo: userId)
+          .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
+          .orderBy('expiresAt')
+          .orderBy('createdAt', descending: true)
+          .get(const GetOptions(source: Source.cache));
+      
+      return snap.docs.map(_storyFromDoc).toList();
+    } catch (_) {
+      return []; // Cache miss
+    }
+  }
+
+  /// INSTANT: Get my stories from cache (no network wait)
+  Future<List<StoryModel>> getMyStoriesFromCache() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return [];
+    return getUserStoriesFromCache(uid);
+  }
   
   StoryModel _storyFromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data() ?? {};

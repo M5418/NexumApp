@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'widgets/outlined_icon_button.dart';
 import 'widgets/connection_card.dart'; // used in mobile layout
+import 'widgets/connection_card_skeleton.dart';
 import 'widgets/message_invite_card.dart';
 import 'widgets/badge_icon.dart';
 import 'notification_page.dart';
@@ -21,6 +22,7 @@ import 'repositories/interfaces/podcast_repository.dart';
 import 'repositories/interfaces/follow_repository.dart';
 import 'core/profile_api.dart';
 import 'providers/follow_state.dart';
+import 'services/app_cache_service.dart';
 
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
@@ -110,12 +112,64 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
   
   // ⚡ OPTIMIZATION: Cache user profiles to avoid redundant fetches
   final Map<String, dynamic> _userProfileCache = {};
+  
+  // Global cache for instant display
+  late final AppCacheService _appCache;
 
   @override
   void initState() {
     super.initState();
+    _appCache = AppCacheService();
+    
+    // FASTFEED: Apply global cache instantly, then refresh in background
+    _applyCachedDataSync();
+    _appCache.addListener(_onCacheChanged);
+    
+    // Background refresh
     _loadUsers();
     _loadUnreadCount();
+  }
+  
+  void _onCacheChanged() {
+    if (!mounted) return;
+    _applyCachedDataSync();
+  }
+  
+  void _applyCachedDataSync() {
+    final currentUid = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (_appCache.isSuggestedUsersLoaded && _appCache.suggestedUsers.isNotEmpty) {
+      final mapped = _appCache.suggestedUsers
+          .where((p) => p.uid != currentUid)
+          .map((p) {
+            final name = (p.displayName ?? '').trim();
+            final uname = (p.username ?? '').trim();
+            final bio = (p.bio ?? '').trim();
+            final avatar = (p.avatarUrl ?? '').trim();
+            final cover = (p.coverUrl ?? '').trim();
+            return User(
+              id: p.uid,
+              fullName: name.isNotEmpty ? name : (uname.isNotEmpty ? uname : 'User'),
+              username: uname.startsWith('@') ? uname : '@$uname',
+              bio: bio,
+              avatarUrl: avatar,
+              coverUrl: cover,
+              isConnected: false,
+              theyConnectToYou: false,
+            );
+          }).toList();
+      
+      if (mapped.isNotEmpty) {
+        users = mapped;
+        _loading = false;
+        if (mounted) setState(() {});
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _appCache.removeListener(_onCacheChanged);
+    super.dispose();
   }
 
   // -----------------------------
@@ -510,9 +564,14 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                 )),
             const SizedBox(height: 12),
             Expanded(
-              child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2))
+              child: _loading && users.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: ConnectionGridSkeleton(
+                        count: 6,
+                        isDarkMode: isDark,
+                      ),
+                    )
                   : (_error != null)
                       ? Center(
                           child: Text(
@@ -527,8 +586,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 12,
                             childAspectRatio: 155 / 260,
                           ),
                           itemCount: users.length,
@@ -718,13 +777,13 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
         children: [
           RefreshIndicator(
             onRefresh: _loadUsers,
-            child: _loading
-                ? ListView(
-                    children: const [
-                      SizedBox(height: 200),
-                      Center(child: CircularProgressIndicator()),
-                      SizedBox(height: 200),
-                    ],
+            child: _loading && users.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: ConnectionGridSkeleton(
+                      count: 6,
+                      isDarkMode: isDark,
+                    ),
                   )
                 : Padding(
                     padding: const EdgeInsets.all(16),
@@ -732,8 +791,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 1,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 12,
                         childAspectRatio: 155 / 260,
                       ),
                       itemCount: users.length,

@@ -14,6 +14,7 @@ class ToolsOverlay {
     VoidCallback? onBooks,
     VoidCallback? onMentorship,
     VoidCallback? onVideos,
+    VoidCallback? onLive,
   }) {
     return showGeneralDialog(
       context: context,
@@ -67,6 +68,10 @@ class ToolsOverlay {
                     } else if (label == 'Videos') {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         onVideos?.call();
+                      });
+                    } else if (label == 'Live') {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        onLive?.call();
                       });
                     } else {
                       // Placeholder action for other tools

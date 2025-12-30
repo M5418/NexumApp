@@ -102,10 +102,94 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
         }
       });
     });
-    () async {
-      await _loadCurrentUserId();
-      await _loadVideoPosts();
-    }();
+    
+    // FASTFEED: Load cached videos instantly, then refresh
+    _loadCurrentUserId();
+    _loadFromCacheInstantly();
+    _loadVideoPosts();
+  }
+
+  /// INSTANT: Load cached video posts (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final models = await _postRepo.getFeedFromCache(limit: 50);
+      if (models.isEmpty || !mounted) return;
+      
+      // Filter for videos and convert fast
+      final videos = <Post>[];
+      for (final m in models) {
+        if (_isVideoPostSync(m)) {
+          videos.add(_toPostFast(m));
+          if (videos.length >= _videosPerPage) break;
+        }
+      }
+      
+      if (videos.isNotEmpty && mounted) {
+        setState(() {
+          _videoPosts = videos;
+        });
+        // Track first video view
+        if (videos.isNotEmpty) _trackVideoView(videos[0]);
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
+  }
+
+  /// FAST sync check if post has video (no async)
+  bool _isVideoPostSync(PostModel model) {
+    if (model.mediaUrls.isEmpty) return false;
+    return model.mediaUrls.any((u) {
+      final l = u.toLowerCase();
+      return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
+             l.contains('.avi') || l.contains('.mkv') ||
+             l.contains('/videos/') || l.contains('video_') ||
+             l.contains('video%2f') || l.contains('video/');
+    });
+  }
+
+  /// FAST: Convert PostModel to Post synchronously using denormalized data
+  Post _toPostFast(PostModel m) {
+    final authorName = m.authorName ?? 'User';
+    final authorAvatarUrl = m.authorAvatarUrl ?? '';
+    
+    String? videoUrl;
+    if (m.mediaUrls.isNotEmpty) {
+      videoUrl = m.mediaUrls.firstWhere(
+        (u) {
+          final l = u.toLowerCase();
+          return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
+                 l.contains('.avi') || l.contains('.mkv') ||
+                 l.contains('/videos/') || l.contains('video_') ||
+                 l.contains('video%2f') || l.contains('video/');
+        },
+        orElse: () => m.mediaUrls.first,
+      );
+    }
+    
+    return Post(
+      id: m.id,
+      authorId: m.authorId,
+      userName: authorName,
+      userAvatarUrl: authorAvatarUrl,
+      createdAt: m.createdAt,
+      text: m.text,
+      mediaType: MediaType.video,
+      imageUrls: m.mediaUrls,
+      videoUrl: videoUrl,
+      counts: PostCounts(
+        likes: m.summary.likes < 0 ? 0 : m.summary.likes,
+        comments: m.summary.comments < 0 ? 0 : m.summary.comments,
+        shares: m.summary.shares < 0 ? 0 : m.summary.shares,
+        reposts: m.summary.reposts < 0 ? 0 : m.summary.reposts,
+        bookmarks: m.summary.bookmarks < 0 ? 0 : m.summary.bookmarks,
+      ),
+      userReaction: null,
+      isBookmarked: false,
+      isRepost: m.repostOf != null && m.repostOf!.isNotEmpty,
+      repostedBy: null,
+      originalPostId: m.repostOf,
+    );
   }
 
   @override
@@ -1106,13 +1190,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
                     ),
                   ),
 
-                const SizedBox(height: 8),
-
-                // Video progress bar
-                if (post.videoUrl != null)
-                  (_videoPlayerKeys[post.videoUrl!]?.currentState
-                          ?.buildProgressBar() ??
-                      const SizedBox.shrink()),
+                // Progress bar is now handled internally by CustomVideoPlayer (shows on pause)
               ],
             ),
           ),

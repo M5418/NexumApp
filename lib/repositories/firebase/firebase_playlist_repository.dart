@@ -35,6 +35,23 @@ class FirebasePlaylistRepository implements PlaylistRepository {
     return snapshot.docs.map(_playlistFromDoc).toList();
   }
 
+  /// FAST: Get playlists from cache first (instant)
+  Future<List<PlaylistModel>> getUserPlaylistsFromCache() async {
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid == null) return [];
+
+      final snapshot = await _playlists
+          .where('userId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .get(const GetOptions(source: Source.cache));
+
+      return snapshot.docs.map(_playlistFromDoc).toList();
+    } catch (_) {
+      return []; // Cache miss
+    }
+  }
+
   @override
   Future<PlaylistModel?> getPlaylist(String playlistId) async {
     final doc = await _playlists.doc(playlistId).get();

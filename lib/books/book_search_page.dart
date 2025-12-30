@@ -238,9 +238,10 @@ class _BookSearchPageState extends State<BookSearchPage> {
                   child: SizedBox(
                     width: 80,
                     height: 140,
-                    child: (b.coverUrl ?? '').isNotEmpty
+                    // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
+                    child: (b.listCoverUrl ?? '').isNotEmpty
                         ? Image.network(
-                            b.coverUrl!,
+                            b.listCoverUrl!,
                             fit: BoxFit.cover,
                             errorBuilder: (ctx, _, __) => Container(
                               color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),

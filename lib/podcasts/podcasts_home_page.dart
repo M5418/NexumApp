@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../repositories/interfaces/podcast_repository.dart';
+import '../repositories/firebase/firebase_podcast_repository.dart';
 import '../core/i18n/language_provider.dart';
 import 'podcast_details_page.dart';
 import 'create_podcast_page.dart';
@@ -22,6 +23,7 @@ class Podcast {
   final String? author;
   final String? authorId;
   final String? coverUrl;
+  final String? coverThumbUrl; // Small thumbnail for fast list loading
   final String? audioUrl;
   final int? durationSec;
   final String? language;
@@ -42,6 +44,7 @@ class Podcast {
     this.author,
     this.authorId,
     this.coverUrl,
+    this.coverThumbUrl,
     this.audioUrl,
     this.durationSec,
     this.language,
@@ -56,6 +59,9 @@ class Podcast {
     this.meFavorite = false,
   });
 
+  /// Get the best URL for list display (thumbnail if available, else full)
+  String? get listCoverUrl => coverThumbUrl ?? coverUrl;
+
   factory Podcast.fromModel(PodcastModel m) {
     return Podcast(
       id: m.id,
@@ -63,6 +69,7 @@ class Podcast {
       author: m.author,
       authorId: m.authorId,
       coverUrl: m.coverUrl,
+      coverThumbUrl: m.coverThumbUrl,
       audioUrl: m.audioUrl,
       durationSec: m.durationSec,
       language: m.language,
@@ -100,13 +107,52 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
 
   String _selectedLanguage = 'All';
   bool _hasInitializedLanguage = false;
+  
+  // FASTFEED: Direct repository access for cache-first loading
+  final FirebasePodcastRepository _firebasePodcastRepo = FirebasePodcastRepository();
 
   @override
   void initState() {
     super.initState();
     _pickDomainSection();
+    // FASTFEED: Load cached podcasts instantly, then refresh
+    _loadFromCacheInstantly();
     _loadTop();
     _loadDomain();
+  }
+
+  /// INSTANT: Load cached podcasts (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      // Load top podcasts from cache
+      final topModels = await _firebasePodcastRepo.listPodcastsFromCache(
+        limit: 20,
+        isPublished: true,
+      );
+      if (topModels.isNotEmpty && mounted) {
+        setState(() {
+          _top = topModels.map(Podcast.fromModel).toList();
+          _loadingTop = false;
+        });
+      }
+      
+      // Load domain podcasts from cache
+      if (_domainCategoryParam != null) {
+        final domainModels = await _firebasePodcastRepo.listPodcastsFromCache(
+          limit: 20,
+          isPublished: true,
+          category: _domainCategoryParam,
+        );
+        if (domainModels.isNotEmpty && mounted) {
+          setState(() {
+            _domainItems = domainModels.map(Podcast.fromModel).toList();
+            _loadingDomain = false;
+          });
+        }
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
   }
   
   @override
@@ -504,9 +550,10 @@ class _HorizontalPodcastList extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     child: AspectRatio(
                       aspectRatio: 1,
-                      child: (p.coverUrl ?? '').isNotEmpty
+                      // FASTFEED: Use listCoverUrl (thumbnail) for fast list loading
+                      child: (p.listCoverUrl ?? '').isNotEmpty
                           ? Image.network(
-                              p.coverUrl!,
+                              p.listCoverUrl!,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) => Container(
                                 color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
@@ -690,9 +737,10 @@ class _AllPodcastsPageState extends State<AllPodcastsPage> {
                           child: SizedBox(
                             width: 110,
                             height: 120,
-                            child: (p.coverUrl ?? '').isNotEmpty
+                            // FASTFEED: Use listCoverUrl (thumbnail) for fast list loading
+                            child: (p.listCoverUrl ?? '').isNotEmpty
                                 ? Image.network(
-                                    p.coverUrl!,
+                                    p.listCoverUrl!,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => Container(
                                       color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),

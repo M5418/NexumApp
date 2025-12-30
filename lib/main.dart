@@ -5,7 +5,6 @@ import 'app_wrapper.dart';
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'firebase_options.dart';
 import 'repositories/interfaces/auth_repository.dart';
 import 'repositories/interfaces/storage_repository.dart';
@@ -49,6 +48,8 @@ import 'repositories/interfaces/translate_repository.dart';
 import 'repositories/interfaces/invitation_repository.dart';
 import 'repositories/interfaces/draft_repository.dart';
 import 'repositories/firebase/firebase_draft_repository.dart';
+import 'repositories/interfaces/livestream_repository.dart';
+import 'repositories/firebase/firebase_livestream_repository.dart';
 import 'repositories/interfaces/bookmark_repository.dart';
 import 'repositories/firebase/firebase_bookmark_repository.dart';
 import 'repositories/interfaces/block_repository.dart';
@@ -68,13 +69,6 @@ import 'providers/follow_state.dart';
 import 'config/cache_config.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Firebase App Check reCAPTCHA Enterprise site key
-// Pass via --dart-define when running:
-// flutter run -d chrome --dart-define=RECAPTCHA_ENTERPRISE_SITE_KEY=<your_key>
-const String kRecaptchaEnterpriseSiteKey = String.fromEnvironment(
-  'RECAPTCHA_ENTERPRISE_SITE_KEY',
-  defaultValue: '',
-);
 
 /// Sanity check: log Firebase configuration (dev only)
 void _sanityLogFirebase() {
@@ -123,20 +117,8 @@ Future<void> main() async {
   
   try {
     if (kIsWeb) {
-      // Web: Only activate when we have a reCAPTCHA key
-      if (kRecaptchaEnterpriseSiteKey.isNotEmpty) {
-        try {
-          await FirebaseAppCheck.instance.activate(
-            webProvider: ReCaptchaEnterpriseProvider(kRecaptchaEnterpriseSiteKey),
-          );
-          appCheckActivated = true;
-          debugPrint('✅ App Check activated with reCAPTCHA Enterprise (Web)');
-        } catch (e) {
-          debugPrint('⚠️ Web App Check failed (non-critical): $e');
-        }
-      } else {
-        debugPrint('ℹ️ App Check not activated on web (no reCAPTCHA key provided)');
-      }
+      // Web: App Check disabled (no reCAPTCHA configured)
+      debugPrint('ℹ️ App Check not activated on web (no reCAPTCHA configured)');
     } else {
       // Mobile: Careful activation with fallbacks
       if (kReleaseMode) {
@@ -271,6 +253,7 @@ class MyApp extends StatelessWidget {
         Provider<AnalyticsRepository>(create: (_) => FirebaseAnalyticsRepository()),
         Provider<SupportRepository>(create: (_) => FirebaseSupportRepository()),
         Provider<MonetizationRepository>(create: (_) => FirebaseMonetizationRepository()),
+        Provider<LiveStreamRepository>(create: (_) => FirebaseLiveStreamRepository()),
         ProxyProvider<MonetizationRepository, ContentAnalyticsService>(
           update: (context, monetizationRepo, previous) =>
               ContentAnalyticsService(monetizationRepo),

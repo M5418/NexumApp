@@ -84,10 +84,7 @@ class FirebaseConversationRepository implements ConversationRepository {
   Future<List<ConversationSummaryModel>> list({int limit = 50}) async {
     try {
       final u = _auth.currentUser;
-      if (u == null) {
-        
-        return [];
-      }
+      if (u == null) return [];
       
       final q = await _convs
           .where('participants', arrayContains: u.uid)
@@ -95,15 +92,27 @@ class FirebaseConversationRepository implements ConversationRepository {
           .limit(limit)
           .get();
 
-      final items = <ConversationSummaryModel>[];
-      for (final d in q.docs) {
-        items.add(_fromDoc(d, u.uid));
-      }
-      return items;
+      return q.docs.map((d) => _fromDoc(d, u.uid)).toList();
     } catch (e) {
-      
-      
       rethrow;
+    }
+  }
+
+  /// FAST: Get conversations from cache first (instant)
+  Future<List<ConversationSummaryModel>> listFromCache({int limit = 50}) async {
+    try {
+      final u = _auth.currentUser;
+      if (u == null) return [];
+      
+      final q = await _convs
+          .where('participants', arrayContains: u.uid)
+          .orderBy('lastMessageAt', descending: true)
+          .limit(limit)
+          .get(const GetOptions(source: Source.cache));
+
+      return q.docs.map((d) => _fromDoc(d, u.uid)).toList();
+    } catch (_) {
+      return []; // Cache miss
     }
   }
 

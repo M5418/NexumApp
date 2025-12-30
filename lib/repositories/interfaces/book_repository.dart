@@ -8,6 +8,7 @@ class BookModel {
   final String? authorId;
   final String? description;
   final String? coverUrl;
+  final String? coverThumbUrl; // Small thumbnail for fast list loading
   final String? epubUrl;
   final String? pdfUrl;
   final String? audioUrl;
@@ -35,6 +36,7 @@ class BookModel {
     this.authorId,
     this.description,
     this.coverUrl,
+    this.coverThumbUrl,
     this.epubUrl,
     this.pdfUrl,
     this.audioUrl,
@@ -139,6 +141,7 @@ abstract class BookRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? coverThumbUrl,
     String? epubUrl,
     String? pdfUrl,
     String? audioUrl,

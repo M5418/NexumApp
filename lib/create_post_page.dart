@@ -1,3 +1,4 @@
+import 'dart:io' show File;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -18,6 +19,7 @@ import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'services/media_compression_service.dart';
+import 'core/profile_api.dart';
 import '../responsive/responsive_breakpoints.dart';
 
 class CreatePostPage extends StatefulWidget {
@@ -1372,19 +1374,50 @@ class _CreatePostPageState extends State<CreatePostPage> {
         body,
       ].where((e) => e.isNotEmpty).join('\n\n');
 
-      // OPTIMISTIC UI: Create post immediately with placeholder media
       final hasMedia = _mediaItems.isNotEmpty;
-      final placeholderUrls = hasMedia 
-          ? List.generate(_mediaItems.length, (i) => 'uploading_$i')
-          : <String>[];
-      
-      // Get communityId if posting to a community
       final communityId = _selectedCommunities.isNotEmpty ? _selectedCommunities.first.id : null;
       
-      debugPrint('🚀 Creating post optimistically with ${_mediaItems.length} media items${communityId != null ? ' to community $communityId' : ''}');
+      List<String> mediaUrls = [];
+      List<String> thumbUrls = [];
+      
+      if (hasMedia) {
+        // FAST: Upload thumbnails first (small ~20-50KB each) for instant display
+        debugPrint('🖼️ Uploading thumbnails first for instant display...');
+        final compressionService = MediaCompressionService();
+        final profileApi = ProfileApi();
+        
+        final thumbFutures = _mediaItems.map((item) async {
+          try {
+            if (item.xfile != null) {
+              final bytes = await item.xfile!.readAsBytes();
+              final thumb = await compressionService.generateFeedThumbnailFromBytes(
+                bytes: bytes,
+                filename: item.xfile!.name,
+                maxSize: 400,
+                quality: 60,
+              );
+              if (thumb != null) {
+                final thumbUrl = await profileApi.uploadBytes(thumb, ext: 'jpg');
+                return thumbUrl;
+              }
+            }
+          } catch (e) {
+            debugPrint('⚠️ Thumbnail generation failed: $e');
+          }
+          return '';
+        }).toList();
+        
+        thumbUrls = await Future.wait(thumbFutures);
+        // Use thumbnails as placeholder media URLs for instant display
+        mediaUrls = thumbUrls.where((u) => u.isNotEmpty).toList();
+        debugPrint('✅ Thumbnails uploaded: ${mediaUrls.length}');
+      }
+      
+      debugPrint('🚀 Creating post with ${mediaUrls.length} thumbnails${communityId != null ? ' to community $communityId' : ''}');
       final postId = await _postRepo.createPost(
         text: content, 
-        mediaUrls: placeholderUrls,
+        mediaUrls: mediaUrls.isNotEmpty ? mediaUrls : null,
+        thumbUrls: thumbUrls.isNotEmpty ? thumbUrls : null,
         communityId: communityId,
       );
       debugPrint('✅ Post created with ID: $postId');
@@ -1400,9 +1433,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            hasMedia 
-                ? 'Post created! Media uploading in background...'
-                : Provider.of<LanguageProvider>(context, listen: false).t('create_post.posted'),
+            Provider.of<LanguageProvider>(context, listen: false).t('create_post.posted'),
             style: GoogleFonts.inter(),
           ),
           backgroundColor: const Color(0xFF4CAF50),
@@ -1410,12 +1441,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
         ),
       );
       
-      // Navigate back immediately (< 2 seconds!)
+      // Navigate back immediately
       Navigator.pop(context, true);
 
-      // Upload media in background if needed
+      // Upload full-resolution media in background and update post
       if (hasMedia) {
-        debugPrint('💾 Starting background upload for ${_mediaItems.length} items');
+        debugPrint('💾 Starting background upload for full-resolution media');
         _uploadMediaInBackground(postId, content, _mediaItems);
       }
 
@@ -1445,44 +1476,46 @@ class _CreatePostPageState extends State<CreatePostPage> {
       debugPrint('💾 Starting parallel upload of ${items.length} media items');
       
       // Upload all media in parallel for faster performance
+      // Returns {url, thumbUrl} for each item
       final uploadFutures = items.asMap().entries.map((entry) async {
         final i = entry.key;
         final item = entry.value;
         final xf = item.xfile;
         final path = item.path;
         
-        if (xf == null && (path == null || path.isEmpty)) return null;
+        if (xf == null && (path == null || path.isEmpty)) return <String, String>{};
 
-        String? url;
         if (xf != null) {
           debugPrint('💾 Uploading media ${i + 1}/${items.length}');
           final uploaded = await _uploadXFile(xf, item.type);
-          url = uploaded['url'];
-          debugPrint('✅ Media ${i + 1} uploaded: $url');
+          debugPrint('✅ Media ${i + 1} uploaded: ${uploaded['url']}');
+          return uploaded;
         } else if (path != null && path.startsWith('http')) {
-          url = path; // Already uploaded
+          return {'url': path, 'thumbUrl': path}; // Already uploaded
         }
 
-        return url;
+        return <String, String>{};
       }).toList();
       
       // Wait for all uploads to complete
-      final urls = await Future.wait(uploadFutures);
-      final mediaUrls = urls.whereType<String>().where((u) => u.isNotEmpty).toList();
+      final results = await Future.wait(uploadFutures);
+      final mediaUrls = results.map((r) => r['url'] ?? '').where((u) => u.isNotEmpty).toList();
+      final thumbUrls = results.map((r) => r['thumbUrl'] ?? r['url'] ?? '').where((u) => u.isNotEmpty).toList();
 
       if (mediaUrls.isEmpty) {
         debugPrint('⚠️ No media URLs to update');
         return;
       }
 
-      // Update post with real media URLs
-      debugPrint('🔄 Updating post with ${mediaUrls.length} real URLs');
+      // Update post with real media URLs and thumbnails
+      debugPrint('🔄 Updating post with ${mediaUrls.length} real URLs + ${thumbUrls.length} thumbs');
       await _postRepo.updatePost(
         postId: postId,
         text: text,
         mediaUrls: mediaUrls,
+        thumbUrls: thumbUrls,
       );
-      debugPrint('✅ Post updated successfully with real media');
+      debugPrint('✅ Post updated successfully with real media + thumbnails');
     } catch (e) {
       debugPrint('❌ Background upload failed: $e');
       // Optionally: could retry or notify user
@@ -1490,6 +1523,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   // Upload helper that works on web and mobile using XFile bytes
+  // Returns {'url': fullSizeUrl, 'thumbUrl': thumbnailUrl}
   Future<Map<String, String>> _uploadXFile(XFile file, MediaType type) async {
     final ext = _extensionOf(file.name);
     final compressionService = MediaCompressionService();
@@ -1499,10 +1533,20 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (type == MediaType.image) {
         debugPrint('🖼️ Compressing image before upload: ${file.name}');
         
-        // Compress image with high quality
+        final originalBytes = await file.readAsBytes();
+        
+        // Generate feed thumbnail (400px, 60% quality) - PARALLEL with compression
+        final thumbFuture = compressionService.generateFeedThumbnailFromBytes(
+          bytes: originalBytes,
+          filename: file.name,
+          maxSize: 400,
+          quality: 60,
+        );
+        
+        // Compress image with high quality for full view
         final compressedBytes = kIsWeb
             ? await compressionService.compressImageBytes(
-                bytes: await file.readAsBytes(),
+                bytes: originalBytes,
                 filename: file.name,
                 quality: 92,
                 minWidth: 1920,
@@ -1515,18 +1559,48 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 minHeight: 1920,
               );
         
+        // Wait for thumbnail
+        final thumbBytes = await thumbFuture;
+        
         if (compressedBytes == null) {
           debugPrint('⚠️ Compression failed, using original image');
-          final bytes = await file.readAsBytes();
-          final res = await FilesApi().uploadBytes(bytes, ext: ext);
-          return {'url': res['url'] ?? ''};
+          final res = await FilesApi().uploadBytes(originalBytes, ext: ext);
+          final url = res['url'] ?? '';
+          // Upload thumbnail if available
+          String thumbUrl = url;
+          if (thumbBytes != null) {
+            final thumbRes = await FilesApi().uploadBytes(thumbBytes, ext: ext);
+            thumbUrl = thumbRes['url'] ?? url;
+          }
+          return {'url': url, 'thumbUrl': thumbUrl};
         }
         
-        // Upload compressed image
-        final res = await FilesApi().uploadBytes(compressedBytes, ext: ext);
-        return {'url': res['url'] ?? ''};
+        // Upload compressed image + thumbnail in parallel
+        final fullUpload = FilesApi().uploadBytes(compressedBytes, ext: ext);
+        final thumbUpload = thumbBytes != null 
+            ? FilesApi().uploadBytes(thumbBytes, ext: ext)
+            : Future.value(<String, dynamic>{'url': ''});
+        
+        final results = await Future.wait([fullUpload, thumbUpload]);
+        final fullUrl = results[0]['url'] ?? '';
+        final thumbUrl = results[1]['url'] ?? fullUrl;
+        
+        debugPrint('✅ Uploaded: full=${(compressedBytes.length / 1024).toStringAsFixed(0)}KB, thumb=${thumbBytes != null ? (thumbBytes.length / 1024).toStringAsFixed(0) : 0}KB');
+        return {'url': fullUrl, 'thumbUrl': thumbUrl};
       } else if (type == MediaType.video && !kIsWeb) {
         debugPrint('🎥 Compressing video before upload: ${file.name}');
+        
+        // Generate video thumbnail for feed
+        File? thumbFile;
+        try {
+          thumbFile = await VideoCompress.getFileThumbnail(
+            file.path,
+            quality: 50,
+            position: -1, // Default position
+          );
+        } catch (_) {
+          // Thumbnail generation failed
+        }
         
         // Compress video (mobile only)
         final compressedFile = await compressionService.compressVideo(
@@ -1538,26 +1612,42 @@ class _CreatePostPageState extends State<CreatePostPage> {
           debugPrint('⚠️ Video compression failed, using original');
           final bytes = await file.readAsBytes();
           final res = await FilesApi().uploadBytes(bytes, ext: ext);
-          return {'url': res['url'] ?? ''};
+          final url = res['url'] ?? '';
+          // Upload video thumbnail if available
+          String thumbUrl = url;
+          if (thumbFile != null) {
+            final thumbBytes = await thumbFile.readAsBytes();
+            final thumbRes = await FilesApi().uploadBytes(thumbBytes, ext: 'jpg');
+            thumbUrl = thumbRes['url'] ?? url;
+          }
+          return {'url': url, 'thumbUrl': thumbUrl};
         }
         
-        // Upload compressed video
+        // Upload compressed video + thumbnail in parallel
         final compressedBytes = await compressedFile.readAsBytes();
-        final res = await FilesApi().uploadBytes(compressedBytes, ext: ext);
-        return {'url': res['url'] ?? ''};
+        final videoUpload = FilesApi().uploadBytes(compressedBytes, ext: ext);
+        final thumbUpload = thumbFile != null 
+            ? FilesApi().uploadBytes(await thumbFile.readAsBytes(), ext: 'jpg')
+            : Future.value(<String, dynamic>{'url': ''});
+        
+        final results = await Future.wait([videoUpload, thumbUpload]);
+        final videoUrl = results[0]['url'] ?? '';
+        final thumbUrl = results[1]['url'] ?? videoUrl;
+        
+        return {'url': videoUrl, 'thumbUrl': thumbUrl};
       } else {
         // Web video or unsupported type - upload original
         debugPrint('📤 Uploading without compression: ${file.name}');
         final bytes = await file.readAsBytes();
         final res = await FilesApi().uploadBytes(bytes, ext: ext);
-        return {'url': res['url'] ?? ''};
+        return {'url': res['url'] ?? '', 'thumbUrl': res['url'] ?? ''};
       }
     } catch (e) {
       debugPrint('❌ Error during compression/upload: $e');
       // Fallback to original upload
       final bytes = await file.readAsBytes();
       final res = await FilesApi().uploadBytes(bytes, ext: ext);
-      return {'url': res['url'] ?? ''};
+      return {'url': res['url'] ?? '', 'thumbUrl': res['url'] ?? ''};
     }
   }
 

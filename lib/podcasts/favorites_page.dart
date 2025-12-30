@@ -100,9 +100,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  (e.coverUrl ?? '').isNotEmpty
+                                  // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
+                                  (e.listCoverUrl ?? '').isNotEmpty
                                       ? CachedNetworkImage(
-                                          imageUrl: e.coverUrl!,
+                                          imageUrl: e.listCoverUrl!,
                                           fit: BoxFit.cover,
                                           memCacheWidth: 400,
                                           memCacheHeight: 400,

@@ -10,6 +10,7 @@
     "lint": "echo 'No lint configured'"
   },
   "dependencies": {
+    "agora-access-token": "^2.0.4",
     "firebase-admin": "^12.6.0",
     "firebase-functions": "^5.1.0"
   }

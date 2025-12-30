@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'models/post.dart';
 import 'repositories/interfaces/community_repository.dart';
 import 'repositories/interfaces/post_repository.dart';
+import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'repositories/models/post_model.dart';
 import 'community_post_page.dart';
@@ -54,9 +55,13 @@ class _CommunityPageState extends State<CommunityPage> {
   // Media items aggregated from posts
   final List<_CommunityMediaItem> _mediaItems = [];
 
+  // Prefetched posts for instant pagination
+  List<Post> _prefetchedPosts = [];
+  bool _isPrefetching = false;
+
   late CommunityRepository _commRepo;
   late PostRepository _postRepo;
-  final FirebaseUserRepository _userRepo = FirebaseUserRepository();
+  final FirebasePostRepository _firebasePostRepo = FirebasePostRepository();
 
   @override
   void initState() {
@@ -84,10 +89,75 @@ class _CommunityPageState extends State<CommunityPage> {
   }
 
   Future<void> _loadAll() async {
-    await Future.wait<void>([
-      _loadDetails(),
-      _loadPostsAndBuildMedia(),
-    ]);
+    // FASTFEED: Load cached posts instantly, then refresh
+    await _loadFromCacheInstantly();
+    
+    // Load fresh data in parallel (non-blocking)
+    _loadDetails();
+    _loadFreshPosts();
+  }
+
+  /// INSTANT: Load from Firestore cache (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final models = await _firebasePostRepo.getCommunityPostsFromCache(
+        communityId: widget.communityId,
+        limit: _postsPerPage,
+      );
+      if (models.isNotEmpty && mounted) {
+        final posts = _mapModelsToPostsFast(models);
+        setState(() {
+          _posts = posts;
+          _loadingPosts = false;
+        });
+        _buildMediaItems(posts);
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
+  }
+
+  /// BACKGROUND: Load fresh posts from server
+  Future<void> _loadFreshPosts() async {
+    try {
+      final models = await _postRepo.getCommunityPosts(
+        communityId: widget.communityId,
+        limit: _postsPerPage,
+      );
+      
+      if (models.isNotEmpty) {
+        _lastPost = models.last;
+        _hasMorePosts = models.length == _postsPerPage;
+      } else {
+        _hasMorePosts = false;
+      }
+      
+      final posts = _mapModelsToPostsFast(models);
+      if (!mounted) return;
+      setState(() {
+        _posts = posts;
+        _loadingPosts = false;
+      });
+      _buildMediaItems(posts);
+      
+      // Hydrate author names + prefetch next page in background
+      _hydrateAuthorNamesInBackground();
+      _prefetchNextBatch();
+    } catch (e) {
+      if (!mounted) return;
+      if (_posts.isEmpty) {
+        setState(() => _loadingPosts = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${Provider.of<LanguageProvider>(context, listen: false).t('community.posts_failed')}: ${_toError(e)}',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadDetails() async {
@@ -121,18 +191,15 @@ class _CommunityPageState extends State<CommunityPage> {
     }
   }
 
+  /// Refresh posts (used after creating/deleting posts)
   Future<void> _loadPostsAndBuildMedia() async {
-    setState(() {
-      _loadingPosts = true;
-    });
+    setState(() => _loadingPosts = true);
+    _prefetchedPosts = []; // Clear prefetch buffer on refresh
 
     try {
-      debugPrint('📊 Fetching initial community posts...');
       final models = await _postRepo.getCommunityPosts(
           communityId: widget.communityId, limit: _postsPerPage);
-      debugPrint('📨 Fetched ${models.length} community posts');
       
-      // Store last post for pagination
       if (models.isNotEmpty) {
         _lastPost = models.last;
         _hasMorePosts = models.length == _postsPerPage;
@@ -140,40 +207,19 @@ class _CommunityPageState extends State<CommunityPage> {
         _hasMorePosts = false;
       }
       
-      final list = await _mapModelsToPosts(models);
+      // FAST sync conversion
+      final list = _mapModelsToPostsFast(models);
       if (!mounted) return;
       setState(() {
         _posts = list;
+        _loadingPosts = false;
       });
-
-      // Build media list: all images and videos (exclude repost rows to avoid duplicates)
-      _mediaItems.clear();
-      for (final p in list) {
-        if (p.isRepost) continue; // exclude repost media to avoid duplicates
-        if (p.mediaType == MediaType.video && p.videoUrl != null) {
-          _mediaItems.add(_CommunityMediaItem(
-            postId: p.id,
-            url: p.videoUrl!,
-            isVideo: true,
-          ));
-        } else if (p.mediaType == MediaType.image && p.imageUrls.isNotEmpty) {
-          _mediaItems.add(_CommunityMediaItem(
-            postId: p.id,
-            url: p.imageUrls.first,
-            isVideo: false,
-          ));
-        } else if (p.mediaType == MediaType.images && p.imageUrls.isNotEmpty) {
-          for (final u in p.imageUrls) {
-            _mediaItems.add(_CommunityMediaItem(
-              postId: p.id,
-              url: u,
-              isVideo: false,
-            ));
-          }
-        }
-      }
+      _buildMediaItems(list);
+      _hydrateAuthorNamesInBackground();
+      _prefetchNextBatch();
     } catch (e) {
       if (!mounted) return;
+      setState(() => _loadingPosts = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -183,33 +229,46 @@ class _CommunityPageState extends State<CommunityPage> {
           backgroundColor: Colors.red,
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingPosts = false;
-        });
-      }
     }
   }
 
   Future<void> _loadMorePosts() async {
     if (_isLoadingMore || !_hasMorePosts || _lastPost == null) return;
 
-    setState(() {
-      _isLoadingMore = true;
-    });
+    // FASTFEED: If we have prefetched posts, use them instantly
+    if (_prefetchedPosts.isNotEmpty) {
+      final newPosts = _prefetchedPosts;
+      _prefetchedPosts = [];
+      setState(() {
+        _posts.addAll(newPosts);
+      });
+      // Add media items and prefetch next batch
+      for (final p in newPosts) {
+        if (p.isRepost) continue;
+        if (p.mediaType == MediaType.video && p.videoUrl != null) {
+          _mediaItems.add(_CommunityMediaItem(postId: p.id, url: p.videoUrl!, isVideo: true));
+        } else if (p.mediaType == MediaType.image && p.imageUrls.isNotEmpty) {
+          _mediaItems.add(_CommunityMediaItem(postId: p.id, url: p.imageUrls.first, isVideo: false));
+        } else if (p.mediaType == MediaType.images && p.imageUrls.isNotEmpty) {
+          for (final u in p.imageUrls) {
+            _mediaItems.add(_CommunityMediaItem(postId: p.id, url: u, isVideo: false));
+          }
+        }
+      }
+      _prefetchNextBatch();
+      return;
+    }
+
+    setState(() => _isLoadingMore = true);
 
     try {
-      debugPrint('📊 Loading more community posts... (starting after: ${_lastPost!.id})');
       final models = await _postRepo.getCommunityPosts(
         communityId: widget.communityId,
         limit: _postsPerPage,
         lastPost: _lastPost,
       );
-      debugPrint('📨 Fetched ${models.length} more community posts');
 
       if (models.isEmpty) {
-        debugPrint('🏁 No more community posts to load');
         if (!mounted) return;
         setState(() {
           _hasMorePosts = false;
@@ -218,13 +277,11 @@ class _CommunityPageState extends State<CommunityPage> {
         return;
       }
 
-      // Update last post for next pagination
       _lastPost = models.last;
       _hasMorePosts = models.length == _postsPerPage;
 
-      // Process new posts
-      final newPosts = await _mapModelsToPosts(models);
-      debugPrint('📬 Mapped ${newPosts.length} new community posts');
+      // FAST sync conversion
+      final newPosts = _mapModelsToPostsFast(models);
 
       if (!mounted) return;
       setState(() {
@@ -232,110 +289,230 @@ class _CommunityPageState extends State<CommunityPage> {
         _isLoadingMore = false;
       });
       
-      // Add new media items
+      // Add media items
       for (final p in newPosts) {
         if (p.isRepost) continue;
         if (p.mediaType == MediaType.video && p.videoUrl != null) {
-          _mediaItems.add(_CommunityMediaItem(
-            postId: p.id,
-            url: p.videoUrl!,
-            isVideo: true,
-          ));
+          _mediaItems.add(_CommunityMediaItem(postId: p.id, url: p.videoUrl!, isVideo: true));
         } else if (p.mediaType == MediaType.image && p.imageUrls.isNotEmpty) {
-          _mediaItems.add(_CommunityMediaItem(
-            postId: p.id,
-            url: p.imageUrls.first,
-            isVideo: false,
-          ));
+          _mediaItems.add(_CommunityMediaItem(postId: p.id, url: p.imageUrls.first, isVideo: false));
         } else if (p.mediaType == MediaType.images && p.imageUrls.isNotEmpty) {
           for (final u in p.imageUrls) {
-            _mediaItems.add(_CommunityMediaItem(
-              postId: p.id,
-              url: u,
-              isVideo: false,
-            ));
+            _mediaItems.add(_CommunityMediaItem(postId: p.id, url: u, isVideo: false));
           }
         }
       }
       
-      debugPrint('✅ Total community posts in feed: ${_posts.length}');
-      debugPrint('📄 Has more posts: $_hasMorePosts');
-    } catch (e) {
-      debugPrint('❌ Error loading more community posts: $e');
+      // Hydrate author names + prefetch next batch
+      _hydrateAuthorNamesInBackground();
+      _prefetchNextBatch();
+    } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _isLoadingMore = false;
-      });
+      setState(() => _isLoadingMore = false);
     }
   }
 
-  Future<Post> _toPost(PostModel m) async {
-    // Capture fallback user text before async gap
-    final fallbackUser = mounted ? Provider.of<LanguageProvider>(context, listen: false).t('community.user') : 'User';
+  /// FAST synchronous conversion using denormalized data (no async user lookups)
+  List<Post> _mapModelsToPostsFast(List<PostModel> models) {
+    return models.map((m) => _toPostFast(m)).toList();
+  }
+
+  /// BACKGROUND: Hydrate missing author names without blocking first paint
+  Future<void> _hydrateAuthorNamesInBackground() async {
+    if (_posts.isEmpty) return;
     
-    final author = await _userRepo.getUserProfile(m.authorId);
+    // Find posts with missing author names (showing "User")
+    final needsHydration = _posts.where((p) => 
+      p.userName == 'User' || p.userName.isEmpty
+    ).toList();
+    
+    if (needsHydration.isEmpty) return;
+    
+    // Batch fetch unique author IDs
+    final authorIds = needsHydration.map((p) => p.authorId).toSet().toList();
+    final authorProfiles = <String, Map<String, String>>{};
+    
+    final userRepo = FirebaseUserRepository();
+    for (final authorId in authorIds) {
+      try {
+        final profile = await userRepo.getUserProfile(authorId);
+        if (profile != null) {
+          final fn = profile.firstName?.trim() ?? '';
+          final ln = profile.lastName?.trim() ?? '';
+          final fullName = (fn.isNotEmpty || ln.isNotEmpty)
+              ? '$fn $ln'.trim()
+              : (profile.displayName ?? profile.username ?? 'User');
+          authorProfiles[authorId] = {
+            'name': fullName,
+            'avatarUrl': profile.avatarUrl ?? '',
+          };
+        }
+      } catch (_) {
+        // Skip failed lookups
+      }
+    }
+    
+    if (authorProfiles.isEmpty || !mounted) return;
+    
+    // Update posts with fetched author names
+    setState(() {
+      _posts = _posts.map((p) {
+        if ((p.userName == 'User' || p.userName.isEmpty) && authorProfiles.containsKey(p.authorId)) {
+          final profile = authorProfiles[p.authorId]!;
+          return p.copyWith(
+            userName: profile['name'],
+            userAvatarUrl: profile['avatarUrl'],
+          );
+        }
+        return p;
+      }).toList();
+    });
+  }
+
+  /// FAST: Convert PostModel to Post using denormalized data
+  Post _toPostFast(PostModel m) {
+    final authorName = m.authorName ?? 'User';
+    final authorAvatarUrl = m.authorAvatarUrl ?? '';
+    
     MediaType mediaType;
     String? videoUrl;
-    if (m.mediaUrls.isEmpty) {
-      mediaType = MediaType.none;
-      videoUrl = null;
-    } else {
+    List<String> imageUrls;
+    
+    if (m.mediaThumbs.isNotEmpty) {
+      // Use mediaThumbs for images (small thumbnails for fast feed)
+      // But use full mediaUrls for video playback
+      final hasVideo = m.mediaThumbs.any((t) => t.type == 'video');
+      if (hasVideo) {
+        mediaType = MediaType.video;
+        videoUrl = m.mediaUrls.firstWhere(
+          (u) {
+            final l = u.toLowerCase();
+            return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
+          },
+          orElse: () => m.mediaUrls.isNotEmpty ? m.mediaUrls.first : '',
+        );
+        imageUrls = [];
+      } else {
+        mediaType = m.mediaThumbs.length == 1 ? MediaType.image : MediaType.images;
+        videoUrl = null;
+        imageUrls = m.mediaThumbs.map((t) => t.thumbUrl).toList();
+      }
+    } else if (m.mediaUrls.isNotEmpty) {
+      // Fallback to mediaUrls (legacy posts)
       final hasVideo = m.mediaUrls.any((u) {
         final l = u.toLowerCase();
-        return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+        return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
       });
       if (hasVideo) {
         mediaType = MediaType.video;
         videoUrl = m.mediaUrls.firstWhere(
           (u) {
             final l = u.toLowerCase();
-            return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+            return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
           },
           orElse: () => m.mediaUrls.first,
         );
+        imageUrls = [];
       } else {
-        mediaType = (m.mediaUrls.length == 1) ? MediaType.image : MediaType.images;
+        mediaType = m.mediaUrls.length == 1 ? MediaType.image : MediaType.images;
         videoUrl = null;
+        imageUrls = m.mediaUrls;
       }
+    } else {
+      mediaType = MediaType.none;
+      videoUrl = null;
+      imageUrls = [];
     }
-    // Build full name from firstName and lastName
-    final firstName = author?.firstName?.trim() ?? '';
-    final lastName = author?.lastName?.trim() ?? '';
-    final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
-        ? '$firstName $lastName'.trim()
-        : (author?.displayName ?? author?.username ?? author?.email ?? fallbackUser);
+    
+    int clamp(int v) => v < 0 ? 0 : v;
+    
+    RepostedBy? repostedBy;
+    if (m.repostOf != null && m.repostOf!.isNotEmpty) {
+      repostedBy = RepostedBy(
+        userId: m.authorId,
+        userName: authorName,
+        userAvatarUrl: authorAvatarUrl,
+        actionType: 'reposted this',
+      );
+    }
     
     return Post(
       id: m.id,
       authorId: m.authorId,
-      userName: fullName,
-      userAvatarUrl: author?.avatarUrl ?? '',
+      userName: authorName,
+      userAvatarUrl: authorAvatarUrl,
       createdAt: m.createdAt,
       text: m.text,
       mediaType: mediaType,
-      imageUrls: m.mediaUrls,
+      imageUrls: imageUrls,
       videoUrl: videoUrl,
       counts: PostCounts(
-        likes: m.summary.likes,
-        comments: m.summary.comments,
-        shares: m.summary.shares,
-        reposts: m.summary.reposts,
-        bookmarks: m.summary.bookmarks,
+        likes: clamp(m.summary.likes),
+        comments: clamp(m.summary.comments),
+        shares: clamp(m.summary.shares),
+        reposts: clamp(m.summary.reposts),
+        bookmarks: clamp(m.summary.bookmarks),
       ),
       userReaction: null,
       isBookmarked: false,
       isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
-      repostedBy: null,
+      repostedBy: repostedBy,
       originalPostId: m.repostOf,
     );
   }
 
-  Future<List<Post>> _mapModelsToPosts(List<PostModel> models) async {
-    final out = <Post>[];
-    for (final m in models) {
-      out.add(await _toPost(m));
+  /// Build media items from posts for the Media tab
+  void _buildMediaItems(List<Post> posts) {
+    _mediaItems.clear();
+    for (final p in posts) {
+      if (p.isRepost) continue;
+      if (p.mediaType == MediaType.video && p.videoUrl != null) {
+        _mediaItems.add(_CommunityMediaItem(
+          postId: p.id,
+          url: p.videoUrl!,
+          isVideo: true,
+        ));
+      } else if (p.mediaType == MediaType.image && p.imageUrls.isNotEmpty) {
+        _mediaItems.add(_CommunityMediaItem(
+          postId: p.id,
+          url: p.imageUrls.first,
+          isVideo: false,
+        ));
+      } else if (p.mediaType == MediaType.images && p.imageUrls.isNotEmpty) {
+        for (final u in p.imageUrls) {
+          _mediaItems.add(_CommunityMediaItem(
+            postId: p.id,
+            url: u,
+            isVideo: false,
+          ));
+        }
+      }
     }
-    return out;
+  }
+
+  /// Prefetch next page in background for instant pagination
+  Future<void> _prefetchNextBatch() async {
+    if (_isPrefetching || !_hasMorePosts || _lastPost == null) return;
+    _isPrefetching = true;
+    
+    try {
+      final models = await _postRepo.getCommunityPosts(
+        communityId: widget.communityId,
+        limit: _postsPerPage,
+        lastPost: _lastPost,
+      );
+      
+      if (models.isEmpty) {
+        _hasMorePosts = false;
+      } else {
+        _lastPost = models.last;
+        _hasMorePosts = models.length == _postsPerPage;
+        _prefetchedPosts = _mapModelsToPostsFast(models);
+      }
+    } catch (_) {
+      // Prefetch failed - will load on demand
+    }
+    _isPrefetching = false;
   }
 
   String _toError(Object e) {

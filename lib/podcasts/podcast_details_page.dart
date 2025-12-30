@@ -106,11 +106,6 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
-    
-    // Debug logging
-    debugPrint('🎙️ [PodcastDetails] Podcast: ${podcast.title}');
-    debugPrint('🎙️ [PodcastDetails] Audio URL: ${podcast.audioUrl ?? "null"}');
-    debugPrint('🎙️ [PodcastDetails] Has audio: ${(podcast.audioUrl ?? '').isNotEmpty}');
 
     return Scaffold(
       backgroundColor: Colors.black,

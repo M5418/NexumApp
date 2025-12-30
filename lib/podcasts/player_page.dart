@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
 import 'add_to_playlist_sheet.dart';
@@ -139,17 +140,6 @@ class _PlayerPageState extends State<PlayerPage> {
     setState(() {});
   }
 
-  String _formatDuration(Duration d) {
-    final hours = d.inHours;
-    final minutes = d.inMinutes.remainder(60);
-    final secs = d.inSeconds.remainder(60);
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-    } else {
-      return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-    }
-  }
-
   void _sendProgress() {
     if (_position.inSeconds <= 0) return;
     // Placeholder: progress tracking will be handled elsewhere
@@ -165,10 +155,6 @@ class _PlayerPageState extends State<PlayerPage> {
     final coverMaxWidth = isWide ? 300.0 : double.infinity;
 
     final playing = _player.playerState.playing;
-    // Use actual duration, or podcast's durationSec, or 1 as last resort
-    final totalSeconds = _duration.inSeconds > 0 
-        ? _duration.inSeconds.toDouble() 
-        : (widget.podcast.durationSec ?? 1).toDouble();
 
     return Scaffold(
       backgroundColor: bg,
@@ -283,7 +269,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Progress bar with modern design
+                      // Progress bar with audio_video_progress_bar
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
@@ -298,82 +284,26 @@ class _PlayerPageState extends State<PlayerPage> {
                               ),
                           ],
                         ),
-                        child: Column(
-                          children: [
-                            // Modern progress bar
-                            Stack(
-                              children: [
-                                // Background track
-                                Container(
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                // Progress track with gradient
-                                FractionallySizedBox(
-                                  widthFactor: (_position.inSeconds.clamp(0, totalSeconds.toInt()) / totalSeconds).clamp(0.0, 1.0),
-                                  child: Container(
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                        colors: [Color(0xFFD4C100), Color(0xFFBFAE01)],
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFFBFAE01).withValues(alpha: 0.4),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                // Invisible slider for interaction
-                                SliderTheme(
-                                  data: SliderTheme.of(context).copyWith(
-                                    activeTrackColor: Colors.transparent,
-                                    inactiveTrackColor: Colors.transparent,
-                                    thumbColor: const Color(0xFFBFAE01),
-                                    overlayColor: const Color(0xFFBFAE01).withValues(alpha: 0.2),
-                                    trackHeight: 8,
-                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-                                  ),
-                                  child: Slider(
-                                    value: _position.inSeconds.clamp(0, totalSeconds.toInt()).toDouble(),
-                                    max: totalSeconds,
-                                    onChanged: (v) => _seekTo(v),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  _formatDuration(_position),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFFBFAE01),
-                                  ),
-                                ),
-                                Text(
-                                  _formatDuration(Duration(seconds: totalSeconds.toInt())),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: const Color(0xFF999999),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                        child: ProgressBar(
+                          progress: _position,
+                          total: _duration,
+                          buffered: _duration,
+                          onSeek: (duration) => _player.seek(duration),
+                          barHeight: 8,
+                          baseBarColor: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0),
+                          progressBarColor: const Color(0xFFBFAE01),
+                          bufferedBarColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+                          thumbColor: const Color(0xFFBFAE01),
+                          thumbRadius: 10,
+                          thumbGlowRadius: 24,
+                          thumbGlowColor: const Color(0xFFBFAE01).withValues(alpha: 0.2),
+                          timeLabelLocation: TimeLabelLocation.below,
+                          timeLabelType: TimeLabelType.totalTime,
+                          timeLabelTextStyle: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFBFAE01),
+                          ),
                         ),
                       ),
 

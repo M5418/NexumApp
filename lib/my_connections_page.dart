@@ -80,11 +80,56 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
         });
       }
     });
+    // FASTFEED: Load cached users instantly, then refresh
+    _loadFromCacheInstantly();
     _loadUsers();
     // Ensure FollowState is initialized
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<FollowState>().initialize();
     });
+  }
+
+  /// INSTANT: Load cached connection users (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final followRepo = FirebaseFollowRepository();
+      final userRepo = FirebaseUserRepository();
+      
+      // Get connection status (this is fast - just IDs)
+      final status = await followRepo.getConnectionsStatus();
+      final ids = <String>{...status.inbound, ...status.outbound}.toList();
+      
+      if (ids.isEmpty) return;
+      
+      // Load cached profiles
+      final profiles = await userRepo.getUsersFromCache(ids);
+      if (profiles.isNotEmpty && mounted) {
+        final mapped = profiles.map((p) {
+          final displayName = p.displayName?.trim() ?? '';
+          final display = displayName.isNotEmpty ? displayName : (p.username ?? 'User');
+          final letter = display.isNotEmpty ? display[0].toUpperCase() : 'U';
+          return MyConnectionUser(
+            id: p.uid,
+            name: display,
+            username: '@${p.username ?? 'user'}',
+            avatarUrl: p.avatarUrl,
+            coverUrl: p.coverUrl,
+            avatarLetter: letter,
+            bio: p.bio ?? '',
+            status: '',
+            youConnectTo: status.outbound.contains(p.uid),
+            theyConnectToYou: status.inbound.contains(p.uid),
+          );
+        }).toList();
+        
+        setState(() {
+          _users = mapped;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
   }
 
   @override

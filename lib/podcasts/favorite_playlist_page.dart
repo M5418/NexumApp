@@ -113,7 +113,8 @@ class _FavoritePlaylistPageState extends State<FavoritePlaylistPage> {
                           return _EpisodeRow(
                             title: e.title,
                             subtitle: e.author ?? 'Unknown',
-                            coverUrl: e.coverUrl ?? '',
+                            // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
+                            coverUrl: e.listCoverUrl ?? '',
                             durationLabel: _mmss(e.durationSec),
                             onPlay: () => Navigator.push(
                               context,

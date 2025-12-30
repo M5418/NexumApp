@@ -51,11 +51,28 @@ class FirebaseUserRepository implements UserRepository {
     return _fromDoc(doc);
   }
 
+  /// FAST: Get user profile from cache first (instant)
+  Future<UserProfile?> getUserProfileFromCache(String uid) async {
+    try {
+      final doc = await _users.doc(uid).get(const GetOptions(source: Source.cache));
+      return _fromDoc(doc);
+    } catch (_) {
+      return null; // Cache miss
+    }
+  }
+
   @override
   Future<UserProfile?> getCurrentUserProfile() async {
     final u = _auth.currentUser;
     if (u == null) return null;
     return await getUserProfile(u.uid);
+  }
+
+  /// FAST: Get current user profile from cache first (instant)
+  Future<UserProfile?> getCurrentUserProfileFromCache() async {
+    final u = _auth.currentUser;
+    if (u == null) return null;
+    return await getUserProfileFromCache(u.uid);
   }
 
   @override
@@ -101,6 +118,46 @@ class FirebaseUserRepository implements UserRepository {
         debugPrint('❌ Fallback also failed: $fallbackError');
         return [];
       }
+    }
+  }
+
+  /// FAST: Get suggested users from cache first (instant)
+  Future<List<UserProfile>> getSuggestedUsersFromCache({int limit = 12}) async {
+    try {
+      final currentUid = _auth.currentUser?.uid;
+      final snap = await _users
+          .orderBy('createdAt', descending: true)
+          .limit(limit * 3)
+          .get(const GetOptions(source: Source.cache));
+      
+      return snap.docs
+          .map(_fromDoc)
+          .whereType<UserProfile>()
+          .where((u) => u.uid != currentUid)
+          .take(limit)
+          .toList();
+    } catch (_) {
+      return []; // Cache miss
+    }
+  }
+
+  /// FAST: Get users by IDs from cache first (instant)
+  Future<List<UserProfile>> getUsersFromCache(List<String> uids) async {
+    if (uids.isEmpty) return [];
+    try {
+      final results = <UserProfile>[];
+      for (final uid in uids) {
+        try {
+          final doc = await _users.doc(uid).get(const GetOptions(source: Source.cache));
+          final profile = _fromDoc(doc);
+          if (profile != null) results.add(profile);
+        } catch (_) {
+          // Skip cache miss for this user
+        }
+      }
+      return results;
+    } catch (_) {
+      return [];
     }
   }
 

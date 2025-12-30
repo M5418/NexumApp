@@ -72,7 +72,8 @@ class _MyEpisodesPageState extends State<MyEpisodesPage> {
                           return _EpisodeRow(
                             title: e.title,
                             author: e.author ?? 'Unknown',
-                            coverUrl: e.coverUrl ?? '',
+                            // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
+                            coverUrl: e.listCoverUrl ?? '',
                             date: _shortDate(e.createdAt),
                             onPlay: () => Navigator.push(
                               context,

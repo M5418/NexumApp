@@ -26,6 +26,7 @@ class FirebasePodcastRepository implements PodcastRepository {
       authorId: d['authorId']?.toString(),
       description: d['description']?.toString(),
       coverUrl: d['coverUrl']?.toString(),
+      coverThumbUrl: d['coverThumbUrl']?.toString(),
       audioUrl: d['audioUrl']?.toString(),
       durationSec: d['durationSec']?.toInt(),
       language: d['language']?.toString(),
@@ -60,9 +61,7 @@ class FirebasePodcastRepository implements PodcastRepository {
 
       if (mine) {
         final uid = _auth.currentUser?.uid;
-        if (uid == null) {
-          return [];
-        }
+        if (uid == null) return [];
         q = q.where('authorId', isEqualTo: uid);
         hasFilter = true;
       } else if (authorId != null) {
@@ -98,6 +97,37 @@ class FirebasePodcastRepository implements PodcastRepository {
     }
   }
 
+  /// FAST: Get podcasts from cache first (instant)
+  Future<List<PodcastModel>> listPodcastsFromCache({
+    int limit = 20,
+    String? category,
+    bool? isPublished,
+  }) async {
+    try {
+      Query<Map<String, dynamic>> q = _podcasts;
+      
+      if (category != null) {
+        q = q.where('category', isEqualTo: category);
+      }
+      if (isPublished != null) {
+        q = q.where('isPublished', isEqualTo: isPublished);
+      }
+      q = q.orderBy('createdAt', descending: true).limit(limit);
+
+      try {
+        final snap = await q.get(const GetOptions(source: Source.cache));
+        return snap.docs.map(_podcastFromDoc).toList();
+      } catch (_) {
+        // Try without ordering if index missing
+        final fallback = _podcasts.limit(limit);
+        final snap = await fallback.get(const GetOptions(source: Source.cache));
+        return snap.docs.map(_podcastFromDoc).toList();
+      }
+    } catch (_) {
+      return []; // Cache miss
+    }
+  }
+
   @override
   Future<PodcastModel?> getPodcast(String podcastId) async {
     final doc = await _podcasts.doc(podcastId).get();
@@ -111,6 +141,7 @@ class FirebasePodcastRepository implements PodcastRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? coverThumbUrl,
     String? audioUrl,
     int? durationSec,
     String? language,
@@ -127,6 +158,7 @@ class FirebasePodcastRepository implements PodcastRepository {
       'authorId': uid,
       'description': description,
       'coverUrl': coverUrl,
+      'coverThumbUrl': coverThumbUrl,
       'audioUrl': audioUrl,
       'durationSec': durationSec,
       'language': language ?? 'en',

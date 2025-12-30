@@ -49,9 +49,14 @@
 			</dict>
 		</dict>
 		<key>NSCameraUsageDescription</key>
-		<string>This app needs camera access to capture photos and videos.</string>
+		<string>Nexum needs camera access for live streaming, video calls, and capturing photos.</string>
 		<key>NSMicrophoneUsageDescription</key>
-		<string>This app needs microphone access to record audio.</string>
+		<string>Nexum needs microphone access for live streaming, voice messages, and audio recording.</string>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>audio</string>
+			<string>voip</string>
+		</array>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>This app needs photo library add access to save media.</string>
 		<key>NSPhotoLibraryUsageDescription</key>

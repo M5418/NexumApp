@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
+import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 
 class CustomVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -158,13 +159,6 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
       _showSpeedOptions = false;
     });
     _controller?.setPlaybackSpeed(speed);
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return '$minutes:$seconds';
   }
 
   @override
@@ -371,104 +365,29 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
 
     final position = _controller!.value.position;
     final duration = _controller!.value.duration;
-    final progress = duration.inMilliseconds > 0
-        ? position.inMilliseconds / duration.inMilliseconds
-        : 0.0;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          // Seekable Progress bar
-          GestureDetector(
-            onHorizontalDragUpdate: (details) {
-              if (!_isInitialized || _controller == null) return;
-              
-              final RenderBox box = context.findRenderObject() as RenderBox;
-              final localPosition = box.globalToLocal(details.globalPosition);
-              final boxWidth = box.size.width - 32; // Account for margins
-              final tapPosition = (localPosition.dx - 16).clamp(0.0, boxWidth);
-              final seekProgress = tapPosition / boxWidth;
-              final seekPosition = duration * seekProgress;
-              
-              _controller!.seekTo(seekPosition);
-            },
-            onTapUp: (details) {
-              if (!_isInitialized || _controller == null) return;
-              
-              final RenderBox box = context.findRenderObject() as RenderBox;
-              final localPosition = box.globalToLocal(details.globalPosition);
-              final boxWidth = box.size.width - 32; // Account for margins
-              final tapPosition = (localPosition.dx - 16).clamp(0.0, boxWidth);
-              final seekProgress = tapPosition / boxWidth;
-              final seekPosition = duration * seekProgress;
-              
-              _controller!.seekTo(seekPosition);
-            },
-            child: Container(
-              height: 20,
-              color: Colors.transparent,
-              child: Center(
-                child: Container(
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(77),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                  child: Stack(
-                    children: [
-                      FractionallySizedBox(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: progress.clamp(0.0, 1.0),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFBFAE01),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      // Seek indicator
-                      if (progress > 0)
-                        Positioned(
-                          left: (progress.clamp(0.0, 1.0) * (MediaQuery.of(context).size.width - 32)) - 6,
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFBFAE01),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          // Time indicators
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _formatDuration(position),
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                _formatDuration(duration),
-                style: GoogleFonts.inter(
-                  color: Colors.white.withAlpha(179),
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ],
+      child: ProgressBar(
+        progress: position,
+        total: duration,
+        buffered: duration,
+        onSeek: (newPosition) => _controller!.seekTo(newPosition),
+        barHeight: 4,
+        baseBarColor: Colors.white.withAlpha(77),
+        progressBarColor: const Color(0xFFBFAE01),
+        bufferedBarColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+        thumbColor: const Color(0xFFBFAE01),
+        thumbRadius: 6,
+        thumbGlowRadius: 16,
+        thumbGlowColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+        timeLabelLocation: TimeLabelLocation.sides,
+        timeLabelType: TimeLabelType.totalTime,
+        timeLabelTextStyle: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../repositories/interfaces/podcast_repository.dart';
+import '../repositories/firebase/firebase_podcast_repository.dart';
 import 'podcasts_home_page.dart' show Podcast;
 import 'podcast_details_page.dart';
 import 'my_library_page.dart';
@@ -31,12 +32,37 @@ class _PodcastsThreeColumnPageState extends State<PodcastsThreeColumnPage> {
   bool _loadingTop = true;
   String? _errorTop;
   List<Podcast> _topItems = [];
+  
+  // FASTFEED: Direct repository access for cache-first loading
+  final FirebasePodcastRepository _firebasePodcastRepo = FirebasePodcastRepository();
 
   @override
   void initState() {
     super.initState();
+    // FASTFEED: Load cached podcasts instantly, then refresh
+    _loadFromCacheInstantly();
     _loadLeft();
     _loadTop();
+  }
+
+  /// INSTANT: Load cached podcasts (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final models = await _firebasePodcastRepo.listPodcastsFromCache(
+        limit: 40,
+        isPublished: true,
+      );
+      if (models.isNotEmpty && mounted) {
+        setState(() {
+          _leftItems = models.map(Podcast.fromModel).toList();
+          _topItems = models.take(30).map(Podcast.fromModel).toList();
+          _loadingLeft = false;
+          _loadingTop = false;
+        });
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
   }
 
   Future<void> _openCreateDialog(BuildContext context) async {
@@ -538,9 +564,10 @@ class _PodcastGridCard extends StatelessWidget {
               children: [
                 AspectRatio(
                   aspectRatio: 1,
-                  child: (podcast.coverUrl ?? '').isNotEmpty
+                  // FASTFEED: Use listCoverUrl (thumbnail) for fast list loading
+                  child: (podcast.listCoverUrl ?? '').isNotEmpty
                       ? Image.network(
-                          podcast.coverUrl!,
+                          podcast.listCoverUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
@@ -711,9 +738,10 @@ class _RightTopList extends StatelessWidget {
                             child: SizedBox(
                               width: 56,
                               height: 56,
-                              child: (p.coverUrl ?? '').isNotEmpty
+                              // FASTFEED: Use listCoverUrl (thumbnail) for fast list loading
+                              child: (p.listCoverUrl ?? '').isNotEmpty
                                   ? Image.network(
-                                      p.coverUrl!,
+                                      p.listCoverUrl!,
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) => Container(
                                         color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),

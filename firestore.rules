@@ -506,8 +506,8 @@ service cloud.firestore {
     
     // Content monetization stats
     match /content_monetization_stats/{contentId} {
-      // Content owners and admins can read their stats
-      allow read: if signedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+      // Allow read for any signed-in user (needed to check if doc exists before update)
+      allow read: if signedIn();
       // Anyone signed in can create/update stats (for tracking views on any content)
       allow create: if signedIn();
       allow update: if signedIn();
@@ -520,6 +520,37 @@ service cloud.firestore {
       allow create: if signedIn();
       allow update: if signedIn();
       allow delete: if isAdmin();
+    }
+    
+    // Live streams
+    match /livestreams/{streamId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn() && (request.auth.uid == resource.data.hostId || isAdmin());
+      allow delete: if signedIn() && (request.auth.uid == resource.data.hostId || isAdmin());
+      
+      // Chat messages subcollection
+      match /messages/{messageId} {
+        allow read: if signedIn();
+        allow create: if signedIn();
+        allow update: if signedIn() && (request.auth.uid == resource.data.senderId || isAdmin());
+        allow delete: if isAdmin();
+      }
+      
+      // Reactions subcollection
+      match /reactions/{reactionId} {
+        allow read: if signedIn();
+        allow create: if signedIn();
+        allow delete: if isAdmin();
+      }
+      
+      // Viewers subcollection
+      match /viewers/{viewerId} {
+        allow read: if signedIn();
+        allow create: if signedIn();
+        allow update: if signedIn();
+        allow delete: if signedIn();
+      }
     }
   }
 }

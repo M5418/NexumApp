@@ -20,6 +20,7 @@ class AudioRecorder {
   DateTime? _startTime;
   Uint8List? _lastBytes;
   bool _permissionGranted = false;
+  String _currentExtension = 'webm';
 
   Future<bool> hasPermission() async {
     try {
@@ -70,13 +71,31 @@ class AudioRecorder {
         throw Exception('Failed to acquire media stream from browser');
       }
 
-      // Prefer opus in webm
-      const mimeOpus = 'audio/webm;codecs=opus';
-      final mime = html.MediaRecorder.isTypeSupported(mimeOpus)
-          ? mimeOpus
-          : 'audio/webm';
+      // Try formats in order of cross-platform compatibility:
+      // 1. MP4/AAC - works on iOS, Android, Safari, and most browsers
+      // 2. WebM/Opus - works on Chrome, Firefox, Android
+      // 3. WebM - fallback
+      String mime = 'audio/webm';
+      String ext = 'webm';
+      
+      // Preferred: MP4 with AAC (best iOS compatibility)
+      if (html.MediaRecorder.isTypeSupported('audio/mp4')) {
+        mime = 'audio/mp4';
+        ext = 'm4a';
+      } else if (html.MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
+        mime = 'audio/mp4;codecs=mp4a.40.2';
+        ext = 'm4a';
+      } else if (html.MediaRecorder.isTypeSupported('audio/aac')) {
+        mime = 'audio/aac';
+        ext = 'aac';
+      } else if (html.MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mime = 'audio/webm;codecs=opus';
+        ext = 'webm';
+      }
+      
+      _currentExtension = ext;
 
-      debugPrint('✅ Web recording using MIME: $mime');
+      debugPrint('✅ Web recording using MIME: $mime (extension: $ext)');
 
       _chunks.clear();
       _lastBytes = null;
@@ -212,7 +231,7 @@ class AudioRecorder {
         filePath: null,
         duration: duration,
         fileSize: bytes.length,
-        fileExtension: 'webm',
+        fileExtension: _currentExtension,
       );
     } catch (e) {
       debugPrint('❌ AudioRecorder(Web): Failed to stop recording: $e');
@@ -235,25 +254,30 @@ class AudioRecorder {
   Future<String?> uploadVoiceFile(String? filePath) async {
     try {
       final bytes = _lastBytes;
+      final ext = _currentExtension;
       _lastBytes = null;
       if (bytes == null || bytes.isEmpty) {
         debugPrint('⚠️ AudioRecorder(Web): No bytes to upload');
         return null;
       }
       final profileApi = ProfileApi();
-      return await profileApi.uploadBytes(bytes, ext: 'webm');
+      debugPrint('📤 Uploading voice file with extension: $ext');
+      return await profileApi.uploadBytes(bytes, ext: ext);
     } catch (e) {
       debugPrint('❌ AudioRecorder(Web): Failed to upload voice file: $e');
       return null;
     }
   }
-
-  // Retrieve the recorded bytes for upload via app's StorageRepository
+  
+  /// Get recorded bytes for manual upload (used by chat_page)
   Future<Uint8List?> takeRecordedBytes() async {
     final bytes = _lastBytes;
     _lastBytes = null;
     return bytes;
   }
+  
+  /// Get the file extension for the last recording
+  String get currentExtension => _currentExtension;
 
   void dispose() {
     try {

@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../repositories/interfaces/playlist_repository.dart';
+import '../repositories/firebase/firebase_playlist_repository.dart';
 import 'my_episodes_page.dart';
 import 'favorite_playlist_page.dart';
 
@@ -17,28 +18,54 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
   bool _loading = true;
   String? _error;
   List<_PlaylistRow> _playlists = [];
+  
+  // FASTFEED: Direct repository access for cache-first loading
+  final FirebasePlaylistRepository _firebasePlaylistRepo = FirebasePlaylistRepository();
 
   @override
   void initState() {
     super.initState();
+    // FASTFEED: Load cached playlists instantly, then refresh
+    _loadFromCacheInstantly();
     _load();
   }
 
+  /// INSTANT: Load cached playlists (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final playlists = await _firebasePlaylistRepo.getUserPlaylistsFromCache();
+      if (playlists.isNotEmpty && mounted) {
+        final rows = playlists.map((p) => _PlaylistRow(
+          id: p.id,
+          name: p.name,
+          isPrivate: p.isPrivate,
+          itemsCount: p.podcastIds.length,
+        )).toList();
+        setState(() {
+          _playlists = rows;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
+  }
+
   Future<void> _load() async {
-    setState(() => _loading = true);
+    // Only show loading if we don't have cached data
+    if (_playlists.isEmpty) {
+      setState(() => _loading = true);
+    }
     try {
       final playlistRepo = context.read<PlaylistRepository>();
       final playlists = await playlistRepo.getUserPlaylists();
       
-      final rows = <_PlaylistRow>[];
-      for (final playlist in playlists) {
-        rows.add(_PlaylistRow(
-          id: playlist.id,
-          name: playlist.name,
-          isPrivate: playlist.isPrivate,
-          itemsCount: playlist.podcastIds.length,
-        ));
-      }
+      final rows = playlists.map((p) => _PlaylistRow(
+        id: p.id,
+        name: p.name,
+        isPrivate: p.isPrivate,
+        itemsCount: p.podcastIds.length,
+      )).toList();
       
       setState(() {
         _playlists = rows;
@@ -46,10 +73,12 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
         _error = null;
       });
     } catch (e) {
-      setState(() {
-        _error = 'Failed to load playlists: $e';
-        _loading = false;
-      });
+      if (_playlists.isEmpty) {
+        setState(() {
+          _error = 'Failed to load playlists: $e';
+          _loading = false;
+        });
+      }
     }
   }
 

@@ -232,4 +232,60 @@ class MediaCompressionService {
       return VideoQuality.DefaultQuality;
     }
   }
+
+  /// Generate small thumbnail for feed display (400px, 60% quality)
+  /// Much smaller than full image for fast feed loading
+  Future<Uint8List?> generateFeedThumbnail({
+    required String filePath,
+    int maxSize = 400,
+    int quality = 60,
+  }) async {
+    try {
+      final ext = path.extension(filePath).toLowerCase();
+      final format = _getImageFormat(ext);
+
+      final result = await FlutterImageCompress.compressWithFile(
+        filePath,
+        quality: quality,
+        minWidth: maxSize,
+        minHeight: maxSize,
+        format: format,
+        autoCorrectionAngle: true,
+        keepExif: false,
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('❌ Thumbnail generation error: $e');
+      return null;
+    }
+  }
+
+  /// Generate small thumbnail from bytes for feed display
+  Future<Uint8List?> generateFeedThumbnailFromBytes({
+    required Uint8List bytes,
+    required String filename,
+    int maxSize = 400,
+    int quality = 60,
+  }) async {
+    try {
+      final ext = path.extension(filename).toLowerCase();
+      final format = _getImageFormat(ext);
+
+      final result = await FlutterImageCompress.compressWithList(
+        bytes,
+        quality: quality,
+        minWidth: maxSize,
+        minHeight: maxSize,
+        format: format,
+        autoCorrectionAngle: true,
+        keepExif: false,
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('❌ Thumbnail generation error: $e');
+      return null;
+    }
+  }
 }

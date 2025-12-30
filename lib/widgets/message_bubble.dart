@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:animated_emoji/animated_emoji.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/message.dart';
@@ -158,15 +159,9 @@ class _MessageBubbleState extends State<MessageBubble>
     for (final msg in widget.allMessages) {
       if (msg.attachments.isEmpty) continue;
       for (final attachment in msg.attachments) {
-        if (attachment.type == MediaType.image) {
+        // Always use full URL for HD viewing (images and videos)
+        if (attachment.type == MediaType.image || attachment.type == MediaType.video) {
           allMedia.add(attachment.url);
-        } else if (attachment.type == MediaType.video) {
-          if (attachment.thumbnailUrl != null && attachment.thumbnailUrl!.isNotEmpty) {
-            allMedia.add(attachment.thumbnailUrl!);
-          } else {
-            // No thumbnail available; include the video URL so viewer can handle it.
-            allMedia.add(attachment.url);
-          }
         }
       }
     }
@@ -219,11 +214,14 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   Widget _buildReactionPill(bool isDark, String emoji) {
+    // Map emoji strings to AnimatedEmoji data for iOS-style animated reactions
+    final animatedEmoji = _getAnimatedEmojiData(emoji);
+    
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
         color: isDark ? Colors.white10 : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 26),
@@ -232,8 +230,94 @@ class _MessageBubbleState extends State<MessageBubble>
           ),
         ],
       ),
-      child: Text(emoji, style: const TextStyle(fontSize: 14)),
+      child: animatedEmoji != null
+          ? SizedBox(
+              width: 24,
+              height: 24,
+              child: AnimatedEmoji(
+                animatedEmoji,
+                size: 24,
+                repeat: true,
+              ),
+            )
+          : Text(emoji, style: const TextStyle(fontSize: 18)),
     );
+  }
+
+  /// Map emoji strings to AnimatedEmojiData for animated reactions
+  AnimatedEmojiData? _getAnimatedEmojiData(String emoji) {
+    switch (emoji) {
+      case '❤️':
+      case '❤':
+        return AnimatedEmojis.redHeart;
+      case '👍':
+      case '👍🏻':
+      case '👍🏼':
+      case '👍🏽':
+      case '👍🏾':
+      case '👍🏿':
+        return AnimatedEmojis.thumbsUp;
+      case '👎':
+      case '👎🏻':
+      case '👎🏼':
+      case '👎🏽':
+      case '👎🏾':
+      case '👎🏿':
+        return AnimatedEmojis.thumbsDown;
+      case '😂':
+        return AnimatedEmojis.joy;
+      case '😮':
+      case '😯':
+        return AnimatedEmojis.astonished;
+      case '😢':
+        return AnimatedEmojis.cry;
+      case '😡':
+        return AnimatedEmojis.angry;
+      case '🔥':
+        return AnimatedEmojis.fire;
+      case '🎉':
+        return AnimatedEmojis.partyPopper;
+      case '💯':
+        return AnimatedEmojis.oneHundred;
+      case '🙏':
+      case '🙏🏻':
+      case '🙏🏼':
+      case '🙏🏽':
+      case '🙏🏾':
+      case '🙏🏿':
+        return AnimatedEmojis.foldedHands;
+      case '😍':
+        return AnimatedEmojis.heartEyes;
+      case '🥰':
+        return AnimatedEmojis.heartFace;
+      case '😘':
+        return AnimatedEmojis.kissingHeart;
+      case '😊':
+        return AnimatedEmojis.blush;
+      case '🥺':
+        return AnimatedEmojis.pleading;
+      case '👏':
+      case '👏🏻':
+      case '👏🏼':
+      case '👏🏽':
+      case '👏🏾':
+      case '👏🏿':
+        return AnimatedEmojis.clap;
+      case '💔':
+        return AnimatedEmojis.brokenHeart;
+      case '✨':
+        return AnimatedEmojis.sparkles;
+      case '🤔':
+        return AnimatedEmojis.thinkingFace;
+      case '🤣':
+        return AnimatedEmojis.rofl;
+      case '😭':
+        return AnimatedEmojis.loudlyCrying;
+      case '🥲':
+        return AnimatedEmojis.happyCry;
+      default:
+        return null; // Fallback to static text emoji
+    }
   }
 
   Widget _buildMessageContent(BuildContext context, bool isDark) {
@@ -264,8 +348,11 @@ class _MessageBubbleState extends State<MessageBubble>
   Widget _buildTextMessage(BuildContext context, bool isDark) {
     final maxW = _bubbleContentWidth(context);
     
-    // Check if this is a story reply
-    final isStoryReply = widget.message.content.startsWith('📖 Story reply:');
+    // Check if this is a story reply (handle both with and without space after colon)
+    final content = widget.message.content;
+    final isStoryReply = content.startsWith('📖 Story reply:') || 
+                         content.startsWith('📖 Story reply :') ||
+                         content.contains('Story reply:');
     
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxW),
@@ -317,10 +404,8 @@ class _MessageBubbleState extends State<MessageBubble>
         onTap: () async {
           if (media.isEmpty) return;
           final allChatMedia = _getAllChatMedia();
-          final firstUrl = media.first.type == MediaType.video &&
-                  media.first.thumbnailUrl != null
-              ? media.first.thumbnailUrl!
-              : media.first.url;
+          // Always use full URL for HD viewing
+          final firstUrl = media.first.url;
           final initialIndex = _getInitialMediaIndex(firstUrl);
 
           final result = await Navigator.push(
@@ -777,16 +862,29 @@ class _MessageBubbleState extends State<MessageBubble>
             if (widget.message.replyTo != null) const SizedBox(height: 6),
                         Row(
               children: [
-                IconButton(
-                  onPressed: _togglePlayback,
-                  icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                  color: widget.message.isFromCurrentUser
-                      ? Colors.white
-                      : const Color(0xFF007AFF),
-                  iconSize: 24,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                ),
+                // Show sending indicator while uploading, play button when ready
+                _isVoiceUploading()
+                    ? const SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: Padding(
+                          padding: EdgeInsets.all(6),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                          ),
+                        ),
+                      )
+                    : IconButton(
+                        onPressed: _togglePlayback,
+                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                        color: widget.message.isFromCurrentUser
+                            ? Colors.white
+                            : const Color(0xFF007AFF),
+                        iconSize: 24,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      ),
                 const SizedBox(width: 3),
                 Expanded(
                   child: LayoutBuilder(
@@ -844,11 +942,27 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
+  // Check if voice message is still uploading (optimistic UI)
+  bool _isVoiceUploading() {
+    final att = _getVoiceAttachment();
+    if (att == null) return false;
+    final url = att.url;
+    // Check for local file paths or placeholder URLs
+    return url.isEmpty || 
+           url == 'uploading' || 
+           url.startsWith('/') || 
+           url.startsWith('file://') ||
+           !url.startsWith('http');
+  }
+
   Future<void> _togglePlayback() async {
     if (_audioPlayer == null) return;
 
     final attachment = _getVoiceAttachment();
     if (attachment == null) return;
+    
+    // Don't allow playback while uploading
+    if (_isVoiceUploading()) return;
 
     try {
       if (_isPlaying) {
@@ -1056,10 +1170,16 @@ class _MessageBubbleState extends State<MessageBubble>
   Widget _buildStoryReplyPreview(bool isDark) {
     // Parse the story reply: "📖 Story reply: message|mediaUrl|mediaType"
     final fullText = widget.message.content;
-    final parts = fullText.replaceFirst('📖 Story reply: ', '').split('|');
-    final messageText = parts[0];
-    final mediaUrl = parts.length > 1 ? parts[1] : '';
-    final mediaType = parts.length > 2 ? parts[2] : 'image';
+    // Handle various format variations
+    String cleanedText = fullText;
+    if (fullText.contains('Story reply:')) {
+      final idx = fullText.indexOf('Story reply:');
+      cleanedText = fullText.substring(idx + 'Story reply:'.length).trim();
+    }
+    final parts = cleanedText.split('|');
+    final messageText = parts[0].trim();
+    final mediaUrl = parts.length > 1 ? parts[1].trim() : '';
+    final mediaType = parts.length > 2 ? parts[2].trim() : 'image';
     
     final textColor = widget.message.isFromCurrentUser
         ? Colors.white

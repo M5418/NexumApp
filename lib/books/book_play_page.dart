@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:provider/provider.dart';
 import 'books_home_page.dart' show Book;
 import '../repositories/interfaces/book_repository.dart';
@@ -17,13 +18,14 @@ class BookPlayPage extends StatefulWidget {
 class _BookPlayPageState extends State<BookPlayPage> {
   final _player = AudioPlayer();
   StreamSubscription<Duration>? _posSub;
+  StreamSubscription<Duration?>? _durSub;
   StreamSubscription<PlayerState>? _stateSub;
 
   bool _loading = true;
   String? _error;
 
   Duration _position = Duration.zero;
-  Duration _duration = const Duration(seconds: 1);
+  Duration _duration = Duration.zero;
   double _playbackSpeed = 1.0;
 
   @override
@@ -35,6 +37,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
   @override
   void dispose() {
     _posSub?.cancel();
+    _durSub?.cancel();
     _stateSub?.cancel();
     _player.dispose();
     _sendProgress(); // try to persist last position
@@ -68,18 +71,34 @@ class _BookPlayPageState extends State<BookPlayPage> {
       } catch (_) {}
 
       await _player.setUrl(url);
-      if (_duration.inSeconds <= 1) {
-        _duration = _player.duration ?? _duration;
+      
+      // Listen to duration stream - this is key for getting the real duration
+      _durSub = _player.durationStream.listen((dur) {
+        if (dur != null && dur.inSeconds > 0 && mounted) {
+          setState(() {
+            _duration = dur;
+          });
+        }
+      });
+      
+      // Get initial duration if available
+      final initialDuration = _player.duration;
+      if (initialDuration != null && initialDuration.inSeconds > 0) {
+        _duration = initialDuration;
       }
+      
       if (_position > Duration.zero) {
         await _player.seek(_position);
       }
 
       _posSub = _player.positionStream.listen((pos) {
-        setState(() {
-          _position = pos;
-        });
+        if (mounted) {
+          setState(() {
+            _position = pos;
+          });
+        }
       });
+      
       _stateSub = _player.playerStateStream.listen((state) {
         if (mounted) setState(() {});
       });
@@ -129,17 +148,6 @@ class _BookPlayPageState extends State<BookPlayPage> {
     setState(() {});
   }
 
-  String _formatDuration(Duration d) {
-    final hours = d.inHours;
-    final minutes = d.inMinutes.remainder(60);
-    final secs = d.inSeconds.remainder(60);
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-    } else {
-      return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-    }
-  }
-
   Future<void> _sendProgress() async {
     try {
       final bookRepo = context.read<BookRepository>();
@@ -162,7 +170,6 @@ class _BookPlayPageState extends State<BookPlayPage> {
     final coverMaxWidth = isWide ? 250.0 : double.infinity;
 
     final playing = _player.playerState.playing;
-    final totalSeconds = (_duration.inSeconds <= 0 ? 1 : _duration.inSeconds).toDouble();
 
     return Scaffold(
       backgroundColor: bg,
@@ -180,6 +187,8 @@ class _BookPlayPageState extends State<BookPlayPage> {
         ),
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
         actions: [
+          IconButton(onPressed: () {}, icon: const Icon(Icons.share_outlined)),
+          IconButton(onPressed: () {}, icon: const Icon(Icons.playlist_play_outlined)),
           IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert)),
         ],
       ),
@@ -236,43 +245,50 @@ class _BookPlayPageState extends State<BookPlayPage> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(fontSize: 16, color: const Color(0xFF666666)),
                       ),
-                      const SizedBox(height: 32),
+                      // Push content down
+                      const Spacer(),
 
-                      // Progress bar
-                      Column(
-                        children: [
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              activeTrackColor: const Color(0xFFBFAE01),
-                              inactiveTrackColor: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
-                              thumbColor: const Color(0xFFBFAE01),
-                              overlayColor: const Color(0xFFBFAE01).withValues(alpha: 0.2),
-                              trackHeight: 4,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                      // Progress bar (light/dark mode aware)
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: isDark ? null : [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                            child: Slider(
-                              value: _position.inSeconds.clamp(0, totalSeconds.toInt()).toDouble(),
-                              max: totalSeconds,
-                              onChanged: (v) => _seekTo(v),
-                            ),
+                          ],
+                        ),
+                        child: ProgressBar(
+                          progress: _position,
+                          total: _duration,
+                          buffered: _duration,
+                          onSeek: (duration) {
+                            _player.seek(duration);
+                            _sendProgress();
+                          },
+                          barHeight: 4,
+                          baseBarColor: isDark 
+                              ? Colors.white.withAlpha(77) 
+                              : Colors.black.withAlpha(30),
+                          progressBarColor: const Color(0xFFBFAE01),
+                          bufferedBarColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+                          thumbColor: const Color(0xFFBFAE01),
+                          thumbRadius: 6,
+                          thumbGlowRadius: 16,
+                          thumbGlowColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+                          timeLabelLocation: TimeLabelLocation.sides,
+                          timeLabelType: TimeLabelType.totalTime,
+                          timeLabelTextStyle: GoogleFonts.inter(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  _formatDuration(_position),
-                                  style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
-                                ),
-                                Text(
-                                  _formatDuration(_duration),
-                                  style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF666666)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
 
                       const SizedBox(height: 32),
@@ -346,16 +362,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
                         ],
                       ),
 
-                      const Spacer(),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          IconButton(onPressed: () {}, icon: const Icon(Icons.timer_outlined), color: isDark ? Colors.white : Colors.black),
-                          IconButton(onPressed: () {}, icon: const Icon(Icons.share_outlined), color: isDark ? Colors.white : Colors.black),
-                          IconButton(onPressed: () {}, icon: const Icon(Icons.playlist_play_outlined), color: isDark ? Colors.white : Colors.black),
-                        ],
-                      ),
+                      const SizedBox(height: 40),
                     ],
                   ),
                 ),

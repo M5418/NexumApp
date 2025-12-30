@@ -8,6 +8,9 @@ import 'forgot_password_page.dart';
 import 'home_feed_page.dart';
 import 'theme_provider.dart';
 import 'repositories/interfaces/auth_repository.dart';
+import 'services/profile_cache_service.dart';
+import 'services/app_cache_service.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -65,6 +68,14 @@ class _SignInPageState extends State<SignInPage> {
       final res = await repo.signInWithEmail(email: email, password: password);
 
       if (res.success) {
+        // Preload all caches BEFORE navigating so all pages are instant
+        final user = fb.FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await Future.wait([
+            ProfileCacheService().preloadCurrentUserData(user.uid),
+            AppCacheService().preloadAppData(user.uid),
+          ]);
+        }
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const HomeFeedPage()),

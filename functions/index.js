@@ -133,3 +133,63 @@ exports.translateTexts = onCall({ region: "us-central1" }, async (request) => {
     return { translations: request.data.texts || [] };
   }
 });
+
+// Agora Token Generation for Live Streaming
+const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
+
+const AGORA_APP_ID = process.env.AGORA_APP_ID || "371cf61b84c0427d84471c91e71435cd";
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || "";
+
+const buildAgoraToken = (appId, appCertificate, channelName, uid, role, privilegeExpiredTs) => {
+  if (!appCertificate) {
+    logger.warn("No Agora App Certificate configured - using empty token");
+    return "";
+  }
+  
+  const agoraRole = role === 1 ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+  return RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channelName, uid, agoraRole, privilegeExpiredTs);
+};
+
+exports.generateAgoraToken = onCall({ region: "us-central1" }, async (request) => {
+  // Verify user is authenticated
+  if (!request.auth) {
+    throw new Error("Authentication required");
+  }
+
+  const { channelName, uid, role } = request.data;
+  
+  if (!channelName) {
+    throw new Error("Channel name is required");
+  }
+
+  const userUid = uid || Math.floor(Math.random() * 100000);
+  const userRole = role === "publisher" ? 1 : 2; // 1 = publisher, 2 = subscriber
+  
+  // Token expires in 24 hours
+  const expirationTimeInSeconds = 86400;
+  const currentTimestamp = Math.floor(Date.now() / 1000);
+  const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+  try {
+    const token = buildAgoraToken(
+      AGORA_APP_ID,
+      AGORA_APP_CERTIFICATE,
+      channelName,
+      userUid,
+      userRole,
+      privilegeExpiredTs
+    );
+
+    logger.info("Agora token generated", { channelName, uid: userUid, role: userRole });
+
+    return {
+      token,
+      uid: userUid,
+      channelName,
+      appId: AGORA_APP_ID,
+    };
+  } catch (error) {
+    logger.error("Error generating Agora token", { error: error.message });
+    throw new Error("Failed to generate token");
+  }
+});

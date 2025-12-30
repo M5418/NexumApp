@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../interfaces/post_repository.dart';
 import '../models/post_model.dart';
+import 'firebase_user_repository.dart';
 
 class FirebasePostRepository implements PostRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -17,7 +18,7 @@ class FirebasePostRepository implements PostRepository {
   }
 
   @override
-  Future<String> createPost({required String text, List<String>? mediaUrls, String? repostOf, String? communityId}) async {
+  Future<String> createPost({required String text, List<String>? mediaUrls, List<String>? thumbUrls, String? repostOf, String? communityId}) async {
     try {
       final u = _auth.currentUser;
       if (u == null) {
@@ -26,6 +27,39 @@ class FirebasePostRepository implements PostRepository {
       }
       
       debugPrint('📝 Creating post - User: ${u.uid}, CommunityId: $communityId');
+      
+      // Fetch author profile for denormalization (fast feed rendering)
+      String? authorName;
+      String? authorAvatarUrl;
+      try {
+        final userRepo = FirebaseUserRepository();
+        final profile = await userRepo.getUserProfile(u.uid);
+        if (profile != null) {
+          final fn = profile.firstName?.trim() ?? '';
+          final ln = profile.lastName?.trim() ?? '';
+          authorName = (fn.isNotEmpty || ln.isNotEmpty)
+              ? '$fn $ln'.trim()
+              : (profile.displayName ?? profile.username ?? 'User');
+          authorAvatarUrl = profile.avatarUrl;
+        }
+      } catch (_) {
+        // Continue without denormalized data - feed will fallback
+      }
+      
+      // Build media thumbs - use provided thumbUrls if available, otherwise fallback to full URLs
+      final urls = mediaUrls ?? [];
+      final thumbs = <MediaThumb>[];
+      for (var i = 0; i < urls.length; i++) {
+        final url = urls[i];
+        final thumbUrl = (thumbUrls != null && i < thumbUrls.length) ? thumbUrls[i] : url;
+        final isVideo = url.toLowerCase().contains('.mp4') ||
+            url.toLowerCase().contains('.mov') ||
+            url.toLowerCase().contains('.webm');
+        thumbs.add(MediaThumb(
+          type: isVideo ? 'video' : 'image',
+          thumbUrl: thumbUrl,
+        ));
+      }
       
       final data = PostModel(
         id: '',
@@ -36,6 +70,9 @@ class FirebasePostRepository implements PostRepository {
         repostOf: repostOf,
         communityId: communityId,
         createdAt: DateTime.now(),
+        authorName: authorName,
+        authorAvatarUrl: authorAvatarUrl,
+        mediaThumbs: thumbs,
       ).toMap();
       
       debugPrint('📝 Post data prepared: ${data.keys.toList()}');
@@ -69,18 +106,45 @@ class FirebasePostRepository implements PostRepository {
   }
 
   @override
-  Future<void> updatePost({required String postId, required String text, List<String>? mediaUrls}) async {
+  Future<void> updatePost({required String postId, required String text, List<String>? mediaUrls, List<String>? thumbUrls}) async {
+    // Build mediaThumbs if thumbUrls provided
+    List<Map<String, dynamic>>? mediaThumbsData;
+    if (mediaUrls != null && thumbUrls != null) {
+      mediaThumbsData = [];
+      for (var i = 0; i < mediaUrls.length; i++) {
+        final url = mediaUrls[i];
+        final thumbUrl = i < thumbUrls.length ? thumbUrls[i] : url;
+        final isVideo = url.toLowerCase().contains('.mp4') ||
+            url.toLowerCase().contains('.mov') ||
+            url.toLowerCase().contains('.webm');
+        mediaThumbsData.add({
+          'type': isVideo ? 'video' : 'image',
+          'thumbUrl': thumbUrl,
+        });
+      }
+    }
+    
     // Try to update in regular posts
     final regularDoc = await _posts.doc(postId).get();
     if (regularDoc.exists) {
-      await _posts.doc(postId).update({'text': text, if (mediaUrls != null) 'mediaUrls': mediaUrls, 'updatedAt': Timestamp.now()});
+      await _posts.doc(postId).update({
+        'text': text,
+        if (mediaUrls != null) 'mediaUrls': mediaUrls,
+        if (mediaThumbsData != null) 'mediaThumbs': mediaThumbsData,
+        'updatedAt': Timestamp.now(),
+      });
       return;
     }
     
     // Try to update in community posts
     final communityDoc = await _communityPosts.doc(postId).get();
     if (communityDoc.exists) {
-      await _communityPosts.doc(postId).update({'text': text, if (mediaUrls != null) 'mediaUrls': mediaUrls, 'updatedAt': Timestamp.now()});
+      await _communityPosts.doc(postId).update({
+        'text': text,
+        if (mediaUrls != null) 'mediaUrls': mediaUrls,
+        if (mediaThumbsData != null) 'mediaThumbs': mediaThumbsData,
+        'updatedAt': Timestamp.now(),
+      });
       return;
     }
     
@@ -106,34 +170,23 @@ class FirebasePostRepository implements PostRepository {
 
   @override
   Future<List<PostModel>> getFeed({int limit = 20, PostModel? lastPost}) async {
+    Query<Map<String, dynamic>> q = _posts.orderBy('createdAt', descending: true).limit(limit);
+    if (lastPost?.snapshot != null) {
+      q = q.startAfterDocument(lastPost!.snapshot!);
+    }
+    final snap = await q.get();
+    return snap.docs.map(_fromDoc).toList();
+  }
+
+  /// FAST: Get feed from cache first (instant), returns cached data
+  /// Call getFeed() after to refresh from server
+  Future<List<PostModel>> getFeedFromCache({int limit = 20}) async {
     try {
-      debugPrint('🔍 [PostRepo] Starting getFeed query...');
-      debugPrint('🔍 [PostRepo] Auth user: ${_auth.currentUser?.uid ?? "NOT LOGGED IN"}');
-      
       Query<Map<String, dynamic>> q = _posts.orderBy('createdAt', descending: true).limit(limit);
-      if (lastPost?.snapshot != null) {
-        q = q.startAfterDocument(lastPost!.snapshot!);
-      }
-      
-      debugPrint('🔍 [PostRepo] Executing Firestore query...');
-      final snap = await q.get();
-      debugPrint('🔍 [PostRepo] Query returned ${snap.docs.length} documents');
-      
-      if (snap.docs.isEmpty) {
-        debugPrint('⚠️ [PostRepo] NO POSTS FOUND - Check:');
-        debugPrint('   1. Is auth user logged in? ${_auth.currentUser != null}');
-        debugPrint('   2. Does posts collection exist in Firestore?');
-        debugPrint('   3. Do posts have createdAt field for ordering?');
-      }
-      
-      final posts = snap.docs.map(_fromDoc).toList();
-      debugPrint('✅ [PostRepo] Mapped ${posts.length} posts successfully');
-      return posts;
-    } catch (e, stackTrace) {
-      debugPrint('❌ [PostRepo] CRITICAL ERROR in getFeed:');
-      debugPrint('   Error: $e');
-      debugPrint('   Stack: $stackTrace');
-      rethrow;
+      final snap = await q.get(const GetOptions(source: Source.cache));
+      return snap.docs.map(_fromDoc).toList();
+    } catch (_) {
+      return []; // Cache miss - return empty, caller will load from server
     }
   }
 
@@ -151,9 +204,22 @@ class FirebasePostRepository implements PostRepository {
     }
   }
 
+  /// FAST: Get user posts from cache first (instant)
+  Future<List<PostModel>> getUserPostsFromCache({required String uid, int limit = 20}) async {
+    try {
+      Query<Map<String, dynamic>> q = _posts
+          .where('authorId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(limit);
+      final snap = await q.get(const GetOptions(source: Source.cache));
+      return snap.docs.map(_fromDoc).toList();
+    } catch (_) {
+      return []; // Cache miss
+    }
+  }
+
   @override
   Future<List<PostModel>> getCommunityPosts({required String communityId, int limit = 20, PostModel? lastPost}) async {
-    debugPrint('📊 Fetching community posts from community_posts collection for community: $communityId');
     Query<Map<String, dynamic>> q = _communityPosts
         .where('communityId', isEqualTo: communityId)
         .orderBy('createdAt', descending: true)
@@ -162,8 +228,21 @@ class FirebasePostRepository implements PostRepository {
       q = q.startAfterDocument(lastPost!.snapshot!);
     }
     final snap = await q.get();
-    debugPrint('📨 Found ${snap.docs.length} community posts');
     return snap.docs.map(_fromDoc).toList();
+  }
+
+  /// FAST: Get community posts from cache first (instant), returns cached data
+  Future<List<PostModel>> getCommunityPostsFromCache({required String communityId, int limit = 20}) async {
+    try {
+      Query<Map<String, dynamic>> q = _communityPosts
+          .where('communityId', isEqualTo: communityId)
+          .orderBy('createdAt', descending: true)
+          .limit(limit);
+      final snap = await q.get(const GetOptions(source: Source.cache));
+      return snap.docs.map(_fromDoc).toList();
+    } catch (_) {
+      return []; // Cache miss - return empty, caller will load from server
+    }
   }
 
   // Unused method - kept for potential future use

@@ -20,6 +20,7 @@ import 'premium_subscription_page.dart';
 import 'sign_in_page.dart';
 import 'core/profile_api.dart';
 import 'repositories/firebase/firebase_post_repository.dart';
+import 'repositories/models/post_model.dart';
 import 'core/post_events.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'dart:convert';
@@ -37,6 +38,7 @@ import 'connections_page.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'support_page.dart';
 import 'help_center_page.dart';
+import 'services/profile_cache_service.dart';
 
 class ProfilePage extends StatefulWidget {
   final bool hideDesktopTopNav;
@@ -50,7 +52,8 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   Map<String, dynamic>? _profile;
-  bool _loadingProfile = true;
+  // FASTFEED: Start with false - cache loads instantly before first paint feels slow
+  bool _loadingProfile = false;
 
   String? _myUserId;
 
@@ -85,17 +88,41 @@ class _ProfilePageState extends State<ProfilePage> {
   
   // Caching for user profiles to avoid redundant fetches
   final Map<String, dynamic> _userProfileCache = {};
+  
+  // Author profile cache for fast hydration (same pattern as home feed)
+  final Map<String, Map<String, String>> _authorProfilesCache = {};
+  final Map<String, PostModel> _hydratedOriginalPosts = {};
+  final FirebasePostRepository _postRepo = FirebasePostRepository();
+
+  late final ProfileCacheService _profileCache;
 
   @override
   void initState() {
     super.initState();
-    // Start with loading states as false since data hasn't been requested yet
-    _loadingMyPosts = false;
-    _loadingActivity = false;
-    _loadingMedia = false;
-    _loadingPodcasts = false;
-    
-    _loadProfile();
+    _profileCache = ProfileCacheService();
+
+    // Default: show shimmer until cache is applied
+    _loadingProfile = true;
+    _loadingMyPosts = true;
+    _loadingActivity = true;
+    _loadingMedia = true;
+    _loadingPodcasts = true;
+
+    // Apply whatever is already in memory instantly
+    _applyProfileCacheSync();
+
+    // Listen for cache becoming ready (preloaded during app start/login)
+    _profileCache.addListener(_onProfileCacheChanged);
+
+    // Fallback: If cache not loaded after 500ms, trigger network load
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      if (!_profileCache.isProfileLoaded) {
+        debugPrint('⚠️ [Profile] Cache not ready after 500ms, loading from network');
+        _loadProfileFallback();
+      }
+    });
+
     _loadUnreadNotifications();
     
     // Setup scroll listeners for pagination
@@ -103,11 +130,280 @@ class _ProfilePageState extends State<ProfilePage> {
     _activityScrollController.addListener(_onActivityScroll);
   }
 
+  void _onProfileCacheChanged() {
+    if (!mounted) return;
+    _applyProfileCacheSync();
+  }
+  
+  /// Fallback: Load profile from network when cache isn't ready
+  Future<void> _loadProfileFallback() async {
+    try {
+      final currentUser = fb.FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+      
+      // Trigger cache preload
+      await ProfileCacheService().preloadCurrentUserData(currentUser.uid);
+      
+      // Apply the now-loaded cache
+      if (mounted) {
+        _applyProfileCacheSync();
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Profile] Fallback load error: $e');
+      if (mounted) {
+        setState(() {
+          _loadingProfile = false;
+          _loadingMyPosts = false;
+          _loadingActivity = false;
+          _loadingMedia = false;
+          _loadingPodcasts = false;
+        });
+      }
+    }
+  }
+
+  bool _activityLoadTriggered = false;
+  bool _podcastsLoadTriggered = false;
+  
+  void _applyProfileCacheSync() {
+    // Profile map is already in the exact format ProfilePage UI expects (snake_case)
+    final p = _profileCache.currentUserProfileMap;
+    if (p != null && p.isNotEmpty) {
+      _profile = p;
+      _myUserId = (p['id'] ?? p['uid'] ?? '').toString();
+      _loadingProfile = false;
+      
+      // Load activity and podcasts once we have userId (only once)
+      if (_myUserId != null && _myUserId!.isNotEmpty) {
+        if (!_activityLoadTriggered) {
+          _activityLoadTriggered = true;
+          _loadActivity();
+        }
+        if (!_podcastsLoadTriggered) {
+          _podcastsLoadTriggered = true;
+          _loadMyPodcasts();
+        }
+      }
+    }
+
+    // If we have posts preloaded, show them instantly
+    final models = _profileCache.currentUserPosts;
+    if (models.isNotEmpty) {
+      // Do not block UI; hydrate then setState when ready
+      _applyCachedPosts(models);
+    } else if (_profileCache.isPostsLoaded) {
+      _loadingMyPosts = false;
+      _loadingMedia = false;
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _applyCachedPosts(List<PostModel> models) async {
+    try {
+      final hydratedModels = await _hydrateAllAuthorData(models);
+      if (!mounted) return;
+      final posts = _mapPostModelsFast(hydratedModels);
+      final mediaItems = _extractMediaItems(posts);
+      setState(() {
+        _myPosts = posts;
+        _mediaItems = mediaItems;
+        _loadingMyPosts = false;
+        _loadingMedia = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMyPosts = false;
+        _loadingMedia = false;
+      });
+    }
+  }
+
+
+
+  /// FAST: Convert PostModels to Posts synchronously using denormalized data
+  List<Post> _mapPostModelsFast(List<PostModel> models) {
+    final result = <Post>[];
+    for (final m in models) {
+      // Skip reposts
+      if (m.repostOf != null && m.repostOf!.isNotEmpty) continue;
+      
+      // Use denormalized data or check cache
+      String authorName = m.authorName ?? 'User';
+      String authorAvatarUrl = m.authorAvatarUrl ?? '';
+      
+      // Check cache for author data if missing
+      if ((authorName == 'User' || authorName.isEmpty) && _authorProfilesCache.containsKey(m.authorId)) {
+        final profile = _authorProfilesCache[m.authorId]!;
+        authorName = profile['name'] ?? 'User';
+        authorAvatarUrl = profile['avatarUrl'] ?? '';
+      }
+      
+      MediaType mediaType;
+      String? videoUrl;
+      List<String> imageUrls;
+      
+      if (m.mediaThumbs.isNotEmpty) {
+        final hasVideo = m.mediaThumbs.any((t) => t.type == 'video');
+        if (hasVideo) {
+          mediaType = MediaType.video;
+          videoUrl = m.mediaUrls.firstWhere(
+            (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
+            orElse: () => m.mediaUrls.isNotEmpty ? m.mediaUrls.first : '',
+          );
+          imageUrls = [];
+        } else {
+          mediaType = m.mediaThumbs.length == 1 ? MediaType.image : MediaType.images;
+          videoUrl = null;
+          imageUrls = m.mediaThumbs.map((t) => t.thumbUrl).toList();
+        }
+      } else if (m.mediaUrls.isNotEmpty) {
+        final hasVideo = m.mediaUrls.any((u) => 
+          u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov')
+        );
+        if (hasVideo) {
+          mediaType = MediaType.video;
+          videoUrl = m.mediaUrls.firstWhere(
+            (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
+            orElse: () => m.mediaUrls.first,
+          );
+          imageUrls = [];
+        } else {
+          mediaType = m.mediaUrls.length == 1 ? MediaType.image : MediaType.images;
+          videoUrl = null;
+          imageUrls = m.mediaUrls;
+        }
+      } else {
+        mediaType = MediaType.none;
+        videoUrl = null;
+        imageUrls = [];
+      }
+      
+      result.add(Post(
+        id: m.id,
+        authorId: m.authorId,
+        userName: authorName,
+        userAvatarUrl: authorAvatarUrl,
+        createdAt: m.createdAt,
+        text: m.text,
+        mediaType: mediaType,
+        imageUrls: imageUrls,
+        videoUrl: videoUrl,
+        counts: PostCounts(
+          likes: m.summary.likes,
+          comments: m.summary.comments,
+          shares: m.summary.shares,
+          reposts: m.summary.reposts,
+          bookmarks: m.summary.bookmarks,
+        ),
+        userReaction: null,
+        isBookmarked: false,
+        isRepost: false,
+        repostedBy: null,
+        originalPostId: null,
+      ));
+    }
+    return result;
+  }
+
+  /// Extract media items from posts for media grid
+  List<Map<String, String>> _extractMediaItems(List<Post> posts) {
+    final items = <Map<String, String>>[];
+    for (final p in posts) {
+      if (p.isRepost) continue;
+      for (final url in p.imageUrls) {
+        items.add({'imageUrl': url, 'postId': p.id});
+      }
+    }
+    return items;
+  }
+  
+  /// SYNC: Hydrate ALL author data before displaying (same as home feed)
+  /// Handles both regular posts AND fetches original posts for reposts
+  Future<List<PostModel>> _hydrateAllAuthorData(List<PostModel> models) async {
+    final userRepo = FirebaseUserRepository();
+    
+    // Collect ALL author IDs we need (post authors + repost original authors)
+    final authorIds = <String>{};
+    final repostOriginalIds = <String>{};
+    
+    for (final m in models) {
+      // Always add the post author
+      if (m.authorName == null || m.authorName!.isEmpty || m.authorName == 'User') {
+        authorIds.add(m.authorId);
+      }
+      // Track reposts that need original post fetched
+      if (m.repostOf != null && m.repostOf!.isNotEmpty) {
+        repostOriginalIds.add(m.repostOf!);
+      }
+    }
+    
+    // Fetch original posts for reposts (to get their author IDs)
+    if (repostOriginalIds.isNotEmpty) {
+      await Future.wait(repostOriginalIds.map((postId) async {
+        if (_hydratedOriginalPosts.containsKey(postId)) return;
+        try {
+          final original = await _postRepo.getPost(postId);
+          if (original != null) {
+            _hydratedOriginalPosts[postId] = original;
+            // Add original author to fetch list if missing
+            if (original.authorName == null || original.authorName!.isEmpty || original.authorName == 'User') {
+              authorIds.add(original.authorId);
+            }
+          }
+        } catch (_) {}
+      }));
+    }
+    
+    // Fetch ALL author profiles in parallel
+    if (authorIds.isNotEmpty) {
+      debugPrint('💧 [Profile] Hydrating ${authorIds.length} authors before display...');
+      await Future.wait(authorIds.map((authorId) async {
+        if (_authorProfilesCache.containsKey(authorId)) return;
+        try {
+          final profile = await userRepo.getUserProfile(authorId);
+          if (profile != null) {
+            final fn = profile.firstName?.trim() ?? '';
+            final ln = profile.lastName?.trim() ?? '';
+            final fullName = (fn.isNotEmpty || ln.isNotEmpty)
+                ? '$fn $ln'.trim()
+                : (profile.displayName ?? profile.username ?? 'User');
+            _authorProfilesCache[authorId] = {
+              'name': fullName,
+              'avatarUrl': profile.avatarUrl ?? '',
+            };
+          }
+        } catch (_) {}
+      }));
+    }
+    
+    // Update models with fetched data
+    return models.map((m) {
+      var updated = m;
+      
+      // Update post author if needed
+      if ((m.authorName == null || m.authorName!.isEmpty || m.authorName == 'User') && 
+          _authorProfilesCache.containsKey(m.authorId)) {
+        final profile = _authorProfilesCache[m.authorId]!;
+        updated = updated.copyWith(
+          authorName: profile['name'],
+          authorAvatarUrl: profile['avatarUrl'],
+        );
+      }
+      
+      return updated;
+    }).toList();
+  }
+
   @override
   void dispose() {
     _postEventsSub?.cancel();
     _postsScrollController.dispose();
     _activityScrollController.dispose();
+    _profileCache.removeListener(_onProfileCacheChanged);
     super.dispose();
   }
   
@@ -1485,40 +1781,70 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 updates['interest_domains'] =
                                                     r.interests ?? [];
 
-                                                try {
-                                                  // Sync interests with community memberships BEFORE updating profile
-                                                  // This ensures we can detect what was removed
-                                                  await CommunityInterestSyncService().syncUserInterests(
-                                                    r.interests ?? [], 
-                                                    oldInterests: interests, // Pass current interests before update
+                                                // INSTANT: Update UI immediately with new data (optimistic update)
+                                                if (mounted) {
+                                                  setState(() {
+                                                    // Apply updates to local profile map instantly
+                                                    final updated = Map<String, dynamic>.from(_profile ?? {});
+                                                    if (updates['first_name'] != null) {
+                                                      updated['first_name'] = updates['first_name'];
+                                                    }
+                                                    if (updates['last_name'] != null) {
+                                                      updated['last_name'] = updates['last_name'];
+                                                    }
+                                                    if (updates['username'] != null) {
+                                                      updated['username'] = updates['username'];
+                                                    }
+                                                    if (updates['bio'] != null) {
+                                                      updated['bio'] = updates['bio'];
+                                                    }
+                                                    if (updates['interest_domains'] != null) {
+                                                      updated['interest_domains'] = updates['interest_domains'];
+                                                    }
+                                                    if (updates['professional_experiences'] != null) {
+                                                      updated['professional_experiences'] = updates['professional_experiences'];
+                                                    }
+                                                    if (updates['trainings'] != null) {
+                                                      updated['trainings'] = updates['trainings'];
+                                                    }
+                                                    // Update full_name
+                                                    final fn = updated['first_name'] ?? '';
+                                                    final ln = updated['last_name'] ?? '';
+                                                    updated['full_name'] = '$fn $ln'.trim();
+                                                    _profile = updated;
+                                                  });
+                                                  
+                                                  // Show success immediately
+                                                  messenger.showSnackBar(
+                                                    SnackBar(
+                                                      content: Text('Profile updated!'),
+                                                      backgroundColor: Colors.green,
+                                                      duration: Duration(seconds: 2),
+                                                    ),
                                                   );
-                                                  
-                                                  // Now update the profile
-                                                  await api.update(updates);
-                                                  
-                                                  // Force reload profile to show new interests
-                                                  await _loadProfile();
-                                                  
-                                                  // Trigger a rebuild of the entire widget tree
-                                                  if (mounted) {
-                                                    setState(() {
-                                                      // This forces the FutureBuilder to rebuild
-                                                    });
-                                                  }
-                                                  
-                                                  // Show success message
-                                                  if (mounted) {
-                                                    messenger.showSnackBar(
-                                                      SnackBar(
-                                                        content: Text('Interests updated! Your communities have been synced.'),
-                                                        backgroundColor: Colors.green,
-                                                        duration: Duration(seconds: 2),
-                                                      ),
-                                                    );
-                                                  }
-                                                } catch (e) {
-                                                  // Error handled silently
                                                 }
+                                                
+                                                // BACKGROUND: Save to server without blocking UI
+                                                () async {
+                                                  try {
+                                                    // Sync interests with community memberships
+                                                    await CommunityInterestSyncService().syncUserInterests(
+                                                      r.interests ?? [], 
+                                                      oldInterests: interests,
+                                                    );
+                                                    
+                                                    // Save to server
+                                                    await api.update(updates);
+                                                    
+                                                    // Refresh cache for next time
+                                                    final user = fb.FirebaseAuth.instance.currentUser;
+                                                    if (user != null) {
+                                                      ProfileCacheService().preloadCurrentUserData(user.uid);
+                                                    }
+                                                  } catch (e) {
+                                                    debugPrint('⚠️ Background profile save error: $e');
+                                                  }
+                                                }();
                                                                                             },
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: const Color(
@@ -2614,40 +2940,62 @@ class _ProfilePageState extends State<ProfilePage> {
 
                                                       updates['interest_domains'] = r.interests ?? [];
 
-                                                      try {
-                                                        // Sync interests with community memberships BEFORE updating profile
-                                                        // This ensures we can detect what was removed
-                                                        await CommunityInterestSyncService().syncUserInterests(
-                                                          r.interests ?? [], 
-                                                          oldInterests: interests, // Pass current interests before update
+                                                      // INSTANT: Update UI immediately with new data (optimistic update)
+                                                      if (mounted) {
+                                                        setState(() {
+                                                          final updated = Map<String, dynamic>.from(_profile ?? {});
+                                                          if (updates['first_name'] != null) {
+                                                            updated['first_name'] = updates['first_name'];
+                                                          }
+                                                          if (updates['last_name'] != null) {
+                                                            updated['last_name'] = updates['last_name'];
+                                                          }
+                                                          if (updates['username'] != null) {
+                                                            updated['username'] = updates['username'];
+                                                          }
+                                                          if (updates['bio'] != null) {
+                                                            updated['bio'] = updates['bio'];
+                                                          }
+                                                          if (updates['interest_domains'] != null) {
+                                                            updated['interest_domains'] = updates['interest_domains'];
+                                                          }
+                                                          if (updates['professional_experiences'] != null) {
+                                                            updated['professional_experiences'] = updates['professional_experiences'];
+                                                          }
+                                                          if (updates['trainings'] != null) {
+                                                            updated['trainings'] = updates['trainings'];
+                                                          }
+                                                          final fn = updated['first_name'] ?? '';
+                                                          final ln = updated['last_name'] ?? '';
+                                                          updated['full_name'] = '$fn $ln'.trim();
+                                                          _profile = updated;
+                                                        });
+                                                        
+                                                        messenger.showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('Profile updated!'),
+                                                            backgroundColor: Colors.green,
+                                                            duration: Duration(seconds: 2),
+                                                          ),
                                                         );
-                                                        
-                                                        // Now update the profile
-                                                        await api.update(updates);
-                                                        
-                                                        // Force reload profile to show new interests
-                                                        await _loadProfile();
-                                                        
-                                                        // Trigger a rebuild of the entire widget tree
-                                                        if (mounted) {
-                                                          setState(() {
-                                                            // This forces the FutureBuilder to rebuild
-                                                          });
-                                                        }
-                                                        
-                                                        // Show success message
-                                                        if (mounted) {
-                                                          messenger.showSnackBar(
-                                                            SnackBar(
-                                                              content: Text('Interests updated! Your communities have been synced.'),
-                                                              backgroundColor: Colors.green,
-                                                              duration: Duration(seconds: 2),
-                                                            ),
-                                                          );
-                                                        }
-                                                      } catch (e) {
-                                                        // Error handled silently
                                                       }
+                                                      
+                                                      // BACKGROUND: Save to server without blocking UI
+                                                      () async {
+                                                        try {
+                                                          await CommunityInterestSyncService().syncUserInterests(
+                                                            r.interests ?? [], 
+                                                            oldInterests: interests,
+                                                          );
+                                                          await api.update(updates);
+                                                          final user = fb.FirebaseAuth.instance.currentUser;
+                                                          if (user != null) {
+                                                            ProfileCacheService().preloadCurrentUserData(user.uid);
+                                                          }
+                                                        } catch (e) {
+                                                          debugPrint('⚠️ Background profile save error: $e');
+                                                        }
+                                                      }();
                                                                                                         },
                                                     style: ElevatedButton.styleFrom(
                                                       backgroundColor:

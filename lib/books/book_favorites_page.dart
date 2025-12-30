@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../repositories/interfaces/book_repository.dart';
+import '../repositories/firebase/firebase_book_repository.dart';
 import 'books_home_page.dart';
 import 'book_details_page.dart';
 
@@ -17,34 +18,56 @@ class _BookFavoritesPageState extends State<BookFavoritesPage> {
   bool _loading = true;
   String? _error;
   List<Book> _items = [];
+  
+  // FASTFEED: Direct repository access for cache-first loading
+  final FirebaseBookRepository _firebaseBookRepo = FirebaseBookRepository();
 
   @override
   void initState() {
     super.initState();
+    // FASTFEED: Load cached favorites instantly, then refresh
+    _loadFromCacheInstantly();
     _load();
   }
 
+  /// INSTANT: Load cached books (no network wait)
+  Future<void> _loadFromCacheInstantly() async {
+    try {
+      final bookModels = await _firebaseBookRepo.listBooksFromCache(
+        limit: 100,
+        isPublished: true,
+      );
+      if (bookModels.isNotEmpty && mounted) {
+        setState(() {
+          _items = bookModels.map(Book.fromModel).toList();
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      // Cache miss - will load from server
+    }
+  }
+
   Future<void> _load() async {
-    setState(() => _loading = true);
+    if (_items.isEmpty) {
+      setState(() => _loading = true);
+    }
     try {
       final bookRepo = context.read<BookRepository>();
       final bookModels = await bookRepo.listBooks(page: 1, limit: 100, isPublished: true);
       
-      // Convert BookModel to Book
-      final books = bookModels.map((m) => Book.fromModel(m)).toList();
-      
-      // Filter for favorite books (you can add a favorites field to the model)
-      // For now, showing all books
       setState(() {
-        _items = books;
+        _items = bookModels.map(Book.fromModel).toList();
         _loading = false;
         _error = null;
       });
     } catch (e) {
-      setState(() {
-        _error = 'Failed to load favorites: $e';
-        _loading = false;
-      });
+      if (_items.isEmpty) {
+        setState(() {
+          _error = 'Failed to load favorites: $e';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -105,14 +128,15 @@ class _BookFavoritesPageState extends State<BookFavoritesPage> {
                             ),
                             child: Row(
                               children: [
-                                if (book.coverUrl != null && book.coverUrl!.isNotEmpty)
+                                // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
+                                if (book.listCoverUrl != null && book.listCoverUrl!.isNotEmpty)
                                   ClipRRect(
                                     borderRadius: const BorderRadius.only(
                                       topLeft: Radius.circular(16),
                                       bottomLeft: Radius.circular(16),
                                     ),
                                     child: Image.network(
-                                      book.coverUrl!,
+                                      book.listCoverUrl!,
                                       width: 80,
                                       height: 100,
                                       fit: BoxFit.cover,

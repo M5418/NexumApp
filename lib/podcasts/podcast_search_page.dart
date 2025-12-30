@@ -221,7 +221,7 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
             ),
             child: Row(
               children: [
-                // Cover
+                // Cover - FASTFEED: Use listCoverUrl (thumbnail) for fast loading
                 ClipRRect(
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(12),
@@ -230,9 +230,9 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
                   child: SizedBox(
                     width: 110,
                     height: 120,
-                    child: (p.coverUrl ?? '').isNotEmpty
+                    child: (p.listCoverUrl ?? '').isNotEmpty
                         ? Image.network(
-                            p.coverUrl!,
+                            p.listCoverUrl!,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                               color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),

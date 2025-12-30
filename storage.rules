@@ -94,6 +94,13 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
     
+    // Livestream thumbnails
+    match /livestream_thumbnails/{fileName} {
+      allow read: if true;
+      allow write: if signedIn() && isImage() && isValidImageSize();
+      allow delete: if signedIn() || isAdmin();
+    }
+    
     // System/admin uploads
     match /system/{allPaths=**} {
       allow read: if true;

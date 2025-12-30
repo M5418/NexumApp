@@ -112,48 +112,68 @@ class FirebaseMessageRepository implements MessageRepository {
 
   @override
   Future<List<MessageRecordModel>> list(String conversationId, {int limit = 50}) async {
+    final uid = _auth.currentUser?.uid;
+    
+    // Try server first for fresh data, fall back to cache if offline
+    QuerySnapshot<Map<String, dynamic>>? snap;
+    try {
+      // IMPORTANT: Force server fetch to get latest messages with proper timestamps
+      snap = await _conv(conversationId)
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get(const GetOptions(source: Source.server));
+    } catch (_) {
+      // Server unavailable, try cache
+      try {
+        snap = await _conv(conversationId)
+            .orderBy('createdAt', descending: true)
+            .limit(limit)
+            .get(const GetOptions(source: Source.cache));
+      } catch (e) {
+        rethrow;
+      }
+    }
+    
+    // Filter out deleted messages
+    final list = snap.docs
+        .where((doc) {
+          final data = doc.data();
+          final deletedFor = data['deletedFor'] as Map?;
+          final deletedForEveryone = data['deletedForEveryone'] as bool?;
+          if (deletedForEveryone == true) return false;
+          if (uid != null && deletedFor != null && deletedFor[uid] == true) return false;
+          return true;
+        })
+        .map(_fromDoc)
+        .toList();
+    
+    return list.reversed.toList();
+  }
+
+  /// FAST: Get messages from cache first (instant), returns cached data
+  Future<List<MessageRecordModel>> listFromCache(String conversationId, {int limit = 50}) async {
     try {
       final uid = _auth.currentUser?.uid;
-      debugPrint('💬 [MessageRepo] Fetching messages for conversation: $conversationId');
-      
       final snap = await _conv(conversationId)
           .orderBy('createdAt', descending: true)
           .limit(limit)
-          .get();
+          .get(const GetOptions(source: Source.cache));
       
-      debugPrint('💬 [MessageRepo] Fetched ${snap.docs.length} raw messages from Firestore');
-      
-      // Filter out messages deleted by current user or deleted for everyone
       final list = snap.docs
           .where((doc) {
             final data = doc.data();
             final deletedFor = data['deletedFor'] as Map?;
             final deletedForEveryone = data['deletedForEveryone'] as bool?;
-            
-            debugPrint('💬 [MessageRepo] Checking message ${doc.id}: deletedForEveryone=$deletedForEveryone, deletedFor[$uid]=${deletedFor?[uid]}');
-            
-            // Hide if deleted for everyone
-            if (deletedForEveryone == true) {
-              debugPrint('💬 [MessageRepo] ❌ Filtering out message ${doc.id}: deleted for everyone');
-              return false;
-            }
-            
-            // Hide if current user deleted it
-            if (uid != null && deletedFor != null && deletedFor[uid] == true) {
-              debugPrint('💬 [MessageRepo] ❌ Filtering out message ${doc.id}: deleted by current user');
-              return false;
-            }
-            
+            if (deletedForEveryone == true) return false;
+            if (uid != null && deletedFor != null && deletedFor[uid] == true) return false;
             return true;
           })
           .map(_fromDoc)
           .toList();
       
-      debugPrint('💬 [MessageRepo] Returning ${list.length} messages after filtering');
       return list.reversed.toList();
-    } catch (e) {
-      debugPrint('💬 [MessageRepo] Error fetching messages: $e');
-      rethrow;
+    } catch (_) {
+      return []; // Cache miss
     }
   }
 

@@ -111,16 +111,21 @@ class _PostPageState extends State<PostPage> {
   }
 
   Future<void> _init() async {
-    await _loadCurrentUserId();
+    // Get user ID synchronously - it's already available
+    _currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+    
     if (widget.post != null) {
+      // INSTANT: Apply post immediately - no await
       _applyPost(widget.post!);
       _trackView(widget.post!);
       _subscribeToPost(widget.post!.id);
       _subscribeToComments(widget.post!.id);
-      await _loadComments();
+      // Load comments in background (non-blocking)
+      _loadComments();
     } else {
-      // Try cache first for faster loading
       final postId = widget.postId!;
+      
+      // Try cache first for instant display
       if (_isCacheValid(postId)) {
         final cachedPost = _postCache[postId];
         final cachedComments = _commentsCache[postId];
@@ -137,15 +142,13 @@ class _PostPageState extends State<PostPage> {
         }
       }
       
-      // Load fresh data in background
-      await _loadPostById();
-      if (widget.postId != null) {
-        _subscribeToPost(widget.postId!);
-        _subscribeToComments(widget.postId!);
-      }
-      if (_post != null) {
-        await _loadComments();
-      }
+      // Subscribe immediately for real-time updates
+      _subscribeToPost(postId);
+      _subscribeToComments(postId);
+      
+      // Load fresh data in background (non-blocking)
+      _loadPostById();
+      _loadComments();
     }
   }
   
@@ -307,21 +310,6 @@ class _PostPageState extends State<PostPage> {
     return out;
   }
 
-  Future<void> _loadCurrentUserId() async {
-    try {
-      final id = fb.FirebaseAuth.instance.currentUser?.uid;
-      if (!mounted) return;
-      setState(() {
-        _currentUserId = id?.toString();
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _currentUserId = null;
-      });
-    }
-  }
-
   void _applyPost(Post p) {
     final detail = PostDetail(
       id: p.id,
@@ -353,33 +341,26 @@ class _PostPageState extends State<PostPage> {
     try {
       final model = await _postRepo.getPost(widget.postId!);
       if (model == null) throw Exception('Post not found');
-      final author = await _userRepo.getUserProfile(model.authorId);
       
-      // Build full name for post author
-      final firstName = author?.firstName?.trim() ?? '';
-      final lastName = author?.lastName?.trim() ?? '';
-      final authorFullName = (firstName.isNotEmpty || lastName.isNotEmpty)
-          ? '$firstName $lastName'.trim()
-          : (author?.displayName ?? author?.username ?? 'User');
+      // Use denormalized data from post model for INSTANT display
+      // (authorName, authorAvatarUrl are already in the post document)
+      final authorName = model.authorName ?? 'User';
+      final avatarUrl = model.authorAvatarUrl ?? '';
       
-      bool liked = false;
-      bool isBookmarked = false;
-      if (_currentUserId != null) {
-        liked = await _postRepo.hasUserLikedPost(postId: model.id, uid: _currentUserId!);
-        isBookmarked = await _postRepo.hasUserBookmarkedPost(postId: model.id, uid: _currentUserId!);
-      }
-      final normUrls = await _normalizeUrls(model.mediaUrls);
-      final avatarUrl = await _normalizeUrl(author?.avatarUrl ?? '');
+      // Use media URLs directly - no normalization needed for display
+      final mediaUrls = model.mediaUrls;
+      
+      // Show post IMMEDIATELY with available data
       final detail = PostDetail(
         id: model.id,
         authorId: model.authorId,
-        authorName: authorFullName,
+        authorName: authorName,
         authorAvatarUrl: avatarUrl,
         createdAt: model.createdAt,
         text: model.text,
-        mediaType: _mediaTypeFor(normUrls),
-        imageUrls: normUrls,
-        videoUrl: _videoUrlFromMedia(normUrls),
+        mediaType: _mediaTypeFor(mediaUrls),
+        imageUrls: mediaUrls,
+        videoUrl: _videoUrlFromMedia(mediaUrls),
         counts: PostCounts(
           likes: model.summary.likes,
           comments: model.summary.comments,
@@ -387,16 +368,38 @@ class _PostPageState extends State<PostPage> {
           reposts: model.summary.reposts,
           bookmarks: model.summary.bookmarks,
         ),
-        userReaction: liked ? ReactionType.like : null,
-        isBookmarked: isBookmarked,
+        userReaction: null,
+        isBookmarked: false,
         comments: const [],
       );
+      
       if (!mounted) return;
       setState(() {
         _post = detail;
-        _isLiked = liked;
-        _isBookmarked = isBookmarked;
+        _loadingPost = false;
       });
+      
+      // Load like/bookmark status in background (non-blocking)
+      if (_currentUserId != null) {
+        _loadUserInteractions(model.id);
+      }
+      
+      // Track view
+      _trackView(Post(
+        id: model.id,
+        userName: authorName,
+        userAvatarUrl: avatarUrl,
+        createdAt: model.createdAt,
+        text: model.text,
+        mediaType: _mediaTypeFor(mediaUrls),
+        imageUrls: mediaUrls,
+        videoUrl: _videoUrlFromMedia(mediaUrls),
+        counts: detail.counts,
+        userReaction: null,
+        isBookmarked: false,
+        authorId: model.authorId,
+        isRepost: model.repostOf != null,
+      ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -408,11 +411,29 @@ class _PostPageState extends State<PostPage> {
       );
       Navigator.pop(context);
     } finally {
-      if (mounted) {
+      if (mounted && _loadingPost) {
         setState(() {
           _loadingPost = false;
         });
       }
+    }
+  }
+  
+  // Load user interactions (like/bookmark) in background
+  Future<void> _loadUserInteractions(String postId) async {
+    if (_currentUserId == null) return;
+    try {
+      final results = await Future.wait([
+        _postRepo.hasUserLikedPost(postId: postId, uid: _currentUserId!),
+        _postRepo.hasUserBookmarkedPost(postId: postId, uid: _currentUserId!),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _isLiked = results[0];
+        _isBookmarked = results[1];
+      });
+    } catch (_) {
+      // Silent fail - not critical
     }
   }
 
