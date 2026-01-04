@@ -1,0 +1,19 @@
+{
+  "projects": {},
+  "targets": {
+    "nexum-backend": {
+      "hosting": {
+        "nexumoffice": [
+          "nexumoffice"
+        ],
+        "nexumconnects": [
+          "nexumconnects"
+        ],
+        "nexum-backend": [
+          "nexum-backend"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

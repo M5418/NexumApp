@@ -151,5 +151,5 @@ flutter_native_splash:
   android: true
   android_gravity: center
   
-  # Web settings (optional)
-  web: false
+  # Web settings
+  web: true

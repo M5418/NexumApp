@@ -3,40 +3,43 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "hosting": {
-    "public": "build/web",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      {"source": "/api/**", "function": "api"},
-      {"source": "/app/**", "destination": "/app/index.html"},
-      {"source": "**", "destination": "/index.html"}
-    ],
-    "redirects": [
-      {"source": "/www", "destination": "https://nexum-connects.com", "type": 301}
-    ],
-    "headers": [
-      {
-        "source": "**/*.@(eot|otf|ttf|ttc|woff|woff2|font.css)",
-        "headers": [{"key": "Access-Control-Allow-Origin", "value": "*"}]
-      },
-      {
-        "source": "**/*.@(jpg|jpeg|gif|png|webp|svg|ico)",
-        "headers": [{"key": "Cache-Control", "value": "public, max-age=604800, immutable"}]
-      },
-      {
-        "source": "**/*.@(js|css)",
-        "headers": [{"key": "Cache-Control", "value": "public, max-age=3600, must-revalidate"}]
-      },
-      {
-        "source": "index.html",
-        "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
-      },
-      {
-        "source": "**",
-        "headers": [{"key": "Cache-Control", "value": "no-cache, must-revalidate"}]
-      }
-    ]
-  },
+  "hosting": [
+    {
+      "target": "nexum-backend",
+      "public": "build/web",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [
+        {"source": "/api/**", "function": "api"},
+        {"source": "/app/**", "destination": "/app/index.html"},
+        {"source": "**", "destination": "/index.html"}
+      ],
+      "redirects": [
+        {"source": "/www", "destination": "https://nexum-connects.com", "type": 301}
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(eot|otf|ttf|ttc|woff|woff2|font.css)",
+          "headers": [{"key": "Access-Control-Allow-Origin", "value": "*"}]
+        },
+        {
+          "source": "**/*.@(jpg|jpeg|gif|png|webp|svg|ico)",
+          "headers": [{"key": "Cache-Control", "value": "public, max-age=604800, immutable"}]
+        },
+        {
+          "source": "**/*.@(js|css)",
+          "headers": [{"key": "Cache-Control", "value": "public, max-age=3600, must-revalidate"}]
+        },
+        {
+          "source": "index.html",
+          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+        },
+        {
+          "source": "**",
+          "headers": [{"key": "Cache-Control", "value": "no-cache, must-revalidate"}]
+        }
+      ]
+    }
+  ],
   "storage": {
     "rules": "storage.rules"
   },

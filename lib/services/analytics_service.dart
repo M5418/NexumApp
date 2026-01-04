@@ -1,26 +1,31 @@
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, debugPrint;
 import 'package:flutter/widgets.dart' show RouteSettings;
 
 /// Centralized analytics service for tracking screen views and events.
 /// Uses Firebase Analytics (GA4) under the hood.
 /// 
 /// IMPORTANT: No PII (email, phone, names) should ever be sent in events.
+/// NOTE: Analytics is disabled on web due to measurement ID fetch issues.
 class AnalyticsService {
   AnalyticsService._internal();
   static final AnalyticsService _instance = AnalyticsService._internal();
   static AnalyticsService get instance => _instance;
 
-  final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
+  // Skip analytics on web to avoid crashes
+  FirebaseAnalytics? get _analytics => kIsWeb ? null : FirebaseAnalytics.instance;
 
   /// Debug toggle: when true, prints each logged event to console.
   bool debugLogging = kDebugMode;
 
   /// Returns the FirebaseAnalyticsObserver for use in MaterialApp.navigatorObservers.
-  FirebaseAnalyticsObserver get observer => FirebaseAnalyticsObserver(
-        analytics: _analytics,
-        nameExtractor: _extractScreenName,
-      );
+  /// Returns null on web since analytics is disabled.
+  FirebaseAnalyticsObserver? get observer => _analytics != null 
+      ? FirebaseAnalyticsObserver(
+          analytics: _analytics!,
+          nameExtractor: _extractScreenName,
+        )
+      : null;
 
   /// Extracts a clean screen name from route settings.
   /// Falls back to 'Unknown' if route name is null or empty.
@@ -46,7 +51,7 @@ class AnalyticsService {
     }
 
     try {
-      await _analytics.logScreenView(
+      await _analytics?.logScreenView(
         screenName: screenName,
         screenClass: screenClass,
       );
@@ -70,7 +75,7 @@ class AnalyticsService {
     }
 
     try {
-      await _analytics.logEvent(
+      await _analytics?.logEvent(
         name: name,
         parameters: parameters,
       );
@@ -103,7 +108,7 @@ class AnalyticsService {
     }
 
     try {
-      await _analytics.setUserProperty(name: name, value: value);
+      await _analytics?.setUserProperty(name: name, value: value);
     } catch (e) {
       if (debugLogging) {
         debugPrint('⚠️ Analytics error (user_property): $e');
@@ -118,7 +123,7 @@ class AnalyticsService {
     }
 
     try {
-      await _analytics.setUserId(id: userId);
+      await _analytics?.setUserId(id: userId);
     } catch (e) {
       if (debugLogging) {
         debugPrint('⚠️ Analytics error (user_id): $e');
@@ -133,7 +138,7 @@ class AnalyticsService {
     }
 
     try {
-      await _analytics.setAnalyticsCollectionEnabled(enabled);
+      await _analytics?.setAnalyticsCollectionEnabled(enabled);
     } catch (e) {
       if (debugLogging) {
         debugPrint('⚠️ Analytics error (setEnabled): $e');

@@ -95,9 +95,7 @@ class _SharedMediaPageState extends State<SharedMediaPage>
     }
 
     // Find conversation if not provided
-    if (_conversationId == null) {
-      _conversationId = await _findConversation(currentUserId, widget.otherUserId);
-    }
+    _conversationId ??= await _findConversation(currentUserId, widget.otherUserId);
 
     if (_conversationId == null) {
       setState(() => _loading = false);

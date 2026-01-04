@@ -90,8 +90,10 @@ void _sanityLogFirebase() {
 Future<void> main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   
-  // Preserve native splash screen until app is ready
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  // Preserve native splash screen until app is ready (skip on web)
+  if (!kIsWeb) {
+    FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  }
   
   // Configure caching for better performance
   CacheConfig.configureImageCache();
@@ -199,18 +201,20 @@ Future<void> main() async {
   debugPrint('📱 App Check Status: ${appCheckActivated ? "ACTIVE" : "INACTIVE (app will work normally)"}');
   
   // Initialize interest-based communities (one-time setup, safe to call multiple times)
-  // Wrap in try-catch to prevent crashes
-  try {
-    CommunityInterestSyncService().initializeInterestCommunities().catchError((e) {
-      debugPrint('Community initialization error (non-critical): $e');
-    });
-  } catch (e) {
-    debugPrint('Community service initialization failed: $e');
+  // Skip on web to avoid potential freeze issues
+  if (!kIsWeb) {
+    try {
+      CommunityInterestSyncService().initializeInterestCommunities().catchError((e) {
+        debugPrint('Community initialization error (non-critical): $e');
+      });
+    } catch (e) {
+      debugPrint('Community service initialization failed: $e');
+    }
   }
   
   // Fix all communities with missing/null names (with delay to ensure Firebase is ready)
-  // Only run in debug mode to avoid potential production issues
-  if (!kReleaseMode) {
+  // Only run in debug mode on mobile (skip on web to avoid freeze)
+  if (!kReleaseMode && !kIsWeb) {
     Future.delayed(const Duration(seconds: 2), () {
       debugPrint('🔥 Starting community fix...');
       fixAllCommunities().then((_) {
@@ -284,7 +288,7 @@ class MyApp extends StatelessWidget {
             darkTheme: themeProvider.darkTheme,
             // Drive theme from in-app toggle
             themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-            navigatorObservers: [AnalyticsRouteObserver()],
+            navigatorObservers: kIsWeb ? [] : [AnalyticsRouteObserver()],
             home: const AppWrapper(),
           );
         },

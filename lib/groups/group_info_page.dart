@@ -547,7 +547,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                             trailing: Switch(
                               value: _group.isMuted(_currentUserId ?? ''),
                               onChanged: (_) => _toggleMute(),
-                              activeColor: const Color(0xFFBFAE01),
+                              activeThumbColor: const Color(0xFFBFAE01),
                             ),
                           ),
                           if (_isAdmin) ...[
@@ -561,7 +561,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                               trailing: Switch(
                                 value: _group.onlyAdminsCanSend,
                                 onChanged: (_) => _toggleOnlyAdminsCanSend(),
-                                activeColor: const Color(0xFFBFAE01),
+                                activeThumbColor: const Color(0xFFBFAE01),
                               ),
                             ),
                           ],

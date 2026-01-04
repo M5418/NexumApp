@@ -579,5 +579,13 @@ service cloud.firestore {
         allow delete: if signedIn();
       }
     }
+    
+    // Guide progress collection - per-user progress tracking
+    // Users can read/write only their own progress document
+    // Admins can read all progress documents
+    match /office_guide_progress/{odId} {
+      allow read: if isOfficeUser() && (request.auth.uid == odId || isAdmin());
+      allow write: if isOfficeUser() && request.auth.uid == odId;
+    }
   }
 }
