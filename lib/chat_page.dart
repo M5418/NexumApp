@@ -887,6 +887,7 @@ void dispose() {
     final previewResult = await Navigator.push<MediaPreviewResult>(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'media_preview'),
         builder: (_) => MediaPreviewPage(
           initialFiles: mediaFiles,
           isDark: isDark,
@@ -1429,12 +1430,13 @@ void dispose() {
           if (currentUserId == widget.otherUser.id) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const ProfilePage()),
+              MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
             );
           } else {
             Navigator.push(
               context,
               MaterialPageRoute(
+                settings: const RouteSettings(name: 'other_user_profile'),
                 builder: (context) => OtherUserProfilePage(
                   userId: widget.otherUser.id,
                   userName: widget.otherUser.name,
@@ -1611,9 +1613,12 @@ void dispose() {
     } else if (messageDate == today.subtract(const Duration(days: 1))) {
       dateText = Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday');
     } else {
-      const months = [
-        'January','February','March','April','May','June',
-        'July','August','September','October','November','December',
+      final lang = Provider.of<LanguageProvider>(context, listen: false);
+      final months = [
+        lang.t('chat.month_january'), lang.t('chat.month_february'), lang.t('chat.month_march'),
+        lang.t('chat.month_april'), lang.t('chat.month_may'), lang.t('chat.month_june'),
+        lang.t('chat.month_july'), lang.t('chat.month_august'), lang.t('chat.month_september'),
+        lang.t('chat.month_october'), lang.t('chat.month_november'), lang.t('chat.month_december'),
       ];
       dateText = '${months[date.month - 1]} ${date.day}, ${date.year}';
     }

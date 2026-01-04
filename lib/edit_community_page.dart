@@ -1,6 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import 'repositories/interfaces/community_repository.dart';
 import 'theme_provider.dart';
+import 'core/i18n/language_provider.dart';
+import 'services/media_compression_service.dart';
 
 class EditCommunityPage extends StatefulWidget {
   final CommunityModel community;
@@ -26,6 +29,18 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
   late TextEditingController _nameController;
   late TextEditingController _bioController;
   
+  // Multilingual name controllers
+  late TextEditingController _nameFrController;
+  late TextEditingController _namePtController;
+  late TextEditingController _nameEsController;
+  late TextEditingController _nameDeController;
+  
+  // Multilingual bio controllers
+  late TextEditingController _bioFrController;
+  late TextEditingController _bioPtController;
+  late TextEditingController _bioEsController;
+  late TextEditingController _bioDeController;
+  
   String? _avatarUrl;
   String? _coverUrl;
   
@@ -33,6 +48,7 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
   XFile? _newCover;
   
   bool _saving = false;
+  bool _showTranslations = false;
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -42,12 +58,37 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
     _bioController = TextEditingController(text: widget.community.bio);
     _avatarUrl = widget.community.avatarUrl;
     _coverUrl = widget.community.coverUrl;
+    
+    // Initialize multilingual controllers from existing translations
+    final nameT = widget.community.nameTranslations ?? {};
+    final bioT = widget.community.bioTranslations ?? {};
+    
+    _nameFrController = TextEditingController(text: nameT['fr'] ?? '');
+    _namePtController = TextEditingController(text: nameT['pt'] ?? '');
+    _nameEsController = TextEditingController(text: nameT['es'] ?? '');
+    _nameDeController = TextEditingController(text: nameT['de'] ?? '');
+    
+    _bioFrController = TextEditingController(text: bioT['fr'] ?? '');
+    _bioPtController = TextEditingController(text: bioT['pt'] ?? '');
+    _bioEsController = TextEditingController(text: bioT['es'] ?? '');
+    _bioDeController = TextEditingController(text: bioT['de'] ?? '');
+    
+    // Show translations section if any translations exist
+    _showTranslations = nameT.isNotEmpty || bioT.isNotEmpty;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _bioController.dispose();
+    _nameFrController.dispose();
+    _namePtController.dispose();
+    _nameEsController.dispose();
+    _nameDeController.dispose();
+    _bioFrController.dispose();
+    _bioPtController.dispose();
+    _bioEsController.dispose();
+    _bioDeController.dispose();
     super.dispose();
   }
 
@@ -87,19 +128,35 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
     }
   }
 
-  Future<String?> _uploadImage(XFile file, String path) async {
+  Future<String?> _uploadImage(XFile file, String path, {bool isCover = false}) async {
     try {
       final ref = FirebaseStorage.instance.ref().child(path);
+      final compressionService = MediaCompressionService();
+      Uint8List bytesToUpload;
       
       if (kIsWeb) {
-        // Web upload
-        final bytes = await file.readAsBytes();
-        await ref.putData(bytes);
+        // Web upload with compression
+        final originalBytes = await file.readAsBytes();
+        final compressed = await compressionService.compressImageBytes(
+          bytes: originalBytes,
+          filename: file.name,
+          quality: 85,
+          minWidth: isCover ? 1920 : 500,
+          minHeight: isCover ? 1080 : 500,
+        );
+        bytesToUpload = compressed ?? originalBytes;
       } else {
-        // Mobile upload
-        await ref.putFile(File(file.path));
+        // Mobile upload with compression
+        final compressed = await compressionService.compressImage(
+          filePath: file.path,
+          quality: 85,
+          minWidth: isCover ? 1920 : 500,
+          minHeight: isCover ? 1080 : 500,
+        );
+        bytesToUpload = compressed ?? await File(file.path).readAsBytes();
       }
       
+      await ref.putData(bytesToUpload);
       return await ref.getDownloadURL();
     } catch (e) {
       debugPrint('Error uploading image: $e');
@@ -111,7 +168,7 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Community name cannot be empty', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('edit_community.name_empty'), style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -141,9 +198,23 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
         final url = await _uploadImage(
           _newCover!,
           'communities/${widget.community.id}/cover_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          isCover: true,
         );
         if (url != null) newCoverUrl = url;
       }
+
+      // Build translations maps (only include non-empty values)
+      final nameTranslations = <String, String>{};
+      if (_nameFrController.text.trim().isNotEmpty) nameTranslations['fr'] = _nameFrController.text.trim();
+      if (_namePtController.text.trim().isNotEmpty) nameTranslations['pt'] = _namePtController.text.trim();
+      if (_nameEsController.text.trim().isNotEmpty) nameTranslations['es'] = _nameEsController.text.trim();
+      if (_nameDeController.text.trim().isNotEmpty) nameTranslations['de'] = _nameDeController.text.trim();
+      
+      final bioTranslations = <String, String>{};
+      if (_bioFrController.text.trim().isNotEmpty) bioTranslations['fr'] = _bioFrController.text.trim();
+      if (_bioPtController.text.trim().isNotEmpty) bioTranslations['pt'] = _bioPtController.text.trim();
+      if (_bioEsController.text.trim().isNotEmpty) bioTranslations['es'] = _bioEsController.text.trim();
+      if (_bioDeController.text.trim().isNotEmpty) bioTranslations['de'] = _bioDeController.text.trim();
 
       // Update community
       await repo.updateCommunity(
@@ -152,13 +223,15 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
         bio: _bioController.text.trim(),
         avatarUrl: newAvatarUrl ?? _avatarUrl,
         coverUrl: newCoverUrl ?? _coverUrl,
+        nameTranslations: nameTranslations.isNotEmpty ? nameTranslations : null,
+        bioTranslations: bioTranslations.isNotEmpty ? bioTranslations : null,
       );
 
       if (!mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Community updated successfully!', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('edit_community.updated'), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFF4CAF50),
         ),
       );
@@ -168,7 +241,7 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update community: $e', style: GoogleFonts.inter()),
+          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('edit_community.update_failed')}: $e', style: GoogleFonts.inter()),
           backgroundColor: Colors.red,
         ),
       );
@@ -196,7 +269,7 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
             elevation: 0,
             centerTitle: true,
             title: Text(
-              'Edit Community',
+              Provider.of<LanguageProvider>(context, listen: false).t('edit_community.title'),
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -372,7 +445,7 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
                     color: textColor,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Enter community name',
+                    hintText: Provider.of<LanguageProvider>(context, listen: false).t('edit_community.name_hint'),
                     hintStyle: GoogleFonts.inter(
                       fontSize: 16,
                       color: isDark ? Colors.white38 : Colors.black38,
@@ -409,7 +482,7 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
                   ),
                   maxLines: 5,
                   decoration: InputDecoration(
-                    hintText: 'Describe this community...',
+                    hintText: Provider.of<LanguageProvider>(context, listen: false).t('edit_community.description_hint'),
                     hintStyle: GoogleFonts.inter(
                       fontSize: 16,
                       color: isDark ? Colors.white38 : Colors.black38,
@@ -426,12 +499,182 @@ class _EditCommunityPageState extends State<EditCommunityPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 24),
+                
+                // Translations Section Toggle
+                GestureDetector(
+                  onTap: () => setState(() => _showTranslations = !_showTranslations),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF111111) : const Color(0xFFEFEFEF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFBFAE01).withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.translate,
+                          color: const Color(0xFFBFAE01),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            Provider.of<LanguageProvider>(context, listen: false).t('edit_community.translations'),
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: textColor,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          _showTranslations ? Icons.expand_less : Icons.expand_more,
+                          color: textColor,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Translations Fields (expandable)
+                if (_showTranslations) ...[
+                  const SizedBox(height: 16),
+                  _buildTranslationSection(
+                    'Français (French)',
+                    _nameFrController,
+                    _bioFrController,
+                    isDark,
+                    textColor,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTranslationSection(
+                    'Português (Portuguese)',
+                    _namePtController,
+                    _bioPtController,
+                    isDark,
+                    textColor,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTranslationSection(
+                    'Español (Spanish)',
+                    _nameEsController,
+                    _bioEsController,
+                    isDark,
+                    textColor,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTranslationSection(
+                    'Deutsch (German)',
+                    _nameDeController,
+                    _bioDeController,
+                    isDark,
+                    textColor,
+                  ),
+                ],
+                
                 const SizedBox(height: 32),
               ],
             ),
           ),
         );
       },
+    );
+  }
+  
+  Widget _buildTranslationSection(
+    String languageLabel,
+    TextEditingController nameController,
+    TextEditingController bioController,
+    bool isDark,
+    Color textColor,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF222222) : const Color(0xFFE0E0E0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            languageLabel,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFFBFAE01),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: nameController,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: textColor,
+            ),
+            decoration: InputDecoration(
+              labelText: Provider.of<LanguageProvider>(context, listen: false).t('edit_community.name_label'),
+              labelStyle: GoogleFonts.inter(
+                fontSize: 12,
+                color: isDark ? Colors.white54 : Colors.black54,
+              ),
+              hintText: Provider.of<LanguageProvider>(context, listen: false).t('edit_community.name_hint'),
+              hintStyle: GoogleFonts.inter(
+                fontSize: 14,
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFEFEFEF),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: bioController,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: textColor,
+            ),
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: Provider.of<LanguageProvider>(context, listen: false).t('edit_community.bio_label'),
+              labelStyle: GoogleFonts.inter(
+                fontSize: 12,
+                color: isDark ? Colors.white54 : Colors.black54,
+              ),
+              hintText: Provider.of<LanguageProvider>(context, listen: false).t('edit_community.description_hint'),
+              hintStyle: GoogleFonts.inter(
+                fontSize: 14,
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFEFEFEF),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

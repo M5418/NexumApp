@@ -7,6 +7,7 @@ import '../repositories/interfaces/podcast_repository.dart';
 import 'podcasts_home_page.dart' show Podcast; // reuse Podcast model
 import 'podcast_details_page.dart';
 import 'player_page.dart';
+import '../core/i18n/language_provider.dart';
 
 class PodcastSearchPage extends StatefulWidget {
   const PodcastSearchPage({super.key});
@@ -75,10 +76,10 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
     if (d == null) return '';
     final diff = DateTime.now().difference(d);
     if (diff.inDays >= 2) return '${diff.inDays} days ago';
-    if (diff.inDays >= 1) return 'Yesterday';
+    if (diff.inDays >= 1) return Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday');
     if (diff.inHours >= 1) return '${diff.inHours} hr';
     if (diff.inMinutes >= 1) return '${diff.inMinutes} min';
-    return 'Just now';
+    return Provider.of<LanguageProvider>(context, listen: false).t('common.just_now');
   }
 
   @override
@@ -150,7 +151,7 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
                               decoration: InputDecoration(
                                 isDense: true,
                                 border: InputBorder.none,
-                                hintText: 'Search podcasts...',
+                                hintText: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.search_podcasts'),
                                 hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
                               ),
                             ),
@@ -188,10 +189,10 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
     if (_controller.text.isEmpty) {
-      return _hint('Start typing to search podcasts');
+      return _hint(Provider.of<LanguageProvider>(context, listen: false).t('podcasts.start_typing'));
     }
     if (_results.isEmpty) {
-      return _hint('No podcasts found');
+      return _hint(Provider.of<LanguageProvider>(context, listen: false).t('podcasts.no_podcasts_found'));
     }
 
     return ListView.separated(
@@ -203,7 +204,7 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
         return GestureDetector(
           onTap: () => Navigator.push(
             ctx,
-            MaterialPageRoute(builder: (_) => PodcastDetailsPage(podcast: p)),
+            MaterialPageRoute(settings: const RouteSettings(name: 'podcast_details'), builder: (_) => PodcastDetailsPage(podcast: p)),
           ),
           child: Container(
             height: 120,
@@ -265,7 +266,7 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          p.author ?? 'Unknown',
+                          p.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF999999)),
@@ -288,7 +289,7 @@ class _PodcastSearchPageState extends State<PodcastSearchPage> {
                   padding: const EdgeInsets.only(right: 12),
                   child: GestureDetector(
                     onTap: () => (p.audioUrl ?? '').isNotEmpty
-                        ? Navigator.push(ctx, MaterialPageRoute(builder: (_) => PlayerPage(podcast: p)))
+                        ? Navigator.push(ctx, MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: p)))
                         : null,
                     child: Container(
                       width: 32,

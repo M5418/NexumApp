@@ -159,6 +159,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                 Navigator.push(
                                   navContext,
                                   MaterialPageRoute(
+                                    settings: const RouteSettings(name: 'password_reset_sent'),
                                     builder: (_) => PasswordResetSentPage(email: email),
                                   ),
                                 );

@@ -7,6 +7,7 @@ import 'book_epub_page.dart';
 import 'book_read_page.dart';
 import 'book_play_page.dart';
 import '../repositories/interfaces/bookmark_repository.dart';
+import '../core/i18n/language_provider.dart';
 
 class BookDetailsPage extends StatefulWidget {
   final Book book;
@@ -232,7 +233,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        book.author ?? 'Unknown Author',
+                        book.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown_author'),
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -288,7 +289,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                       
                       // About Section
                       Text(
-                        'About',
+                        Provider.of<LanguageProvider>(context, listen: false).t('books.about'),
                         style: GoogleFonts.inter(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -297,7 +298,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        book.description ?? 'No description available.',
+                        book.description ?? Provider.of<LanguageProvider>(context, listen: false).t('common.no_description'),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           height: 1.5,
@@ -312,8 +313,8 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                         width: double.infinity,
                         child: _buildActionButton(
                           label: hasEpub
-                              ? 'Start Reading (EPUB)'
-                              : (hasPdf ? 'Start Reading (PDF)' : 'Start Reading'),
+                              ? Provider.of<LanguageProvider>(context, listen: false).t('books.start_reading_epub')
+                              : (hasPdf ? Provider.of<LanguageProvider>(context, listen: false).t('books.start_reading_pdf') : Provider.of<LanguageProvider>(context, listen: false).t('books.start_reading')),
                           icon: Icons.auto_stories,
                           isPrimary: true,
                           onPressed: hasReadable
@@ -322,13 +323,13 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                                     debugPrint('📖 [BookDetails] Opening EPUB reader');
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (_) => BookEpubPage(book: book)),
+                                      MaterialPageRoute(settings: const RouteSettings(name: 'book_epub'), builder: (_) => BookEpubPage(book: book)),
                                     );
                                   } else if (hasPdf) {
                                     debugPrint('📖 [BookDetails] Opening PDF reader');
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (_) => BookReadPage(book: book)),
+                                      MaterialPageRoute(settings: const RouteSettings(name: 'book_read'), builder: (_) => BookReadPage(book: book)),
                                     );
                                   }
                                 }
@@ -339,14 +340,14 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: _buildActionButton(
-                          label: 'Listen Now',
+                          label: Provider.of<LanguageProvider>(context, listen: false).t('books.listen_now'),
                           icon: Icons.headphones,
                           isPrimary: false,
                           onPressed: () {
                             debugPrint('🎧 [BookDetails] Opening audio player');
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => BookPlayPage(book: book)),
+                              MaterialPageRoute(settings: const RouteSettings(name: 'book_play'), builder: (_) => BookPlayPage(book: book)),
                             );
                           },
                         ),

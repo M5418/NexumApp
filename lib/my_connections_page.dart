@@ -410,6 +410,7 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
         Navigator.push(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'other_user_profile'),
             builder: (_) => OtherUserProfilePage(
               userId: user.id,
               userName: user.name,

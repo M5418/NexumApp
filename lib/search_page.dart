@@ -366,6 +366,7 @@ class _SearchPageState extends State<SearchPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
+                settings: const RouteSettings(name: 'community'),
                 builder: (context) => CommunityPage(
                   communityId: c.id,
                   communityName: c.name,
@@ -434,12 +435,13 @@ class _UserRowTile extends StatelessWidget {
           if (currentUserId == user.id) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const ProfilePage()),
+              MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
             );
           } else {
             Navigator.push(
               context,
               MaterialPageRoute(
+                settings: const RouteSettings(name: 'other_user_profile'),
                 builder: (context) => OtherUserProfilePage(
                   userId: user.id,
                   userName: user.name,

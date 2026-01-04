@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../repositories/interfaces/mentorship_repository.dart';
 import 'mentorship_chat_page.dart';
+import '../core/i18n/language_provider.dart';
 
 class MyMentorsPage extends StatefulWidget {
   const MyMentorsPage({super.key});
@@ -56,7 +57,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
         backgroundColor: surfaceColor,
         elevation: 0,
         title: Text(
-          'My Mentors',
+          Provider.of<LanguageProvider>(context, listen: false).t('mentorship.my_mentors'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -99,7 +100,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                             const SizedBox(height: 120),
                             Center(
                               child: Text(
-                                'No mentors yet',
+                                Provider.of<LanguageProvider>(context, listen: false).t('mentorship.no_mentors'),
                                 style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, color: secondaryTextColor),
                               ),
                             ),
@@ -200,6 +201,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
+                                              settings: const RouteSettings(name: 'mentorship_chat'),
                                               builder: (context) => MentorshipChatPage(
                                                 mentorUserId: mentor.id,
                                                 mentorName: mentor.name,
@@ -227,7 +229,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '(${mentor.reviewCount} reviews)',
+                                        '(${mentor.reviewCount} ${Provider.of<LanguageProvider>(context, listen: false).t('mentorship.reviews')})',
                                         style: GoogleFonts.inter(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w400,
@@ -236,7 +238,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                                       ),
                                       const Spacer(),
                                       Text(
-                                        '${mentor.yearsExperience}+ years exp',
+                                        '${mentor.yearsExperience}+ ${Provider.of<LanguageProvider>(context, listen: false).t('mentorship.years_exp')}',
                                         style: GoogleFonts.inter(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,
@@ -289,7 +291,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                                           },
                                           icon: Icon(Icons.calendar_today, size: 16, color: textColor),
                                           label: Text(
-                                            'Schedule',
+                                            Provider.of<LanguageProvider>(context, listen: false).t('mentorship.schedule'),
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w500,
@@ -309,6 +311,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                                             Navigator.push(
                                               context,
                                               MaterialPageRoute(
+                                                settings: const RouteSettings(name: 'mentorship_chat'),
                                                 builder: (context) => MentorshipChatPage(
                                                   mentorUserId: mentor.id,
                                                   mentorName: mentor.name,
@@ -320,7 +323,7 @@ class _MyMentorsPageState extends State<MyMentorsPage> {
                                           },
                                           icon: const Icon(Icons.chat, size: 16, color: Colors.black),
                                           label: Text(
-                                            'Message',
+                                            Provider.of<LanguageProvider>(context, listen: false).t('mentorship.message'),
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w500,

@@ -138,6 +138,7 @@ class _ChatImageEditorPageState extends State<ChatImageEditorPage> {
     final result = await Navigator.push<Uint8List>(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'image_editor'),
         builder: (context) => ProImageEditor.memory(
           imageBytes,
           callbacks: ProImageEditorCallbacks(

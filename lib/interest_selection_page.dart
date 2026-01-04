@@ -548,7 +548,7 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
       if (!context.isMobile) {
         _pushWithPopupTransition(context, next);
       } else {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+        Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'connect_friends'), builder: (_) => next));
       }
     } catch (e) {
       if (!mounted) return;

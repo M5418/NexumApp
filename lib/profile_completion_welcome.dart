@@ -47,7 +47,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
     if (!context.isMobile) {
       _pushWithPopupTransition(context, next);
     } else {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+      Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_photo'), builder: (_) => next));
     }
   }
 

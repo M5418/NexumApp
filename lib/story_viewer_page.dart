@@ -756,12 +756,13 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             if (currentUserId == f.user.userId) {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
+                MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
               );
             } else {
               Navigator.push(
                 context,
                 MaterialPageRoute(
+                  settings: const RouteSettings(name: 'other_user_profile'),
                   builder: (context) => OtherUserProfilePage(
                     userId: f.user.userId,
                     userName: f.user.name,
@@ -798,12 +799,13 @@ class _StoryViewerPageState extends State<StoryViewerPage>
               if (currentUserId == f.user.userId) {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                  MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
                 );
               } else {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'other_user_profile'),
                     builder: (context) => OtherUserProfilePage(
                       userId: f.user.userId,
                       userName: f.user.name,

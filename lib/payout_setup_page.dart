@@ -66,7 +66,7 @@ class _PayoutSetupPageState extends State<PayoutSetupPage> {
           if (_currentStep == 5) {
             final ok = await Navigator.push<bool>(
               context,
-              MaterialPageRoute(builder: (_) => const PayoutSetupSuccessPage()),
+              MaterialPageRoute(settings: const RouteSettings(name: 'monetization'), builder: (_) => const PayoutSetupSuccessPage()),
             );
             if (!context.mounted) return;
             Navigator.pop(context, ok == true);

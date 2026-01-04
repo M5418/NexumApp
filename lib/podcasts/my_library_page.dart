@@ -200,7 +200,7 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
                             label: 'My Episodes',
                             onTap: () => Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const MyEpisodesPage()),
+                              MaterialPageRoute(settings: const RouteSettings(name: 'my_episodes'), builder: (context) => const MyEpisodesPage()),
                             ),
                             isDark: isDark,
                           ),
@@ -245,7 +245,8 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => FavoritePlaylistPage(playlistId: pl.id),
+                                settings: const RouteSettings(name: 'favorite_playlist'),
+                                builder: (_) => FavoritePlaylistPage(playlistId: pl.id),
                               ),
                             ).then((_) => _load()),
                             child: Container(

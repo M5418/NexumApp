@@ -6,6 +6,7 @@ import 'mentorship_conversations_page.dart';
 import 'professional_fields_page.dart';
 import 'my_mentors_page.dart';
 import 'my_schedule_page.dart';
+import '../core/i18n/language_provider.dart';
 
 class MentorshipHomePage extends StatefulWidget {
   final VoidCallback? onMentorshipChat;
@@ -52,7 +53,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Failed to load mentorship data: $e');
+      setState(() => _error = '${Provider.of<LanguageProvider>(context, listen: false).t('mentorship.failed_load')}: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -72,7 +73,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
         backgroundColor: surfaceColor,
         elevation: 0,
         title: Text(
-          'Mentorship',
+          Provider.of<LanguageProvider>(context, listen: false).t('mentorship.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -100,13 +101,14 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                   Expanded(
                     child: _buildNavigationButton(
                       Icons.chat_bubble_outline,
-                      'Conversations',
+                      Provider.of<LanguageProvider>(context, listen: false).t('mentorship.conversations'),
                       surfaceColor,
                       textColor,
                       () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(name: 'mentorship_conversations'),
                             builder: (context) => const MentorshipConversationsPage(),
                           ),
                         );
@@ -117,13 +119,14 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                   Expanded(
                     child: _buildNavigationButton(
                       Icons.calendar_today_outlined,
-                      'Schedule',
+                      Provider.of<LanguageProvider>(context, listen: false).t('mentorship.schedule'),
                       surfaceColor,
                       textColor,
                       () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(name: 'my_schedule'),
                             builder: (context) => const MySchedulePage(),
                           ),
                         );
@@ -138,13 +141,14 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                   Expanded(
                     child: _buildNavigationButton(
                       Icons.person_outline,
-                      'My Mentors',
+                      Provider.of<LanguageProvider>(context, listen: false).t('mentorship.my_mentors'),
                       surfaceColor,
                       textColor,
                       () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(name: 'my_mentors'),
                             builder: (context) => const MyMentorsPage(),
                           ),
                         );
@@ -162,7 +166,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Choose a professional field',
+                    Provider.of<LanguageProvider>(context, listen: false).t('mentorship.choose_field'),
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -174,12 +178,13 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'professional_fields'),
                           builder: (context) => const ProfessionalFieldsPage(),
                         ),
                       );
                     },
                     child: Text(
-                      'View All',
+                      Provider.of<LanguageProvider>(context, listen: false).t('mentorship.view_all'),
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -198,7 +203,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Upcoming meetings',
+                    Provider.of<LanguageProvider>(context, listen: false).t('mentorship.upcoming_meetings'),
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -209,11 +214,11 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const MySchedulePage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'mentorship_chat'), builder: (context) => const MySchedulePage()),
                       );
                     },
                     child: Text(
-                      'View',
+                      Provider.of<LanguageProvider>(context, listen: false).t('mentorship.view'),
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -249,7 +254,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                         Icon(Icons.lightbulb_outline, color: const Color(0xFFBFAE01), size: 24),
                         const SizedBox(width: 12),
                         Text(
-                          'Why Choose Mentorship?',
+                          Provider.of<LanguageProvider>(context, listen: false).t('mentorship.why_choose'),
                           style: GoogleFonts.inter(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -259,11 +264,11 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _buildBenefitItem('🎯', 'Personalized Guidance', 'Get tailored advice for your specific goals and challenges', textColor, secondaryTextColor),
+                    _buildBenefitItem('🎯', Provider.of<LanguageProvider>(context, listen: false).t('mentorship.personalized_guidance'), Provider.of<LanguageProvider>(context, listen: false).t('mentorship.personalized_guidance_desc'), textColor, secondaryTextColor),
                     const SizedBox(height: 12),
-                    _buildBenefitItem('🚀', 'Accelerated Growth', 'Learn from experienced professionals and avoid common pitfalls', textColor, secondaryTextColor),
+                    _buildBenefitItem('🚀', Provider.of<LanguageProvider>(context, listen: false).t('mentorship.accelerated_growth'), Provider.of<LanguageProvider>(context, listen: false).t('mentorship.accelerated_growth_desc'), textColor, secondaryTextColor),
                     const SizedBox(height: 12),
-                    _buildBenefitItem('🤝', 'Network Expansion', 'Connect with industry leaders and expand your professional network', textColor, secondaryTextColor),
+                    _buildBenefitItem('🤝', Provider.of<LanguageProvider>(context, listen: false).t('mentorship.network_expansion'), Provider.of<LanguageProvider>(context, listen: false).t('mentorship.network_expansion_desc'), textColor, secondaryTextColor),
                   ],
                 ),
               ),
@@ -350,7 +355,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
         height: 160,
         child: Center(
           child: Text(
-            'No fields available',
+            Provider.of<LanguageProvider>(context, listen: false).t('mentorship.no_fields'),
             style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, color: secondaryTextColor),
           ),
         ),
@@ -389,6 +394,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
+                      settings: const RouteSettings(name: 'professional_fields'),
                       builder: (context) => const ProfessionalFieldsPage(),
                     ),
                   );
@@ -503,7 +509,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
         ),
         child: Center(
           child: Text(
-            'No upcoming meetings',
+            Provider.of<LanguageProvider>(context, listen: false).t('mentorship.no_meetings'),
             style: GoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w400,
@@ -565,7 +571,7 @@ class _MentorshipHomePageState extends State<MentorshipHomePage> {
                       Text(
                         (session.message.isNotEmpty)
                             ? session.message
-                            : 'Mentorship session',
+                            : Provider.of<LanguageProvider>(context, listen: false).t('mentorship.mentorship_session'),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w400,

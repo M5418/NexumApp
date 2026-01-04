@@ -11,6 +11,23 @@ class FirebaseCommunityRepository implements CommunityRepository {
 
   CommunityModel _fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
+    
+    // Parse nameTranslations map
+    Map<String, String>? nameTranslations;
+    if (data?['nameTranslations'] is Map) {
+      nameTranslations = Map<String, String>.from(
+        (data!['nameTranslations'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()))
+      );
+    }
+    
+    // Parse bioTranslations map
+    Map<String, String>? bioTranslations;
+    if (data?['bioTranslations'] is Map) {
+      bioTranslations = Map<String, String>.from(
+        (data!['bioTranslations'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()))
+      );
+    }
+    
     return CommunityModel(
       id: doc.id,
       name: (data?['name'] ?? '').toString(),
@@ -21,6 +38,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
       unreadPosts: (data?['unreadPosts'] is num) ? (data?['unreadPosts'] as num).toInt() : 0,
       postsCount: (data?['postsCount'] is num) ? (data?['postsCount'] as num).toInt() : 0,
       memberCount: (data?['memberCount'] is num) ? (data?['memberCount'] as num).toInt() : 0,
+      nameTranslations: nameTranslations,
+      bioTranslations: bioTranslations,
     );
   }
 
@@ -153,6 +172,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
     String? bio,
     String? avatarUrl,
     String? coverUrl,
+    Map<String, String>? nameTranslations,
+    Map<String, String>? bioTranslations,
   }) async {
     try {
       final updates = <String, dynamic>{};
@@ -160,6 +181,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
       if (bio != null) updates['bio'] = bio;
       if (avatarUrl != null) updates['avatarUrl'] = avatarUrl;
       if (coverUrl != null) updates['coverUrl'] = coverUrl;
+      if (nameTranslations != null) updates['nameTranslations'] = nameTranslations;
+      if (bioTranslations != null) updates['bioTranslations'] = bioTranslations;
       
       if (updates.isNotEmpty) {
         updates['updatedAt'] = FieldValue.serverTimestamp();

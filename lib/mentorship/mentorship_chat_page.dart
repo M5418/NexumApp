@@ -1,6 +1,7 @@
 // c:\Users\dehou\nexum-app\lib\mentorship\mentorship_chat_page.dart
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -24,6 +25,8 @@ import '../repositories/interfaces/storage_repository.dart';
 import '../core/profile_api.dart';
 import '../core/audio_recorder.dart';
 import '../core/video_utils_stub.dart' if (dart.library.io) '../core/video_utils_io.dart';
+import '../core/i18n/language_provider.dart';
+import '../services/media_compression_service.dart';
 // removed ApiClient usage
 
 class MentorshipChatPage extends StatefulWidget {
@@ -307,7 +310,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
       // Force instant refresh
       await _load();
     } catch (e) {
-      if (mounted) _snack('Failed to send: $e');
+      if (mounted) _snack('${Provider.of<LanguageProvider>(context, listen: false).t('mentorship.failed_send')}: $e');
     }
   }
 
@@ -392,7 +395,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
       );
       if (res == null || res.files.isEmpty) return;
-      _snack('Uploading file(s)...');
+      _snack(Provider.of<LanguageProvider>(context, listen: false).t('mentorship.uploading_files'));
       final profile = ProfileApi();
       final atts = <Map<String, dynamic>>[];
       for (final f in res.files) {
@@ -447,7 +450,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
       await _load();
     } catch (e) {
       _hideSnack();
-      _snack('Failed to send files: $e');
+      _snack('${Provider.of<LanguageProvider>(context, listen: false).t('mentorship.failed_send_files')}: $e');
     }
   }
 
@@ -474,6 +477,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
     final preview = await Navigator.push<MediaPreviewResult>(
       context,
       MaterialPageRoute(
+          settings: const RouteSettings(name: 'media_preview'),
           builder: (_) =>
               MediaPreviewPage(initialFiles: files, isDark: isDark)),
     );
@@ -483,7 +487,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
 
   Future<void> _uploadAndSend(List<XFile> files, String caption) async {
     try {
-      _snack('Uploading media...');
+      _snack(Provider.of<LanguageProvider>(context, listen: false).t('mentorship.uploading_media'));
       final profile = ProfileApi();
       final atts = <Map<String, dynamic>>[];
       bool isVideoName(String p) =>
@@ -508,6 +512,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
             return 'video/mp4';
         }
       }
+      final compressionService = MediaCompressionService();
       for (final f in files) {
         final nameOrPath = f.name.isNotEmpty ? f.name : f.path;
         final dot = nameOrPath.lastIndexOf('.');
@@ -517,17 +522,50 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         String url;
         int? size;
         String? thumbUrl;
+        final isVideo = isVideoName(nameOrPath);
+        final isImage = MediaCompressionService.isImage(nameOrPath);
+        
         if (kIsWeb) {
-          final bytes = await f.readAsBytes();
-          size = bytes.length;
-          final isVideo = isVideoName(nameOrPath);
+          final originalBytes = await f.readAsBytes();
+          Uint8List bytesToUpload = originalBytes;
+          
+          // Compress images on web
+          if (isImage) {
+            final compressed = await compressionService.compressImageBytes(
+              bytes: originalBytes,
+              filename: nameOrPath,
+              quality: 85,
+              minWidth: 1920,
+              minHeight: 1920,
+            );
+            if (compressed != null) bytesToUpload = compressed;
+          }
+          
+          size = bytesToUpload.length;
           final ct = isVideo ? guessVideoContentType(ext) : null;
-          url = await profile.uploadBytes(bytes, ext: ext, contentType: ct);
+          url = await profile.uploadBytes(bytesToUpload, ext: ext, contentType: ct);
         } else {
           final file = File(f.path);
-          size = await file.length();
-          url = await profile.uploadFile(file);
-          final isVideo = isVideoName(nameOrPath);
+          Uint8List? bytesToUpload;
+          
+          // Compress images on mobile
+          if (isImage) {
+            bytesToUpload = await compressionService.compressImage(
+              filePath: file.path,
+              quality: 85,
+              minWidth: 1920,
+              minHeight: 1920,
+            );
+          }
+          
+          if (bytesToUpload != null) {
+            size = bytesToUpload.length;
+            url = await profile.uploadBytes(bytesToUpload, ext: ext);
+          } else {
+            size = await file.length();
+            url = await profile.uploadFile(file);
+          }
+          
           if (isVideo) {
             try {
               final thumb = await generateVideoThumbnail(file.path);
@@ -717,12 +755,13 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
             if (currentUserId == widget.mentorUserId) {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
+                MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
               );
             } else {
               Navigator.push(
                 context,
                 MaterialPageRoute(
+                  settings: const RouteSettings(name: 'other_user_profile'),
                   builder: (context) => OtherUserProfilePage(
                     userId: widget.mentorUserId,
                     userName: widget.mentorName,

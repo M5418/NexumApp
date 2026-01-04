@@ -236,7 +236,8 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => const SupportPage(),
+                                  settings: const RouteSettings(name: 'support'),
+                                  builder: (_) => const SupportPage(),
                                 ),
                               );
                             },

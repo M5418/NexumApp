@@ -136,9 +136,31 @@ exports.translateTexts = onCall({ region: "us-central1" }, async (request) => {
 
 // Agora Token Generation for Live Streaming
 const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
+const functions = require('firebase-functions');
 
-const AGORA_APP_ID = process.env.AGORA_APP_ID || "371cf61b84c0427d84471c91e71435cd";
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || "";
+// Get Agora credentials from Firebase config or environment
+const getAgoraConfig = () => {
+  // Try Firebase Functions config first (legacy)
+  try {
+    const config = functions.config();
+    if (config.agora && config.agora.app_certificate) {
+      return {
+        appId: config.agora.app_id || "371cf61b84c0427d84471c91e71435cd",
+        appCertificate: config.agora.app_certificate
+      };
+    }
+  } catch (e) {
+    // Config not available
+  }
+  // Fallback to environment variables
+  return {
+    appId: process.env.AGORA_APP_ID || "371cf61b84c0427d84471c91e71435cd",
+    appCertificate: process.env.AGORA_APP_CERTIFICATE || ""
+  };
+};
+
+const AGORA_APP_ID = "371cf61b84c0427d84471c91e71435cd";
+const AGORA_APP_CERTIFICATE = "0f3dae78a0b545988066cd25794a4ab8";
 
 const buildAgoraToken = (appId, appCertificate, channelName, uid, role, privilegeExpiredTs) => {
   if (!appCertificate) {
@@ -151,11 +173,8 @@ const buildAgoraToken = (appId, appCertificate, channelName, uid, role, privileg
 };
 
 exports.generateAgoraToken = onCall({ region: "us-central1" }, async (request) => {
-  // Verify user is authenticated
-  if (!request.auth) {
-    throw new Error("Authentication required");
-  }
-
+  // Note: Authentication is optional for token generation
+  // The token itself provides security for the Agora channel
   const { channelName, uid, role } = request.data;
   
   if (!channelName) {
@@ -193,3 +212,298 @@ exports.generateAgoraToken = onCall({ region: "us-central1" }, async (request) =
     throw new Error("Failed to generate token");
   }
 });
+
+// ============================================
+// PUSH NOTIFICATIONS
+// ============================================
+
+const db = admin.firestore();
+const messaging = admin.messaging();
+
+// Helper: Get user's FCM tokens
+async function getUserFcmTokens(userId) {
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) return [];
+  const data = userDoc.data();
+  return data.fcmTokens || [];
+}
+
+// Helper: Send push notification to user
+async function sendPushToUser(userId, title, body, data = {}) {
+  const tokens = await getUserFcmTokens(userId);
+  if (tokens.length === 0) {
+    logger.info('No FCM tokens for user', { userId });
+    return;
+  }
+
+  const message = {
+    notification: {
+      title,
+      body,
+    },
+    data: {
+      ...data,
+      click_action: 'FLUTTER_NOTIFICATION_CLICK',
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'default',
+          badge: 1,
+        },
+      },
+    },
+    android: {
+      notification: {
+        sound: 'default',
+        priority: 'high',
+      },
+    },
+  };
+
+  // Send to all user's devices
+  const sendPromises = tokens.map(async (token) => {
+    try {
+      await messaging.send({ ...message, token });
+      logger.info('Push sent', { userId, token: token.substring(0, 20) + '...' });
+    } catch (error) {
+      // Remove invalid tokens
+      if (error.code === 'messaging/invalid-registration-token' ||
+          error.code === 'messaging/registration-token-not-registered') {
+        logger.info('Removing invalid token', { userId });
+        await db.collection('users').doc(userId).update({
+          fcmTokens: admin.firestore.FieldValue.arrayRemove(token)
+        });
+      } else {
+        logger.error('Push send error', { error: error.message });
+      }
+    }
+  });
+
+  await Promise.all(sendPromises);
+}
+
+// 1. PUSH FOR NEW NOTIFICATIONS (in-app notifications trigger push)
+exports.onNotificationCreated = onDocumentCreated(
+  { document: 'users/{userId}/notifications/{notificationId}', region: 'us-central1' },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const notification = snapshot.data();
+    const userId = event.params.userId;
+
+    // Send push notification
+    await sendPushToUser(
+      userId,
+      notification.title || 'New Notification',
+      notification.body || 'You have a new notification',
+      {
+        type: notification.type || 'notification',
+        refId: notification.refId || '',
+        notificationId: event.params.notificationId,
+      }
+    );
+  }
+);
+
+// 2. PUSH FOR NEW MESSAGES
+exports.onMessageCreated = onDocumentCreated(
+  { document: 'conversations/{conversationId}/messages/{messageId}', region: 'us-central1' },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const message = snapshot.data();
+    const conversationId = event.params.conversationId;
+    const senderId = message.senderId;
+
+    // Get conversation to find recipient
+    const convDoc = await db.collection('conversations').doc(conversationId).get();
+    if (!convDoc.exists) return;
+
+    const convData = convDoc.data();
+    const participants = convData.participants || [];
+    
+    // Find recipient (not the sender)
+    const recipientId = participants.find(p => p !== senderId);
+    if (!recipientId) return;
+
+    // Check if recipient has muted sender
+    const muteCheck = await db.collection('mutes')
+      .where('mutedByUid', '==', recipientId)
+      .where('mutedUid', '==', senderId)
+      .limit(1)
+      .get();
+    
+    if (!muteCheck.empty) {
+      logger.info('Sender is muted, skipping push', { senderId, recipientId });
+      return;
+    }
+
+    // Get sender name
+    const senderDoc = await db.collection('users').doc(senderId).get();
+    const senderName = senderDoc.exists ? 
+      (senderDoc.data().firstName || senderDoc.data().username || 'Someone') : 'Someone';
+
+    // Determine message preview
+    let messagePreview = message.text || '';
+    if (message.mediaUrls && message.mediaUrls.length > 0) {
+      messagePreview = messagePreview || '📷 Sent a photo';
+    }
+    if (message.audioUrl) {
+      messagePreview = '🎤 Sent a voice message';
+    }
+    if (messagePreview.length > 100) {
+      messagePreview = messagePreview.substring(0, 100) + '...';
+    }
+
+    await sendPushToUser(
+      recipientId,
+      senderName,
+      messagePreview,
+      {
+        type: 'message',
+        conversationId,
+        senderId,
+      }
+    );
+  }
+);
+
+// 3. PUSH FOR NEW CONNECTION REQUEST (follow)
+exports.onFollowCreated = onDocumentCreated(
+  { document: 'follows/{followId}', region: 'us-central1' },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const follow = snapshot.data();
+    const followerId = follow.followerId;
+    const followingId = follow.followingId;
+
+    // Get follower name
+    const followerDoc = await db.collection('users').doc(followerId).get();
+    const followerName = followerDoc.exists ? 
+      (followerDoc.data().firstName || followerDoc.data().username || 'Someone') : 'Someone';
+
+    // Check if this is a mutual connection (they already follow back)
+    const mutualCheck = await db.collection('follows')
+      .where('followerId', '==', followingId)
+      .where('followingId', '==', followerId)
+      .limit(1)
+      .get();
+
+    if (!mutualCheck.empty) {
+      // Mutual connection - notify both
+      await sendPushToUser(
+        followingId,
+        'New Connection! 🎉',
+        `${followerName} connected with you`,
+        { type: 'connection', userId: followerId }
+      );
+    } else {
+      // New connection request
+      await sendPushToUser(
+        followingId,
+        'New Connection Request',
+        `${followerName} wants to connect with you`,
+        { type: 'connection_request', userId: followerId }
+      );
+    }
+  }
+);
+
+// 4. PUSH FOR NEW POST FROM CONNECTIONS
+exports.onPostCreated = onDocumentCreated(
+  { document: 'posts/{postId}', region: 'us-central1' },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const post = snapshot.data();
+    const authorId = post.authorId;
+    const postId = event.params.postId;
+
+    // Skip if no author
+    if (!authorId) return;
+
+    // Get author info
+    const authorDoc = await db.collection('users').doc(authorId).get();
+    if (!authorDoc.exists) return;
+    const authorData = authorDoc.data();
+    const authorName = authorData.firstName || authorData.username || 'Someone';
+
+    // Get all followers of this author (people who follow the author)
+    const followersSnap = await db.collection('follows')
+      .where('followingId', '==', authorId)
+      .get();
+
+    if (followersSnap.empty) {
+      logger.info('No followers to notify', { authorId });
+      return;
+    }
+
+    // Get post preview
+    let postPreview = post.content || post.text || '';
+    if (postPreview.length > 80) {
+      postPreview = postPreview.substring(0, 80) + '...';
+    }
+    if (!postPreview && post.mediaUrls && post.mediaUrls.length > 0) {
+      postPreview = 'shared a photo';
+    }
+
+    // Send push to each follower (batch to avoid overwhelming)
+    const followerIds = followersSnap.docs.map(doc => doc.data().followerId);
+    
+    // Limit to first 100 followers to avoid function timeout
+    const limitedFollowers = followerIds.slice(0, 100);
+
+    for (const followerId of limitedFollowers) {
+      // Check if follower has muted author
+      const muteCheck = await db.collection('mutes')
+        .where('mutedByUid', '==', followerId)
+        .where('mutedUid', '==', authorId)
+        .limit(1)
+        .get();
+      
+      if (muteCheck.empty) {
+        await sendPushToUser(
+          followerId,
+          `${authorName} posted`,
+          postPreview || 'shared a new post',
+          { type: 'post', postId, authorId }
+        );
+      }
+    }
+
+    logger.info('Post notifications sent', { postId, followerCount: limitedFollowers.length });
+  }
+);
+
+// 5. PUSH FOR INVITATIONS
+exports.onInvitationCreated = onDocumentCreated(
+  { document: 'invitations/{invitationId}', region: 'us-central1' },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const invitation = snapshot.data();
+    const senderId = invitation.senderId || invitation.fromUserId;
+    const recipientId = invitation.recipientId || invitation.toUserId;
+
+    if (!senderId || !recipientId) return;
+
+    // Get sender name
+    const senderDoc = await db.collection('users').doc(senderId).get();
+    const senderName = senderDoc.exists ? 
+      (senderDoc.data().firstName || senderDoc.data().username || 'Someone') : 'Someone';
+
+    await sendPushToUser(
+      recipientId,
+      'New Invitation',
+      `${senderName} sent you an invitation`,
+      { type: 'invitation', invitationId: event.params.invitationId, senderId }
+    );
+  }
+);

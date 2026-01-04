@@ -18,6 +18,7 @@ class AttachmentDropdownMenu extends StatelessWidget {
     await Navigator.push(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'image_editor'),
         builder: (context) => ChatImageEditorPage(
           onSendImages: (imageBytesList) {
             // Handle sending the edited images

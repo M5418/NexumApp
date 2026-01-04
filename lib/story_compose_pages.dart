@@ -11,6 +11,7 @@ import 'package:pro_image_editor/pro_image_editor.dart';
 
 import 'core/files_api.dart';
 import 'repositories/interfaces/story_repository.dart';
+import 'services/media_compression_service.dart';
 
 enum StoryComposeType { image, video, text, mixed }
 
@@ -442,6 +443,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
     final edited = await Navigator.push<Uint8List>(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'image_editor'),
         builder: (editorContext) => ProImageEditor.memory(
           srcBytes,
           callbacks: ProImageEditorCallbacks(
@@ -541,6 +543,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
 
       final filesApi = FilesApi();
       final storyRepo = context.read<StoryRepository>();
+      final compressionService = MediaCompressionService();
       int ok = 0;
       Object? lastErr;
 
@@ -569,12 +572,20 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
             }
           } else {
             if (kIsWeb) {
-              final bytes = it.editedImageBytes ?? it.imageBytes ?? await it.file.readAsBytes();
+              final originalBytes = it.editedImageBytes ?? it.imageBytes ?? await it.file.readAsBytes();
               final mime = it.file.mimeType ?? 'image/jpeg';
               final ext = mime.contains('png')
                   ? 'png'
                   : (mime.contains('webp') ? 'webp' : 'jpg');
-              final up = await _uploadBytesWeb(bytes, ext: ext, mime: mime);
+              // Compress image before upload
+              final compressedBytes = await compressionService.compressImageBytes(
+                bytes: originalBytes,
+                filename: it.file.name,
+                quality: 85,
+                minWidth: 1080,
+                minHeight: 1920,
+              ) ?? originalBytes;
+              final up = await _uploadBytesWeb(compressedBytes, ext: ext, mime: mime);
               await storyRepo.createStory(
                 mediaType: 'image',
                 mediaUrl: up['url'],
@@ -584,7 +595,15 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
               );
             } else {
               if (it.editedImageBytes != null) {
-                final f = await _tmpWrite(it.editedImageBytes!, ext: 'jpg');
+                // Compress edited image bytes before upload
+                final compressedBytes = await compressionService.compressImageBytes(
+                  bytes: it.editedImageBytes!,
+                  filename: 'edited.jpg',
+                  quality: 85,
+                  minWidth: 1080,
+                  minHeight: 1920,
+                ) ?? it.editedImageBytes!;
+                final f = await _tmpWrite(compressedBytes, ext: 'jpg');
                 final up = await filesApi.uploadFile(f);
                 await storyRepo.createStory(
                   mediaType: 'image',
@@ -594,14 +613,33 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
                   durationSec: 15,
                 );
               } else {
-                final up = await filesApi.uploadFile(File(it.file.path));
-                await storyRepo.createStory(
-                  mediaType: 'image',
-                  mediaUrl: up['url'],
-                  audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
-                  audioTitle: _selectedTrack?.title,
-                  durationSec: 15,
+                // Compress image file before upload
+                final compressedBytes = await compressionService.compressImage(
+                  filePath: it.file.path,
+                  quality: 85,
+                  minWidth: 1080,
+                  minHeight: 1920,
                 );
+                if (compressedBytes != null) {
+                  final f = await _tmpWrite(compressedBytes, ext: 'jpg');
+                  final up = await filesApi.uploadFile(f);
+                  await storyRepo.createStory(
+                    mediaType: 'image',
+                    mediaUrl: up['url'],
+                    audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                    audioTitle: _selectedTrack?.title,
+                    durationSec: 15,
+                  );
+                } else {
+                  final up = await filesApi.uploadFile(File(it.file.path));
+                  await storyRepo.createStory(
+                    mediaType: 'image',
+                    mediaUrl: up['url'],
+                    audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                    audioTitle: _selectedTrack?.title,
+                    durationSec: 15,
+                  );
+                }
               }
             }
           }

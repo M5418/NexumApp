@@ -6,6 +6,7 @@ import '../repositories/interfaces/book_repository.dart';
 import '../repositories/firebase/firebase_book_repository.dart';
 import 'books_home_page.dart';
 import 'book_details_page.dart';
+import '../core/i18n/language_provider.dart';
 
 class BookFavoritesPage extends StatefulWidget {
   const BookFavoritesPage({super.key});
@@ -82,7 +83,7 @@ class _BookFavoritesPageState extends State<BookFavoritesPage> {
         elevation: 0,
         centerTitle: false,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-        title: Text('My Favorite Books',
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('books.my_favorites'),
             style: GoogleFonts.inter(
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.black,
@@ -100,7 +101,7 @@ class _BookFavoritesPageState extends State<BookFavoritesPage> {
                           const Icon(Icons.bookmark_border, size: 64, color: Colors.grey),
                           const SizedBox(height: 16),
                           Text(
-                            'No favorites yet',
+                            Provider.of<LanguageProvider>(context, listen: false).t('books.no_favorites'),
                             style: GoogleFonts.inter(fontSize: 16, color: Colors.grey),
                           ),
                         ],
@@ -117,6 +118,7 @@ class _BookFavoritesPageState extends State<BookFavoritesPage> {
                             Navigator.push(
                               ctx,
                               MaterialPageRoute(
+                                settings: const RouteSettings(name: 'book_details'),
                                 builder: (_) => BookDetailsPage(book: book),
                               ),
                             );

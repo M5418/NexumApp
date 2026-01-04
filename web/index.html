@@ -32,9 +32,63 @@
   <title>nexum</title>
   <link rel="manifest" href="manifest.json">
   
-  <!-- Agora Web SDK for Live Streaming -->
+  <!-- Agora Web SDK for Live Streaming (loaded BEFORE Flutter bootstrap) -->
+  <!-- Using CDN for development; for production, download and serve locally -->
   <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
   <script src="agora_web.js"></script>
+  
+  <!-- Agora Web Runtime Check - sets global flags for Flutter to detect -->
+  <script>
+    (function() {
+      // Check if Agora SDK loaded successfully
+      window.agoraWebRuntimeLoaded = typeof window.AgoraRTC !== 'undefined';
+      
+      // Check secure context (required for WebRTC)
+      window.isSecureContext = window.isSecureContext || 
+        window.location.protocol === 'https:' || 
+        window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1';
+      
+      // Check WebRTC support
+      window.webRTCSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      
+      // Log status for debugging
+      console.log('[Agora Web] Runtime loaded:', window.agoraWebRuntimeLoaded);
+      console.log('[Agora Web] Secure context:', window.isSecureContext);
+      console.log('[Agora Web] WebRTC supported:', window.webRTCSupported);
+      
+      if (!window.agoraWebRuntimeLoaded) {
+        console.error('[Agora Web] CRITICAL: Agora SDK failed to load!');
+      }
+      if (!window.isSecureContext) {
+        console.warn('[Agora Web] WARNING: Not a secure context. WebRTC may not work.');
+      }
+    })();
+  </script>
+<style>
+    /* Make Flutter canvas transparent so Agora video behind it is visible */
+    body {
+      background: transparent !important;
+    }
+    flutter-view, flt-glass-pane {
+      background: transparent !important;
+    }
+    /* Agora remote video container styling */
+    [id^="agora-remote-video-"] {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      z-index: 0 !important;
+      background: black !important;
+    }
+    /* Ensure Flutter content is above video */
+    flutter-view {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+  </style>
 </head>
 <body>
   <script src='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs' type='module'></script>

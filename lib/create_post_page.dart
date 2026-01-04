@@ -647,7 +647,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           ),
                           const SizedBox(width: 16),
                           Text(
-                            'Tag People',
+                            Provider.of<LanguageProvider>(context, listen: false).t('create_post.tag_people'),
                             style: GoogleFonts.inter(
                               fontSize: 20,
                               fontWeight: FontWeight.w600,
@@ -1023,7 +1023,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           ),
                           const SizedBox(width: 16),
                           Text(
-                            'Choose Community',
+                            Provider.of<LanguageProvider>(context, listen: false).t('create_post.choose_community'),
                             style: GoogleFonts.inter(
                               fontSize: 20,
                               fontWeight: FontWeight.w600,
@@ -1326,7 +1326,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Please write what's on your mind before posting.",
+            Provider.of<LanguageProvider>(context, listen: false).t('create_post.empty_post'),
             style: GoogleFonts.inter(),
           ),
           backgroundColor: Colors.red,

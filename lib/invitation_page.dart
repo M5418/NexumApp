@@ -418,6 +418,7 @@ class _InvitationPageState extends State<InvitationPage>
             );
             Navigator.of(context).push(
               MaterialPageRoute(
+                settings: const RouteSettings(name: 'chat'),
                 builder: (_) => ChatPage(
                   otherUser: other,
                   isDarkMode: widget.isDarkMode,

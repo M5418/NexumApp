@@ -159,7 +159,7 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
       } else {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => next),
+          MaterialPageRoute(settings: const RouteSettings(name: 'profile_training'), builder: (context) => next),
         );
       }
     } catch (e) {

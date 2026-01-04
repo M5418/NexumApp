@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -12,6 +13,7 @@ import '../repositories/interfaces/livestream_repository.dart';
 import '../repositories/models/livestream_model.dart';
 import '../other_user_profile_page.dart';
 import '../services/agora_service.dart';
+import '../services/agora_token_service.dart';
 import '../widgets/agora_web_video.dart';
 
 class LiveStreamPage extends StatefulWidget {
@@ -34,7 +36,8 @@ class _LiveStreamPageState extends State<LiveStreamPage>
   bool _isLoading = true;
   bool _isChatVisible = true;
   bool _isFullscreen = false;
-  bool _showControls = true;
+  // Controls always visible - removed auto-hide feature
+  // bool _showControls = true;
 
   AgoraService? _agoraService;
   bool _agoraInitialized = false;
@@ -76,20 +79,41 @@ class _LiveStreamPageState extends State<LiveStreamPage>
     try {
       _agoraService = AgoraService();
       
+      final agoraSvc = _agoraService;
+      if (agoraSvc == null) {
+        debugPrint('Failed to create AgoraService');
+        return;
+      }
+      
       // Initialize as viewer (audience)
-      await _agoraService!.initialize(isBroadcaster: false);
+      final initResult = await agoraSvc.initialize(isBroadcaster: false);
+      if (!initResult.success) {
+        debugPrint('Agora init failed: ${initResult.errorMessage}');
+        return;
+      }
       
       // Generate a unique UID for the viewer
       _localUid = DateTime.now().millisecondsSinceEpoch % 100000;
       
       // Listen for remote user joining (the host)
-      _agoraService!.onUserJoined.listen((uid) {
+      agoraSvc.onUserJoined.listen((uid) {
+        debugPrint('Viewer: Remote user joined with uid: $uid');
         if (mounted) {
           setState(() => _remoteUid = uid);
+          // On web, play the remote video after a short delay
+          if (kIsWeb) {
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted && _remoteUid != null) {
+                final containerId = 'agora-remote-video-${widget.streamId}';
+                _agoraService?.playRemoteVideoWeb(_remoteUid!, containerId);
+                debugPrint('Viewer: Playing remote video in container: $containerId');
+              }
+            });
+          }
         }
       });
       
-      _agoraService!.onUserOffline.listen((uid) {
+      agoraSvc.onUserOffline.listen((uid) {
         if (mounted && _remoteUid == uid) {
           setState(() => _remoteUid = null);
         }
@@ -104,24 +128,40 @@ class _LiveStreamPageState extends State<LiveStreamPage>
   }
 
   Future<void> _joinAgoraChannel() async {
-    if (_agoraService != null && _localUid != null && _agoraInitialized) {
-      await _agoraService!.joinChannelAsViewer(
+    final agoraSvc = _agoraService;
+    final uid = _localUid;
+    if (agoraSvc != null && uid != null && _agoraInitialized) {
+      // Try to get a token from Cloud Functions
+      String? token;
+      try {
+        final tokenResult = await AgoraTokenService().generateToken(
+          channelName: widget.streamId,
+          uid: uid,
+          isPublisher: false,
+        );
+        token = tokenResult?.token;
+      } catch (e) {
+        debugPrint('Token generation failed, continuing without token: $e');
+      }
+      
+      final joinResult = await agoraSvc.joinChannelAsViewer(
         channelName: widget.streamId,
-        uid: _localUid!,
+        uid: uid,
+        token: token,
       );
+      if (!joinResult.success) {
+        debugPrint('Failed to join as viewer: ${joinResult.errorMessage}');
+      }
     }
   }
 
+  // Removed auto-hide controls - everything always visible
   void _startControlsTimer() {
-    _controlsTimer?.cancel();
-    _controlsTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) setState(() => _showControls = false);
-    });
+    // No-op: controls always visible
   }
 
   void _showControlsTemporarily() {
-    setState(() => _showControls = true);
-    _startControlsTimer();
+    // No-op: controls always visible
   }
 
   Future<void> _loadStream() async {
@@ -282,7 +322,7 @@ class _LiveStreamPageState extends State<LiveStreamPage>
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: kIsWeb ? Colors.transparent : Colors.black,
       body: GestureDetector(
         onTap: _showControlsTemporarily,
         child: Stack(
@@ -295,24 +335,21 @@ class _LiveStreamPageState extends State<LiveStreamPage>
             // Floating reactions
             ..._floatingReactions.map((r) => _buildFloatingReaction(r)),
 
-            // Controls overlay
-            if (_showControls) ...[
-              // Top bar
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _buildTopBar(lang, isDark),
-              ),
+            // Top bar - always visible (wrapped for web z-index)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: PointerInterceptor(child: _buildTopBar(lang, isDark)),
+            ),
 
-              // Bottom controls
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _buildBottomControls(lang, isDark),
-              ),
-            ],
+            // Bottom controls - always visible
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: PointerInterceptor(child: _buildBottomControls(lang, isDark)),
+            ),
 
             // Chat panel (right side on landscape, bottom on portrait)
             if (_isChatVisible && !_isFullscreen)
@@ -321,14 +358,14 @@ class _LiveStreamPageState extends State<LiveStreamPage>
                 left: 16,
                 right: 80,
                 height: 250,
-                child: _buildChatPanel(lang, isDark),
+                child: PointerInterceptor(child: _buildChatPanel(lang, isDark)),
               ),
 
             // Reaction buttons
             Positioned(
               right: 16,
               bottom: 180,
-              child: _buildReactionButtons(),
+              child: PointerInterceptor(child: _buildReactionButtons()),
             ),
           ],
         ),
@@ -342,23 +379,29 @@ class _LiveStreamPageState extends State<LiveStreamPage>
       // Web platform - use HtmlElementView
       if (kIsWeb && _agoraService?.isWeb == true) {
         final containerId = 'agora-remote-video-${widget.streamId}';
-        return AgoraWebVideoView(
-          containerId: containerId,
-          isLocalVideo: false,
-          remoteUid: _remoteUid,
-          onReady: () {
-            // Play remote video after view is ready
-            _agoraService?.playRemoteVideoWeb(_remoteUid!, containerId);
-          },
-        );
+        final remoteId = _remoteUid;
+        if (remoteId != null) {
+          return AgoraWebVideoView(
+            containerId: containerId,
+            isLocalVideo: false,
+            remoteUid: remoteId,
+            onReady: () {
+              // Play remote video after view is ready
+              _agoraService?.playRemoteVideoWeb(remoteId, containerId);
+            },
+          );
+        }
       }
       
       // Native platform - use AgoraVideoView
-      if (_agoraService?.engine != null) {
+      final agoraSvc = _agoraService;
+      final eng = agoraSvc?.engine;
+      final remoteId = _remoteUid;
+      if (eng != null && remoteId != null) {
         return AgoraVideoView(
           controller: VideoViewController.remote(
-            rtcEngine: _agoraService!.engine!,
-            canvas: VideoCanvas(uid: _remoteUid!),
+            rtcEngine: eng,
+            canvas: VideoCanvas(uid: remoteId),
             connection: RtcConnection(channelId: widget.streamId),
           ),
         );
@@ -366,11 +409,13 @@ class _LiveStreamPageState extends State<LiveStreamPage>
     }
     
     // Show loading or waiting state
+    final streamData = _stream;
+    final thumbUrl = streamData?.thumbnailUrl;
     return Container(
       color: Colors.black,
-      child: _stream?.thumbnailUrl != null && _stream?.isLive != true
+      child: thumbUrl != null && streamData?.isLive != true
           ? CachedNetworkImage(
-              imageUrl: _stream!.thumbnailUrl!,
+              imageUrl: thumbUrl,
               fit: BoxFit.contain,
               width: double.infinity,
               height: double.infinity,
@@ -468,6 +513,7 @@ class _LiveStreamPageState extends State<LiveStreamPage>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'other_user_profile'),
                     builder: (_) => OtherUserProfilePage(
                       userId: _stream!.hostId,
                       userName: _stream!.hostName,

@@ -732,7 +732,7 @@ class _KycVerificationPageState extends State<KycVerificationPage> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const KycStatusPage()),
+        MaterialPageRoute(settings: const RouteSettings(name: 'kyc_status'), builder: (_) => const KycStatusPage()),
       );
     } catch (e) {
       _showSnack('Submission failed: $e');

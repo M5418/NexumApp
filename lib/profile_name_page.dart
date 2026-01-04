@@ -398,7 +398,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
       if (!context.isMobile) {
         _pushWithPopupTransition(context, next);
       } else {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+        Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_birthday'), builder: (_) => next));
       }
     } catch (e) {
       if (!mounted) return;

@@ -7,6 +7,7 @@ import '../repositories/firebase/firebase_podcast_repository.dart';
 import 'podcasts_home_page.dart';
 import 'podcast_details_page.dart';
 import 'player_page.dart';
+import '../core/i18n/language_provider.dart';
 
 class PodcastsCategoriesPage extends StatefulWidget {
   const PodcastsCategoriesPage({super.key});
@@ -107,7 +108,7 @@ class _PodcastsCategoriesPageState extends State<PodcastsCategoriesPage> {
         elevation: 0,
         centerTitle: false,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-        title: Text('Categories',
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('podcasts.categories'),
             style: GoogleFonts.inter(
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.black,
@@ -130,11 +131,11 @@ class _PodcastsCategoriesPageState extends State<PodcastsCategoriesPage> {
                       tileColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       title: Text(name, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                      subtitle: Text('$count podcasts', style: GoogleFonts.inter(color: const Color(0xFF888888))),
+                      subtitle: Text('$count ${count == 1 ? Provider.of<LanguageProvider>(context, listen: false).t('podcasts.podcast_count') : Provider.of<LanguageProvider>(context, listen: false).t('podcasts.podcasts_count')}', style: GoogleFonts.inter(color: const Color(0xFF888888))),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => CategoryPodcastsPage(category: name)),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'category_podcasts'), builder: (_) => CategoryPodcastsPage(category: name)),
                       ),
                     );
                   },
@@ -261,7 +262,7 @@ class _CategoryPodcastsPageState extends State<CategoryPodcastsPage> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${_podcasts.length} ${_podcasts.length == 1 ? 'podcast' : 'podcasts'}',
+                          '${_podcasts.length} ${_podcasts.length == 1 ? Provider.of<LanguageProvider>(context, listen: false).t('podcasts.podcast_count') : Provider.of<LanguageProvider>(context, listen: false).t('podcasts.podcasts_count')}',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: const Color(0xFF999999),
@@ -327,7 +328,7 @@ class _CategoryPodcastsPageState extends State<CategoryPodcastsPage> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No podcasts in this category',
+                            Provider.of<LanguageProvider>(context, listen: false).t('podcasts.no_podcasts_category'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               color: isDark ? Colors.white70 : Colors.black54,
@@ -364,7 +365,7 @@ class _CategoryPodcastsPageState extends State<CategoryPodcastsPage> {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => PodcastDetailsPage(podcast: podcast)),
+        MaterialPageRoute(settings: const RouteSettings(name: 'podcast_details'), builder: (_) => PodcastDetailsPage(podcast: podcast)),
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -414,7 +415,7 @@ class _CategoryPodcastsPageState extends State<CategoryPodcastsPage> {
                       if ((podcast.audioUrl ?? '').isNotEmpty) {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => PlayerPage(podcast: podcast)),
+                          MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: podcast)),
                         );
                       }
                     },

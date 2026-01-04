@@ -277,6 +277,7 @@ class _LiveStreamListPageState extends State<LiveStreamListPage>
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
+                settings: const RouteSettings(name: 'create_livestream'),
                 builder: (_) => const CreateLiveStreamPage(),
               ),
             ),
@@ -306,7 +307,7 @@ class _LiveStreamListPageState extends State<LiveStreamListPage>
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const CreateLiveStreamPage()),
+          MaterialPageRoute(settings: const RouteSettings(name: 'livestream'), builder: (_) => const CreateLiveStreamPage()),
         ),
         backgroundColor: const Color(0xFFBFAE01),
         icon: const Icon(Ionicons.videocam, color: Colors.black),
@@ -366,6 +367,7 @@ class _LiveStreamListPageState extends State<LiveStreamListPage>
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'create_livestream'),
                     builder: (_) => const CreateLiveStreamPage(),
                   ),
                 ),
@@ -435,6 +437,7 @@ class _LiveStreamListPageState extends State<LiveStreamListPage>
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: 'livestream'),
           builder: (_) => LiveStreamPage(streamId: stream.id),
         ),
       ),

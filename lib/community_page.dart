@@ -140,7 +140,8 @@ class _CommunityPageState extends State<CommunityPage> {
       });
       _buildMediaItems(posts);
       
-      // Hydrate author names + prefetch next page in background
+      // Load like/bookmark status + hydrate author names + prefetch next page in background
+      _loadUserInteractionsInBackground(posts);
       _hydrateAuthorNamesInBackground();
       _prefetchNextBatch();
     } catch (e) {
@@ -528,6 +529,56 @@ class _CommunityPageState extends State<CommunityPage> {
     return e.toString();
   }
 
+  /// BACKGROUND: Load like/bookmark status for posts (non-blocking)
+  Future<void> _loadUserInteractionsInBackground(List<Post> posts) async {
+    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null || posts.isEmpty) return;
+    
+    try {
+      // Get unique post IDs (use originalPostId for reposts)
+      final postIds = posts.map((p) => p.originalPostId ?? p.id).toSet().toList();
+      
+      // Check like/bookmark status for each post in parallel
+      final results = await Future.wait(postIds.map((postId) async {
+        try {
+          final liked = await _firebasePostRepo.hasUserLikedPost(postId: postId, uid: currentUserId);
+          final bookmarked = await _firebasePostRepo.hasUserBookmarkedPost(postId: postId, uid: currentUserId);
+          return {'postId': postId, 'liked': liked, 'bookmarked': bookmarked};
+        } catch (_) {
+          return {'postId': postId, 'liked': false, 'bookmarked': false};
+        }
+      }));
+      
+      if (!mounted) return;
+      
+      // Build lookup map
+      final statusMap = <String, Map<String, bool>>{};
+      for (final r in results) {
+        statusMap[r['postId'] as String] = {
+          'liked': r['liked'] as bool,
+          'bookmarked': r['bookmarked'] as bool,
+        };
+      }
+      
+      // Update posts with actual status
+      setState(() {
+        _posts = _posts.map((p) {
+          final effectiveId = p.originalPostId ?? p.id;
+          final status = statusMap[effectiveId];
+          if (status != null) {
+            return p.copyWith(
+              userReaction: status['liked'] == true ? ReactionType.like : null,
+              isBookmarked: status['bookmarked'] ?? false,
+            );
+          }
+          return p;
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('⚠️ [Community] Failed to load user interactions: $e');
+    }
+  }
+
   // Toggle bookmark for a post (optimistic UI + backend)
   void _onBookmarkToggle(String postId) async {
     final postIndex = _posts.indexWhere((post) => post.id == postId);
@@ -871,7 +922,8 @@ class _CommunityPageState extends State<CommunityPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CommunityPostPage(
+        settings: const RouteSettings(name: 'community_post'),
+        builder: (_) => CommunityPostPage(
           communityId: widget.communityId,
           post: p, // pass full post for instant render
         ),
@@ -897,7 +949,7 @@ class _CommunityPageState extends State<CommunityPage> {
             elevation: 0,
             centerTitle: true,
             title: Text(
-              _community?.name ?? widget.communityName,
+              _community?.getLocalizedName(Provider.of<LanguageProvider>(context, listen: false).code) ?? widget.communityName,
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -1052,9 +1104,9 @@ class _CommunityPageState extends State<CommunityPage> {
                                           child: LinearProgressIndicator(),
                                         ),
                                       Text(
-                                        _community?.bio.isNotEmpty == true
-                                            ? _community!.bio
-                                            : 'A vibrant community.',
+                                        _community?.getLocalizedBio(Provider.of<LanguageProvider>(context, listen: false).code).isNotEmpty == true
+                                            ? _community!.getLocalizedBio(Provider.of<LanguageProvider>(context, listen: false).code)
+                                            : Provider.of<LanguageProvider>(context, listen: false).t('community.default_bio'),
                                         style: GoogleFonts.inter(
                                           fontSize: 14,
                                           height: 1.5,
@@ -1274,7 +1326,7 @@ class _CommunityPageState extends State<CommunityPage> {
     final textColor = isDark ? Colors.white : Colors.black;
     const secondaryTextColor = Color(0xFF666666);
 
-    final displayName = _community?.name ?? widget.communityName;
+    final displayName = _community?.getLocalizedName(Provider.of<LanguageProvider>(context, listen: false).code) ?? widget.communityName;
     final handle = displayName.toLowerCase().replaceAll(
       RegExp(r"[^a-z0-9]"),
       '',
@@ -1407,6 +1459,7 @@ class _CommunityPageState extends State<CommunityPage> {
                           final updated = await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
+                              settings: const RouteSettings(name: 'edit_community'),
                               builder: (context) => EditCommunityPage(
                                 community: _community!,
                               ),
@@ -1460,9 +1513,9 @@ class _CommunityPageState extends State<CommunityPage> {
             ),
           ),
           const SizedBox(height: 4),
-          if (_community?.bio.isNotEmpty == true)
+          if (_community?.getLocalizedBio(Provider.of<LanguageProvider>(context, listen: false).code).isNotEmpty == true)
             Text(
-              _community!.bio,
+              _community!.getLocalizedBio(Provider.of<LanguageProvider>(context, listen: false).code),
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: const Color(0xFF666666),

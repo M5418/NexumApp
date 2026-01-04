@@ -78,7 +78,7 @@ class _SignInPageState extends State<SignInPage> {
         }
         if (mounted) {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeFeedPage()),
+            MaterialPageRoute(settings: const RouteSettings(name: 'sign_up'), builder: (_) => const HomeFeedPage()),
           );
         }
       } else {
@@ -315,8 +315,8 @@ class _SignInPageState extends State<SignInPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    const ForgotPasswordPage(),
+                                settings: const RouteSettings(name: 'forgot_password'),
+                                builder: (_) => const ForgotPasswordPage(),
                               ),
                             );
                           },
@@ -383,6 +383,7 @@ class _SignInPageState extends State<SignInPage> {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
+                                          settings: const RouteSettings(name: 'sign_up'),
                                           builder: (context) =>
                                               const SignUpPage(),
                                         ),

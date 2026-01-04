@@ -11,6 +11,7 @@ import '../data/interest_domains.dart';
 import '../repositories/interfaces/draft_repository.dart';
 import '../repositories/interfaces/podcast_repository.dart';
 import '../repositories/models/draft_model.dart';
+import '../core/i18n/language_provider.dart';
 
 class CreatePodcastPage extends StatefulWidget {
   final DraftModel? draft;
@@ -126,12 +127,12 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cover uploaded', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.cover_uploaded'), style: GoogleFonts.inter())),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cover upload failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.cover_upload_failed')}: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _uploadingCover = false);
@@ -151,7 +152,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
       if (bytes == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not read file bytes', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+          SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.could_not_read_file'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
         );
         return;
       }
@@ -160,12 +161,12 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
       setState(() => _audioUrl = res['url']);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Audio uploaded', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.audio_uploaded_msg'), style: GoogleFonts.inter())),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Audio upload failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.audio_upload_failed')}: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _uploadingAudio = false);
@@ -175,7 +176,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   Future<void> _saveDraft() async {
     if (_titleCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Title is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.title_required'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
@@ -207,13 +208,13 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved to drafts', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.saved_drafts'), style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
       );
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save draft: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.save_draft_failed')}: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _creating = false);
@@ -224,35 +225,35 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
     // Validate required fields
     if (_titleCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Title is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.title_required'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
     
     if (_authorCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Author is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.author_required'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
     
     if (_descCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Description is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.description_required'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
     
     if (_languageCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Language is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.language_required'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
     
     if (_selectedCategories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('At least one category is required', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.category_required'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
@@ -291,13 +292,13 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Podcast published', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.podcast_published'), style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
       );
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to publish podcast: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.publish_failed')}: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _creating = false);
@@ -334,10 +335,10 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                         Expanded(
                           child: TextField(
                             autofocus: true,
-                            decoration: const InputDecoration(
-                              hintText: 'Search categories',
-                              prefixIcon: Icon(Icons.search),
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              hintText: Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.search_categories'),
+                              prefixIcon: const Icon(Icons.search),
+                              border: const OutlineInputBorder(),
                             ),
                             onChanged: (val) => setModal(() => query = val),
                           ),
@@ -349,7 +350,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                             backgroundColor: const Color(0xFFBFAE01),
                             foregroundColor: Colors.black,
                           ),
-                          child: Text('Done (${tempSelected.length})', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                          child: Text('${Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.done')} (${tempSelected.length})', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
@@ -358,7 +359,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: Text(
-                        '${tempSelected.length} selected',
+                        '${tempSelected.length} ${Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.selected')}',
                         style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFFBFAE01), fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -432,7 +433,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                   ),
                   Expanded(
                     child: Text(
-                      'Create Podcast',
+                      Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.title'),
                       style: GoogleFonts.inter(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
@@ -493,7 +494,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
               children: [
                 // Cover
                 Text(
-                  'Cover Image',
+                  Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.cover_image'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -533,7 +534,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                                         const Icon(Icons.add_photo_alternate_outlined, color: Color(0xFFBFAE01), size: 48),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'Tap to upload cover',
+                                          Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.tap_upload_cover'),
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
                                             color: const Color(0xFF999999),
@@ -563,7 +564,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
 
                 // Audio
                 Text(
-                  'Audio File',
+                  Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.audio_file'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -600,7 +601,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          (_audioUrl ?? '').isEmpty ? 'No audio file selected' : 'Audio file uploaded ✓',
+                          (_audioUrl ?? '').isEmpty ? Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.no_audio_selected') : Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.audio_uploaded'),
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: (_audioUrl ?? '').isEmpty ? const Color(0xFF666666) : const Color(0xFFBFAE01),
@@ -612,7 +613,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                       ElevatedButton.icon(
                         onPressed: _uploadingAudio ? null : _pickAudioFile,
                         icon: const Icon(Icons.upload_file, color: Colors.black, size: 18),
-                        label: Text('Upload', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600, fontSize: 14)),
+                        label: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.upload'), style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600, fontSize: 14)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFBFAE01),
                           elevation: 0,
@@ -638,7 +639,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
 
                 // Details Section Header
                 Text(
-                  'Podcast Details',
+                  Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.podcast_details'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -775,8 +776,8 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                                   Expanded(
                                     child: Text(
                                       _selectedCategories.isEmpty 
-                                          ? 'Select Categories *' 
-                                          : '${_selectedCategories.length} selected',
+                                          ? Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.select_categories') 
+                                          : '${_selectedCategories.length} ${Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.selected')}',
                                       style: GoogleFonts.inter(
                                         color: _selectedCategories.isEmpty 
                                             ? const Color(0xFF999999)
@@ -883,7 +884,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                             const Icon(Icons.publish, size: 22),
                           const SizedBox(width: 10),
                           Text(
-                            _creating ? 'Publishing...' : 'Publish Podcast',
+                            _creating ? Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.publishing') : Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.publish_podcast'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -912,7 +913,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                         const Icon(Icons.drafts_outlined, size: 20, color: Color(0xFFBFAE01)),
                         const SizedBox(width: 10),
                         Text(
-                          'Save as Draft',
+                          Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.save_draft'),
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

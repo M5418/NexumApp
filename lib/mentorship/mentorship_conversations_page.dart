@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../repositories/interfaces/mentorship_repository.dart';
 import 'mentorship_chat_page.dart';
 import '../core/time_utils.dart';
+import '../core/i18n/language_provider.dart';
 
 class MentorshipConversationsPage extends StatefulWidget {
   const MentorshipConversationsPage({super.key});
@@ -61,7 +62,7 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
         backgroundColor: card,
         elevation: 0,
         centerTitle: false,
-        title: Text('Mentorship Chats', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, color: text)),
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('mentorship.chats'), style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, color: text)),
         leading: IconButton(icon: Icon(Icons.arrow_back, color: text), onPressed: () => Navigator.pop(context)),
       ),
       body: _loading && _items.isEmpty
@@ -94,7 +95,7 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
                             const SizedBox(height: 120),
                             Center(
                               child: Text(
-                                'No conversations yet',
+                                Provider.of<LanguageProvider>(context, listen: false).t('mentorship.no_conversations'),
                                 style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, color: secondary),
                               ),
                             ),
@@ -127,6 +128,7 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
                                     await Navigator.push(
                                       context,
                                       MaterialPageRoute(
+                                        settings: const RouteSettings(name: 'mentorship_chat'),
                                         builder: (_) => MentorshipChatPage(
                                           mentorUserId: mentor?.id ?? c.mentorId,
                                           mentorName: mentorName,
@@ -227,13 +229,13 @@ return TimeUtils.relativeLabel(dt, locale: 'en_short');
   String _label(String? t) {
     switch ((t ?? '').toLowerCase()) {
       case 'image':
-        return 'Photo';
+        return Provider.of<LanguageProvider>(context, listen: false).t('mentorship.photo');
       case 'video':
-        return 'Video';
+        return Provider.of<LanguageProvider>(context, listen: false).t('mentorship.video');
       case 'voice':
-        return 'Voice message';
+        return Provider.of<LanguageProvider>(context, listen: false).t('mentorship.voice_message');
       case 'file':
-        return 'File';
+        return Provider.of<LanguageProvider>(context, listen: false).t('mentorship.file');
       default:
         return '';
     }

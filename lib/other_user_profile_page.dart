@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
@@ -18,6 +19,7 @@ import 'providers/follow_state.dart';
 import 'models/message.dart' hide MediaType;
 import 'widgets/report_bottom_sheet.dart';
 import 'chat_page.dart';
+import 'shared_media_page.dart';
 
 
 class OtherUserProfilePage extends StatefulWidget {
@@ -97,6 +99,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   // Cache for user profiles to avoid redundant fetches
   final Map<String, dynamic> _userProfileCache = {};
 
+  // Shared media counts
+  int _sharedMediaCount = 0;
+  int _sharedLinksCount = 0;
+  int _sharedDocsCount = 0;
+  bool _loadingSharedMedia = false;
+
   @override
   void initState() {
     super.initState();
@@ -117,6 +125,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     _loadUserPosts();     // posts authored by this user (with repost hydration)
     _loadActivity();      // "their activity": likes/bookmarks/reposts they did
     _loadPodcasts();      // podcasts authored by this user
+    _loadSharedMediaCounts(); // shared media/links/docs counts
     
     // Setup scroll listeners for pagination
     _postsScrollController.addListener(_onPostsScroll);
@@ -532,7 +541,72 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         _userPosts = posts;
         _mediaImageUrls = mediaUrls;
       });
+      
+      // Load like/bookmark status in background
+      _loadUserInteractionsInBackground(posts);
     } catch (_) {}
+  }
+
+  /// BACKGROUND: Load like/bookmark status for posts (non-blocking)
+  Future<void> _loadUserInteractionsInBackground(List<Post> posts) async {
+    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null || posts.isEmpty) return;
+    
+    try {
+      // Get unique post IDs (use originalPostId for reposts)
+      final postIds = posts.map((p) => p.originalPostId ?? p.id).toSet().toList();
+      
+      // Check like/bookmark status for each post in parallel
+      final results = await Future.wait(postIds.map((postId) async {
+        try {
+          final liked = await _postRepo.hasUserLikedPost(postId: postId, uid: currentUserId);
+          final bookmarked = await _postRepo.hasUserBookmarkedPost(postId: postId, uid: currentUserId);
+          return {'postId': postId, 'liked': liked, 'bookmarked': bookmarked};
+        } catch (_) {
+          return {'postId': postId, 'liked': false, 'bookmarked': false};
+        }
+      }));
+      
+      if (!mounted) return;
+      
+      // Build lookup map
+      final statusMap = <String, Map<String, bool>>{};
+      for (final r in results) {
+        statusMap[r['postId'] as String] = {
+          'liked': r['liked'] as bool,
+          'bookmarked': r['bookmarked'] as bool,
+        };
+      }
+      
+      // Update posts with actual status
+      setState(() {
+        _userPosts = _userPosts.map((p) {
+          final effectiveId = p.originalPostId ?? p.id;
+          final status = statusMap[effectiveId];
+          if (status != null) {
+            return p.copyWith(
+              userReaction: status['liked'] == true ? ReactionType.like : null,
+              isBookmarked: status['bookmarked'] ?? false,
+            );
+          }
+          return p;
+        }).toList();
+        
+        _activityPosts = _activityPosts.map((p) {
+          final effectiveId = p.originalPostId ?? p.id;
+          final status = statusMap[effectiveId];
+          if (status != null) {
+            return p.copyWith(
+              userReaction: status['liked'] == true ? ReactionType.like : null,
+              isBookmarked: status['bookmarked'] ?? false,
+            );
+          }
+          return p;
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('⚠️ [OtherProfile] Failed to load user interactions: $e');
+    }
   }
 
   Future<void> _loadActivity() async {
@@ -711,6 +785,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         Navigator.push(
           ctx,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'chat'),
             builder: (_) => ChatPage(
               otherUser: chatUser,
               isDarkMode: false,
@@ -730,6 +805,25 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       if (ctx.mounted) {
         _showMessageBottomSheet(ctx);
       }
+    }
+  }
+
+  /// Load shared media counts from conversation
+  Future<void> _loadSharedMediaCounts() async {
+    setState(() => _loadingSharedMedia = true);
+    try {
+      final counts = await SharedMediaHelper.getSharedMediaCounts(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _sharedMediaCount = counts['media'] ?? 0;
+        _sharedLinksCount = counts['links'] ?? 0;
+        _sharedDocsCount = counts['docs'] ?? 0;
+        _loadingSharedMedia = false;
+      });
+    } catch (e) {
+      debugPrint('⚠️ [OtherProfile] Failed to load shared media counts: $e');
+      if (!mounted) return;
+      setState(() => _loadingSharedMedia = false);
     }
   }
 
@@ -907,12 +1001,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                   children: [
                                     _buildStatColumn(
                                       _formatCount(_followersCount),
-                                      'Connections',
+                                      Provider.of<LanguageProvider>(context, listen: false).t('profile.connections_label'),
                                     ),
                                     const SizedBox(width: 40),
                                     _buildStatColumn(
                                       _formatCount(_followingCount),
-                                      'Connected',
+                                      Provider.of<LanguageProvider>(context, listen: false).t('profile.connected_label'),
                                     ),
                                   ],
                                 ),
@@ -986,8 +1080,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                           } catch (e) {
                                             if (!mounted) return;
                                             messenger.showSnackBar(
-                                              const SnackBar(
-                                                content: Text('Failed to toggle connection'),
+                                              SnackBar(
+                                                content: Text(Provider.of<LanguageProvider>(context, listen: false).t('other_profile.toggle_failed')),
                                               ),
                                             );
                                           }
@@ -1092,7 +1186,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Professional Experiences',
+                                    Provider.of<LanguageProvider>(context, listen: false).t('other_profile.experiences'),
                                     style: GoogleFonts.inter(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
@@ -1264,6 +1358,60 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                             ],
                           ),
                         ),
+
+                        // Shared Media Section (only show if there's a conversation)
+                        if (_sharedMediaCount + _sharedLinksCount + _sharedDocsCount > 0)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    settings: const RouteSettings(name: 'shared_media'),
+                                    builder: (context) => SharedMediaPage(
+                                      otherUserId: widget.userId,
+                                      otherUserName: widget.userName,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.perm_media_outlined,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      Provider.of<LanguageProvider>(context, listen: false).t('other_profile.shared_media'),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: isDark ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_sharedMediaCount + _sharedLinksCount + _sharedDocsCount}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    size: 20,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -1290,7 +1438,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                 color: isDark ? Colors.grey[300] : Colors.black87,
               ),
               title: Text(
-                'Report User',
+                Provider.of<LanguageProvider>(context, listen: false).t('other_profile.report_user'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -1313,7 +1461,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                 color: isDark ? Colors.grey[300] : Colors.black87,
               ),
               title: Text(
-                'Block User',
+                Provider.of<LanguageProvider>(context, listen: false).t('other_profile.block_user'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -1544,8 +1692,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       itemBuilder: (context, index) {
         final podcast = _podcasts[index];
         return _buildPodcastItem(
-          (podcast['title'] ?? 'Untitled').toString(),
-          (podcast['description'] ?? 'No description').toString(),
+          (podcast['title'] ?? Provider.of<LanguageProvider>(context, listen: false).t('other_profile.untitled')).toString(),
+          (podcast['description'] ?? Provider.of<LanguageProvider>(context, listen: false).t('other_profile.no_description')).toString(),
           '${podcast['durationSec'] ?? 0}s',
           (podcast['coverUrl'] ?? '').toString(),
           isDark,

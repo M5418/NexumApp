@@ -469,7 +469,7 @@ class _InsightsPageState extends State<InsightsPage> with SingleTickerProviderSt
     final statValue = _selectedSortBy == SortBy.views ? post.views : _selectedSortBy == SortBy.likes ? post.likes : post.comments;
     return InkWell(
       onTap: () {
-        Navigator.push(context, MaterialPageRoute(builder: (context) => PostPage(postId: post.postId)));
+        Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'post_detail'), builder: (context) => PostPage(postId: post.postId)));
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(

@@ -1410,12 +1410,13 @@ class _PostPageState extends State<PostPage> {
                     if (currentUserId == _post!.authorId) {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const ProfilePage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
                       );
                     } else {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'other_user_profile'),
                           builder: (context) => OtherUserProfilePage(
                             userId: _post!.authorId,
                             userName: _post!.authorName,
@@ -1452,12 +1453,13 @@ class _PostPageState extends State<PostPage> {
                       if (currentUserId == _post!.authorId) {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const ProfilePage()),
+                          MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
                         );
                       } else {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(name: 'other_user_profile'),
                             builder: (context) => OtherUserProfilePage(
                               userId: _post!.authorId,
                               userName: _post!.authorName,

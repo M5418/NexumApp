@@ -262,16 +262,16 @@ class _BooksHomePageState extends State<BooksHomePage> {
     if (d == null) return '';
     final diff = DateTime.now().difference(d);
     if (diff.inDays >= 2) return '${diff.inDays} days ago';
-    if (diff.inDays >= 1) return 'Yesterday';
+    if (diff.inDays >= 1) return Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday');
     if (diff.inHours >= 1) return '${diff.inHours} hr';
     if (diff.inMinutes >= 1) return '${diff.inMinutes} min';
-    return 'Just now';
+    return Provider.of<LanguageProvider>(context, listen: false).t('common.just_now');
   }
 
   Future<void> _openCreateMobile() async {
     final changed = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const CreateBookPage()),
+      MaterialPageRoute(settings: const RouteSettings(name: 'create_book'), builder: (_) => const CreateBookPage()),
     );
     if (changed == true && mounted) {
       await _fetchBooks(reset: true);
@@ -287,7 +287,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
 
   void _openInRightPanel(Book b) {
     _rightNavKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => BookDetailsPage(book: b)),
+      MaterialPageRoute(settings: const RouteSettings(name: 'book_details'), builder: (_) => BookDetailsPage(book: b)),
       (route) => false,
     );
   }
@@ -295,14 +295,14 @@ class _BooksHomePageState extends State<BooksHomePage> {
   void _openCategories() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const BookCategoriesPage()),
+      MaterialPageRoute(settings: const RouteSettings(name: 'book_categories'), builder: (_) => const BookCategoriesPage()),
     );
   }
 
   void _openFavorites() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const BookFavoritesPage()),
+      MaterialPageRoute(settings: const RouteSettings(name: 'book_favorites'), builder: (_) => const BookFavoritesPage()),
     );
   }
 
@@ -528,7 +528,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                                                             ),
                                                             const SizedBox(height: 2),
                                                             Text(
-                                                              b.author ?? 'Unknown',
+                                                              b.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown'),
                                                               style: GoogleFonts.inter(
                                                                 fontSize: 13,
                                                                 color: const Color(0xFF999999),
@@ -644,6 +644,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                                 onGenerateInitialRoutes: (_, __) {
                                   return [
                                     MaterialPageRoute(
+                                      settings: const RouteSettings(name: 'book_details'),
                                       builder: (_) => const _BooksPlaceholder(),
                                     ),
                                   ];
@@ -697,7 +698,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                     icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
                   ),
                   Text(
-                    'Books',
+                    Provider.of<LanguageProvider>(context, listen: false).t('books.title'),
                     style: GoogleFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
@@ -709,7 +710,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const BookSearchPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'book_search'), builder: (_) => const BookSearchPage()),
                       );
                     },
                     icon: Icon(Icons.search, color: isDark ? Colors.white : const Color(0xFF666666)),
@@ -749,7 +750,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                         children: [
                           _QuickActionChip(
                             icon: Icons.category_outlined,
-                            label: 'Categories',
+                            label: Provider.of<LanguageProvider>(context, listen: false).t('books.categories'),
                             isDark: isDark,
                             onTap: _openCategories,
                           ),
@@ -757,14 +758,14 @@ class _BooksHomePageState extends State<BooksHomePage> {
                           if (AdminConfig.isAdmin(fb.FirebaseAuth.instance.currentUser?.uid))
                             _QuickActionChip(
                               icon: Icons.add_circle_outline,
-                              label: 'Add Book',
+                              label: Provider.of<LanguageProvider>(context, listen: false).t('books.add_book'),
                               isDark: isDark,
                               onTap: _openCreateMobile,
                             ),
                           const SizedBox(width: 8),
                           _QuickActionChip(
                             icon: Icons.favorite_border,
-                            label: 'Favorites',
+                            label: Provider.of<LanguageProvider>(context, listen: false).t('books.favorites'),
                             isDark: isDark,
                             onTap: _openFavorites,
                           ),
@@ -791,7 +792,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                   return GestureDetector(
                     onTap: () => Navigator.push(
                       ctx,
-                      MaterialPageRoute(builder: (ctx) => BookDetailsPage(book: b)),
+                      MaterialPageRoute(settings: const RouteSettings(name: 'book_details'), builder: (ctx) => BookDetailsPage(book: b)),
                     ),
                     child: Container(
                       width: 360,
@@ -868,7 +869,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        b.author ?? 'Unknown',
+                                        b.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown'),
                                         style: GoogleFonts.inter(
                                           fontSize: 14,
                                           color: const Color(0xFF999999),
@@ -937,7 +938,7 @@ class _BooksHomePageState extends State<BooksHomePage> {
                                     GestureDetector(
                                       onTap: () => Navigator.push(
                                         context,
-                                        MaterialPageRoute(builder: (ctx) => BookDetailsPage(book: b)),
+                                        MaterialPageRoute(settings: const RouteSettings(name: 'book_details'), builder: (ctx) => BookDetailsPage(book: b)),
                                       ),
                                       child: Container(
                                         width: 32,
@@ -1078,7 +1079,7 @@ class _BooksPlaceholder extends StatelessWidget {
       backgroundColor: isDark ? Colors.black : Colors.white,
       body: Center(
         child: Text(
-          'Select a book from the left list',
+          Provider.of<LanguageProvider>(context, listen: false).t('books.select_book'),
           style: GoogleFonts.inter(
             fontSize: 16,
             color: isDark ? Colors.white70 : const Color(0xFF666666),

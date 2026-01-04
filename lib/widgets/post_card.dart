@@ -72,10 +72,25 @@ class _PostCardState extends State<PostCard> {
   @override
   void initState() {
     super.initState();
-    // Initialize local state from widget props (like comments do)
+    // Initialize local state from widget props
     _isLiked = widget.post.userReaction != null;
     _likeCount = widget.post.counts.likes.clamp(0, 999999);
     _isBookmarked = widget.post.isBookmarked;
+  }
+
+  @override
+  void didUpdateWidget(covariant PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sync local state when parent rebuilds with new data (e.g., after backend fetch)
+    if (oldWidget.post.userReaction != widget.post.userReaction) {
+      _isLiked = widget.post.userReaction != null;
+    }
+    if (oldWidget.post.counts.likes != widget.post.counts.likes) {
+      _likeCount = widget.post.counts.likes.clamp(0, 999999);
+    }
+    if (oldWidget.post.isBookmarked != widget.post.isBookmarked) {
+      _isBookmarked = widget.post.isBookmarked;
+    }
   }
 
   @override
@@ -491,12 +506,13 @@ class _PostCardState extends State<PostCard> {
                     if (currentUserId == widget.post.authorId) {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const ProfilePage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
                       );
                     } else {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'other_user_profile'),
                           builder: (context) => OtherUserProfilePage(
                             userId: widget.post.authorId,
                             userName: widget.post.userName,
@@ -522,12 +538,13 @@ class _PostCardState extends State<PostCard> {
                       if (currentUserId == widget.post.authorId) {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const ProfilePage()),
+                          MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
                         );
                       } else {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(name: 'other_user_profile'),
                             builder: (context) => OtherUserProfilePage(
                               userId: widget.post.authorId,
                               userName: widget.post.userName,

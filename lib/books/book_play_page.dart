@@ -6,6 +6,7 @@ import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:provider/provider.dart';
 import 'books_home_page.dart' show Book;
 import '../repositories/interfaces/book_repository.dart';
+import '../core/i18n/language_provider.dart';
 
 class BookPlayPage extends StatefulWidget {
   final Book book;
@@ -48,7 +49,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
     final url = (widget.book.audioUrl ?? '').trim();
     if (url.isEmpty) {
       setState(() {
-        _error = 'No audio available for this book';
+        _error = Provider.of<LanguageProvider>(context, listen: false).t('books.no_audio');
         _loading = false;
       });
       return;
@@ -110,7 +111,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
     } catch (e) {
       setState(() {
         _loading = false;
-        _error = 'Failed to load audio: $e';
+        _error = '${Provider.of<LanguageProvider>(context, listen: false).t('books.failed_load_audio')}: $e';
       });
     }
   }
@@ -178,7 +179,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
         elevation: 0,
         centerTitle: false,
         title: Text(
-          'Now Playing',
+          Provider.of<LanguageProvider>(context, listen: false).t('books.now_playing'),
           style: GoogleFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -241,7 +242,7 @@ class _BookPlayPageState extends State<BookPlayPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        widget.book.author ?? 'Unknown',
+                        widget.book.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(fontSize: 16, color: const Color(0xFF666666)),
                       ),

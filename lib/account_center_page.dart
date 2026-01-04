@@ -66,7 +66,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
     if (u == null) {
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const SignInPage()),
+          MaterialPageRoute(settings: const RouteSettings(name: 'sign_in'), builder: (_) => const SignInPage()),
         );
       }
       return;
@@ -200,6 +200,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'change_password'),
                         builder: (_) => ChangePasswordPage(currentEmail: _email),
                       ),
                     );
@@ -213,6 +214,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'change_email'),
                         builder: (_) => ChangeEmailPage(currentEmail: _email),
                       ),
                     );
@@ -232,20 +234,20 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                         if (!ctx.mounted) return;
                         Navigator.push(
                           ctx,
-                          MaterialPageRoute(builder: (_) => const KycVerificationPage()),
+                          MaterialPageRoute(settings: const RouteSettings(name: 'kyc_verification'), builder: (_) => const KycVerificationPage()),
                         );
                       } else {
                         if (!ctx.mounted) return;
                         Navigator.push(
                           ctx,
-                          MaterialPageRoute(builder: (_) => const KycStatusPage()),
+                          MaterialPageRoute(settings: const RouteSettings(name: 'kyc_status'), builder: (_) => const KycStatusPage()),
                         );
                       }
                     } else {
                       if (!ctx.mounted) return;
                       Navigator.push(
                         ctx,
-                        MaterialPageRoute(builder: (_) => const KycVerificationPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'kyc_verification'), builder: (_) => const KycVerificationPage()),
                       );
                     }
                   },
@@ -409,7 +411,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
       await repo.deleteAccount(password: pwd);
       if (!navContext.mounted) return;
       Navigator.of(navContext).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const SignInPage()),
+        MaterialPageRoute(settings: const RouteSettings(name: 'sign_in'), builder: (_) => const SignInPage()),
         (_) => false,
       );
     } catch (_) {

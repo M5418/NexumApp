@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'books_home_page.dart' show Book; // reuse Book.fromApi + Book model
 import 'book_details_page.dart';
 import '../repositories/interfaces/book_repository.dart'; // reuse Book.fromApi + Book model
+import '../core/i18n/language_provider.dart';
 
 class BookSearchPage extends StatefulWidget {
   const BookSearchPage({super.key});
@@ -80,10 +81,10 @@ class _BookSearchPageState extends State<BookSearchPage> {
     if (d == null) return '';
     final diff = DateTime.now().difference(d);
     if (diff.inDays >= 2) return '${diff.inDays} days ago';
-    if (diff.inDays >= 1) return 'Yesterday';
+    if (diff.inDays >= 1) return Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday');
     if (diff.inHours >= 1) return '${diff.inHours} hr';
     if (diff.inMinutes >= 1) return '${diff.inMinutes} min';
-    return 'Just now';
+    return Provider.of<LanguageProvider>(context, listen: false).t('common.just_now');
   }
 
   @override
@@ -155,7 +156,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                               decoration: InputDecoration(
                                 isDense: true,
                                 border: InputBorder.none,
-                                hintText: 'Search books...',
+                                hintText: Provider.of<LanguageProvider>(context, listen: false).t('books.search_books'),
                                 hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
                               ),
                             ),
@@ -195,10 +196,10 @@ class _BookSearchPageState extends State<BookSearchPage> {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
     if (_controller.text.isEmpty) {
-      return _hint('Start typing to search books');
+      return _hint(Provider.of<LanguageProvider>(context, listen: false).t('books.start_typing'));
     }
     if (_results.isEmpty) {
-      return _hint('No books found');
+      return _hint(Provider.of<LanguageProvider>(context, listen: false).t('books.no_books_found'));
     }
 
     return ListView.separated(
@@ -210,7 +211,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
         return GestureDetector(
           onTap: () => Navigator.push(
             ctx,
-            MaterialPageRoute(builder: (_) => BookDetailsPage(book: b)),
+            MaterialPageRoute(settings: const RouteSettings(name: 'book_details'), builder: (_) => BookDetailsPage(book: b)),
           ),
           child: Container(
             width: 360,
@@ -276,7 +277,7 @@ class _BookSearchPageState extends State<BookSearchPage> {
                         const SizedBox(height: 2),
                         // Author
                         Text(
-                          b.author ?? 'Unknown',
+                          b.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown'),
                           style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF999999)),
                         ),
                         const SizedBox(height: 4),

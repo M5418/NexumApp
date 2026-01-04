@@ -50,6 +50,21 @@ post_install do |installer|
         ]
       end
     end
+    
+    # Agora SDK linking fix for TestFlight/Release builds
+    # Prevents symbol stripping that causes "debug OK / TestFlight broken" issues
+    if target.name.include?('agora') || target.name.include?('Agora') || target.name == 'AgoraRtcEngine_iOS'
+      target.build_configurations.each do |config|
+        # Force load Agora frameworks to prevent symbol stripping
+        config.build_settings['OTHER_LDFLAGS'] ||= ['$(inherited)']
+        unless config.build_settings['OTHER_LDFLAGS'].include?('-ObjC')
+          config.build_settings['OTHER_LDFLAGS'] << '-ObjC'
+        end
+        # Ensure all symbols are preserved in release builds
+        config.build_settings['STRIP_INSTALLED_PRODUCT'] = 'NO'
+        config.build_settings['STRIP_STYLE'] = 'non-global'
+      end
+    end
   end
   
   installer.pods_project.targets.each do |target|

@@ -162,7 +162,8 @@ class PasswordResetSentPage extends StatelessWidget {
                               Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => const SignInPage(),
+                                  settings: const RouteSettings(name: 'sign_in'),
+                                  builder: (_) => const SignInPage(),
                                 ),
                                 (route) => false,
                               );

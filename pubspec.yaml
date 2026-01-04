@@ -78,6 +78,8 @@ dependencies:
   firebase_crashlytics: ^4.2.0
   firebase_app_check: ^0.3.2
   cloud_functions: ^5.1.5
+  pointer_interceptor: ^0.10.1+2
+  flutter_native_splash: ^2.4.3
 
 dev_dependencies:
   flutter_test:
@@ -90,7 +92,6 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.4
-  flutter_native_splash: ^2.4.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

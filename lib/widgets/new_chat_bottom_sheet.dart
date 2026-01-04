@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/message.dart';
+import '../models/group_chat.dart';
 import '../repositories/firebase/firebase_user_repository.dart';
 import 'package:provider/provider.dart';
 import '../repositories/interfaces/conversation_repository.dart';
+import '../groups/create_group_page.dart';
+import '../groups/group_chat_page.dart';
+import '../core/i18n/language_provider.dart';
 
 class NewChatBottomSheet extends StatefulWidget {
   final bool isDarkMode;
@@ -79,6 +83,23 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
       });
     } finally {
       if (mounted) setState(() => _loadingUsers = false);
+    }
+  }
+
+  void _openCreateGroup() async {
+    final ctx = context;
+    Navigator.pop(ctx);
+    
+    final result = await Navigator.push(
+      ctx,
+      MaterialPageRoute(settings: const RouteSettings(name: 'chat'), builder: (context) => const CreateGroupPage()),
+    );
+    
+    if (result != null && result is GroupChat && ctx.mounted) {
+      Navigator.push(
+        ctx,
+        MaterialPageRoute(settings: const RouteSettings(name: 'chat'), builder: (context) => GroupChatPage(group: result)),
+      );
     }
   }
 
@@ -172,6 +193,45 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
                                 tooltip: 'Close',
                               ),
                             ],
+                          ),
+                        ),
+
+                        // New Group Button
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: InkWell(
+                            onTap: () => _openCreateGroup(),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFBFAE01).withOpacity(0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.group_add, color: Color(0xFFBFAE01), size: 20),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    Provider.of<LanguageProvider>(context, listen: false).t('groups.new_group'),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Icon(Icons.chevron_right, color: Colors.grey[500], size: 20),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
 
@@ -388,6 +448,44 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
                   tooltip: 'Close',
                 ),
               ],
+            ),
+          ),
+          // New Group Button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: InkWell(
+              onTap: () => _openCreateGroup(),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: widget.isDarkMode ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFBFAE01).withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.group_add, color: Color(0xFFBFAE01), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      Provider.of<LanguageProvider>(context, listen: false).t('groups.new_group'),
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: textColor,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(Icons.chevron_right, color: Colors.grey[500], size: 20),
+                  ],
+                ),
+              ),
             ),
           ),
           // Search bar

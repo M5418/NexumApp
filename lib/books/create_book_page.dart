@@ -13,6 +13,7 @@ import '../services/media_compression_service.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../core/admin_config.dart';
 import '../data/interest_domains.dart';
+import '../core/i18n/language_provider.dart';
 
 class CreateBookPage extends StatefulWidget {
   const CreateBookPage({super.key});
@@ -306,31 +307,31 @@ class _CreateBookPageState extends State<CreateBookPage> {
     // Validate all required fields
     if (_titleCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Title is required', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.title_required'), style: GoogleFonts.inter())),
       );
       return;
     }
     if (_authorCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Author is required', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.author_required'), style: GoogleFonts.inter())),
       );
       return;
     }
     if (_descCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Description is required', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.description_required'), style: GoogleFonts.inter())),
       );
       return;
     }
     if (_selectedCategories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('At least one category is required', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.category_required'), style: GoogleFonts.inter())),
       );
       return;
     }
     if (_coverFile == null && _coverBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cover image is required', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.cover_required'), style: GoogleFonts.inter())),
       );
       return;
     }
@@ -338,7 +339,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
     final hasAudio = _audioFile != null || _audioBytes != null;
     if (!hasPdf && !hasAudio) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Attach at least a PDF or audio file', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.file_required'), style: GoogleFonts.inter())),
       );
       return;
     }
@@ -424,7 +425,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
       if (!navContext.mounted) return;
       ScaffoldMessenger.of(navContext).showSnackBar(
         SnackBar(
-          content: Text('Book created', style: GoogleFonts.inter()),
+          content: Text(Provider.of<LanguageProvider>(navContext, listen: false).t('create_book.book_created'), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFFBFAE01),
         ),
       );
@@ -432,7 +433,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create book: $e', style: GoogleFonts.inter())),
+        SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('create_book.create_failed')}: $e', style: GoogleFonts.inter())),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -462,7 +463,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Admin Only',
+                  Provider.of<LanguageProvider>(context, listen: false).t('create_book.admin_only'),
                   style: GoogleFonts.inter(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
@@ -471,7 +472,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Only administrators can create books.',
+                  Provider.of<LanguageProvider>(context, listen: false).t('create_book.admin_only_message'),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 16,
@@ -490,7 +491,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                     ),
                   ),
                   child: Text(
-                    'Go Back',
+                    Provider.of<LanguageProvider>(context, listen: false).t('create_book.go_back'),
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -531,7 +532,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                     icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.black),
                   ),
                   Text(
-                    'Add a Book',
+                    Provider.of<LanguageProvider>(context, listen: false).t('create_book.title'),
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -553,7 +554,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                           )
-                        : Text('Add', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                        : Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.add'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -569,7 +570,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
               controller: _titleCtrl,
               style: GoogleFonts.inter(),
               decoration: InputDecoration(
-                hintText: 'Title',
+                hintText: Provider.of<LanguageProvider>(context, listen: false).t('create_book.title_hint'),
                 hintStyle: GoogleFonts.inter(color: const Color(0xFF999999)),
                 border: InputBorder.none,
               ),
@@ -581,7 +582,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
               controller: _authorCtrl,
               style: GoogleFonts.inter(),
               decoration: InputDecoration(
-                hintText: 'Author',
+                hintText: Provider.of<LanguageProvider>(context, listen: false).t('create_book.author_hint'),
                 hintStyle: GoogleFonts.inter(color: const Color(0xFF999999)),
                 border: InputBorder.none,
               ),
@@ -595,7 +596,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
               maxLines: null,
               style: GoogleFonts.inter(),
               decoration: InputDecoration(
-                hintText: 'Description',
+                hintText: Provider.of<LanguageProvider>(context, listen: false).t('create_book.description_hint'),
                 hintStyle: GoogleFonts.inter(color: const Color(0xFF999999)),
                 border: InputBorder.none,
               ),
@@ -607,7 +608,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
           _InputCard(
             child: Row(
               children: [
-                _SquareButton(icon: Icons.image_outlined, label: 'Cover', onTap: _pickCover),
+                _SquareButton(icon: Icons.image_outlined, label: Provider.of<LanguageProvider>(context, listen: false).t('create_book.cover'), onTap: _pickCover),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Row(
@@ -630,7 +631,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                         ),
                       Expanded(
                         child: Text(
-                          (_coverFile != null || _coverBytes != null) ? 'Cover selected' : 'No cover selected',
+                          (_coverFile != null || _coverBytes != null) ? Provider.of<LanguageProvider>(context, listen: false).t('create_book.cover_selected') : Provider.of<LanguageProvider>(context, listen: false).t('create_book.no_cover'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(),
@@ -649,7 +650,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
           _InputCard(
             child: Row(
               children: [
-                _SquareButton(icon: Icons.picture_as_pdf, label: 'PDF', onTap: _pickPdf),
+                _SquareButton(icon: Icons.picture_as_pdf, label: Provider.of<LanguageProvider>(context, listen: false).t('create_book.pdf'), onTap: _pickPdf),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -657,7 +658,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                         ? (_pdfName ?? 'No PDF selected')
                         : (_pdfFile != null
                             ? _pdfFile!.path.split(Platform.pathSeparator).last
-                            : 'No PDF selected'),
+                            : Provider.of<LanguageProvider>(context, listen: false).t('create_book.no_pdf')),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(),
@@ -679,7 +680,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
           _InputCard(
             child: Row(
               children: [
-                _SquareButton(icon: Icons.audiotrack, label: 'Audio', onTap: _pickAudio),
+                _SquareButton(icon: Icons.audiotrack, label: Provider.of<LanguageProvider>(context, listen: false).t('create_book.audio'), onTap: _pickAudio),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -687,7 +688,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                         ? (_audioName ?? 'No audio selected')
                         : (_audioFile != null
                             ? _audioFile!.path.split(Platform.pathSeparator).last
-                            : 'No audio selected'),
+                            : Provider.of<LanguageProvider>(context, listen: false).t('create_book.no_audio')),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(),
@@ -702,7 +703,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
           _InputCard(
             child: Row(
               children: [
-                Text('Language:', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.language'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
                 const SizedBox(width: 8),
                 DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
@@ -743,7 +744,7 @@ class _CreateBookPageState extends State<CreateBookPage> {
                         Expanded(
                           child: Text(
                             _selectedCategories.isEmpty
-                                ? 'Select categories (tap to choose)'
+                                ? Provider.of<LanguageProvider>(context, listen: false).t('create_book.select_categories')
                                 : '${_selectedCategories.length} categor${_selectedCategories.length == 1 ? 'y' : 'ies'} selected',
                             style: GoogleFonts.inter(
                               fontSize: 14,

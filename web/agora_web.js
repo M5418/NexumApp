@@ -9,12 +9,18 @@ class AgoraWebClient {
     this.remoteUsers = new Map();
     this.isJoined = false;
     this.isBroadcaster = false;
+    this.joinTimestamp = null;
+    this.lastError = null;
+    this.lastErrorCode = null;
+    this.connectionState = 'DISCONNECTED';
     
     // Event callbacks
     this.onUserJoined = null;
     this.onUserLeft = null;
     this.onError = null;
     this.onConnectionStateChanged = null;
+    this.onJoinSuccess = null;
+    this.onLocalVideoStateChanged = null;
   }
 
   async initialize(appId, isBroadcaster) {
@@ -36,17 +42,39 @@ class AgoraWebClient {
 
       // Set up event handlers
       this.client.on('user-published', async (user, mediaType) => {
-        await this.client.subscribe(user, mediaType);
-        console.log('Agora Web: Subscribed to user', user.uid, mediaType);
-        
-        if (mediaType === 'video') {
-          this.remoteUsers.set(user.uid, user);
-          if (this.onUserJoined) {
-            this.onUserJoined(user.uid);
+        console.log('Agora Web: User published', user.uid, mediaType);
+        try {
+          await this.client.subscribe(user, mediaType);
+          console.log('Agora Web: Subscribed to user', user.uid, mediaType);
+          
+          if (mediaType === 'video') {
+            this.remoteUsers.set(user.uid, user);
+            // Auto-play remote video in document body first, Flutter will move it
+            if (user.videoTrack) {
+              console.log('Agora Web: Remote video track available for uid', user.uid);
+              // Create a visible container for the remote video ON TOP of Flutter
+              const remoteContainerId = `agora-remote-video-${user.uid}`;
+              let remoteContainer = document.getElementById(remoteContainerId);
+              if (!remoteContainer) {
+                remoteContainer = document.createElement('div');
+                remoteContainer.id = remoteContainerId;
+                // Position behind Flutter UI but visible (z-index between body and Flutter overlay)
+                remoteContainer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;background:black;';
+                document.body.appendChild(remoteContainer);
+              }
+              user.videoTrack.play(remoteContainer, { fit: 'cover' });
+              console.log('Agora Web: Playing remote video in container', remoteContainerId);
+            }
+            if (this.onUserJoined) {
+              this.onUserJoined(user.uid);
+            }
           }
-        }
-        if (mediaType === 'audio') {
-          user.audioTrack?.play();
+          if (mediaType === 'audio') {
+            user.audioTrack?.play();
+            console.log('Agora Web: Playing remote audio for uid', user.uid);
+          }
+        } catch (error) {
+          console.error('Agora Web: Subscribe error', error);
         }
       });
 
@@ -67,6 +95,7 @@ class AgoraWebClient {
 
       this.client.on('connection-state-change', (curState, prevState) => {
         console.log('Agora Web: Connection state', prevState, '->', curState);
+        this.connectionState = curState;
         if (this.onConnectionStateChanged) {
           this.onConnectionStateChanged(curState);
         }
@@ -74,8 +103,18 @@ class AgoraWebClient {
 
       this.client.on('exception', (event) => {
         console.error('Agora Web: Exception', event);
+        this.lastError = event.msg || 'Unknown error';
+        this.lastErrorCode = event.code || 'EXCEPTION';
         if (this.onError) {
           this.onError(event.msg || 'Unknown error');
+        }
+      });
+
+      // Track local video state changes
+      this.client.on('local-track-state-changed', (trackType, state) => {
+        console.log('Agora Web: Local track state changed', trackType, state);
+        if (trackType === 'video' && this.onLocalVideoStateChanged) {
+          this.onLocalVideoStateChanged(state);
         }
       });
 
@@ -125,19 +164,32 @@ class AgoraWebClient {
 
       // Join the channel
       const appId = '371cf61b84c0427d84471c91e71435cd';
-      await this.client.join(appId, channelName, token || null, uid);
+      const joinedUid = await this.client.join(appId, channelName, token || null, uid);
       this.isJoined = true;
-      console.log('Agora Web: Joined channel', channelName, 'as uid', uid);
+      this.joinTimestamp = Date.now();
+      console.log('Agora Web: Joined channel', channelName, 'as uid', joinedUid);
 
       // Publish local tracks if broadcaster
       if (this.isBroadcaster && this.localAudioTrack && this.localVideoTrack) {
         await this.client.publish([this.localAudioTrack, this.localVideoTrack]);
         console.log('Agora Web: Published local tracks');
+        
+        // Notify local video state
+        if (this.onLocalVideoStateChanged) {
+          this.onLocalVideoStateChanged('capturing');
+        }
+      }
+
+      // Fire join success callback
+      if (this.onJoinSuccess) {
+        this.onJoinSuccess(joinedUid, channelName);
       }
 
       return true;
     } catch (error) {
       console.error('Agora Web: Join channel error', error);
+      this.lastError = error.message;
+      this.lastErrorCode = error.code || 'UNKNOWN';
       if (this.onError) {
         this.onError(error.message);
       }
@@ -174,12 +226,20 @@ class AgoraWebClient {
     }
   }
 
-  playLocalVideo(containerId) {
+  async playLocalVideo(containerId) {
     try {
       if (this.localVideoTrack) {
-        this.localVideoTrack.play(containerId, { fit: 'cover' });
-        console.log('Agora Web: Playing local video in', containerId);
-        return true;
+        // Wait for container to be in DOM
+        const container = await this._waitForContainer(containerId);
+        if (container) {
+          this.localVideoTrack.play(container, { fit: 'cover' });
+          console.log('Agora Web: Playing local video in', containerId);
+          return true;
+        } else {
+          console.warn('Agora Web: Container not found, playing in document.body');
+          this.localVideoTrack.play(document.body, { fit: 'cover' });
+          return true;
+        }
       }
       return false;
     } catch (error) {
@@ -188,19 +248,60 @@ class AgoraWebClient {
     }
   }
 
-  playRemoteVideo(uid, containerId) {
+  async playRemoteVideo(uid, containerId) {
     try {
       const user = this.remoteUsers.get(uid);
       if (user && user.videoTrack) {
-        user.videoTrack.play(containerId, { fit: 'cover' });
-        console.log('Agora Web: Playing remote video for uid', uid, 'in', containerId);
-        return true;
+        // Wait for container to be in DOM
+        const container = await this._waitForContainer(containerId);
+        if (container) {
+          user.videoTrack.play(container, { fit: 'cover' });
+          console.log('Agora Web: Playing remote video for uid', uid, 'in', containerId);
+          return true;
+        } else {
+          console.warn('Agora Web: Container not found for remote video');
+          return false;
+        }
       }
       return false;
     } catch (error) {
       console.error('Agora Web: Play remote video error', error);
       return false;
     }
+  }
+
+  // Helper to wait for DOM element
+  async _waitForContainer(containerId, maxWaitMs = 3000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitMs) {
+      // Try finding by ID
+      let element = document.getElementById(containerId);
+      if (element) {
+        console.log('Agora Web: Found container', containerId);
+        return element;
+      }
+      // Try finding by query selector (for Flutter's platform view)
+      element = document.querySelector(`[id="${containerId}"]`);
+      if (element) {
+        console.log('Agora Web: Found container via query', containerId);
+        return element;
+      }
+      // Try finding inside flt-platform-view
+      const platformViews = document.querySelectorAll('flt-platform-view');
+      for (const pv of platformViews) {
+        const shadow = pv.shadowRoot;
+        if (shadow) {
+          element = shadow.getElementById(containerId);
+          if (element) {
+            console.log('Agora Web: Found container in shadow DOM', containerId);
+            return element;
+          }
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    console.warn('Agora Web: Container not found after waiting:', containerId);
+    return null;
   }
 
   async muteLocalAudio(muted) {
@@ -341,13 +442,42 @@ window.agoraWebDispose = function() {
   }
 };
 
-window.agoraWebSetCallbacks = function(onUserJoined, onUserLeft, onError, onConnectionStateChanged) {
+window.agoraWebSetCallbacks = function(onUserJoined, onUserLeft, onError, onConnectionStateChanged, onJoinSuccess, onLocalVideoStateChanged) {
   if (window.agoraWebClient) {
     window.agoraWebClient.onUserJoined = onUserJoined;
     window.agoraWebClient.onUserLeft = onUserLeft;
     window.agoraWebClient.onError = onError;
     window.agoraWebClient.onConnectionStateChanged = onConnectionStateChanged;
+    window.agoraWebClient.onJoinSuccess = onJoinSuccess;
+    window.agoraWebClient.onLocalVideoStateChanged = onLocalVideoStateChanged;
   }
+};
+
+// Get diagnostics info for debug panel
+window.agoraWebGetDiagnostics = function() {
+  if (window.agoraWebClient) {
+    return {
+      isJoined: window.agoraWebClient.isJoined,
+      isBroadcaster: window.agoraWebClient.isBroadcaster,
+      connectionState: window.agoraWebClient.connectionState,
+      joinTimestamp: window.agoraWebClient.joinTimestamp,
+      lastError: window.agoraWebClient.lastError,
+      lastErrorCode: window.agoraWebClient.lastErrorCode,
+      remoteUserCount: window.agoraWebClient.remoteUsers.size,
+      hasLocalVideo: window.agoraWebClient.localVideoTrack !== null,
+      hasLocalAudio: window.agoraWebClient.localAudioTrack !== null,
+    };
+  }
+  return null;
+};
+
+// Check if runtime is ready
+window.agoraWebIsRuntimeReady = function() {
+  return {
+    sdkLoaded: typeof window.AgoraRTC !== 'undefined',
+    secureContext: window.isSecureContext,
+    webRTCSupported: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+  };
 };
 
 console.log('Agora Web SDK wrapper loaded');

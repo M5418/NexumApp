@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../repositories/interfaces/book_repository.dart';
 import '../repositories/firebase/firebase_book_repository.dart';
+import '../core/i18n/language_provider.dart';
 
 class BookCategoriesPage extends StatefulWidget {
   const BookCategoriesPage({super.key});
@@ -104,7 +105,7 @@ class _BookCategoriesPageState extends State<BookCategoriesPage> {
         elevation: 0,
         centerTitle: false,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-        title: Text('Book Categories',
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('books.book_categories'),
             style: GoogleFonts.inter(
               fontWeight: FontWeight.w600,
               color: isDark ? Colors.white : Colors.black,
@@ -164,7 +165,7 @@ class _BookCategoriesPageState extends State<BookCategoriesPage> {
                                     ),
                                   ),
                                   Text(
-                                    '$count book${count == 1 ? '' : 's'}',
+                                    '$count ${count == 1 ? Provider.of<LanguageProvider>(context, listen: false).t('books.book_count') : Provider.of<LanguageProvider>(context, listen: false).t('books.books_count')}',
                                     style: GoogleFonts.inter(
                                       fontSize: 13,
                                       color: const Color(0xFF666666),

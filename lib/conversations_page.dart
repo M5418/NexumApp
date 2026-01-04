@@ -11,7 +11,10 @@ import 'widgets/badge_icon.dart';
 
 import 'chat_page.dart';
 import 'models/message.dart';
+import 'models/group_chat.dart';
 import 'community_page.dart';
+import 'groups/group_chat_page.dart';
+import 'repositories/firebase/firebase_group_repository.dart';
 import 'invitation_page.dart';
 import 'conversation_search_page.dart';
 import 'notification_page.dart';
@@ -95,6 +98,11 @@ class _ConversationsPageState extends State<ConversationsPage>
   bool _loadingConversations = false;
   String? _errorConversations;
   final List<ChatItem> _chats = [];
+  
+  // Groups state
+  final FirebaseGroupRepository _groupRepo = FirebaseGroupRepository();
+  final List<GroupChat> _groups = [];
+  bool _loadingGroups = false;
 
   // Communities state
   bool _loadingCommunities = false;
@@ -111,6 +119,7 @@ class _ConversationsPageState extends State<ConversationsPage>
   // Split-view selection (desktop)
   ChatItem? _selectedChat;
   CommunityItem? _selectedCommunity;
+  GroupChat? _selectedGroup;
 
   late final AppCacheService _appCache;
   
@@ -148,6 +157,7 @@ class _ConversationsPageState extends State<ConversationsPage>
     
     // Background refresh
     _loadConversations();
+    _loadGroups();
     _loadCommunities();
     _loadUnreadNotifications();
   }
@@ -169,6 +179,7 @@ class _ConversationsPageState extends State<ConversationsPage>
                 lastType: _mapLastType(c.lastMessageType),
                 lastText: _cleanLastMessageText(c.lastMessageText),
                 lastTime: _formatTime(c.lastMessageAt),
+                lastMessageAt: c.lastMessageAt,
                 unreadCount: c.unreadCount,
                 muted: c.muted,
               ))
@@ -365,6 +376,7 @@ class _ConversationsPageState extends State<ConversationsPage>
               lastType: _mapLastType(c.lastMessageType),
               lastText: _cleanLastMessageText(c.lastMessageText),
               lastTime: _formatTime(c.lastMessageAt),
+              lastMessageAt: c.lastMessageAt,
               unreadCount: c.unreadCount,
               muted: c.muted,
             ),
@@ -390,6 +402,32 @@ class _ConversationsPageState extends State<ConversationsPage>
       });
     } finally {
       if (mounted) setState(() => _loadingConversations = false);
+    }
+  }
+
+  Future<void> _loadGroups() async {
+    setState(() => _loadingGroups = true);
+    try {
+      // Try cache first
+      final cached = await _groupRepo.getMyGroupsFromCache();
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _groups.clear();
+          _groups.addAll(cached);
+        });
+      }
+      
+      // Then load fresh
+      final groups = await _groupRepo.getMyGroups();
+      if (!mounted) return;
+      setState(() {
+        _groups.clear();
+        _groups.addAll(groups);
+        _loadingGroups = false;
+      });
+    } catch (e) {
+      debugPrint('⚠️ Failed to load groups: $e');
+      if (mounted) setState(() => _loadingGroups = false);
     }
   }
 
@@ -547,6 +585,7 @@ class _ConversationsPageState extends State<ConversationsPage>
     await Navigator.push(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'chat'),
         builder: (context) => ChatPage(
           otherUser: chatUser,
           isDarkMode: widget.isDarkMode,
@@ -563,6 +602,7 @@ class _ConversationsPageState extends State<ConversationsPage>
     Navigator.push(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'community'),
         builder: (context) => CommunityPage(
           communityId: community.id,
           communityName: community.name,
@@ -571,10 +611,105 @@ class _ConversationsPageState extends State<ConversationsPage>
     );
   }
 
+  void _selectGroup(GroupChat group) async {
+    if (_isWideLayout(context)) {
+      setState(() {
+        _selectedGroup = group;
+        _selectedChat = null;
+        _selectedCommunity = null;
+      });
+    }
+    
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'group_chat'),
+        builder: (context) => GroupChatPage(group: group),
+      ),
+    );
+
+    if (!mounted) return;
+    await _loadGroups();
+  }
+
+  void _showGroupActions(GroupChat group) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: Icon(group.isMuted(fb.FirebaseAuth.instance.currentUser?.uid ?? '') 
+                    ? Icons.volume_up : Icons.volume_off),
+                title: Text(group.isMuted(fb.FirebaseAuth.instance.currentUser?.uid ?? '')
+                    ? lang.t('conversations.unmute') : lang.t('conversations.mute')),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    if (group.isMuted(fb.FirebaseAuth.instance.currentUser?.uid ?? '')) {
+                      await _groupRepo.unmuteGroup(group.id);
+                    } else {
+                      await _groupRepo.muteGroup(group.id);
+                    }
+                    await _loadGroups();
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed: $e')),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.exit_to_app, color: Colors.red),
+                title: Text(lang.t('groups.leave_group'), style: const TextStyle(color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: Text(lang.t('groups.leave_group')),
+                      content: Text(lang.t('groups.leave_confirm')),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(c, false),
+                          child: Text(lang.t('common.cancel')),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(c, true),
+                          style: TextButton.styleFrom(foregroundColor: Colors.red),
+                          child: Text(lang.t('groups.leave')),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    try {
+                      await _groupRepo.removeMember(group.id, fb.FirebaseAuth.instance.currentUser!.uid);
+                      await _loadGroups();
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed: $e')),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _navigateToInvitations() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const InvitationPage()),
+      MaterialPageRoute(settings: const RouteSettings(name: 'invitations'), builder: (context) => const InvitationPage()),
     );
   }
 
@@ -616,6 +751,7 @@ class _ConversationsPageState extends State<ConversationsPage>
         await Navigator.push(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'chat'),
             builder: (_) => ChatPage(
               otherUser: user,
               isDarkMode: widget.isDarkMode,
@@ -866,7 +1002,7 @@ Widget _buildDesktopBody(bool isDark) {
                     } else {
                       await Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const NotificationPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'notifications'), builder: (_) => const NotificationPage()),
                       );
                     }
                     if (!mounted) return;
@@ -885,7 +1021,7 @@ Widget _buildDesktopBody(bool isDark) {
                   _navButton(isDark, icon: Icons.people_outline, label: Provider.of<LanguageProvider>(context, listen: false).t('nav.connections'), onTap: () {}),
                   _navButton(isDark, icon: Icons.chat_bubble_outline, label: Provider.of<LanguageProvider>(context, listen: false).t('conversations.title'), selected: true, onTap: () {}),
                   _navButton(isDark, icon: Icons.person_outline, label: Provider.of<LanguageProvider>(context, listen: false).t('nav.profile'), onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+                    Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile'), builder: (_) => const ProfilePage()));
                   }),
                 ],
               ),
@@ -921,7 +1057,7 @@ Widget _buildDesktopBody(bool isDark) {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const ConversationSearchPage()),
+              MaterialPageRoute(settings: const RouteSettings(name: 'conversation_search'), builder: (_) => const ConversationSearchPage()),
             );
           },
         ),
@@ -944,7 +1080,7 @@ Widget _buildDesktopBody(bool isDark) {
             onTap: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
+                MaterialPageRoute(settings: const RouteSettings(name: 'notifications'), builder: (_) => const NotificationPage()),
               );
               await _loadUnreadNotifications();
             },
@@ -991,7 +1127,7 @@ Widget _buildDesktopBody(bool isDark) {
                 Text(Provider.of<LanguageProvider>(context, listen: false).t('conversations.title'), style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black)),
                 const Spacer(),
                 _circleIcon(icon: Icons.search, tooltip: Provider.of<LanguageProvider>(context, listen: false).t('common.search'), onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ConversationSearchPage()));
+                  Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'conversation_search'), builder: (_) => const ConversationSearchPage()));
                 }),
                 const SizedBox(width: 8),
                                 _circleIcon(
@@ -1144,10 +1280,10 @@ Widget _buildDesktopBody(bool isDark) {
   // Lists (left column content)
   // -----------------------------
   Widget _buildChatsList(bool isDark, {required bool isDesktop}) {
-    if (_loadingConversations) {
+    if (_loadingConversations && _loadingGroups) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_errorConversations != null) {
+    if (_errorConversations != null && _groups.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -1172,7 +1308,7 @@ Widget _buildDesktopBody(bool isDark) {
         ),
       );
     }
-    if (_chats.isEmpty) {
+    if (_chats.isEmpty && _groups.isEmpty) {
       return Center(
         child: Text(
           Provider.of<LanguageProvider>(context).t('chat.no_conversations'),
@@ -1184,30 +1320,69 @@ Widget _buildDesktopBody(bool isDark) {
       );
     }
 
+    // Combine chats and groups into a single list sorted by time
+    final combinedItems = <_CombinedChatItem>[];
+    
+    // Add regular chats
+    for (final chat in _chats) {
+      combinedItems.add(_CombinedChatItem(
+        isGroup: false,
+        chat: chat,
+        sortTime: chat.lastMessageAt ?? DateTime(2000),
+      ));
+    }
+    
+    // Add groups
+    for (final group in _groups) {
+      combinedItems.add(_CombinedChatItem(
+        isGroup: true,
+        group: group,
+        sortTime: group.lastMessageAt ?? group.updatedAt,
+      ));
+    }
+    
+    // Sort by most recent first
+    combinedItems.sort((a, b) => b.sortTime.compareTo(a.sortTime));
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _chats.length,
+      itemCount: combinedItems.length,
       separatorBuilder: (context, index) => Divider(
         height: 1,
         thickness: 0.5,
-        color: const Color(0xFF666666).withValues (alpha: 0.10),
+        color: const Color(0xFF666666).withValues(alpha: 0.10),
         indent: 64,
       ),
       itemBuilder: (context, index) {
-        final item = _chats[index];
-        final selected =
-            _isWideLayout(context) && _selectedChat?.conversationId == item.conversationId;
+        final item = combinedItems[index];
+        
+        if (item.isGroup) {
+          final group = item.group!;
+          final selected = _isWideLayout(context) && _selectedGroup?.id == group.id;
+          
+          return _GroupListTile(
+            group: group,
+            isDark: isDark,
+            selected: selected,
+            onTap: () => _selectGroup(group),
+            onLongPress: () => _showGroupActions(group),
+          );
+        } else {
+          final chat = item.chat!;
+          final selected = _isWideLayout(context) && _selectedChat?.conversationId == chat.conversationId;
 
-        return ChatListTile(
-          item: item,
-          isDark: isDark,
-          selected: selected,
-          onTap: () => _selectChat(item),
-          onLongPress: () => _showConversationActions(item),
-        );
+          return ChatListTile(
+            item: chat,
+            isDark: isDark,
+            selected: selected,
+            onTap: () => _selectChat(chat),
+            onLongPress: () => _showConversationActions(chat),
+          );
+        }
       },
     );
   }
+  
 
   Widget _buildCommunitiesList(bool isDark, {required bool isDesktop}) {
     if (_loadingCommunities) {
@@ -1637,6 +1812,7 @@ class ChatItem {
   final MessageType lastType;
   final String? lastText;
   final String lastTime;
+  final DateTime? lastMessageAt;
   final int unreadCount;
   final bool muted;
 
@@ -1648,6 +1824,7 @@ class ChatItem {
     required this.lastType,
     this.lastText,
     required this.lastTime,
+    this.lastMessageAt,
     required this.unreadCount,
     this.muted = false,
   });
@@ -1660,6 +1837,7 @@ class ChatItem {
     MessageType? lastType,
     String? lastText,
     String? lastTime,
+    DateTime? lastMessageAt,
     int? unreadCount,
     bool? muted,
   }) {
@@ -1671,6 +1849,7 @@ class ChatItem {
       lastType: lastType ?? this.lastType,
       lastText: lastText ?? this.lastText,
       lastTime: lastTime ?? this.lastTime,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
       muted: muted ?? this.muted,
     );
@@ -1693,4 +1872,157 @@ class CommunityItem {
     required this.friendsInCommon,
     required this.unreadPosts,
   });
+}
+
+/// Helper class to combine chats and groups for unified list
+class _CombinedChatItem {
+  final bool isGroup;
+  final ChatItem? chat;
+  final GroupChat? group;
+  final DateTime sortTime;
+
+  _CombinedChatItem({
+    required this.isGroup,
+    this.chat,
+    this.group,
+    required this.sortTime,
+  });
+}
+
+/// Group list tile widget
+class _GroupListTile extends StatelessWidget {
+  final GroupChat group;
+  final bool isDark;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const _GroupListTile({
+    required this.group,
+    required this.isDark,
+    required this.selected,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtitleColor = const Color(0xFF666666);
+    final unreadCount = group.unreadCounts[fb.FirebaseAuth.instance.currentUser?.uid] ?? 0;
+
+    return Material(
+      color: selected
+          ? (isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8E8ED))
+          : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              // Group avatar with group icon overlay
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundImage: group.avatarUrl != null
+                        ? CachedNetworkImageProvider(group.avatarUrl!)
+                        : null,
+                    backgroundColor: isDark ? Colors.grey[700] : Colors.grey[300],
+                    child: group.avatarUrl == null
+                        ? Icon(Icons.group, color: Colors.grey[500], size: 24)
+                        : null,
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFBFAE01),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF0C0C0C) : Colors.white,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(Icons.group, size: 10, color: Colors.black),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            group.name,
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.w500,
+                              color: textColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (group.lastMessageAt != null)
+                          Text(
+                            TimeUtils.relativeLabel(group.lastMessageAt!, locale: 'en_short'),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: unreadCount > 0 ? const Color(0xFFBFAE01) : subtitleColor,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            group.lastMessageText ?? '${group.memberIds.length} members',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: subtitleColor,
+                              fontWeight: unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (unreadCount > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFBFAE01),
+                              borderRadius: BorderRadius.all(Radius.circular(12)),
+                            ),
+                            child: Text(
+                              unreadCount.toString(),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

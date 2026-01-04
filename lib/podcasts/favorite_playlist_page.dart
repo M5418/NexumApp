@@ -118,7 +118,7 @@ class _FavoritePlaylistPageState extends State<FavoritePlaylistPage> {
                             durationLabel: _mmss(e.durationSec),
                             onPlay: () => Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => PlayerPage(podcast: e)),
+                              MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: e)),
                             ),
                             isDark: isDark,
                           );

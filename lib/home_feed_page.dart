@@ -259,6 +259,55 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
+  /// BACKGROUND: Load like/bookmark status for posts (non-blocking)
+  Future<void> _loadUserInteractionsInBackground(List<Post> posts) async {
+    if (_currentUserId == null || posts.isEmpty) return;
+    
+    try {
+      // Get unique post IDs (use originalPostId for reposts)
+      final postIds = posts.map((p) => p.originalPostId ?? p.id).toSet().toList();
+      
+      // Check like/bookmark status for each post in parallel
+      final results = await Future.wait(postIds.map((postId) async {
+        try {
+          final liked = await _postRepo.hasUserLikedPost(postId: postId, uid: _currentUserId!);
+          final bookmarked = await _postRepo.hasUserBookmarkedPost(postId: postId, uid: _currentUserId!);
+          return {'postId': postId, 'liked': liked, 'bookmarked': bookmarked};
+        } catch (_) {
+          return {'postId': postId, 'liked': false, 'bookmarked': false};
+        }
+      }));
+      
+      if (!mounted) return;
+      
+      // Build lookup map
+      final statusMap = <String, Map<String, bool>>{};
+      for (final r in results) {
+        statusMap[r['postId'] as String] = {
+          'liked': r['liked'] as bool,
+          'bookmarked': r['bookmarked'] as bool,
+        };
+      }
+      
+      // Update posts with actual status
+      setState(() {
+        _posts = _posts.map((p) {
+          final effectiveId = p.originalPostId ?? p.id;
+          final status = statusMap[effectiveId];
+          if (status != null) {
+            return p.copyWith(
+              userReaction: status['liked'] == true ? ReactionType.like : null,
+              isBookmarked: status['bookmarked'] ?? false,
+            );
+          }
+          return p;
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('⚠️ [FastFeed] Failed to load user interactions: $e');
+    }
+  }
+
   /// INSTANT: Load from Firestore cache (no network wait)
   Future<void> _loadFromCacheInstantly() async {
     try {
@@ -307,6 +356,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         _isInitialLoading = false;
       });
       
+      // Load like/bookmark status in background (non-blocking)
+      _loadUserInteractionsInBackground(posts);
+      
       // Prefetch next page in background
       _prefetchNextBatch();
     } catch (e) {
@@ -315,7 +367,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         setState(() => _isInitialLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load posts: ${_toError(e)}', style: GoogleFonts.inter()),
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('feed.load_failed')}: ${_toError(e)}', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -627,6 +679,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         _posts.addAll(newPosts);
         _isLoadingMore = false;
       });
+      
+      // Load like/bookmark status for new posts
+      _loadUserInteractionsInBackground(newPosts);
       
       // Prefetch next batch + hydrate reposts + author names in background
       _prefetchNextBatch();
@@ -1007,7 +1062,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       () async {
         final created = await Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const CreatePostPage()),
+          MaterialPageRoute(settings: const RouteSettings(name: 'create_post'), builder: (context) => const CreatePostPage()),
         );
         if (created == true) {
           await _loadData();
@@ -1016,7 +1071,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     } else if (index == 5) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const VideoScrollPage()),
+        MaterialPageRoute(settings: const RouteSettings(name: 'video_scroll'), builder: (context) => const VideoScrollPage()),
       );
     }
   }
@@ -1612,23 +1667,23 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       },
       onPodcasts: () {
         Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const PodcastsHomePage()));
+            MaterialPageRoute(settings: const RouteSettings(name: 'podcasts_home'), builder: (_) => const PodcastsHomePage()));
       },
       onBooks: () {
         Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const BooksHomePage()));
+            context, MaterialPageRoute(settings: const RouteSettings(name: 'books_home'), builder: (_) => const BooksHomePage()));
       },
       onMentorship: () {
         Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MentorshipHomePage()));
+            MaterialPageRoute(settings: const RouteSettings(name: 'mentorship_home'), builder: (_) => const MentorshipHomePage()));
       },
       onVideos: () {
         Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const VideoScrollPage()));
+            MaterialPageRoute(settings: const RouteSettings(name: 'video_scroll'), builder: (_) => const VideoScrollPage()));
       },
       onLive: () {
         Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const LiveStreamListPage()));
+            MaterialPageRoute(settings: const RouteSettings(name: 'livestream_list'), builder: (_) => const LiveStreamListPage()));
       },
     );
   }
@@ -1794,6 +1849,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
+                              settings: const RouteSettings(name: 'notifications'),
                               builder: (_) => const NotificationPage()),
                         );
                       }
@@ -1903,12 +1959,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                       story_widget.StoryRing(
                         imageUrl: ring.userAvatar,
                         label: isMine
-                            ? 'Your Story'
+                            ? Provider.of<LanguageProvider>(context, listen: false).t('feed.your_story')
                             : (ring.userName.isNotEmpty
                                 ? ring.userName
                                 : ring.stories.isNotEmpty
                                     ? ring.stories.first.userName
-                                    : 'User'),
+                                    : Provider.of<LanguageProvider>(context, listen: false).t('feed.user')),
                         isMine: isMine,
                         isSeen: !ring.hasUnseen,
                         onAddTap: isMine
@@ -1930,6 +1986,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                             await Navigator.push(
                                               context,
                                               MaterialPageRoute(
+                                                  settings: const RouteSettings(name: 'story_composer'),
                                                   builder: (_) =>
                                                       _composerPage(type)),
                                             );
@@ -1959,6 +2016,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                         await Navigator.push(
                                           context,
                                           MaterialPageRoute(
+                                              settings: const RouteSettings(name: 'story_composer'),
                                               builder: (_) =>
                                                   _composerPage(type)),
                                         );
@@ -1980,6 +2038,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     await Navigator.push(
                                       context,
                                       MaterialPageRoute(
+                                          settings: const RouteSettings(name: 'story_composer'),
                                           builder: (_) => _composerPage(type)),
                                     );
                                   }
@@ -2005,6 +2064,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
+                                  settings: const RouteSettings(name: 'story_viewer'),
                                   builder: (_) => StoryViewerPage(
                                     rings: _storyRings
                                         .map((r) => {
@@ -2084,6 +2144,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'post_detail'),
                     builder: (context) => PostPage(postId: postId),
                   ),
                 );
@@ -2109,7 +2170,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Loading more posts...',
+                      Provider.of<LanguageProvider>(context, listen: false).t('feed.loading_more'),
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         color: const Color(0xFF666666),
@@ -2127,7 +2188,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Center(
               child: Text(
-                'You\'re all caught up! 🎉',
+                Provider.of<LanguageProvider>(context, listen: false).t('feed.all_caught_up'),
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: const Color(0xFF999999),
@@ -2182,7 +2243,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             Row(
               children: [
                 Text(
-                  'Connections',
+                  Provider.of<LanguageProvider>(context, listen: false).t('feed.connections'),
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -2195,6 +2256,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                          settings: const RouteSettings(name: 'connections'),
                           builder: (_) => ConnectionsPage(
                               isDarkMode: isDark, onThemeToggle: () {})),
                     );
@@ -2234,6 +2296,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'conversations'),
                           builder: (_) => ConversationsPage(
                               isDarkMode: isDark,
                               onThemeToggle: () {},
@@ -2340,6 +2403,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
+                                  settings: const RouteSettings(name: 'search'),
                                   builder: (_) => const SearchPage(),
                                 ),
                               );
@@ -2370,6 +2434,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
+                                  settings: const RouteSettings(name: 'notifications'),
                                   builder: (_) => const NotificationPage(),
                                 ),
                               );
@@ -2403,12 +2468,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                   child: story_widget.StoryRing(
                                     imageUrl: ring.userAvatar,
                                     label: isMine
-                                        ? 'Your Story'
+                                        ? Provider.of<LanguageProvider>(context, listen: false).t('feed.your_story')
                                         : (ring.userName.isNotEmpty
                                             ? ring.userName
                                             : ring.stories.isNotEmpty
                                                 ? ring.stories.first.userName
-                                                : 'User'),
+                                                : Provider.of<LanguageProvider>(context, listen: false).t('feed.user')),
                                     isMine: isMine,
                                     isSeen: !ring.hasUnseen,
 
@@ -2440,6 +2505,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                                 await Navigator.push(
                                                   context,
                                                   MaterialPageRoute(
+                                                      settings: const RouteSettings(name: 'story_composer'),
                                                       builder: (_) =>
                                                           _composerPage(type)),
                                                 );
@@ -2462,6 +2528,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                             await Navigator.push(
                                               context,
                                               MaterialPageRoute(
+                                                  settings: const RouteSettings(name: 'story_composer'),
                                                   builder: (_) =>
                                                       _composerPage(type)),
                                             );
@@ -2489,6 +2556,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                       await Navigator.push(
                                         context,
                                         MaterialPageRoute(
+                                          settings: const RouteSettings(name: 'story_viewer'),
                                           builder: (_) => StoryViewerPage(
                                             rings: _storyRings
                                                 .map((r) => {
@@ -2550,7 +2618,8 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => PostPage(postId: postId),
+                          settings: const RouteSettings(name: 'post_detail'),
+                          builder: (_) => PostPage(postId: postId),
                         ),
                       );
                       // Refresh feed after returning from post page
@@ -2578,7 +2647,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Loading more posts...',
+                        Provider.of<LanguageProvider>(context, listen: false).t('feed.loading_more'),
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: const Color(0xFF666666),
@@ -2598,7 +2667,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Center(
                   child: Text(
-                    'You\'re all caught up! 🎉',
+                    Provider.of<LanguageProvider>(context, listen: false).t('feed.all_caught_up'),
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: const Color(0xFF999999),

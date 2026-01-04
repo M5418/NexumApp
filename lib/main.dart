@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode, debugPrint;
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'app_wrapper.dart';
 import 'theme_provider.dart';
@@ -64,11 +66,20 @@ import 'repositories/interfaces/monetization_repository.dart';
 import 'repositories/firebase/firebase_monetization_repository.dart';
 import 'services/community_interest_sync_service.dart';
 import 'services/content_analytics_service.dart';
+import 'services/analytics_route_observer.dart';
 import 'fix_communities.dart';
 import 'providers/follow_state.dart';
 import 'config/cache_config.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+
+/// Background message handler - must be top-level function
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Ensure Firebase is initialized for background handling
+  await Firebase.initializeApp();
+  debugPrint('Background message received: ${message.messageId}');
+}
 
 /// Sanity check: log Firebase configuration (dev only)
 void _sanityLogFirebase() {
@@ -77,7 +88,10 @@ void _sanityLogFirebase() {
 }
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  
+  // Preserve native splash screen until app is ready
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   
   // Configure caching for better performance
   CacheConfig.configureImageCache();
@@ -92,6 +106,9 @@ Future<void> main() async {
     // App already initialized (hot restart), ignore
     debugPrint('Firebase already initialized: $e');
   }
+  
+  // Set up Firebase Messaging background handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   
   // Enable Firestore offline persistence for faster loads
   if (!kIsWeb) {
@@ -267,6 +284,7 @@ class MyApp extends StatelessWidget {
             darkTheme: themeProvider.darkTheme,
             // Drive theme from in-app toggle
             themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            navigatorObservers: [AnalyticsRouteObserver()],
             home: const AppWrapper(),
           );
         },

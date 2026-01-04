@@ -221,7 +221,7 @@ Happy connecting! 🚀''';
     if (context.isMobile) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => next),
+        MaterialPageRoute(settings: const RouteSettings(name: 'home_feed'), builder: (_) => next),
         (route) => false,
       );
     } else {
@@ -421,12 +421,13 @@ Happy connecting! 🚀''';
                         if (currentUserId == userId) {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ProfilePage()),
+                            MaterialPageRoute(settings: const RouteSettings(name: 'home_feed'), builder: (context) => const ProfilePage()),
                           );
                         } else {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
+                              settings: const RouteSettings(name: 'other_user_profile'),
                               builder: (context) => OtherUserProfilePage(
                                 userId: userId,
                                 userName: user['name'] as String? ?? 'Unknown',

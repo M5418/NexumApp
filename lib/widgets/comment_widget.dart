@@ -85,12 +85,13 @@ class _CommentWidgetState extends State<CommentWidget> {
                   if (currentUserId == widget.comment.userId) {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const ProfilePage()),
+                      MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
                     );
                   } else {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'other_user_profile'),
                         builder: (context) => OtherUserProfilePage(
                           userId: widget.comment.userId,
                           userName: widget.comment.userName,
@@ -124,12 +125,13 @@ class _CommentWidgetState extends State<CommentWidget> {
                               if (currentUserId == widget.comment.userId) {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                                  MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
                                 );
                               } else {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
+                                    settings: const RouteSettings(name: 'other_user_profile'),
                                     builder: (context) => OtherUserProfilePage(
                                       userId: widget.comment.userId,
                                       userName: widget.comment.userName,

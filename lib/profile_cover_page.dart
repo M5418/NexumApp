@@ -241,7 +241,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
     } else {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => next),
+        MaterialPageRoute(settings: const RouteSettings(name: 'profile_experience'), builder: (_) => next),
         (route) => false,
       );
     }

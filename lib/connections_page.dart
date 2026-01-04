@@ -471,7 +471,8 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) => const NotificationPage()),
+                              settings: const RouteSettings(name: 'notifications'),
+                              builder: (_) => const NotificationPage(),),
                         );
                       }
                       if (!mounted) return;
@@ -507,6 +508,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'conversations'),
                           builder: (_) => ConversationsPage(
                             isDarkMode: isDark,
                             onThemeToggle: () {},
@@ -522,7 +524,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const ProfilePage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (_) => const ProfilePage()),
                       );
                     },
                   ),
@@ -695,7 +697,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                 children: [
                   // Title
                   Text(
-                    'Connections',
+                    Provider.of<LanguageProvider>(context, listen: false).t('nav.connections'),
                     style: GoogleFonts.inter(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
@@ -709,7 +711,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                         icon: Icons.search,
                         onPressed: () {
                           // Search page optional, left as is for parity
-                          // Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchPage()));
+                          // Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (_) => const SearchPage()));
                         },
                       ),
                       const SizedBox(width: 12),
@@ -758,6 +760,7 @@ class _ConnectionsPageState extends State<ConnectionsPage> {
                             await Navigator.push(
                               context,
                               MaterialPageRoute(
+                                  settings: const RouteSettings(name: 'notifications'),
                                   builder: (_) => const NotificationPage()),
                             );
                           }
@@ -1312,6 +1315,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
         Navigator.push(
           ctx,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'chat'),
             builder: (_) => ChatPage(
               otherUser: chatUser,
               isDarkMode: widget.isDark,
@@ -1465,11 +1469,11 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
                           children: [
                             _buildStatColumn(
                                 _formatCount(_connectionsInboundCount),
-                                'Connections'),
+                                Provider.of<LanguageProvider>(context, listen: false).t('profile.connections_label')),
                             const SizedBox(width: 40),
                             _buildStatColumn(
                                 _formatCount(_connectionsOutboundCount),
-                                'Connected'),
+                                Provider.of<LanguageProvider>(context, listen: false).t('profile.connected_label')),
                           ],
                         ),
                       ),

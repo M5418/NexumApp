@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../core/i18n/language_provider.dart';
 
 class RequestMentorshipPage extends StatefulWidget {
   final String fieldId;
@@ -34,7 +36,7 @@ class _RequestMentorshipPageState extends State<RequestMentorshipPage> {
       appBar: AppBar(
         backgroundColor: surfaceColor,
         elevation: 0,
-        title: Text('Request a mentorship', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, color: textColor)),
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('mentorship.request_title'), style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, color: textColor)),
         centerTitle: false,
         leading: IconButton(icon: Icon(Icons.arrow_back, color: textColor), onPressed: () => Navigator.pop(context)),
       ),
@@ -44,7 +46,7 @@ class _RequestMentorshipPageState extends State<RequestMentorshipPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 24),
-            Text('Tell us more about yourself', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: textColor)),
+            Text(Provider.of<LanguageProvider>(context, listen: false).t('mentorship.tell_us_more'), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: textColor)),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -52,7 +54,7 @@ class _RequestMentorshipPageState extends State<RequestMentorshipPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Field: ', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: secondaryTextColor)),
+                  Text('${Provider.of<LanguageProvider>(context, listen: false).t('mentorship.field')}: ', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: secondaryTextColor)),
                   Text(widget.fieldName, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFFBFAE01))),
                 ],
               ),
@@ -72,7 +74,7 @@ class _RequestMentorshipPageState extends State<RequestMentorshipPage> {
                   expands: true,
                   textAlignVertical: TextAlignVertical.top,
                   decoration: InputDecoration(
-                    hintText: 'Your goals and motivations, tell us more about yourself',
+                    hintText: Provider.of<LanguageProvider>(context, listen: false).t('mentorship.goals_hint'),
                     hintStyle: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400, color: secondaryTextColor),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
@@ -115,7 +117,7 @@ class _RequestMentorshipPageState extends State<RequestMentorshipPage> {
   void _showSuccessSnackBar() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Mentorship request sent successfully!', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black)),
+        content: Text(Provider.of<LanguageProvider>(context, listen: false).t('mentorship.request_sent'), style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black)),
         backgroundColor: const Color(0xFFBFAE01),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

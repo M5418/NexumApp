@@ -231,12 +231,13 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
               if (currentUserId == user.blockedUid) {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                  MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (_) => const ProfilePage()),
                 );
               } else {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'other_user_profile'),
                     builder: (context) => OtherUserProfilePage(
                       userId: user.blockedUid,
                       userName: user.blockedUsername ?? 'Unknown',
@@ -305,12 +306,13 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
               if (currentUserId == user.mutedUid) {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                  MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (_) => const ProfilePage()),
                 );
               } else {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'other_user_profile'),
                     builder: (context) => OtherUserProfilePage(
                       userId: user.mutedUid,
                       userName: user.mutedUsername ?? 'Unknown',

@@ -273,6 +273,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'monetization_analytics'),
                           builder: (_) => const MonetizationAnalyticsPage(),
                         ),
                       );
@@ -329,6 +330,7 @@ class _MonetizationPageState extends State<MonetizationPage> {
                             ok = await Navigator.push<bool>(
                               context,
                               MaterialPageRoute(
+                                settings: const RouteSettings(name: 'payout_setup'),
                                 builder: (_) => const PayoutSetupPage(),
                               ),
                             );

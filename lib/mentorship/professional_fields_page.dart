@@ -129,6 +129,7 @@ class _ProfessionalFieldsPageState extends State<ProfessionalFieldsPage> {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
+                                          settings: const RouteSettings(name: 'request_mentorship'),
                                           builder: (context) => RequestMentorshipPage(fieldId: field.id, fieldName: field.name),
                                         ),
                                       );

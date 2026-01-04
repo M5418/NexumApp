@@ -159,7 +159,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
       } else {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => next),
+          MaterialPageRoute(settings: const RouteSettings(name: 'interest_selection'), builder: (context) => next),
         );
       }
     } catch (e) {

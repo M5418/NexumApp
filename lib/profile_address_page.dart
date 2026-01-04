@@ -863,7 +863,7 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
       if (!context.isMobile) {
         _pushWithPopupTransition(context, next);
       } else {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+        Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_bio'), builder: (_) => next));
       }
     } catch (e) {
       if (!mounted) return;

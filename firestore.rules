@@ -522,6 +522,33 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    // Group Chats
+    match /groups/{groupId} {
+      // Members can read group info
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+      
+      // Any signed-in user can create a group
+      allow create: if signedIn() && 
+        request.auth.uid == request.resource.data.createdBy &&
+        request.auth.uid in request.resource.data.memberIds &&
+        request.auth.uid in request.resource.data.adminIds &&
+        request.resource.data.memberIds.size() <= 200;
+      
+      // Members can update (repo handles permission checks)
+      allow update: if signedIn() && request.auth.uid in resource.data.memberIds;
+      
+      // Only admins can delete
+      allow delete: if signedIn() && request.auth.uid in resource.data.adminIds;
+      
+      // Group messages subcollection
+      match /messages/{messageId} {
+        allow read: if signedIn();
+        allow create: if signedIn();
+        allow update: if signedIn();
+        allow delete: if signedIn();
+      }
+    }
+    
     // Live streams
     match /livestreams/{streamId} {
       allow read: if signedIn();

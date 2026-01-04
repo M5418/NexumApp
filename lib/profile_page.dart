@@ -1225,7 +1225,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (!desktop) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const PremiumSubscriptionPage()),
+        MaterialPageRoute(settings: const RouteSettings(name: 'premium_subscription'), builder: (_) => const PremiumSubscriptionPage()),
       );
       return;
     }
@@ -1469,14 +1469,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                             _formatCount(
                                               p['connections_inbound_count'],
                                             ),
-                                            'Connections',
+                                            Provider.of<LanguageProvider>(context, listen: false).t('profile.connections_label'),
                                           ),
                                           const SizedBox(width: 40),
                                           _buildStatColumn(
                                             _formatCount(
                                               p['connections_outbound_count'],
                                             ),
-                                            'Connected',
+                                            Provider.of<LanguageProvider>(context, listen: false).t('profile.connected_label'),
                                           ),
                                         ],
                                       ),
@@ -1662,6 +1662,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       >(
                                                         dialogContext,
                                                         MaterialPageRoute(
+                                                          settings: const RouteSettings(name: 'edit_profile'),
                                                           builder: (_) => page,
                                                         ),
                                                       );
@@ -1817,7 +1818,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   // Show success immediately
                                                   messenger.showSnackBar(
                                                     SnackBar(
-                                                      content: Text('Profile updated!'),
+                                                      content: Text(Provider.of<LanguageProvider>(context, listen: false).t('profile.updated')),
                                                       backgroundColor: Colors.green,
                                                       duration: Duration(seconds: 2),
                                                     ),
@@ -1924,6 +1925,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   Navigator.push(
                                                     context,
                                                     MaterialPageRoute(
+                                                      settings: const RouteSettings(name: 'my_connections'),
                                                       builder: (_) =>
                                                           const MyConnectionsPage(),
                                                     ),
@@ -2309,6 +2311,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
+                            settings: const RouteSettings(name: 'notifications'),
                             builder: (_) => const NotificationPage(),
                           ),
                         );
@@ -2342,6 +2345,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'connections'),
                           builder: (_) => const ConnectionsPage(),
                         ),
                       );
@@ -2355,6 +2359,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'conversations'),
                           builder: (_) => ConversationsPage(
                             isDarkMode: isDark,
                             onThemeToggle: () {},
@@ -2824,6 +2829,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                             >(
                                                               dialogContext,
                                                               MaterialPageRoute(
+                                                                settings: const RouteSettings(name: 'edit_profile'),
                                                                 builder: (_) =>
                                                                     page,
                                                               ),
@@ -2973,7 +2979,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         
                                                         messenger.showSnackBar(
                                                           SnackBar(
-                                                            content: Text('Profile updated!'),
+                                                            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('profile.updated')),
                                                             backgroundColor: Colors.green,
                                                             duration: Duration(seconds: 2),
                                                           ),
@@ -3086,6 +3092,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         Navigator.push(
                                                           context,
                                                           MaterialPageRoute(
+                                                            settings: const RouteSettings(name: 'my_connections'),
                                                             builder: (_) =>
                                                                 const MyConnectionsPage(),
                                                           ),
@@ -3465,6 +3472,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'drafts'),
                         builder: (context) => const DraftsPage(),
                       ),
                     );
@@ -3489,6 +3497,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'bookmarks'),
                         builder: (context) => const BookmarksPage(),
                       ),
                     );
@@ -3513,6 +3522,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'settings'),
                         builder: (context) => const SettingsPage(),
                       ),
                     );
@@ -3525,7 +3535,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     size: 22,
                   ),
                   title: Text(
-                    'Monetization',
+                    Provider.of<LanguageProvider>(context, listen: false).t('profile.monetization'),
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -3537,6 +3547,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'monetization'),
                         builder: (_) => const MonetizationPage(),
                       ),
                     );
@@ -3568,7 +3579,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     size: 22,
                   ),
                   title: Text(
-                    'Insights',
+                    Provider.of<LanguageProvider>(context, listen: false).t('profile.insights'),
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -3580,6 +3591,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'insights'),
                         builder: (context) => const InsightsPage(),
                       ),
                     );
@@ -3597,7 +3609,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'Dark Mode',
+                        Provider.of<LanguageProvider>(context, listen: false).t('profile.dark_mode'),
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -3634,6 +3646,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
+                              settings: const RouteSettings(name: 'help_center'),
                               builder: (context) => const HelpCenterPage(),
                             ),
                           );
@@ -3652,6 +3665,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
+                              settings: const RouteSettings(name: 'support'),
                               builder: (context) => const SupportPage(),
                             ),
                           );
@@ -3712,7 +3726,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       navContext,
                       rootNavigator: true,
                     ).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (_) => const SignInPage()),
+                      MaterialPageRoute(settings: const RouteSettings(name: 'sign_in'), builder: (_) => const SignInPage()),
                       (route) => false,
                     );
                   },

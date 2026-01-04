@@ -3,6 +3,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../core/i18n/language_provider.dart';
 
 // Navigation is delegated via callbacks. No direct imports here to keep this reusable.
 
@@ -119,13 +121,14 @@ class _ToolsCircle extends StatelessWidget {
     // Ordered top-center then clockwise to match the mock:
     // Books (top), Videos (top-right), Podcasts (bottom-right),
     // Live (bottom), Communities (bottom-left), Mentorship (top-left)
-    const items = [
-      _Tool(label: 'Books', icon: Icons.menu_book_outlined),
-      _Tool(label: 'Videos', icon: Icons.ondemand_video_outlined),
-      _Tool(label: 'Podcasts', icon: Icons.mic_none_outlined),
-      _Tool(label: 'Live', icon: Icons.live_tv_outlined),
-      _Tool(label: 'Communities', icon: Icons.hub_outlined),
-      _Tool(label: 'Mentorship', icon: Icons.groups_outlined),
+    final t = Provider.of<LanguageProvider>(context, listen: false).t;
+    final items = [
+      _Tool(label: t('tools.books'), key: 'Books', icon: Icons.menu_book_outlined),
+      _Tool(label: t('tools.videos'), key: 'Videos', icon: Icons.ondemand_video_outlined),
+      _Tool(label: t('tools.podcasts'), key: 'Podcasts', icon: Icons.mic_none_outlined),
+      _Tool(label: t('tools.live'), key: 'Live', icon: Icons.live_tv_outlined),
+      _Tool(label: t('tools.communities'), key: 'Communities', icon: Icons.hub_outlined),
+      _Tool(label: t('tools.mentorship'), key: 'Mentorship', icon: Icons.groups_outlined),
     ];
 
     return Container(
@@ -164,7 +167,7 @@ class _ToolsCircle extends StatelessWidget {
                     height: 84,
                     child: _ToolTile(
                       tool: items[i],
-                      onTap: () => onItemTap(items[i].label),
+                      onTap: () => onItemTap(items[i].key),
                     ),
                   ),
                 ),
@@ -187,8 +190,9 @@ class _ToolsCircle extends StatelessWidget {
 
 class _Tool {
   final String label;
+  final String key;
   final IconData icon;
-  const _Tool({required this.label, required this.icon});
+  const _Tool({required this.label, required this.key, required this.icon});
 }
 
 class _ToolTile extends StatelessWidget {

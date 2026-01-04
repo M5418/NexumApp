@@ -209,7 +209,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                   final initial = _items[_selectedIndex];
                                   final builder = initial.builder ?? () => const SizedBox.shrink();
                                   return [
-                                    MaterialPageRoute(builder: (_) => builder()),
+                                    MaterialPageRoute(settings: const RouteSettings(name: 'settings_panel'), builder: (_) => builder()),
                                   ];
                                 },
                               ),
@@ -295,7 +295,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final builder = item.builder!;
     // Replace right-panel route with the selected page
     _panelNavigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => builder()),
+      MaterialPageRoute(settings: const RouteSettings(name: 'settings_panel'), builder: (_) => builder()),
       (route) => false,
     );
   }
@@ -338,7 +338,7 @@ class _SettingsPageState extends State<SettingsPage> {
       // Reset navigation to AppWrapper
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AppWrapper()),
+          MaterialPageRoute(settings: const RouteSettings(name: 'app_wrapper'), builder: (_) => const AppWrapper()),
           (_) => false,
         );
       }
@@ -412,7 +412,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AccountCenterPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'account_center'), builder: (_) => const AccountCenterPage()),
                       );
                     },
                     isDark: isDark,
@@ -423,7 +423,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const FeedPreferencesPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'feed_preferences'), builder: (_) => const FeedPreferencesPage()),
                       );
                     },
                     isDark: isDark,
@@ -434,7 +434,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const ContentControlsPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'content_controls'), builder: (_) => const ContentControlsPage()),
                       );
                     },
                     isDark: isDark,
@@ -445,7 +445,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const NotificationPreferencesPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'notification_preferences'), builder: (_) => const NotificationPreferencesPage()),
                       );
                     },
                     isDark: isDark,
@@ -456,7 +456,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const LanguageRegionPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'language_region'), builder: (_) => const LanguageRegionPage()),
                       );
                     },
                     isLast: true,
@@ -502,7 +502,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const PrivacyVisibilityPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'privacy_visibility'), builder: (_) => const PrivacyVisibilityPage()),
                       );
                     },
                     isDark: isDark,
@@ -513,7 +513,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const BlockedMutedAccountsPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'blocked_muted_accounts'), builder: (_) => const BlockedMutedAccountsPage()),
                       );
                     },
                     isDark: isDark,
@@ -524,7 +524,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const SecurityLoginPage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'security_login'), builder: (_) => const SecurityLoginPage()),
                       );
                     },
                     isDark: isDark,

@@ -367,7 +367,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
       if (!context.isMobile) {
         _pushWithPopupTransition(context, next);
       } else {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+        Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_address'), builder: (_) => next));
       }
     } catch (e) {
       if (!mounted) return;

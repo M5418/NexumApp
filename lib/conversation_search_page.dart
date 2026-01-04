@@ -318,6 +318,7 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'chat'),
                     builder: (_) => ChatPage(
                       otherUser: user,
                       conversationId: c.id,
@@ -431,6 +432,7 @@ class _ConversationSearchPageState extends State<ConversationSearchPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'community'),
                     builder: (_) => CommunityPage(
                       communityId: c.id,
                       communityName: c.name,

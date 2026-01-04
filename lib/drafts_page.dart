@@ -306,7 +306,8 @@ class _DraftsPageState extends State<DraftsPage>
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => CreatePodcastPage(draft: draft),
+          settings: const RouteSettings(name: 'create_podcast'),
+          builder: (_) => CreatePodcastPage(draft: draft),
         ),
       );
       // Refresh drafts after closing editor

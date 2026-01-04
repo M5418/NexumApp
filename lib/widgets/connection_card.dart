@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../other_user_profile_page.dart';
 import '../providers/follow_state.dart';
+import '../core/i18n/language_provider.dart';
 
 class ConnectionCard extends StatefulWidget {
   final String userId;
@@ -59,6 +60,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
         Navigator.push(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'other_user_profile'),
             builder: (context) => OtherUserProfilePage(
               userId: widget.userId,
               userName: widget.fullName,
@@ -215,7 +217,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
                                 if (!ctx.mounted) return;
                                 ScaffoldMessenger.of(ctx).showSnackBar(
                                   SnackBar(
-                                    content: Text('Failed to toggle connection'),
+                                    content: Text(Provider.of<LanguageProvider>(ctx, listen: false).t('connection.toggle_failed')),
                                   ),
                                 );
                               }

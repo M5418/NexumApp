@@ -75,7 +75,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                     return GestureDetector(
                       onTap: () {
                         if ((e.audioUrl ?? '').isNotEmpty) {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(podcast: e)));
+                          Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: e)));
                         }
                       },
                       child: Container(

@@ -115,7 +115,7 @@ class _NotificationPageState extends State<NotificationPage> {
       if (n.type == NotificationType.like || n.type == NotificationType.comment) {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => PostPage(postId: n.refId!)),
+          MaterialPageRoute(settings: const RouteSettings(name: 'post_detail'), builder: (_) => PostPage(postId: n.refId!)),
         );
       }
     }

@@ -7,6 +7,7 @@ import 'player_page.dart';
 import 'add_to_playlist_sheet.dart';
 import '../repositories/interfaces/bookmark_repository.dart';
 import '../repositories/models/bookmark_model.dart';
+import '../core/i18n/language_provider.dart';
 
 class PodcastDetailsPage extends StatefulWidget {
   final Podcast podcast;
@@ -90,7 +91,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
         setState(() => _isBookmarked = !_isBookmarked);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Bookmark failed: $e', style: GoogleFonts.inter()),
+            content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('podcasts.bookmark_failed')}: $e', style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
           ),
         );
@@ -245,7 +246,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        podcast.author ?? 'Unknown Author',
+                        podcast.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown_author'),
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -300,7 +301,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                       
                       // About Section
                       Text(
-                        'About',
+                        Provider.of<LanguageProvider>(context, listen: false).t('podcasts.about'),
                         style: GoogleFonts.inter(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -309,7 +310,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        podcast.description ?? 'No description available.',
+                        podcast.description ?? Provider.of<LanguageProvider>(context, listen: false).t('common.no_description'),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           height: 1.5,
@@ -323,7 +324,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: _buildActionButton(
-                          label: 'Play Now',
+                          label: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.play_now'),
                           icon: Icons.play_arrow,
                           isPrimary: true,
                           onPressed: (podcast.audioUrl ?? '').isNotEmpty
@@ -331,7 +332,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                                   debugPrint('🎧 [PodcastDetails] Opening audio player');
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (_) => PlayerPage(podcast: podcast)),
+                                    MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: podcast)),
                                   );
                                 }
                               : null,
@@ -341,7 +342,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: _buildActionButton(
-                          label: 'Add to Playlist',
+                          label: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.add_to_playlist'),
                           icon: Icons.playlist_add,
                           isPrimary: false,
                           onPressed: () {

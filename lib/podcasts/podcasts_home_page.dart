@@ -251,7 +251,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
 
 
   void _openCreate() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePodcastPage())).then((changed) {
+    Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'create_podcast'), builder: (_) => const CreatePodcastPage())).then((changed) {
       if (changed == true) {
         _loadTop();
         _loadDomain();
@@ -260,15 +260,15 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
   }
 
   void _openLibrary() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const MyLibraryPage()));
+    Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'my_library'), builder: (_) => const MyLibraryPage()));
   }
 
   void _openFavorites() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()));
+    Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'favorites'), builder: (_) => const FavoritesPage()));
   }
 
   void _openCategories() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const PodcastsCategoriesPage()));
+    Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'podcast_categories'), builder: (_) => const PodcastsCategoriesPage()));
   }
 
       @override
@@ -285,7 +285,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
         elevation: 0,
         centerTitle: false,
         title: Text(
-          'Podcast',
+          Provider.of<LanguageProvider>(context, listen: false).t('podcasts.title'),
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -304,7 +304,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PodcastSearchPage()),
+                MaterialPageRoute(settings: const RouteSettings(name: 'podcast_search'), builder: (_) => const PodcastSearchPage()),
               );
             },
             icon: Icon(Icons.search, color: isDark ? Colors.white : Colors.black),
@@ -335,25 +335,25 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
               children: [
                 _QuickActionCard(
                   icon: Icons.add_circle_outline,
-                  label: 'Add a Podcast',
+                  label: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.add_podcast'),
                   onTap: _openCreate,
                   isDark: isDark,
                 ),
                 _QuickActionCard(
                   icon: Icons.video_library_outlined,
-                  label: 'My Library',
+                  label: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.my_library'),
                   onTap: _openLibrary,
                   isDark: isDark,
                 ),
                 _QuickActionCard(
                   icon: Icons.star_border,
-                  label: 'Favorites',
+                  label: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.favorites'),
                   onTap: _openFavorites,
                   isDark: isDark,
                 ),
                 _QuickActionCard(
                   icon: Icons.category_outlined,
-                  label: 'Categories',
+                  label: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.categories'),
                   onTap: _openCategories,
                   isDark: isDark,
                 ),
@@ -363,8 +363,8 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
 
             // Top Podcast section
             _SectionHeader(
-              title: 'Top Podcast',
-              onMore: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllPodcastsPage())),
+              title: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.top_podcast'),
+              onMore: () => Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'all_podcasts'), builder: (_) => const AllPodcastsPage())),
               isDark: isDark,
             ),
             const SizedBox(height: 8),
@@ -384,7 +384,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
                 isDark: isDark,
                 onTap: (p) => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => PodcastDetailsPage(podcast: p)),
+                  MaterialPageRoute(settings: const RouteSettings(name: 'podcast_details'), builder: (_) => PodcastDetailsPage(podcast: p)),
                 ),
               ),
 
@@ -398,6 +398,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
                   : () => Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'category_podcasts'),
                           builder: (_) => CategoryPodcastsPage(category: _domainCategoryParam!),
                         ),
                       ),
@@ -420,7 +421,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
                 isDark: isDark,
                 onTap: (p) => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => PodcastDetailsPage(podcast: p)),
+                  MaterialPageRoute(settings: const RouteSettings(name: 'podcast_details'), builder: (_) => PodcastDetailsPage(podcast: p)),
                 ),
               ),
           ],
@@ -511,7 +512,7 @@ class _SectionHeader extends StatelessWidget {
         if (onMore != null)
           TextButton(
             onPressed: onMore,
-            child: Text('More', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('podcasts.more'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
       ],
     );
@@ -711,7 +712,7 @@ class _AllPodcastsPageState extends State<AllPodcastsPage> {
                 return GestureDetector(
                   onTap: () => Navigator.push(
                     ctx,
-                    MaterialPageRoute(builder: (_) => PodcastDetailsPage(podcast: p)),
+                    MaterialPageRoute(settings: const RouteSettings(name: 'podcast_details'), builder: (_) => PodcastDetailsPage(podcast: p)),
                   ),
                   child: Container(
                     height: 120,
@@ -796,7 +797,7 @@ class _AllPodcastsPageState extends State<AllPodcastsPage> {
                             onTap: () => (p.audioUrl ?? '').isNotEmpty
                                 ? Navigator.push(
                                     ctx,
-                                    MaterialPageRoute(builder: (_) => PlayerPage(podcast: p)),
+                                    MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: p)),
                                   )
                                 : null,
                             child: Container(

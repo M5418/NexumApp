@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'core/profile_api.dart';
+import 'services/media_compression_service.dart';
 import 'interest_selection_page.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'core/admin_config.dart';
@@ -285,17 +286,41 @@ class _EditProfilPageState extends State<EditProfilPage> {
 
     try {
       String url;
+      final compressionService = MediaCompressionService();
+      final ext = _extOf(picked.path);
+      
       if (kIsWeb) {
-        final bytes = await picked.readAsBytes();
-        final ext = _extOf(picked.path);
-        url = await api.uploadBytes(bytes, ext: ext);
+        final originalBytes = await picked.readAsBytes();
+        // Compress image before upload
+        final compressedBytes = await compressionService.compressImageBytes(
+          bytes: originalBytes,
+          filename: picked.name,
+          quality: 85,
+          minWidth: isCover ? 1920 : 800,
+          minHeight: isCover ? 1080 : 800,
+        ) ?? originalBytes;
+        
+        url = await api.uploadBytes(compressedBytes, ext: ext);
         await api
             .update({isCover ? 'cover_photo_url' : 'profile_photo_url': url});
       } else {
         final file = File(picked.path);
-        url = isCover
-            ? await api.uploadAndAttachCoverPhoto(file)
-            : await api.uploadAndAttachProfilePhoto(file);
+        // Compress image before upload
+        final compressedBytes = await compressionService.compressImage(
+          filePath: file.path,
+          quality: 85,
+          minWidth: isCover ? 1920 : 800,
+          minHeight: isCover ? 1080 : 800,
+        );
+        
+        if (compressedBytes != null) {
+          url = await api.uploadBytes(compressedBytes, ext: ext);
+          await api.update({isCover ? 'cover_photo_url' : 'profile_photo_url': url});
+        } else {
+          url = isCover
+              ? await api.uploadAndAttachCoverPhoto(file)
+              : await api.uploadAndAttachProfilePhoto(file);
+        }
       }
 
       if (!mounted) return;
@@ -1095,6 +1120,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
       selected = await Navigator.push<List<String>>(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: 'interest_selection'),
           builder: (_) => InterestSelectionPage(
             initialSelected: _interests,
             returnSelectedOnPop: true,

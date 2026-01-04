@@ -62,12 +62,31 @@ class _HomePostCardState extends State<HomePostCard> {
     } catch (_) {}
   }
 
+  // Local state for bookmarks
+  late bool _isBookmarked;
+
   @override
   void initState() {
     super.initState();
-    // Initialize local state from widget props (like comments do)
+    // Initialize local state from widget props
     _isLiked = widget.post.userReaction != null;
     _likeCount = widget.post.counts.likes.clamp(0, 999999);
+    _isBookmarked = widget.post.isBookmarked;
+  }
+
+  @override
+  void didUpdateWidget(covariant HomePostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sync local state when parent rebuilds with new data (e.g., after backend fetch)
+    if (oldWidget.post.userReaction != widget.post.userReaction) {
+      _isLiked = widget.post.userReaction != null;
+    }
+    if (oldWidget.post.counts.likes != widget.post.counts.likes) {
+      _likeCount = widget.post.counts.likes.clamp(0, 999999);
+    }
+    if (oldWidget.post.isBookmarked != widget.post.isBookmarked) {
+      _isBookmarked = widget.post.isBookmarked;
+    }
   }
 
   @override
@@ -454,17 +473,12 @@ class _HomePostCardState extends State<HomePostCard> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
+                      settings: const RouteSettings(name: 'other_user_profile'),
                       builder: (context) => OtherUserProfilePage(
-                        userId: widget.post.userName.toLowerCase().replaceAll(
-                          ' ',
-                          '_',
-                        ),
+                        userId: widget.post.authorId,
                         userName: widget.post.userName,
                         userAvatarUrl: widget.post.userAvatarUrl,
-                        userBio:
-                            'Professional user bio here', // This would come from user data
-                        isConnected:
-                            false, // This would come from connection status
+                        userBio: '',
                       ),
                     ),
                   );
@@ -483,17 +497,12 @@ class _HomePostCardState extends State<HomePostCard> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'other_user_profile'),
                         builder: (context) => OtherUserProfilePage(
-                          userId: widget.post.userName.toLowerCase().replaceAll(
-                            ' ',
-                            '_',
-                          ),
+                          userId: widget.post.authorId,
                           userName: widget.post.userName,
                           userAvatarUrl: widget.post.userAvatarUrl,
-                          userBio:
-                              'Professional user bio here', // This would come from user data
-                          isConnected:
-                              false, // This would come from connection status
+                          userBio: '',
                         ),
                       ),
                     );
@@ -714,17 +723,23 @@ class _HomePostCardState extends State<HomePostCard> {
 
               // Bookmark button
               GestureDetector(
-                onTap: () => widget.onBookmarkToggle?.call(_effectivePostId()),
+                onTap: () {
+                  // Optimistic update for bookmarks
+                  setState(() {
+                    _isBookmarked = !_isBookmarked;
+                  });
+                  widget.onBookmarkToggle?.call(_effectivePostId());
+                },
                 child: Row(
                   children: [
                     Icon(
-                      widget.post.isBookmarked
+                      _isBookmarked
                           ? Ionicons.bookmark
                           : Ionicons.bookmark_outline,
                       size: 20,
-                      color: widget.post.isBookmarked
+                      color: _isBookmarked
                           ? const Color(0xFFBFAE01)
-                          : _getTextColor(),
+                          : const Color(0xFF666666),
                     ),
                     const SizedBox(width: 4),
                     Text(

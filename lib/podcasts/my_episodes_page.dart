@@ -78,7 +78,8 @@ class _MyEpisodesPageState extends State<MyEpisodesPage> {
                             onPlay: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => PlayerPage(podcast: e),
+                                settings: const RouteSettings(name: 'podcast_player'),
+                                builder: (_) => PlayerPage(podcast: e),
                               ),
                             ),
                           );

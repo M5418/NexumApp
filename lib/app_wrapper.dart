@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
+import 'services/push_notification_service.dart';
 import 'home_feed_page.dart';
 import 'sign_in_page.dart';
 import 'repositories/interfaces/post_repository.dart';
@@ -19,7 +22,8 @@ class AppWrapper extends StatefulWidget {
 
 class _AppWrapperState extends State<AppWrapper> {
   final AuthService _authService = AuthService();
-  bool _isInitializing = true;
+  final PushNotificationService _pushService = PushNotificationService();
+  StreamSubscription<Map<String, dynamic>>? _notificationSub;
 
   @override
   void initState() {
@@ -31,15 +35,61 @@ class _AppWrapperState extends State<AppWrapper> {
     // Initialize auth - this is fast, no artificial delays
     await _authService.initialize();
     
-    // Show UI immediately after auth check
-    if (mounted) {
-      setState(() {
-        _isInitializing = false;
-      });
-    }
+    // Initialize push notifications
+    await _pushService.initialize();
+    
+    // Listen for notification taps
+    _notificationSub = _pushService.onNotificationTap.listen((data) {
+      if (mounted && _authService.isLoggedIn) {
+        _handleNotificationNavigation(data);
+      }
+    });
+    
+    // Remove native splash screen - app is ready
+    FlutterNativeSplash.remove();
     
     // Continue preloading in background (non-blocking)
     _preloadInBackground();
+  }
+  
+  void _handleNotificationNavigation(Map<String, dynamic> data) {
+    final type = data['type'] as String?;
+    
+    switch (type) {
+      case 'message':
+        final conversationId = data['conversationId'] as String?;
+        if (conversationId != null && mounted) {
+          Navigator.of(context).pushNamed('/chat', arguments: {'conversationId': conversationId});
+        }
+        break;
+        
+      case 'post':
+        final postId = data['postId'] as String?;
+        if (postId != null && mounted) {
+          Navigator.of(context).pushNamed('/post', arguments: {'postId': postId});
+        }
+        break;
+        
+      case 'connection':
+      case 'connection_request':
+        final userId = data['userId'] as String?;
+        if (userId != null && mounted) {
+          Navigator.of(context).pushNamed('/profile', arguments: {'userId': userId});
+        }
+        break;
+        
+      case 'invitation':
+        if (mounted) {
+          Navigator.of(context).pushNamed('/invitations');
+        }
+        break;
+        
+      default:
+        if (mounted) {
+          Navigator.of(context).pushNamed('/notifications');
+        }
+        break;
+    }
   }
 
   void _preloadInBackground() {
@@ -74,15 +124,13 @@ class _AppWrapperState extends State<AppWrapper> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (_isInitializing) {
-      // Show black screen to match native splash while initializing
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: SizedBox.expand(),
-      );
-    }
+  void dispose() {
+    _notificationSub?.cancel();
+    super.dispose();
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: _authService,
       builder: (context, child) {

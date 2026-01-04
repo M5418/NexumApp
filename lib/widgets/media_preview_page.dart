@@ -124,6 +124,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         result = await Navigator.push<Uint8List?>(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'image_editor'),
             builder: (_) => SimpleWebEditorPage(
               bytes: editorBytes,
               isDark: widget.isDark,
@@ -135,6 +136,7 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
         result = await Navigator.push(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'image_editor'),
             builder: (_) => ProImageEditor.memory(
               editorBytes,
               callbacks: ProImageEditorCallbacks(),

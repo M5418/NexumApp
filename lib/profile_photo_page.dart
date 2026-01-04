@@ -216,7 +216,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
     if (!context.isMobile) {
       _pushWithPopupTransition(context, next);
     } else {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+      Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_cover'), builder: (_) => next));
     }
   }
 

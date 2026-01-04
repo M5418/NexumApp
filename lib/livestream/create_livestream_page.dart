@@ -180,6 +180,7 @@ class _CreateLiveStreamPageState extends State<CreateLiveStreamPage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'livestream'),
             builder: (_) => LiveStreamHostPage(streamId: streamId),
           ),
         );
@@ -436,7 +437,7 @@ class _CreateLiveStreamPageState extends State<CreateLiveStreamPage> {
                     trailing: Switch(
                       value: _isPrivate,
                       onChanged: (v) => setState(() => _isPrivate = v),
-                      activeColor: const Color(0xFFBFAE01),
+                      activeThumbColor: const Color(0xFFBFAE01),
                     ),
                     isDark: isDark,
                   ),
@@ -449,7 +450,7 @@ class _CreateLiveStreamPageState extends State<CreateLiveStreamPage> {
                     trailing: Switch(
                       value: _isScheduled,
                       onChanged: (v) => setState(() => _isScheduled = v),
-                      activeColor: const Color(0xFFBFAE01),
+                      activeThumbColor: const Color(0xFFBFAE01),
                     ),
                     isDark: isDark,
                   ),

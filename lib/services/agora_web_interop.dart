@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 @JS('agoraWebInit')
 external JSPromise<JSBoolean> _agoraWebInit(JSBoolean isBroadcaster);
@@ -43,27 +44,186 @@ external void _agoraWebSetCallbacks(
   JSFunction? onUserLeft,
   JSFunction? onError,
   JSFunction? onConnectionStateChanged,
+  JSFunction? onJoinSuccess,
+  JSFunction? onLocalVideoStateChanged,
 );
+
+@JS('agoraWebIsRuntimeReady')
+external JSObject? _agoraWebIsRuntimeReady();
+
+@JS('agoraWebGetDiagnostics')
+external JSObject? _agoraWebGetDiagnostics();
+
+/// Result of checking Agora Web runtime status
+class AgoraWebRuntimeStatus {
+  final bool sdkLoaded;
+  final bool secureContext;
+  final bool webRTCSupported;
+
+  const AgoraWebRuntimeStatus({
+    required this.sdkLoaded,
+    required this.secureContext,
+    required this.webRTCSupported,
+  });
+
+  bool get isReady => sdkLoaded && secureContext && webRTCSupported;
+
+  String? get errorMessage {
+    if (!sdkLoaded) return 'Agora Web SDK not loaded. Check index.html script tags.';
+    if (!secureContext) return 'WebRTC requires HTTPS or localhost. Current origin is not secure.';
+    if (!webRTCSupported) return 'WebRTC is not supported in this browser.';
+    return null;
+  }
+}
+
+/// Web diagnostics data
+class AgoraWebDiagnostics {
+  final bool isJoined;
+  final bool isBroadcaster;
+  final String connectionState;
+  final int? joinTimestamp;
+  final String? lastError;
+  final String? lastErrorCode;
+  final int remoteUserCount;
+  final bool hasLocalVideo;
+  final bool hasLocalAudio;
+
+  const AgoraWebDiagnostics({
+    this.isJoined = false,
+    this.isBroadcaster = false,
+    this.connectionState = 'DISCONNECTED',
+    this.joinTimestamp,
+    this.lastError,
+    this.lastErrorCode,
+    this.remoteUserCount = 0,
+    this.hasLocalVideo = false,
+    this.hasLocalAudio = false,
+  });
+}
 
 /// Dart wrapper for Agora Web SDK JavaScript interop
 class AgoraWebService {
   bool _isInitialized = false;
+  bool _isJoined = false;
+  DateTime? _joinTimestamp;
   
   final _userJoinedController = StreamController<int>.broadcast();
   final _userLeftController = StreamController<int>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   final _connectionStateController = StreamController<String>.broadcast();
+  final _joinSuccessController = StreamController<int>.broadcast();
+  final _localVideoStateController = StreamController<String>.broadcast();
   
   Stream<int> get onUserJoined => _userJoinedController.stream;
   Stream<int> get onUserLeft => _userLeftController.stream;
   Stream<String> get onError => _errorController.stream;
   Stream<String> get onConnectionStateChanged => _connectionStateController.stream;
+  Stream<int> get onJoinSuccess => _joinSuccessController.stream;
+  Stream<String> get onLocalVideoStateChanged => _localVideoStateController.stream;
   
   bool get isInitialized => _isInitialized;
+  bool get isJoined => _isJoined;
+  DateTime? get joinTimestamp => _joinTimestamp;
+
+  /// Check if Agora Web runtime is ready
+  static AgoraWebRuntimeStatus checkRuntimeStatus() {
+    try {
+      final result = _agoraWebIsRuntimeReady();
+      if (result == null) {
+        return const AgoraWebRuntimeStatus(
+          sdkLoaded: false,
+          secureContext: false,
+          webRTCSupported: false,
+        );
+      }
+      
+      final sdkLoaded = _getBoolProperty(result, 'sdkLoaded');
+      final secureContext = _getBoolProperty(result, 'secureContext');
+      final webRTCSupported = _getBoolProperty(result, 'webRTCSupported');
+      
+      return AgoraWebRuntimeStatus(
+        sdkLoaded: sdkLoaded,
+        secureContext: secureContext,
+        webRTCSupported: webRTCSupported,
+      );
+    } catch (e) {
+      return const AgoraWebRuntimeStatus(
+        sdkLoaded: false,
+        secureContext: false,
+        webRTCSupported: false,
+      );
+    }
+  }
+
+  static bool _getBoolProperty(JSObject obj, String key) {
+    final value = obj[key];
+    if (value == null) return false;
+    if (value.isA<JSBoolean>()) return (value as JSBoolean).toDart;
+    return false;
+  }
+
+  static String _getStringProperty(JSObject obj, String key, String defaultValue) {
+    final value = obj[key];
+    if (value == null) return defaultValue;
+    if (value.isA<JSString>()) return (value as JSString).toDart;
+    return defaultValue;
+  }
+
+  static String? _getStringPropertyNullable(JSObject obj, String key) {
+    final value = obj[key];
+    if (value == null || value.isUndefinedOrNull) return null;
+    if (value.isA<JSString>()) return (value as JSString).toDart;
+    return null;
+  }
+
+  static int _getIntProperty(JSObject obj, String key, int defaultValue) {
+    final value = obj[key];
+    if (value == null) return defaultValue;
+    if (value.isA<JSNumber>()) return (value as JSNumber).toDartInt;
+    return defaultValue;
+  }
+
+  static int? _getIntPropertyNullable(JSObject obj, String key) {
+    final value = obj[key];
+    if (value == null || value.isUndefinedOrNull) return null;
+    if (value.isA<JSNumber>()) return (value as JSNumber).toDartInt;
+    return null;
+  }
+
+  /// Get current diagnostics
+  AgoraWebDiagnostics getDiagnostics() {
+    try {
+      final result = _agoraWebGetDiagnostics();
+      if (result == null) {
+        return const AgoraWebDiagnostics();
+      }
+      
+      return AgoraWebDiagnostics(
+        isJoined: _getBoolProperty(result, 'isJoined'),
+        isBroadcaster: _getBoolProperty(result, 'isBroadcaster'),
+        connectionState: _getStringProperty(result, 'connectionState', 'DISCONNECTED'),
+        joinTimestamp: _getIntPropertyNullable(result, 'joinTimestamp'),
+        lastError: _getStringPropertyNullable(result, 'lastError'),
+        lastErrorCode: _getStringPropertyNullable(result, 'lastErrorCode'),
+        remoteUserCount: _getIntProperty(result, 'remoteUserCount', 0),
+        hasLocalVideo: _getBoolProperty(result, 'hasLocalVideo'),
+        hasLocalAudio: _getBoolProperty(result, 'hasLocalAudio'),
+      );
+    } catch (e) {
+      return const AgoraWebDiagnostics();
+    }
+  }
 
   /// Initialize Agora Web SDK
   Future<bool> initialize({required bool isBroadcaster}) async {
     try {
+      // Check runtime first
+      final runtimeStatus = checkRuntimeStatus();
+      if (!runtimeStatus.isReady) {
+        _errorController.add(runtimeStatus.errorMessage ?? 'Runtime not ready');
+        return false;
+      }
+      
       // Set up callbacks
       _agoraWebSetCallbacks(
         ((JSNumber uid) {
@@ -77,6 +237,14 @@ class AgoraWebService {
         }).toJS,
         ((JSString state) {
           _connectionStateController.add(state.toDart);
+        }).toJS,
+        ((JSNumber uid, JSString channel) {
+          _isJoined = true;
+          _joinTimestamp = DateTime.now();
+          _joinSuccessController.add(uid.toDartInt);
+        }).toJS,
+        ((JSString state) {
+          _localVideoStateController.add(state.toDart);
         }).toJS,
       );
       
@@ -201,6 +369,9 @@ class AgoraWebService {
     _userLeftController.close();
     _errorController.close();
     _connectionStateController.close();
+    _joinSuccessController.close();
+    _localVideoStateController.close();
     _isInitialized = false;
+    _isJoined = false;
   }
 }

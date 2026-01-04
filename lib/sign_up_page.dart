@@ -360,8 +360,8 @@ class _SignUpPageState extends State<SignUpPage> {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (context) =>
-                                              const SignInPage(),
+                                          settings: const RouteSettings(name: 'sign_in'),
+                                          builder: (_) => const SignInPage(),
                                         ),
                                       );
                                     },
@@ -592,7 +592,7 @@ class _SignUpPageState extends State<SignUpPage> {
       if (mounted) {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const ProfileFlowStart()),
+          MaterialPageRoute(settings: const RouteSettings(name: 'profile_flow_start'), builder: (_) => const ProfileFlowStart()),
         );
       }
     } catch (e) {

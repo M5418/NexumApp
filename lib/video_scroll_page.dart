@@ -997,12 +997,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
                     if (currentUserId == post.authorId) {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const ProfilePage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'post_detail'), builder: (context) => const ProfilePage()),
                       );
                     } else {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          settings: const RouteSettings(name: 'other_user_profile'),
                           builder: (context) => OtherUserProfilePage(
                             userId: post.authorId,
                             userName: post.userName,

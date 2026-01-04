@@ -174,7 +174,7 @@ class ProfileFlowStart extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const ProfileNamePage()),
+                        MaterialPageRoute(settings: const RouteSettings(name: 'profile_name'), builder: (_) => const ProfileNamePage()),
                       );
                     },
                     style: ElevatedButton.styleFrom(

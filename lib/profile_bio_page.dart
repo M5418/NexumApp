@@ -47,7 +47,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
       if (!context.isMobile) {
         _pushWithPopupTransition(context, next);
       } else {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+        Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_photo'), builder: (_) => next));
       }
     } catch (e) {
       if (!mounted) return;
@@ -196,7 +196,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                                 firstName: widget.firstName,
                                 lastName: widget.lastName,
                               );
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => next));
+                              Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_photo'), builder: (_) => next));
                             },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),

@@ -137,7 +137,7 @@ class _PodcastsThreeColumnPageState extends State<PodcastsThreeColumnPage> {
 
   void _openInMiddle(Podcast p) {
     _middleNavKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => PodcastDetailsPage(podcast: p)),
+      MaterialPageRoute(settings: const RouteSettings(name: 'podcast_details'), builder: (_) => PodcastDetailsPage(podcast: p)),
       (route) => false,
     );
   }
@@ -220,6 +220,7 @@ class _PodcastsThreeColumnPageState extends State<PodcastsThreeColumnPage> {
                                 onGenerateInitialRoutes: (_, __) {
                                   return [
                                     MaterialPageRoute(
+                                      settings: const RouteSettings(name: 'podcast_placeholder'),
                                       builder: (_) => const _MiddlePlaceholder(),
                                     ),
                                   ];
@@ -312,7 +313,7 @@ class _LeftColumn extends StatelessWidget {
                 IconButton(
                   tooltip: 'Search',
                   onPressed: () => leftNavKey.currentState?.push(
-                    MaterialPageRoute(builder: (_) => const PodcastSearchPage()),
+                    MaterialPageRoute(settings: const RouteSettings(name: 'podcast_search'), builder: (_) => const PodcastSearchPage()),
                   ),
                   icon: Icon(Icons.search, color: isDark ? Colors.white : Colors.black),
                 ),
@@ -328,6 +329,7 @@ class _LeftColumn extends StatelessWidget {
               onGenerateInitialRoutes: (_, __) {
                 return [
                   MaterialPageRoute(
+                    settings: const RouteSettings(name: 'podcast_landing'),
                     builder: (_) => _LeftLandingPage(
                       isDark: isDark,
                       items: items,
@@ -440,13 +442,13 @@ class _LeftQuickActions extends StatelessWidget {
           icon: Icons.podcasts_outlined,
           label: 'My Episodes',
           isDark: isDark,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyEpisodesPage())),
+          onTap: () => Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'my_episodes'), builder: (_) => const MyEpisodesPage())),
         ),
         _QuickActionPill(
           icon: Icons.video_library_outlined,
           label: 'My Library',
           isDark: isDark,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyLibraryPage())),
+          onTap: () => Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'my_library'), builder: (_) => const MyLibraryPage())),
         ),
         _QuickActionPill(
           icon: Icons.add_circle_outline,
@@ -461,7 +463,7 @@ class _LeftQuickActions extends StatelessWidget {
           icon: Icons.category_outlined,
           label: 'Categories',
           isDark: isDark,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PodcastsCategoriesPage())),
+          onTap: () => Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'podcast_categories'), builder: (_) => const PodcastsCategoriesPage())),
         ),
       ],
     );

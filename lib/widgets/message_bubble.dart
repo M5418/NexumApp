@@ -411,6 +411,7 @@ class _MessageBubbleState extends State<MessageBubble>
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
+              settings: const RouteSettings(name: 'image_swipe'),
               builder: (_) => ImageSwipePage(
                 mediaUrls: allChatMedia,
                 initialIndex: initialIndex,
@@ -511,6 +512,7 @@ class _MessageBubbleState extends State<MessageBubble>
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
+              settings: const RouteSettings(name: 'image_swipe'),
               builder: (_) => ImageSwipePage(
                 mediaUrls: allChatMedia,
                 initialIndex: initialIndex,

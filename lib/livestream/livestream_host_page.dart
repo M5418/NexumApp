@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -10,6 +10,8 @@ import '../core/i18n/language_provider.dart';
 import '../repositories/interfaces/livestream_repository.dart';
 import '../repositories/models/livestream_model.dart';
 import '../services/agora_service.dart';
+import '../services/agora_token_service.dart';
+import '../widgets/agora_debug_panel.dart';
 import '../widgets/agora_web_video.dart';
 
 class LiveStreamHostPage extends StatefulWidget {
@@ -35,10 +37,13 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
   bool _isMicMuted = false;
   bool _isCameraOff = false;
   bool _showViewers = false;
+  bool _showDebugPanel = false;
 
   AgoraService? _agoraService;
   bool _agoraInitialized = false;
   int? _localUid;
+  StreamSubscription<AgoraDiagnostics>? _diagnosticsSub;
+  AgoraDiagnostics _currentDiagnostics = const AgoraDiagnostics();
 
   StreamSubscription<LiveStreamModel?>? _streamSub;
   StreamSubscription<List<LiveStreamChatMessage>>? _chatSub;
@@ -65,6 +70,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
     _streamSub?.cancel();
     _chatSub?.cancel();
     _reactionSub?.cancel();
+    _diagnosticsSub?.cancel();
     _controlsTimer?.cancel();
     _durationTimer?.cancel();
     super.dispose();
@@ -74,24 +80,54 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
     try {
       _agoraService = AgoraService();
       
-      // Request permissions
-      final hasPermission = await _agoraService!.requestPermissions();
-      if (!hasPermission) {
-        debugPrint('Permissions not granted');
+      final agoraSvc = _agoraService;
+      if (agoraSvc == null) {
+        debugPrint('Failed to create AgoraService');
+        if (mounted) setState(() => _agoraInitialized = true);
+        return;
+      }
+      
+      // Subscribe to diagnostics updates (for debug panel)
+      _diagnosticsSub = agoraSvc.onDiagnosticsChanged.listen((diag) {
         if (mounted) {
-          setState(() => _agoraInitialized = true); // Show UI anyway
+          setState(() => _currentDiagnostics = diag);
+        }
+      });
+      
+      // Request permissions
+      final permResult = await agoraSvc.requestPermissions();
+      if (!permResult.granted) {
+        debugPrint('Permissions not granted - camera: ${permResult.cameraState}, mic: ${permResult.microphoneState}');
+        if (mounted) {
+          setState(() {
+            _agoraInitialized = true;
+            _currentDiagnostics = agoraSvc.diagnostics;
+          });
         }
         return;
       }
       
       // Initialize as broadcaster
-      await _agoraService!.initialize(isBroadcaster: true);
+      final initResult = await agoraSvc.initialize(isBroadcaster: true);
+      if (!initResult.success) {
+        debugPrint('Agora init failed: ${initResult.errorMessage}');
+        if (mounted) {
+          setState(() {
+            _agoraInitialized = true;
+            _currentDiagnostics = agoraSvc.diagnostics;
+          });
+        }
+        return;
+      }
       
       // Generate a unique UID for the host based on streamId
       _localUid = widget.streamId.hashCode.abs() % 100000;
       
       if (mounted) {
-        setState(() => _agoraInitialized = true);
+        setState(() {
+          _agoraInitialized = true;
+          _currentDiagnostics = agoraSvc.diagnostics;
+        });
       }
     } catch (e) {
       debugPrint('Error initializing Agora: $e');
@@ -114,11 +150,22 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
       // Subscribe to stream updates
       _streamSub = repo.liveStreamStream(widget.streamId).listen((stream) {
         if (!mounted) return;
+        final wasLive = _isLive;
+        final nowLive = stream?.isLive ?? false;
         setState(() {
           _stream = stream;
           _isLoading = false;
-          _isLive = stream?.isLive ?? false;
+          _isLive = nowLive;
         });
+        
+        // Start timer when stream becomes live (or is already live on load)
+        if (nowLive && !wasLive && _durationTimer == null) {
+          _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+            if (mounted) {
+              setState(() => _liveDuration += const Duration(seconds: 1));
+            }
+          });
+        }
       });
 
       // Subscribe to chat messages
@@ -168,24 +215,49 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
   Future<void> _startStream() async {
     try {
       // Join Agora channel as broadcaster
-      if (_agoraService != null && _localUid != null) {
-        await _agoraService!.joinChannel(
+      final agoraSvc = _agoraService;
+      final uid = _localUid;
+      if (agoraSvc != null && uid != null) {
+        // Try to get a token from Cloud Functions
+        String? token;
+        try {
+          debugPrint('Agora: Requesting token for channel: ${widget.streamId}, uid: $uid');
+          final tokenResult = await AgoraTokenService().generateToken(
+            channelName: widget.streamId,
+            uid: uid,
+            isPublisher: true,
+          );
+          token = tokenResult?.token;
+          debugPrint('Agora: Token received: ${token != null ? "${token.substring(0, 20)}..." : "null"}');
+        } catch (e) {
+          debugPrint('Agora: Token generation failed: $e');
+        }
+        
+        final joinResult = await agoraSvc.joinChannel(
           channelName: widget.streamId,
-          uid: _localUid!,
+          uid: uid,
+          token: token,
         );
+        if (!joinResult.success) {
+          debugPrint('Failed to join channel: ${joinResult.errorMessage}');
+        }
       }
       
+      if (!mounted) return;
       final repo = context.read<LiveStreamRepository>();
       await repo.startLiveStream(widget.streamId);
       
-      setState(() => _isLive = true);
+      if (!mounted) return;
       
-      // Start duration timer
-      _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) {
-          setState(() => _liveDuration += const Duration(seconds: 1));
-        }
-      });
+      // Start timer immediately - don't wait for callback on web
+      if (!_isLive) {
+        setState(() => _isLive = true);
+        _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) {
+            setState(() => _liveDuration += const Duration(seconds: 1));
+          }
+        });
+      }
     } catch (e) {
       debugPrint('Error starting stream: $e');
       if (!mounted) return;
@@ -404,6 +476,37 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
             Positioned.fill(
               child: _buildViewersPanel(lang),
             ),
+
+          // Debug panel (only in debug builds)
+          if (kDebugMode && _showDebugPanel)
+            Positioned.fill(
+              child: AgoraDebugPanel(
+                diagnostics: _currentDiagnostics,
+                onClose: () => setState(() => _showDebugPanel = false),
+              ),
+            ),
+
+          // Debug button (only in debug builds)
+          if (kDebugMode)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 60,
+              right: 16,
+              child: GestureDetector(
+                onTap: () => setState(() => _showDebugPanel = !_showDebugPanel),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.bug_report,
+                    color: Color(0xFFBFAE01),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -454,10 +557,12 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
     }
 
     // Native platform - use AgoraVideoView
-    if (_agoraService?.engine != null) {
+    final agoraSvc = _agoraService;
+    final eng = agoraSvc?.engine;
+    if (eng != null) {
       return AgoraVideoView(
         controller: VideoViewController(
-          rtcEngine: _agoraService!.engine!,
+          rtcEngine: eng,
           canvas: const VideoCanvas(uid: 0),
         ),
       );
