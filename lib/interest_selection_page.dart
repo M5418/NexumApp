@@ -530,13 +530,17 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
     if (_selectedInterests.isEmpty) return;
     setState(() => _isSaving = true);
     try {
+      // Sync interests with community memberships BEFORE updating profile
+      // Pass empty list as oldInterests for new accounts so all selected interests are treated as new
+      await CommunityInterestSyncService().syncUserInterests(
+        _selectedInterests.toList(),
+        oldInterests: widget.initialSelected ?? [],
+      );
+      
       // Save interests to user profile
       await ProfileApi().update({
         'interest_domains': _selectedInterests.toList(),
       });
-      
-      // Sync interests with community memberships
-      await CommunityInterestSyncService().syncUserInterests(_selectedInterests.toList());
       
       if (!mounted) return;
 

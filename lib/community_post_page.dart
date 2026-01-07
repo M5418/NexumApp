@@ -21,8 +21,7 @@ import 'widgets/auto_play_video.dart';
 import 'widgets/post_options_menu.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/comment_bottom_sheet.dart';
-import 'other_user_profile_page.dart';
-import 'profile_page.dart';
+import 'utils/profile_navigation.dart';
 import 'core/time_utils.dart';
 import 'repositories/firebase/firebase_translate_repository.dart';
 import 'core/i18n/language_provider.dart';
@@ -845,26 +844,13 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                     children: [
                                       GestureDetector(
                                         onTap: () {
-                                          final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-                                          if (currentUserId == _post!.authorId) {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-                                            );
-                                          } else {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                settings: const RouteSettings(name: 'other_user_profile'),
-                                                builder: (context) => OtherUserProfilePage(
-                                                  userId: _post!.authorId,
-                                                  userName: _post!.authorName,
-                                                  userAvatarUrl: _post!.authorAvatarUrl,
-                                                  userBio: '',
-                                                ),
-                                              ),
-                                            );
-                                          }
+                                          navigateToUserProfile(
+                                            context: context,
+                                            userId: _post!.authorId,
+                                            userName: _post!.authorName,
+                                            userAvatarUrl: _post!.authorAvatarUrl,
+                                            userBio: '',
+                                          );
                                         },
                                         child: CircleAvatar(
                                           radius: 20,
@@ -888,26 +874,13 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                                       Expanded(
                                         child: GestureDetector(
                                           onTap: () {
-                                            final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-                                            if (currentUserId == _post!.authorId) {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-                                              );
-                                            } else {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  settings: const RouteSettings(name: 'other_user_profile'),
-                                                  builder: (context) => OtherUserProfilePage(
-                                                    userId: _post!.authorId,
-                                                    userName: _post!.authorName,
-                                                    userAvatarUrl: _post!.authorAvatarUrl,
-                                                    userBio: '',
-                                                  ),
-                                                ),
-                                              );
-                                            }
+                                            navigateToUserProfile(
+                                              context: context,
+                                              userId: _post!.authorId,
+                                              userName: _post!.authorName,
+                                              userAvatarUrl: _post!.authorAvatarUrl,
+                                              userBio: '',
+                                            );
                                           },
                                           child: Column(
                                             crossAxisAlignment:

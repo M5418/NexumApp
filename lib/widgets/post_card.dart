@@ -7,9 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:readmore/readmore.dart';
 import 'package:ionicons/ionicons.dart';
 import '../models/post.dart';
-import '../other_user_profile_page.dart';
+import '../utils/profile_navigation.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import '../profile_page.dart';
 import 'auto_play_video.dart';
 import 'reaction_picker.dart';
 import '../core/time_utils.dart';
@@ -502,26 +501,13 @@ class _PostCardState extends State<PostCard> {
               children: [
                 GestureDetector(
                   onTap: () {
-                    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-                    if (currentUserId == widget.post.authorId) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-                      );
-                    } else {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings: const RouteSettings(name: 'other_user_profile'),
-                          builder: (context) => OtherUserProfilePage(
-                            userId: widget.post.authorId,
-                            userName: widget.post.userName,
-                            userAvatarUrl: widget.post.userAvatarUrl,
-                            userBio: '',
-                          ),
-                        ),
-                      );
-                    }
+                    navigateToUserProfile(
+                      context: context,
+                      userId: widget.post.authorId,
+                      userName: widget.post.userName,
+                      userAvatarUrl: widget.post.userAvatarUrl,
+                      userBio: '',
+                    );
                   },
                   child: _AvatarCircle(
                     url: widget.post.userAvatarUrl,
@@ -534,26 +520,13 @@ class _PostCardState extends State<PostCard> {
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
-                      final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-                      if (currentUserId == widget.post.authorId) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-                        );
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            settings: const RouteSettings(name: 'other_user_profile'),
-                            builder: (context) => OtherUserProfilePage(
-                              userId: widget.post.authorId,
-                              userName: widget.post.userName,
-                              userAvatarUrl: widget.post.userAvatarUrl,
-                              userBio: '',
-                            ),
-                          ),
-                        );
-                      }
+                      navigateToUserProfile(
+                        context: context,
+                        userId: widget.post.authorId,
+                        userName: widget.post.userName,
+                        userAvatarUrl: widget.post.userAvatarUrl,
+                        userBio: '',
+                      );
                     },
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

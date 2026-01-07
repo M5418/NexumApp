@@ -9,8 +9,7 @@ import 'repositories/firebase/firebase_user_repository.dart';
 import 'repositories/interfaces/conversation_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'responsive/responsive_breakpoints.dart';
-import 'other_user_profile_page.dart';
-import 'profile_page.dart';
+import 'utils/profile_navigation.dart';
 import 'home_feed_page.dart';
 import 'core/admin_config.dart';
 
@@ -417,26 +416,13 @@ Happy connecting! 🚀''';
 
                     return GestureDetector(
                       onTap: () {
-                        final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-                        if (currentUserId == userId) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(settings: const RouteSettings(name: 'home_feed'), builder: (context) => const ProfilePage()),
-                          );
-                        } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              settings: const RouteSettings(name: 'other_user_profile'),
-                              builder: (context) => OtherUserProfilePage(
-                                userId: userId,
-                                userName: user['name'] as String? ?? 'Unknown',
-                                userAvatarUrl: user['avatarUrl'] as String? ?? '',
-                                userBio: '',
-                              ),
-                            ),
-                          );
-                        }
+                        navigateToUserProfile(
+                          context: context,
+                          userId: userId,
+                          userName: user['name'] as String? ?? 'Unknown',
+                          userAvatarUrl: user['avatarUrl'] as String? ?? '',
+                          userBio: '',
+                        );
                       },
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 16),

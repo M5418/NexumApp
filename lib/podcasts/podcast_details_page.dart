@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'podcasts_home_page.dart' show Podcast;
 import 'player_page.dart';
 import 'add_to_playlist_sheet.dart';
+import 'edit_podcast_page.dart';
 import '../repositories/interfaces/bookmark_repository.dart';
+import '../repositories/interfaces/podcast_repository.dart';
 import '../repositories/models/bookmark_model.dart';
 import '../core/i18n/language_provider.dart';
 
@@ -22,12 +25,83 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
   bool _togglingLike = false;
   bool _togglingBookmark = false;
   bool _isBookmarked = false;
+  bool _isOwner = false;
+  bool _deleting = false;
 
   @override
   void initState() {
     super.initState();
     podcast = widget.podcast;
     _checkBookmarkStatus();
+    _checkOwnership();
+  }
+
+  void _checkOwnership() {
+    final currentUid = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid != null && podcast.authorId == currentUid) {
+      setState(() => _isOwner = true);
+    }
+  }
+
+  Future<void> _editPodcast() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'edit_podcast'),
+        builder: (_) => EditPodcastPage(podcast: podcast),
+      ),
+    );
+    if (result == true && mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _deletePodcast() async {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang.t('podcasts.delete'), style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+        content: Text(lang.t('podcasts.delete_confirm'), style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(lang.t('common.cancel'), style: GoogleFonts.inter()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(lang.t('common.delete'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      final podcastRepo = context.read<PodcastRepository>();
+      await podcastRepo.deletePodcast(podcast.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(lang.t('podcasts.deleted'), style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF4CAF50),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${lang.t('podcasts.delete_failed')}: $e', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
   }
 
   Future<void> _checkBookmarkStatus() async {
@@ -167,6 +241,50 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
               child: const Icon(Icons.playlist_add, color: Colors.white, size: 20),
             ),
           ),
+          if (_isOwner)
+            PopupMenuButton<String>(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+              ),
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _editPodcast();
+                } else if (value == 'delete') {
+                  _deletePodcast();
+                }
+              },
+              itemBuilder: (ctx) {
+                final lang = Provider.of<LanguageProvider>(ctx, listen: false);
+                return [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.edit, size: 20, color: Color(0xFFBFAE01)),
+                        const SizedBox(width: 12),
+                        Text(lang.t('podcasts.edit'), style: GoogleFonts.inter()),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    enabled: !_deleting,
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: _deleting ? Colors.grey : Colors.red),
+                        const SizedBox(width: 12),
+                        Text(lang.t('podcasts.delete'), style: GoogleFonts.inter(color: _deleting ? Colors.grey : Colors.red)),
+                      ],
+                    ),
+                  ),
+                ];
+              },
+            ),
           const SizedBox(width: 8),
         ],
       ),

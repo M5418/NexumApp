@@ -12,7 +12,7 @@ import '../repositories/firebase/firebase_group_repository.dart';
 import '../repositories/interfaces/storage_repository.dart';
 import '../services/media_compression_service.dart';
 import '../models/group_chat.dart';
-import '../other_user_profile_page.dart';
+import '../utils/profile_navigation.dart';
 
 class GroupInfoPage extends StatefulWidget {
   final GroupChat group;
@@ -616,17 +616,12 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
 
                               return ListTile(
                                 onTap: isMe ? null : () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      settings: const RouteSettings(name: 'other_user_profile'),
-                                      builder: (_) => OtherUserProfilePage(
-                                        userId: member.odId,
-                                        userName: member.name,
-                                        userAvatarUrl: member.avatarUrl ?? '',
-                                        userBio: '',
-                                      ),
-                                    ),
+                                  navigateToUserProfile(
+                                    context: context,
+                                    userId: member.odId,
+                                    userName: member.name,
+                                    userAvatarUrl: member.avatarUrl ?? '',
+                                    userBio: '',
                                   );
                                 },
                                 leading: CircleAvatar(

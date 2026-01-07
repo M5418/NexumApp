@@ -287,6 +287,14 @@ service cloud.firestore {
       allow delete: if signedIn();
     }
     
+    // Story music (admin-managed music for stories)
+    match /story_music/{musicId} {
+      allow read: if true; // Anyone can read to display in picker
+      allow create: if signedIn(); // Any authenticated user can upload (restrict via app logic)
+      allow update: if signedIn();
+      allow delete: if signedIn();
+    }
+    
     // Books
     match /books/{bookId} {
       allow read: if true;

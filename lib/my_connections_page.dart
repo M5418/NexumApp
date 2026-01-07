@@ -7,7 +7,7 @@ import 'widgets/segmented_tabs.dart';
 import 'widgets/animated_navbar.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'repositories/firebase/firebase_follow_repository.dart';
-import 'other_user_profile_page.dart';
+import 'utils/profile_navigation.dart';
 
 class MyConnectionUser {
   final String id;
@@ -407,20 +407,15 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
     final secondaryText = const Color(0xFF666666);
     return InkWell(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            settings: const RouteSettings(name: 'other_user_profile'),
-            builder: (_) => OtherUserProfilePage(
-              userId: user.id,
-              userName: user.name,
-              userAvatarUrl: user.avatarUrl ?? '',
-              userBio: user.bio,
-              userCoverUrl: user.coverUrl ?? '',
-              isConnected: user.youConnectTo,
-              theyConnectToYou: user.theyConnectToYou,
-            ),
-          ),
+        navigateToUserProfile(
+          context: context,
+          userId: user.id,
+          userName: user.name,
+          userAvatarUrl: user.avatarUrl ?? '',
+          userBio: user.bio,
+          userCoverUrl: user.coverUrl ?? '',
+          isConnected: user.youConnectTo,
+          theyConnectToYou: user.theyConnectToYou,
         );
       },
       child: Container(

@@ -7,6 +7,7 @@ class StoryRing extends StatelessWidget {
   final String label;
   final bool isMine;
   final bool isSeen;
+  final bool hasActiveStories; // For "Your Story" - show avatar with highlight if has stories
   final VoidCallback? onTap;
   final VoidCallback? onAddTap;
 
@@ -16,6 +17,7 @@ class StoryRing extends StatelessWidget {
     required this.label,
     this.isMine = false,
     this.isSeen = false,
+    this.hasActiveStories = false,
     this.onTap,
     this.onAddTap,
   });
@@ -35,7 +37,13 @@ class StoryRing extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: isMine
-                    ? null
+                    ? (hasActiveStories
+                        ? const LinearGradient(
+                            colors: [Color(0xFFBFAE01), Color(0xFFBFAE01)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null)
                     : LinearGradient(
                         colors: !isSeen  // if has unseen stories
                             ? [
@@ -49,7 +57,7 @@ class StoryRing extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                border: isMine
+                border: isMine && !hasActiveStories
                     ? Border.all(
                         color: const Color(0xFF666666),
                         width: 2,
@@ -58,27 +66,81 @@ class StoryRing extends StatelessWidget {
                     : null,
               ),
               child: isMine
-                  ? Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFF666666),
-                          width: 2,
-                          style: BorderStyle.solid,
-                        ),
-                      ),
-                      child: Center(
-                        child: GestureDetector(
-                          onTap: onAddTap ?? onTap,
-                          behavior: HitTestBehavior.opaque,
-                          child: const Icon(
-                            Icons.add,
-                            color: Color(0xFF666666),
-                            size: 24,
+                  ? (hasActiveStories
+                      // Show avatar with yellow ring + small add button when has active stories
+                      ? Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: Container(
+                                decoration: const BoxDecoration(shape: BoxShape.circle),
+                                clipBehavior: Clip.antiAlias,
+                                child: imageUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: imageUrl!,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Container(
+                                          color: const Color(0xFF666666).withValues(alpha: 0.2),
+                                          child: const Center(
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                                            ),
+                                          ),
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          color: const Color(0xFF666666).withValues(alpha: 0.2),
+                                          child: const Icon(Icons.person, color: Color(0xFF666666), size: 30),
+                                        ),
+                                      )
+                                    : Container(
+                                        color: const Color(0xFF666666).withValues(alpha: 0.2),
+                                        child: const Icon(Icons.person, color: Color(0xFF666666), size: 30),
+                                      ),
+                              ),
+                            ),
+                            // Small + button at bottom right
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: GestureDetector(
+                                onTap: onAddTap,
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFBFAE01),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                  child: const Icon(Icons.add, size: 14, color: Colors.black),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      // Show + icon when no active stories
+                      : Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF666666),
+                              width: 2,
+                              style: BorderStyle.solid,
+                            ),
                           ),
-                        ),
-                      ),
-                    )
+                          child: Center(
+                            child: GestureDetector(
+                              onTap: onAddTap ?? onTap,
+                              behavior: HitTestBehavior.opaque,
+                              child: const Icon(
+                                Icons.add,
+                                color: Color(0xFF666666),
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ))
                   : Padding(
                       padding: const EdgeInsets.all(3),
                       child: Container(

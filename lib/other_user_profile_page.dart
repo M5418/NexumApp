@@ -14,12 +14,14 @@ import 'repositories/interfaces/conversation_repository.dart';
 import 'repositories/interfaces/user_repository.dart';
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/firebase/firebase_podcast_repository.dart';
 import 'repositories/models/post_model.dart';
 import 'providers/follow_state.dart';
 import 'models/message.dart' hide MediaType;
 import 'widgets/report_bottom_sheet.dart';
 import 'chat_page.dart';
 import 'shared_media_page.dart';
+import 'widgets/expandable_photo_viewer.dart';
 
 
 class OtherUserProfilePage extends StatefulWidget {
@@ -60,7 +62,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     'coverUrl': widget.userCoverUrl,
   };
   late String? _profilePhotoUrl = widget.userAvatarUrl;
-  late final String _coverPhotoUrl = widget.userCoverUrl;
+  late String _coverPhotoUrl = widget.userCoverUrl;
 
   int _followersCount = 0;
   int _followingCount = 0;
@@ -164,6 +166,10 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
               'postsCount': profile.postsCount ?? 0,
             };
             _profilePhotoUrl = profile.avatarUrl;
+            // Update cover photo URL from cache if available
+            if (profile.coverUrl != null && profile.coverUrl!.isNotEmpty) {
+              _coverPhotoUrl = profile.coverUrl!;
+            }
             _followersCount = profile.followersCount ?? 0;
             _followingCount = profile.followingCount ?? 0;
           });
@@ -377,6 +383,10 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
           'full_name': fullName,
         };
         _profilePhotoUrl = user.avatarUrl;
+        // Update cover photo URL from Firebase if available
+        if (user.coverUrl != null && user.coverUrl!.isNotEmpty) {
+          _coverPhotoUrl = user.coverUrl!;
+        }
         _followersCount = user.followersCount ?? 0;
         _followingCount = user.followingCount ?? 0;
         _experiences
@@ -749,10 +759,30 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     });
 
     try {
-      // Placeholder: podcasts will be loaded elsewhere
+      final podcastRepo = FirebasePodcastRepository();
+      final podcasts = await podcastRepo.listPodcasts(
+        authorId: widget.userId,
+        isPublished: true,
+        limit: 50,
+      );
+      
       if (!mounted) return;
       setState(() {
-        _podcasts = [];
+        _podcasts = podcasts.map((p) => {
+          'id': p.id,
+          'title': p.title,
+          'author': p.author ?? '',
+          'authorId': p.authorId ?? '',
+          'description': p.description ?? '',
+          'coverUrl': p.coverUrl ?? '',
+          'audioUrl': p.audioUrl ?? '',
+          'durationSec': p.durationSec ?? 0,
+          'playCount': p.playCount,
+          'likeCount': p.likeCount,
+          'isLiked': p.isLiked,
+          'isBookmarked': p.isBookmarked,
+          'createdAt': p.createdAt,
+        }).toList();
         _loadingPodcasts = false;
       });
     } catch (e) {
@@ -888,44 +918,76 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
               child: Column(
                 children: [
                   // Profile Header with Cover Image
-                  Container(
-                    height: 200,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      image: (coverUrl.isNotEmpty)
-                          ? DecorationImage(
-                              image: NetworkImage(coverUrl),
-                              fit: BoxFit.cover,
+                  GestureDetector(
+                    onTap: coverUrl.isNotEmpty
+                        ? () => showExpandablePhoto(
+                              context: context,
+                              imageUrl: coverUrl,
+                              isProfilePhoto: false,
+                              heroTag: 'other_user_cover_${widget.userId}',
                             )
-                          : null,
-                      color: coverUrl.isEmpty
-                          ? (isDark ? Colors.black : Colors.grey[300])
-                          : null,
-                    ),
-                    child: SafeArea(
+                        : null,
+                    child: Container(
+                      height: 200,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        image: (coverUrl.isNotEmpty)
+                            ? DecorationImage(
+                                image: NetworkImage(coverUrl),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                        color: coverUrl.isEmpty
+                            ? (isDark ? Colors.black : Colors.grey[300])
+                            : null,
+                      ),
+                      child: SafeArea(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            InkWell(
-                              onTap: () => Navigator.pop(context),
-                              child: const Icon(
-                                Icons.arrow_back,
-                                color: Colors.white,
+                            // Back button with visible background
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: InkWell(
+                                onTap: () => Navigator.pop(context),
+                                borderRadius: BorderRadius.circular(20),
+                                child: const Icon(
+                                  Icons.arrow_back,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
                               ),
                             ),
-                            InkWell(
-                              onTap: () =>
-                                  scaffoldKey.currentState!.openEndDrawer(),
-                              child: const Icon(
-                                Icons.more_horiz,
-                                color: Colors.white,
+                            // More options button with visible background
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: InkWell(
+                                onTap: () =>
+                                    scaffoldKey.currentState!.openEndDrawer(),
+                                borderRadius: BorderRadius.circular(20),
+                                child: const Icon(
+                                  Icons.more_horiz,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
+                    ),
                     ),
                   ),
 
@@ -955,40 +1017,51 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                               // Avatar positioned to overlap cover
                               Transform.translate(
                                 offset: const Offset(0, -50),
-                                child: Container(
-                                  width: 120,
-                                  height: 120,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isDark
-                                          ? const Color(0xFF000000)
-                                          : Colors.white,
-                                      width: 4,
-                                    ),
-                                  ),
-                                  child: CircleAvatar(
-                                    radius: 58,
-                                    backgroundImage: (_profilePhotoUrl != null &&
-                                            _profilePhotoUrl!.isNotEmpty)
-                                        ? NetworkImage(_profilePhotoUrl!)
-                                        : null,
-                                    child: (_profilePhotoUrl == null ||
-                                            _profilePhotoUrl!.isEmpty)
-                                        ? Text(
-                                            (displayName.isNotEmpty
-                                                    ? displayName[0]
-                                                    : 'U')
-                                                .toUpperCase(),
-                                            style: GoogleFonts.inter(
-                                              fontSize: 40,
-                                              fontWeight: FontWeight.w700,
-                                              color: isDark
-                                                  ? Colors.white
-                                                  : Colors.black,
-                                            ),
+                                child: GestureDetector(
+                                  onTap: (_profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty)
+                                      ? () => showExpandablePhoto(
+                                            context: context,
+                                            imageUrl: _profilePhotoUrl,
+                                            isProfilePhoto: true,
+                                            heroTag: 'other_user_avatar_${widget.userId}',
+                                            fallbackInitial: displayName.isNotEmpty ? displayName[0] : 'U',
                                           )
-                                        : null,
+                                      : null,
+                                  child: Container(
+                                    width: 120,
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isDark
+                                            ? const Color(0xFF000000)
+                                            : Colors.white,
+                                        width: 4,
+                                      ),
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 58,
+                                      backgroundImage: (_profilePhotoUrl != null &&
+                                              _profilePhotoUrl!.isNotEmpty)
+                                          ? NetworkImage(_profilePhotoUrl!)
+                                          : null,
+                                      child: (_profilePhotoUrl == null ||
+                                              _profilePhotoUrl!.isEmpty)
+                                          ? Text(
+                                              (displayName.isNotEmpty
+                                                      ? displayName[0]
+                                                      : 'U')
+                                                  .toUpperCase(),
+                                              style: GoogleFonts.inter(
+                                                fontSize: 40,
+                                                fontWeight: FontWeight.w700,
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : Colors.black,
+                                              ),
+                                            )
+                                          : null,
+                                    ),
                                   ),
                                 ),
                               ),

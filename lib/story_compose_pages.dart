@@ -8,10 +8,14 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import 'core/files_api.dart';
+import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/story_repository.dart';
+import 'repositories/models/story_music_model.dart';
 import 'services/media_compression_service.dart';
+import 'widgets/story_music_picker_sheet.dart';
 
 enum StoryComposeType { image, video, text, mixed }
 
@@ -106,7 +110,7 @@ class StoryTypePicker {
                   child: const Icon(Icons.perm_media, color: Color(0xFFBFAE01), size: 20),
                 ),
                 const SizedBox(width: 12),
-                Text('Media story', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                Builder(builder: (ctx) => Text(Provider.of<LanguageProvider>(ctx, listen: false).t('story.media_story'), style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14))),
               ],
             ),
           ),
@@ -125,7 +129,7 @@ class StoryTypePicker {
                   child: const Icon(Icons.text_fields, color: Color(0xFFBFAE01), size: 20),
                 ),
                 const SizedBox(width: 12),
-                Text('Text story', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                Builder(builder: (ctx) => Text(Provider.of<LanguageProvider>(ctx, listen: false).t('story.text_story'), style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14))),
               ],
             ),
           ),
@@ -164,7 +168,7 @@ class StoryTypePicker {
                     backgroundColor: const Color(0xFFBFAE01).withValues(alpha: 38),
                     child: const Icon(Icons.perm_media, color: Colors.white),
                   ),
-                  title: Text('Media story', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                  title: Builder(builder: (ctx) => Text(Provider.of<LanguageProvider>(ctx, listen: false).t('story.media_story'), style: GoogleFonts.inter(fontWeight: FontWeight.w600))),
                   trailing: const Icon(Icons.chevron_right, color: Color(0xFF666666)),
                   onTap: () {
                     Navigator.pop(context);
@@ -176,7 +180,7 @@ class StoryTypePicker {
                     backgroundColor: const Color(0xFFBFAE01).withValues(alpha: 38),
                     child: const Icon(Icons.text_fields, color: Colors.white),
                   ),
-                  title: Text('Text story', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                  title: Builder(builder: (ctx) => Text(Provider.of<LanguageProvider>(ctx, listen: false).t('story.text_story'), style: GoogleFonts.inter(fontWeight: FontWeight.w600))),
                   trailing: const Icon(Icons.chevron_right, color: Color(0xFF666666)),
                   onTap: () {
                     Navigator.pop(context);
@@ -192,111 +196,7 @@ class StoryTypePicker {
   }
 }
 
-// Simple music model and picker
-class MusicTrack {
-  final String id;
-  final String title;
-  final String artist;
-  final Duration duration;
-
-  const MusicTrack({
-    required this.id,
-    required this.title,
-    required this.artist,
-    required this.duration,
-  });
-}
-
-const List<MusicTrack> _sampleTracks = [
-  MusicTrack(id: '1', title: 'Sunrise Drive', artist: 'Nexum Beats', duration: Duration(minutes: 2, seconds: 14)),
-  MusicTrack(id: '2', title: 'Golden Hour', artist: 'Nova', duration: Duration(minutes: 3, seconds: 2)),
-  MusicTrack(id: '3', title: 'Focus Flow', artist: 'Deepwork', duration: Duration(minutes: 2, seconds: 47)),
-  MusicTrack(id: '4', title: 'Night Vibes', artist: 'Pulse', duration: Duration(minutes: 2, seconds: 38)),
-  MusicTrack(id: '5', title: 'City Lights', artist: 'Skyline', duration: Duration(minutes: 1, seconds: 55)),
-  MusicTrack(id: '6', title: 'Cloud Surf', artist: 'Aero', duration: Duration(minutes: 2, seconds: 20)),
-];
-
-class _MusicPickerSheet extends StatelessWidget {
-  final List<MusicTrack> tracks;
-  const _MusicPickerSheet({required this.tracks});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.only(top: 8),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFF666666).withValues(alpha: 77),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Icon(Icons.music_note, color: isDark ? Colors.white : Colors.black),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Select music',
-                    style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: tracks.length,
-                separatorBuilder: (context, _) => Divider(
-                  color: const Color(0xFF666666).withValues(alpha: 51),
-                  height: 1,
-                ),
-                itemBuilder: (context, i) {
-                  final t = tracks[i];
-                  String two(int n) => n.toString().padLeft(2, '0');
-                  final mm = two(t.duration.inMinutes.remainder(60));
-                  final ss = two(t.duration.inSeconds.remainder(60));
-                  return ListTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFBFAE01).withValues(alpha: 38),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.music_note, color: Colors.white),
-                    ),
-                    title: Text(
-                      t.title,
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black),
-                    ),
-                    subtitle: Text('${t.artist}  •  $mm:$ss', style: GoogleFonts.inter(color: const Color(0xFF666666))),
-                    onTap: () => Navigator.pop(context, t),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// Music model is now StoryMusicModel from Firebase
 
 class MixedMediaStoryComposerPage extends StatefulWidget {
   const MixedMediaStoryComposerPage({super.key});
@@ -338,11 +238,14 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
   final List<MediaItem> _items = [];
   int _index = 0;
 
-  MusicTrack? _selectedTrack;
+  StoryMusicModel? _selectedTrack;
+  AudioPlayer? _musicPlayer;
+  bool _isMusicPlaying = false;
 
   @override
   void dispose() {
     _pageController.dispose();
+    _musicPlayer?.dispose();
     for (final it in _items) {
       it.videoController?.dispose();
     }
@@ -491,10 +394,31 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
     if (_items.isEmpty) return;
     final current = _items[_index];
     if (!current.isVideo) return;
+    
+    final willUnmute = current.muted;
+    
     setState(() {
       current.muted = !current.muted;
       current.videoController?.setVolume(current.muted ? 0.0 : 1.0);
     });
+    
+    // If unmuting video, stop background music (mutually exclusive like Snapchat)
+    if (willUnmute && _selectedTrack != null) {
+      _stopMusic();
+      setState(() => _selectedTrack = null);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              Provider.of<LanguageProvider>(context, listen: false).t('story.music_removed_for_video'),
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: const Color(0xFFBFAE01),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   void _togglePlayPause() {
@@ -531,14 +455,14 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
   Future<void> _post() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No media selected', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.no_media_selected'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
       return;
     }
 
     try {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uploading...', style: GoogleFonts.inter())),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.uploading'), style: GoogleFonts.inter())),
       );
 
       final filesApi = FilesApi();
@@ -560,6 +484,8 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
               await storyRepo.createStory(
                 mediaType: 'video',
                 mediaUrl: up['url'],
+                audioUrl: _selectedTrack?.audioUrl,
+                audioTitle: _selectedTrack?.title,
                 durationSec: (it.videoDuration?.inSeconds ?? 30).clamp(1, 60),
               );
             } else {
@@ -567,6 +493,8 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
               await storyRepo.createStory(
                 mediaType: 'video',
                 mediaUrl: up['url'],
+                audioUrl: _selectedTrack?.audioUrl,
+                audioTitle: _selectedTrack?.title,
                 durationSec: (it.videoDuration?.inSeconds ?? 30).clamp(1, 60),
               );
             }
@@ -589,7 +517,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
               await storyRepo.createStory(
                 mediaType: 'image',
                 mediaUrl: up['url'],
-                audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                audioUrl: _selectedTrack?.audioUrl,
                 audioTitle: _selectedTrack?.title,
                 durationSec: 15,
               );
@@ -608,7 +536,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
                 await storyRepo.createStory(
                   mediaType: 'image',
                   mediaUrl: up['url'],
-                  audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                  audioUrl: _selectedTrack?.audioUrl,
                   audioTitle: _selectedTrack?.title,
                   durationSec: 15,
                 );
@@ -626,7 +554,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
                   await storyRepo.createStory(
                     mediaType: 'image',
                     mediaUrl: up['url'],
-                    audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                    audioUrl: _selectedTrack?.audioUrl,
                     audioTitle: _selectedTrack?.title,
                     durationSec: 15,
                   );
@@ -635,7 +563,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
                   await storyRepo.createStory(
                     mediaType: 'image',
                     mediaUrl: up['url'],
-                    audioUrl: _selectedTrack != null ? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' : null,
+                    audioUrl: _selectedTrack?.audioUrl,
                     audioTitle: _selectedTrack?.title,
                     durationSec: 15,
                   );
@@ -652,19 +580,19 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
       if (!mounted) return;
       if (ok > 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ok == 1 ? 'Story posted!' : '$ok stories posted!', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
+          SnackBar(content: Text(ok == 1 ? Provider.of<LanguageProvider>(context, listen: false).t('story.story_posted') : '$ok ${Provider.of<LanguageProvider>(context, listen: false).t('story.stories_posted')}', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
         );
         Navigator.pop(context, true);
       } else {
         final msg = lastErr?.toString() ?? 'Unknown error';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to post story: $msg', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+          SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('story.post_failed')}: $msg', style: GoogleFonts.inter()), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to post story: ${e.toString()}', style: GoogleFonts.inter()), backgroundColor: Colors.red),
+        SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('story.post_failed')}: ${e.toString()}', style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
     }
   }
@@ -727,14 +655,14 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
                   if (!it.isVideo)
                     _roundIcon(
                       icon: it.fitCover ? Icons.crop_free : Icons.fit_screen,
-                      tooltip: it.fitCover ? 'Fit contain' : 'Fit cover',
+                      tooltip: it.fitCover ? Provider.of<LanguageProvider>(context, listen: false).t('story.fit_contain') : Provider.of<LanguageProvider>(context, listen: false).t('story.fit_cover'),
                       onTap: _toggleFit,
                     ),
                   if (it.isVideo) ...[
                     const SizedBox(width: 8),
                     _roundIcon(
                       icon: it.muted ? Icons.volume_off : Icons.volume_up,
-                      tooltip: it.muted ? 'Unmute' : 'Mute',
+                      tooltip: it.muted ? Provider.of<LanguageProvider>(context, listen: false).t('story.unmute') : Provider.of<LanguageProvider>(context, listen: false).t('story.mute'),
                       onTap: _toggleMute,
                     ),
                   ],
@@ -785,7 +713,10 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
                         ),
                         const SizedBox(width: 6),
                         GestureDetector(
-                          onTap: () => setState(() => _selectedTrack = null),
+                          onTap: () async {
+                            await _stopMusic();
+                            setState(() => _selectedTrack = null);
+                          },
                           child: const Icon(Icons.close, size: 16, color: Colors.black),
                         ),
                       ],
@@ -852,18 +783,81 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
   }
 
   Future<void> _pickMusic() async {
-    final selected = await showModalBottomSheet<MusicTrack>(
+    // Check if current item is a video - if so, it must be muted to add music
+    final currentItem = _items.isNotEmpty ? _items[_index] : null;
+    final isVideoMuted = currentItem?.isVideo != true || currentItem!.muted;
+    
+    final result = await showModalBottomSheet<dynamic>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => _MusicPickerSheet(tracks: _sampleTracks),
+      isScrollControlled: true,
+      builder: (context) => StoryMusicPickerSheet(
+        currentSelection: _selectedTrack,
+        isVideoMuted: isVideoMuted,
+      ),
     );
+    
     if (!mounted) return;
-    if (selected != null) {
-      setState(() => _selectedTrack = selected);
+    
+    if (result == 'remove') {
+      // Remove music selection
+      await _stopMusic();
+      setState(() => _selectedTrack = null);
+    } else if (result is StoryMusicModel) {
+      // New music selected
+      await _stopMusic();
+      setState(() => _selectedTrack = result);
+      // If video is playing, mute it when music is selected
+      if (currentItem?.isVideo == true && !currentItem!.muted) {
+        _muteVideoForMusic();
+      }
+      // Start playing the music
+      await _playMusic();
+    }
+  }
+  
+  void _muteVideoForMusic() {
+    final currentItem = _items.isNotEmpty ? _items[_index] : null;
+    if (currentItem?.isVideo == true) {
+      currentItem!.muted = true;
+      currentItem.videoController?.setVolume(0);
+      setState(() {});
+    }
+  }
+  
+  Future<void> _playMusic() async {
+    if (_selectedTrack == null) return;
+    
+    _musicPlayer ??= AudioPlayer();
+    
+    try {
+      await _musicPlayer!.play(UrlSource(_selectedTrack!.audioUrl));
+      await _musicPlayer!.setReleaseMode(ReleaseMode.loop);
+      setState(() => _isMusicPlaying = true);
+    } catch (e) {
+      debugPrint('Error playing music: $e');
+    }
+  }
+  
+  Future<void> _stopMusic() async {
+    await _musicPlayer?.stop();
+    setState(() => _isMusicPlaying = false);
+  }
+  
+  Future<void> _pauseMusic() async {
+    await _musicPlayer?.pause();
+    setState(() => _isMusicPlaying = false);
+  }
+  
+  Future<void> _resumeMusic() async {
+    if (_selectedTrack != null) {
+      await _musicPlayer?.resume();
+      setState(() => _isMusicPlaying = true);
     }
   }
 
   void _resetAll() {
+    _stopMusic();
     setState(() {
       for (final item in _items) {
         item.editedImageBytes = null;
@@ -885,12 +879,12 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context)),
-        title: Text(_items.length > 1 ? '${_items.length} Stories' : 'Story',
+        title: Text(_items.length > 1 ? '${_items.length} ${Provider.of<LanguageProvider>(context, listen: false).t('story.stories_count')}' : Provider.of<LanguageProvider>(context, listen: false).t('story.story'),
             style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600)),
         actions: [
           TextButton(
             onPressed: _post,
-            child: Text('Post', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700)),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.post'), style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -966,23 +960,23 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
                   children: [
                     _CircleAction(
                       icon: Icons.edit,
-                      label: 'Edit',
+                      label: Provider.of<LanguageProvider>(context, listen: false).t('story.edit'),
                       enabled: !_items[_index].isVideo,
                       onTap: !_items[_index].isVideo ? _editCurrent : null,
                     ),
                     _CircleAction(
                       icon: Icons.music_note,
-                      label: 'Music',
+                      label: Provider.of<LanguageProvider>(context, listen: false).t('story.music'),
                       onTap: _pickMusic,
                     ),
                     _CircleAction(
                       icon: Icons.add,
-                      label: 'Choose',
+                      label: Provider.of<LanguageProvider>(context, listen: false).t('story.choose'),
                       onTap: _pickMedia,
                     ),
                     _CircleAction(
                       icon: Icons.replay,
-                      label: 'Reset',
+                      label: Provider.of<LanguageProvider>(context, listen: false).t('story.reset'),
                       onTap: _resetAll,
                     ),
                   ],
@@ -1056,7 +1050,7 @@ class _TextStoryComposerPageState extends State<TextStoryComposerPage> {
   Future<void> _postText() async {
     final text = _controller.text.trim();
     if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Write something', style: GoogleFonts.inter())));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.write_something'), style: GoogleFonts.inter())));
       return;
     }
     try {
@@ -1065,13 +1059,13 @@ class _TextStoryComposerPageState extends State<TextStoryComposerPage> {
       await storyRepo.createStory(mediaType: 'text', textContent: text, backgroundColor: hex, durationSec: 15);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Story posted!', style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.story_posted'), style: GoogleFonts.inter()), backgroundColor: const Color(0xFF4CAF50)),
       );
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed to post story: ${e.toString()}', style: GoogleFonts.inter()), backgroundColor: Colors.red));
+          .showSnackBar(SnackBar(content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('story.post_failed')}: ${e.toString()}', style: GoogleFonts.inter()), backgroundColor: Colors.red));
     }
   }
 
@@ -1080,8 +1074,8 @@ class _TextStoryComposerPageState extends State<TextStoryComposerPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: Text('Text Story', style: GoogleFonts.inter()),
-        actions: [TextButton(onPressed: _postText, child: Text('Post', style: GoogleFonts.inter(fontWeight: FontWeight.w700)))],
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.text_story'), style: GoogleFonts.inter()),
+        actions: [TextButton(onPressed: _postText, child: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.post'), style: GoogleFonts.inter(fontWeight: FontWeight.w700)))],
       ),
       body: Column(
         children: [
@@ -1095,7 +1089,7 @@ class _TextStoryComposerPageState extends State<TextStoryComposerPage> {
                 maxLines: null,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(fontSize: 22, color: Colors.white, height: 1.3),
-                decoration: const InputDecoration(border: InputBorder.none, hintText: 'Type your story...'),
+                decoration: InputDecoration(border: InputBorder.none, hintText: Provider.of<LanguageProvider>(context, listen: false).t('story.type_your_story')),
               ),
             ),
           ),
@@ -1141,12 +1135,12 @@ class _PickPlaceholder extends StatelessWidget {
           child: const Icon(Icons.perm_media, color: Colors.white, size: 36),
         ),
         const SizedBox(height: 12),
-        Text('Select images and videos', style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 179), fontSize: 16)),
+        Builder(builder: (ctx) => Text(Provider.of<LanguageProvider>(ctx, listen: false).t('story.select_images_videos'), style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 179), fontSize: 16))),
         const SizedBox(height: 8),
         ElevatedButton(
           onPressed: onPick,
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBFAE01)),
-          child: Text('Pick Media', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600)),
+          child: Builder(builder: (ctx) => Text(Provider.of<LanguageProvider>(ctx, listen: false).t('story.pick_media'), style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w600))),
         ),
       ],
     );

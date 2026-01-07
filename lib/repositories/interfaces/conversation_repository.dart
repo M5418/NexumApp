@@ -42,6 +42,7 @@ class ConversationSummaryModel {
 
 abstract class ConversationRepository {
   Future<List<ConversationSummaryModel>> list({int limit = 50});
+  Stream<List<ConversationSummaryModel>> listStream({int limit = 50});
   Future<String> createOrGet(String otherUserId);
   Future<void> markRead(String conversationId);
   Future<void> mute(String conversationId);

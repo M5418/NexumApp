@@ -18,8 +18,7 @@ import '../widgets/chat_input.dart';
 import '../widgets/attachment_dropdown_menu.dart';
 import '../widgets/message_actions_sheet.dart';
 import '../widgets/media_preview_page.dart';
-import '../other_user_profile_page.dart';
-import '../profile_page.dart';
+import '../utils/profile_navigation.dart';
 import '../repositories/interfaces/mentorship_repository.dart';
 import '../repositories/interfaces/storage_repository.dart';
 import '../core/profile_api.dart';
@@ -751,26 +750,13 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         ),
         title: GestureDetector(
           onTap: () {
-            final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-            if (currentUserId == widget.mentorUserId) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-              );
-            } else {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  settings: const RouteSettings(name: 'other_user_profile'),
-                  builder: (context) => OtherUserProfilePage(
-                    userId: widget.mentorUserId,
-                    userName: widget.mentorName,
-                    userAvatarUrl: widget.mentorAvatar,
-                    userBio: '',
-                  ),
-                ),
-              );
-            }
+            navigateToUserProfile(
+              context: context,
+              userId: widget.mentorUserId,
+              userName: widget.mentorName,
+              userAvatarUrl: widget.mentorAvatar,
+              userBio: '',
+            );
           },
           child: Row(children: [
             ClipRRect(

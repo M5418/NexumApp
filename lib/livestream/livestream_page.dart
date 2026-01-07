@@ -11,7 +11,7 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import '../core/i18n/language_provider.dart';
 import '../repositories/interfaces/livestream_repository.dart';
 import '../repositories/models/livestream_model.dart';
-import '../other_user_profile_page.dart';
+import '../utils/profile_navigation.dart';
 import '../services/agora_service.dart';
 import '../services/agora_token_service.dart';
 import '../widgets/agora_web_video.dart';
@@ -510,17 +510,12 @@ class _LiveStreamPageState extends State<LiveStreamPage>
           GestureDetector(
             onTap: () {
               if (_stream?.hostId != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    settings: const RouteSettings(name: 'other_user_profile'),
-                    builder: (_) => OtherUserProfilePage(
-                      userId: _stream!.hostId,
-                      userName: _stream!.hostName,
-                      userAvatarUrl: _stream!.hostAvatarUrl,
-                      userBio: '',
-                    ),
-                  ),
+                navigateToUserProfile(
+                  context: context,
+                  userId: _stream!.hostId,
+                  userName: _stream!.hostName,
+                  userAvatarUrl: _stream!.hostAvatarUrl,
+                  userBio: '',
                 );
               }
             },

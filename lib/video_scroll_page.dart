@@ -17,8 +17,7 @@ import 'widgets/custom_video_player.dart';
 import 'widgets/reaction_picker.dart';
 import 'widgets/comment_bottom_sheet.dart';
 import 'widgets/share_bottom_sheet.dart';
-import 'other_user_profile_page.dart';
-import 'profile_page.dart';
+import 'utils/profile_navigation.dart';
 import 'services/content_analytics_service.dart';
 import 'core/post_events.dart';
 import 'providers/follow_state.dart';
@@ -993,26 +992,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
                 // User info
                 GestureDetector(
                   onTap: () {
-                    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-                    if (currentUserId == post.authorId) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(settings: const RouteSettings(name: 'post_detail'), builder: (context) => const ProfilePage()),
-                      );
-                    } else {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings: const RouteSettings(name: 'other_user_profile'),
-                          builder: (context) => OtherUserProfilePage(
-                            userId: post.authorId,
-                            userName: post.userName,
-                            userAvatarUrl: post.userAvatarUrl,
-                            userBio: '',
-                          ),
-                        ),
-                      );
-                    }
+                    navigateToUserProfile(
+                      context: context,
+                      userId: post.authorId,
+                      userName: post.userName,
+                      userAvatarUrl: post.userAvatarUrl,
+                      userBio: '',
+                    );
                   },
                   child: Row(
                     children: [

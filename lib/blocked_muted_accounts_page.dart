@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/block_repository.dart';
 import 'repositories/interfaces/mute_repository.dart';
-import 'other_user_profile_page.dart';
-import 'profile_page.dart';
+import 'utils/profile_navigation.dart';
 
 class BlockedMutedAccountsPage extends StatefulWidget {
   const BlockedMutedAccountsPage({super.key});
@@ -227,26 +225,13 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
           ),
           child: ListTile(
             onTap: () {
-              final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-              if (currentUserId == user.blockedUid) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (_) => const ProfilePage()),
-                );
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    settings: const RouteSettings(name: 'other_user_profile'),
-                    builder: (context) => OtherUserProfilePage(
-                      userId: user.blockedUid,
-                      userName: user.blockedUsername ?? 'Unknown',
-                      userAvatarUrl: user.blockedAvatarUrl ?? '',
-                      userBio: '',
-                    ),
-                  ),
-                );
-              }
+              navigateToUserProfile(
+                context: context,
+                userId: user.blockedUid,
+                userName: user.blockedUsername ?? 'Unknown',
+                userAvatarUrl: user.blockedAvatarUrl ?? '',
+                userBio: '',
+              );
             },
             leading: CircleAvatar(
               backgroundImage: user.blockedAvatarUrl != null && user.blockedAvatarUrl!.isNotEmpty
@@ -302,26 +287,13 @@ class _BlockedMutedAccountsPageState extends State<BlockedMutedAccountsPage>
           ),
           child: ListTile(
             onTap: () {
-              final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-              if (currentUserId == user.mutedUid) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (_) => const ProfilePage()),
-                );
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    settings: const RouteSettings(name: 'other_user_profile'),
-                    builder: (context) => OtherUserProfilePage(
-                      userId: user.mutedUid,
-                      userName: user.mutedUsername ?? 'Unknown',
-                      userAvatarUrl: user.mutedAvatarUrl ?? '',
-                      userBio: '',
-                    ),
-                  ),
-                );
-              }
+              navigateToUserProfile(
+                context: context,
+                userId: user.mutedUid,
+                userName: user.mutedUsername ?? 'Unknown',
+                userAvatarUrl: user.mutedAvatarUrl ?? '',
+                userBio: '',
+              );
             },
             leading: CircleAvatar(
               backgroundImage: user.mutedAvatarUrl != null && user.mutedAvatarUrl!.isNotEmpty

@@ -49,14 +49,16 @@ import 'responsive/responsive_breakpoints.dart';
 import 'core/i18n/language_provider.dart';
 
 class HomeFeedPage extends StatefulWidget {
-  const HomeFeedPage({super.key});
+  final int initialNavIndex;
+  
+  const HomeFeedPage({super.key, this.initialNavIndex = 0});
 
   @override
   State<HomeFeedPage> createState() => _HomeFeedPageState();
 }
 
 class _HomeFeedPageState extends State<HomeFeedPage> {
-  int _selectedNavIndex = 0;
+  late int _selectedNavIndex;
   List<Post> _posts = [];
   bool _isInitialLoading = true; // Show skeletons on first load
   List<StoryRingModel> _storyRings = [];
@@ -95,6 +97,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   @override
   void initState() {
     super.initState();
+    _selectedNavIndex = widget.initialNavIndex;
     // ULTRA-FAST: Load cached posts INSTANTLY, then refresh
     () async {
       // 1. INSTANT: Show cached posts immediately (no await on user ID)
@@ -385,7 +388,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       final storyRepo = context.read<StoryRepository>();
       var rings = await storyRepo.getStoryRings();
       
-      rings = _sortStoryRings(rings);
+      rings = await _sortStoryRingsAsync(rings, storyRepo);
       
       if (!mounted) return;
       setState(() {
@@ -435,6 +438,48 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         storyCount: 0,
         stories: const [],
       );
+    }
+    
+    final unseenRings = rings.where((r) => r.hasUnseen).toList();
+    final seenRings = rings.where((r) => !r.hasUnseen).toList();
+    return [myRing, ...unseenRings, ...seenRings];
+  }
+
+  /// Sort story rings with async fetch for user's own stories
+  Future<List<StoryRingModel>> _sortStoryRingsAsync(List<StoryRingModel> rings, StoryRepository storyRepo) async {
+    if (_currentUserId == null) return rings;
+    
+    final myRingIndex = rings.indexWhere((r) => r.userId == _currentUserId);
+    StoryRingModel? myRing;
+    
+    if (myRingIndex >= 0) {
+      myRing = rings.removeAt(myRingIndex);
+    } else {
+      // User's ring not in list - fetch their stories directly
+      try {
+        final myStories = await storyRepo.getUserStories(_currentUserId!);
+        myRing = StoryRingModel(
+          userId: _currentUserId!,
+          userName: '',
+          userAvatar: null,
+          hasUnseen: false,
+          lastStoryAt: myStories.isNotEmpty ? myStories.first.createdAt : DateTime.now(),
+          thumbnailUrl: myStories.isNotEmpty ? myStories.first.mediaUrl : null,
+          storyCount: myStories.length,
+          stories: myStories,
+        );
+      } catch (_) {
+        myRing = StoryRingModel(
+          userId: _currentUserId!,
+          userName: '',
+          userAvatar: null,
+          hasUnseen: false,
+          lastStoryAt: DateTime.now(),
+          thumbnailUrl: null,
+          storyCount: 0,
+          stories: const [],
+        );
+      }
     }
     
     final unseenRings = rings.where((r) => r.hasUnseen).toList();
@@ -2476,9 +2521,28 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                                 : Provider.of<LanguageProvider>(context, listen: false).t('feed.user')),
                                     isMine: isMine,
                                     isSeen: !ring.hasUnseen,
+                                    hasActiveStories: isMine && ring.stories.isNotEmpty,
 
-                                    // Remove the + icon from Your Story ring
-                                    onAddTap: null,
+                                    // Show + icon only when user has active stories
+                                    onAddTap: (isMine && ring.stories.isNotEmpty) ? () {
+                                      StoryTypePicker.show(
+                                        context,
+                                        position: const Offset(16, 120),
+                                        onSelected: (type) async {
+                                          if (_useDesktopPopup(context)) {
+                                            await StoryComposerPopup.show(context, type: type);
+                                          } else {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                settings: const RouteSettings(name: 'story_composer'),
+                                                builder: (_) => _composerPage(type),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      );
+                                    } : null,
                                     onTap: () async {
                                   if (isMine) {
                                     // Check if user has any ACTIVE stories (not expired)
@@ -2489,31 +2553,42 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     }).toList();
                                     
                                     if (activeStories.isNotEmpty && _currentUserId != null) {
-                                      // User has active stories - show bottom sheet
-                                      MyStoriesBottomSheet.show(
-                                        context,
-                                        currentUserId: _currentUserId!,
-                                        onAddStory: () {
-                                          StoryTypePicker.show(
-                                            context,
-                                            onSelected: (type) async {
-                                              if (_useDesktopPopup(context)) {
-                                                await StoryComposerPopup.show(
-                                                    context,
-                                                    type: type);
-                                              } else {
-                                                await Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                      settings: const RouteSettings(name: 'story_composer'),
-                                                      builder: (_) =>
-                                                          _composerPage(type)),
-                                                );
-                                              }
-                                            },
-                                          );
-                                        },
-                                      );
+                                      // User has active stories - open story viewer (like other users)
+                                      if (_useDesktopPopup(context)) {
+                                        await StoryViewerPopup.show(
+                                          context,
+                                          rings: _storyRings
+                                              .map((r) => {
+                                                    'userId': r.userId,
+                                                    'imageUrl': r.userAvatar,
+                                                    'label': r.userName,
+                                                    'isMine': r.userId == _currentUserId,
+                                                    'isSeen': !r.hasUnseen,
+                                                  })
+                                              .toList(),
+                                          initialRingIndex: index,
+                                        );
+                                      } else {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            settings: const RouteSettings(name: 'story_viewer'),
+                                            builder: (_) => StoryViewerPage(
+                                              rings: _storyRings
+                                                  .map((r) => {
+                                                        'userId': r.userId,
+                                                        'imageUrl': r.userAvatar,
+                                                        'label': r.userName,
+                                                        'isMine': r.userId == _currentUserId,
+                                                        'isSeen': !r.hasUnseen,
+                                                      })
+                                                  .toList(),
+                                              initialRingIndex: index,
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      await _loadData(); // refresh rings after viewing
                                     } else {
                                       // No active stories - show type picker as popup near ring
                                       StoryTypePicker.show(

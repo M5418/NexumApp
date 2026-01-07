@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../repositories/interfaces/story_repository.dart';
+import '../core/i18n/language_provider.dart';
 
 class MyStoriesBottomSheet extends StatefulWidget {
   final String currentUserId;
@@ -156,29 +157,29 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
   String _label(StoryModel story) {
     if (story.mediaType == 'text') {
       final t = (story.textContent ?? '').trim();
-      return t.isEmpty ? 'Text story' : (t.length > 30 ? '${t.substring(0, 30)}...' : t);
+      return t.isEmpty ? Provider.of<LanguageProvider>(context, listen: false).t('story.text_story') : (t.length > 30 ? '${t.substring(0, 30)}...' : t);
     }
-    return story.mediaType == 'image' ? 'Image story' : 'Video story';
+    return story.mediaType == 'image' ? Provider.of<LanguageProvider>(context, listen: false).t('story.image_story') : Provider.of<LanguageProvider>(context, listen: false).t('story.video_story');
   }
 
   Future<void> _confirmDelete(StoryModel story) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Story?', style: GoogleFonts.inter()),
+        title: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.delete_story_title'), style: GoogleFonts.inter()),
         content: Text(
-          'This story will be permanently deleted. This action cannot be undone.',
+          Provider.of<LanguageProvider>(context, listen: false).t('story.delete_story_message'),
           style: GoogleFonts.inter(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: GoogleFonts.inter(color: const Color(0xFF666666))),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.cancel'), style: GoogleFonts.inter(color: const Color(0xFF666666))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text('Delete', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            child: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.delete'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -203,7 +204,7 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Story deleted', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.story_deleted'), style: GoogleFonts.inter()),
             backgroundColor: const Color(0xFFBFAE01),
             duration: const Duration(seconds: 2),
           ),
@@ -214,7 +215,7 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to delete story', style: GoogleFonts.inter()),
+            content: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.delete_failed'), style: GoogleFonts.inter()),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 2),
           ),
@@ -251,7 +252,7 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
             Row(
               children: [
                 Text(
-                  'Your Stories',
+                  Provider.of<LanguageProvider>(context, listen: false).t('story.your_stories'),
                   style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -271,7 +272,7 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   icon: const Icon(Icons.add, size: 18),
-                  label: Text('Add Story', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                  label: Text(Provider.of<LanguageProvider>(context, listen: false).t('story.add_story'), style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
@@ -287,7 +288,7 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 40),
                 child: Text(
-                  'No active stories. Tap “Add Story”.',
+                  Provider.of<LanguageProvider>(context, listen: false).t('story.no_active_stories'),
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: isDark ? Colors.white70 : Colors.black54,
@@ -343,7 +344,7 @@ class _MyStoriesBottomSheetState extends State<MyStoriesBottomSheet> {
                             color: isDark ? Colors.white70 : Colors.black54,
                           ),
                           onPressed: () => _confirmDelete(it),
-                          tooltip: 'Delete story',
+                          tooltip: Provider.of<LanguageProvider>(context, listen: false).t('story.delete_story'),
                         ),
                       ],
                     );

@@ -98,6 +98,19 @@ class FirebaseConversationRepository implements ConversationRepository {
     }
   }
 
+  @override
+  Stream<List<ConversationSummaryModel>> listStream({int limit = 50}) {
+    final u = _auth.currentUser;
+    if (u == null) return Stream.value([]);
+    
+    return _convs
+        .where('participants', arrayContains: u.uid)
+        .orderBy('lastMessageAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => _fromDoc(d, u.uid)).toList());
+  }
+
   /// FAST: Get conversations from cache first (instant)
   Future<List<ConversationSummaryModel>> listFromCache({int limit = 50}) async {
     try {

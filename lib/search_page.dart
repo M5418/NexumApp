@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'providers/follow_state.dart';
 
 import 'widgets/post_card.dart';
@@ -14,8 +13,7 @@ import 'models/post.dart';
 import 'widgets/community_card.dart';
 import 'conversations_page.dart'; // for CommunityItem model
 import 'community_page.dart';
-import 'other_user_profile_page.dart';
-import 'profile_page.dart';
+import 'utils/profile_navigation.dart';
 
 import 'repositories/firebase/firebase_search_repository.dart';
 import 'repositories/interfaces/search_repository.dart';
@@ -431,26 +429,13 @@ class _UserRowTile extends StatelessWidget {
       ),
       child: GestureDetector(
         onTap: () {
-          final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-          if (currentUserId == user.id) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-            );
-          } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                settings: const RouteSettings(name: 'other_user_profile'),
-                builder: (context) => OtherUserProfilePage(
-                  userId: user.id,
-                  userName: user.name,
-                  userAvatarUrl: user.avatarUrl,
-                  userBio: '',
-                ),
-              ),
-            );
-          }
+          navigateToUserProfile(
+            context: context,
+            userId: user.id,
+            userName: user.name,
+            userAvatarUrl: user.avatarUrl,
+            userBio: '',
+          );
         },
         child: Row(
           children: [

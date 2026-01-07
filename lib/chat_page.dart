@@ -25,8 +25,7 @@ import 'core/profile_api.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'widgets/media_preview_page.dart';
 import 'core/video_utils_stub.dart' if (dart.library.io) 'core/video_utils_io.dart';
-import 'other_user_profile_page.dart';
-import 'profile_page.dart';
+import 'utils/profile_navigation.dart';
 import 'services/media_compression_service.dart';
 import 'core/i18n/language_provider.dart';
 
@@ -1426,26 +1425,13 @@ void dispose() {
       ),
       title: GestureDetector(
         onTap: () {
-          final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-          if (currentUserId == widget.otherUser.id) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-            );
-          } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                settings: const RouteSettings(name: 'other_user_profile'),
-                builder: (context) => OtherUserProfilePage(
-                  userId: widget.otherUser.id,
-                  userName: widget.otherUser.name,
-                  userAvatarUrl: widget.otherUser.avatarUrl ?? '',
-                  userBio: '',
-                ),
-              ),
-            );
-          }
+          navigateToUserProfile(
+            context: context,
+            userId: widget.otherUser.id,
+            userName: widget.otherUser.name,
+            userAvatarUrl: widget.otherUser.avatarUrl ?? '',
+            userBio: '',
+          );
         },
         child: Row(
           children: [

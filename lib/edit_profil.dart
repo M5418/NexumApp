@@ -11,6 +11,7 @@ import 'services/media_compression_service.dart';
 import 'interest_selection_page.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'core/admin_config.dart';
+import 'widgets/expandable_photo_viewer.dart';
 
 class ExperienceItem {
   final String title;
@@ -598,34 +599,44 @@ class _EditProfilPageState extends State<EditProfilPage> {
                   borderRadius: BorderRadius.circular(20),
                   child: Stack(
                     children: [
-                      Container(
-                        height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: isDarkMode
-                              ? const Color(0xFF1A1A1A)
-                              : Colors.white,
-                          image: hasCover
-                              ? DecorationImage(
-                                  image: _coverProvider()!,
-                                  fit: BoxFit.cover,
+                      GestureDetector(
+                        onTap: hasCover && _remoteCoverUrl != null && _remoteCoverUrl!.isNotEmpty
+                            ? () => showExpandablePhoto(
+                                  context: context,
+                                  imageUrl: _remoteCoverUrl,
+                                  isProfilePhoto: false,
+                                  heroTag: 'edit_profile_cover',
+                                )
+                            : null,
+                        child: Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? const Color(0xFF1A1A1A)
+                                : Colors.white,
+                            image: hasCover
+                                ? DecorationImage(
+                                    image: _coverProvider()!,
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: !hasCover
+                              ? Center(
+                                  child: Text(
+                                    'Add cover image',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: isDarkMode
+                                          ? Colors.white70
+                                          : const Color(0xFF666666),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                                 )
                               : null,
                         ),
-                        child: !hasCover
-                            ? Center(
-                                child: Text(
-                                  'Add cover image',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    color: isDarkMode
-                                        ? Colors.white70
-                                        : const Color(0xFF666666),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              )
-                            : null,
                       ),
                       if (_uploadingCover)
                         Positioned.fill(
@@ -678,36 +689,47 @@ class _EditProfilPageState extends State<EditProfilPage> {
                   child: Center(
                     child: Stack(
                       children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isDarkMode
-                                  ? const Color(0xFF1F1F1F)
-                                  : Colors.white,
-                              width: 4,
-                            ),
-                          ),
-                          child: CircleAvatar(
-                            radius: 58,
-                            backgroundColor: isDarkMode
-                                ? const Color(0xFF1A1A1A)
-                                : Colors.white,
-                            backgroundImage: _profileProvider(),
-                            child: _profileProvider() == null
-                                ? Text(
-                                    initialLetter,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 40,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDarkMode
-                                          ? Colors.white
-                                          : Colors.black,
-                                    ),
+                        GestureDetector(
+                          onTap: _remoteProfileUrl != null && _remoteProfileUrl!.isNotEmpty
+                              ? () => showExpandablePhoto(
+                                    context: context,
+                                    imageUrl: _remoteProfileUrl,
+                                    isProfilePhoto: true,
+                                    heroTag: 'edit_profile_avatar',
+                                    fallbackInitial: initialLetter,
                                   )
-                                : null,
+                              : null,
+                          child: Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isDarkMode
+                                    ? const Color(0xFF1F1F1F)
+                                    : Colors.white,
+                                width: 4,
+                              ),
+                            ),
+                            child: CircleAvatar(
+                              radius: 58,
+                              backgroundColor: isDarkMode
+                                  ? const Color(0xFF1A1A1A)
+                                  : Colors.white,
+                              backgroundImage: _profileProvider(),
+                              child: _profileProvider() == null
+                                  ? Text(
+                                      initialLetter,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 40,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDarkMode
+                                            ? Colors.white
+                                            : Colors.black,
+                                      ),
+                                    )
+                                  : null,
+                            ),
                           ),
                         ),
                         if (_uploadingProfile)

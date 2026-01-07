@@ -108,6 +108,13 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
     
+    // Story music uploads (admin only - using hardcoded admin UID)
+    match /story_music/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == 'pRtNrwPbDQZLyo8Sx5Tpski8rLj1';
+      allow delete: if signedIn() && request.auth.uid == 'pRtNrwPbDQZLyo8Sx5Tpski8rLj1';
+    }
+    
     // Support ticket attachments (screenshots, error images)
     match /support_attachments/{fileName} {
       allow read: if signedIn();  // Users can see attachments in their tickets, office users can see all

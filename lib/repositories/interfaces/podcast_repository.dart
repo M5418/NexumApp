@@ -148,6 +148,7 @@ abstract class PodcastRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? coverThumbUrl,
     String? audioUrl,
     int? durationSec,
     String? language,

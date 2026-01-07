@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import '../other_user_profile_page.dart';
+import '../utils/profile_navigation.dart';
 import '../providers/follow_state.dart';
 import '../core/i18n/language_provider.dart';
 
@@ -57,20 +57,15 @@ class _ConnectionCardState extends State<ConnectionCard> {
           widget.onTap!.call();
           return;
         }
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            settings: const RouteSettings(name: 'other_user_profile'),
-            builder: (context) => OtherUserProfilePage(
-              userId: widget.userId,
-              userName: widget.fullName,
-              userAvatarUrl: widget.avatarUrl,
-              userBio: widget.bio,
-              userCoverUrl: widget.coverUrl,
-              isConnected: connected,
-              theyConnectToYou: widget.theyConnectToYou,
-            ),
-          ),
+        navigateToUserProfile(
+          context: context,
+          userId: widget.userId,
+          userName: widget.fullName,
+          userAvatarUrl: widget.avatarUrl,
+          userBio: widget.bio,
+          userCoverUrl: widget.coverUrl,
+          isConnected: connected,
+          theyConnectToYou: widget.theyConnectToYou,
         );
       },
       child: Container(

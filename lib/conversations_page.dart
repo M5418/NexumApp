@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -98,6 +99,7 @@ class _ConversationsPageState extends State<ConversationsPage>
   bool _loadingConversations = false;
   String? _errorConversations;
   final List<ChatItem> _chats = [];
+  StreamSubscription<List<ConversationSummaryModel>>? _conversationsSubscription;
   
   // Groups state
   final FirebaseGroupRepository _groupRepo = FirebaseGroupRepository();
@@ -160,6 +162,34 @@ class _ConversationsPageState extends State<ConversationsPage>
     _loadGroups();
     _loadCommunities();
     _loadUnreadNotifications();
+    
+    // Subscribe to real-time conversation updates for unread badges
+    _subscribeToConversations();
+  }
+  
+  void _subscribeToConversations() {
+    _conversationsSubscription?.cancel();
+    _conversationsSubscription = _convRepo.listStream().listen((list) {
+      if (!mounted) return;
+      final mapped = list
+          .map((c) => ChatItem(
+                conversationId: c.id,
+                id: c.otherUserId,
+                name: c.otherUser.name,
+                avatarUrl: c.otherUser.avatarUrl ?? '',
+                lastType: _mapLastType(c.lastMessageType),
+                lastText: _cleanLastMessageText(c.lastMessageText),
+                lastTime: _formatTime(c.lastMessageAt),
+                lastMessageAt: c.lastMessageAt,
+                unreadCount: c.unreadCount,
+                muted: c.muted,
+              ))
+          .toList();
+      setState(() {
+        _chats.clear();
+        _chats.addAll(mapped);
+      });
+    });
   }
   
   void _onAppCacheChanged() {
@@ -246,6 +276,7 @@ class _ConversationsPageState extends State<ConversationsPage>
   
   @override
   void dispose() {
+    _conversationsSubscription?.cancel();
     ConversationUpdateNotifier().removeListener(_onConversationUpdated);
     _appCache.removeListener(_onAppCacheChanged);
     _tabController.dispose();
@@ -1602,17 +1633,19 @@ class ChatListTile extends StatelessWidget {
                         if (item.unreadCount > 0) const SizedBox(width: 8),
                         if (item.unreadCount > 0)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF007AFF),
-                              shape: BoxShape.circle,
+                            constraints: const BoxConstraints(minWidth: 20),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFBFAE01),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              '${item.unreadCount}',
+                              item.unreadCount > 99 ? '99+' : '${item.unreadCount}',
+                              textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black,
                               ),
                             ),
                           ),

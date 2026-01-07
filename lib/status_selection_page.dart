@@ -145,6 +145,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                   children: [
                     Expanded(
                       child: _buildStatusOption(
+                        'Entrepreneur',
                         Provider.of<LanguageProvider>(context, listen: false).t('status.entrepreneur'),
                         _selectedStatus == 'Entrepreneur',
                         isDarkMode,
@@ -153,6 +154,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: _buildStatusOption(
+                        'Investor',
                         Provider.of<LanguageProvider>(context, listen: false).t('status.investor'),
                         _selectedStatus == 'Investor',
                         isDarkMode,
@@ -256,6 +258,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                                   children: [
                                     Expanded(
                                       child: _buildStatusOption(
+                                        'Entrepreneur',
                                         Provider.of<LanguageProvider>(context, listen: false).t('status.entrepreneur'),
                                         _selectedStatus == 'Entrepreneur',
                                         isDarkMode,
@@ -264,6 +267,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                                     const SizedBox(width: 16),
                                     Expanded(
                                       child: _buildStatusOption(
+                                        'Investor',
                                         Provider.of<LanguageProvider>(context, listen: false).t('status.investor'),
                                         _selectedStatus == 'Investor',
                                         isDarkMode,
@@ -312,9 +316,9 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
     );
   }
 
-  Widget _buildStatusOption(String status, bool isSelected, bool isDarkMode) {
+  Widget _buildStatusOption(String statusKey, String displayLabel, bool isSelected, bool isDarkMode) {
     return GestureDetector(
-      onTap: () => _selectStatus(status),
+      onTap: () => _selectStatus(statusKey),
       child: Container(
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -342,7 +346,7 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              status,
+              displayLabel,
               style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,

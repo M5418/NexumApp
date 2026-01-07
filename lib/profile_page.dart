@@ -39,6 +39,8 @@ import 'responsive/responsive_breakpoints.dart';
 import 'support_page.dart';
 import 'help_center_page.dart';
 import 'services/profile_cache_service.dart';
+import 'widgets/expandable_photo_viewer.dart';
+import 'story_music_list_page.dart';
 
 class ProfilePage extends StatefulWidget {
   final bool hideDesktopTopNav;
@@ -1337,21 +1339,30 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: Column(
                       children: [
                         // Profile Header with Cover Image
-                        Container(
-                          height: 200,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF1A1A1A)
-                                : Colors.grey[200],
-                            image: (coverUrl != null && coverUrl.isNotEmpty)
-                                ? DecorationImage(
-                                    image: NetworkImage(coverUrl),
-                                    fit: BoxFit.cover,
+                        GestureDetector(
+                          onTap: (coverUrl != null && coverUrl.isNotEmpty)
+                              ? () => showExpandablePhoto(
+                                    context: context,
+                                    imageUrl: coverUrl,
+                                    isProfilePhoto: false,
+                                    heroTag: 'profile_cover_$_myUserId',
                                   )
-                                : null,
-                          ),
-                          child: Stack(
+                              : null,
+                          child: Container(
+                            height: 200,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1A1A1A)
+                                  : Colors.grey[200],
+                              image: (coverUrl != null && coverUrl.isNotEmpty)
+                                  ? DecorationImage(
+                                      image: NetworkImage(coverUrl),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: Stack(
                             children: [
                               SafeArea(
                                 child: Padding(
@@ -1387,6 +1398,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                             ],
+                            ),
                           ),
                         ), // Main Profile Card
                         Container(
@@ -1416,45 +1428,56 @@ class _ProfilePageState extends State<ProfilePage> {
                                     // Avatar positioned to overlap cover
                                     Transform.translate(
                                       offset: const Offset(0, -50),
-                                      child: Container(
-                                        width: 120,
-                                        height: 120,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: isDark
-                                                ? const Color(0xFF1F1F1F)
-                                                : Colors.white,
-                                            width: 4,
-                                          ),
-                                        ),
-                                        child: CircleAvatar(
-                                          radius: 58,
-                                          backgroundImage:
-                                              (profileUrl != null &&
-                                                  profileUrl.isNotEmpty)
-                                              ? NetworkImage(profileUrl)
-                                              : null,
-                                          child:
-                                              (profileUrl == null ||
-                                                  profileUrl.isEmpty)
-                                              ? Text(
-                                                  (fullName.isNotEmpty
-                                                          ? fullName.substring(
-                                                              0,
-                                                              1,
-                                                            )
-                                                          : '?')
-                                                      .toUpperCase(),
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 40,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: isDark
-                                                        ? Colors.white
-                                                        : Colors.black,
-                                                  ),
+                                      child: GestureDetector(
+                                        onTap: (profileUrl != null && profileUrl.isNotEmpty)
+                                            ? () => showExpandablePhoto(
+                                                  context: context,
+                                                  imageUrl: profileUrl,
+                                                  isProfilePhoto: true,
+                                                  heroTag: 'profile_avatar_$_myUserId',
+                                                  fallbackInitial: fullName.isNotEmpty ? fullName.substring(0, 1) : '?',
                                                 )
-                                              : null,
+                                            : null,
+                                        child: Container(
+                                          width: 120,
+                                          height: 120,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: isDark
+                                                  ? const Color(0xFF1F1F1F)
+                                                  : Colors.white,
+                                              width: 4,
+                                            ),
+                                          ),
+                                          child: CircleAvatar(
+                                            radius: 58,
+                                            backgroundImage:
+                                                (profileUrl != null &&
+                                                    profileUrl.isNotEmpty)
+                                                ? NetworkImage(profileUrl)
+                                                : null,
+                                            child:
+                                                (profileUrl == null ||
+                                                    profileUrl.isEmpty)
+                                                ? Text(
+                                                    (fullName.isNotEmpty
+                                                            ? fullName.substring(
+                                                                0,
+                                                                1,
+                                                              )
+                                                            : '?')
+                                                        .toUpperCase(),
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 40,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: isDark
+                                                          ? Colors.white
+                                                          : Colors.black,
+                                                    ),
+                                                  )
+                                                : null,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -2472,59 +2495,69 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Column(
                             children: [
                               // Cover
-                              Container(
-                                height: 200,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? const Color(0xFF1A1A1A)
-                                      : Colors.grey[200],
-                                  image:
-                                      (coverUrl != null && coverUrl.isNotEmpty)
-                                      ? DecorationImage(
-                                          image: NetworkImage(coverUrl),
-                                          fit: BoxFit.cover,
+                              GestureDetector(
+                                onTap: (coverUrl != null && coverUrl.isNotEmpty)
+                                    ? () => showExpandablePhoto(
+                                          context: context,
+                                          imageUrl: coverUrl,
+                                          isProfilePhoto: false,
+                                          heroTag: 'profile_cover_desktop_$_myUserId',
                                         )
-                                      : null,
-                                ),
-                                child: Stack(
-                                  children: [
-                                    SafeArea(
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.end,
-                                          children: [
-                                            InkWell(
-                                              onTap: () => scaffoldKey
-                                                  .currentState
-                                                  ?.openEndDrawer(),
-                                              child: Icon(
-                                                Icons.more_horiz,
-                                                color: isDark
-                                                    ? Colors.white70
-                                                    : Colors.black87,
+                                    : null,
+                                child: Container(
+                                  height: 200,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF1A1A1A)
+                                        : Colors.grey[200],
+                                    image:
+                                        (coverUrl != null && coverUrl.isNotEmpty)
+                                        ? DecorationImage(
+                                            image: NetworkImage(coverUrl),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      SafeArea(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.end,
+                                            children: [
+                                              InkWell(
+                                                onTap: () => scaffoldKey
+                                                    .currentState
+                                                    ?.openEndDrawer(),
+                                                child: Icon(
+                                                  Icons.more_horiz,
+                                                  color: isDark
+                                                      ? Colors.white70
+                                                      : Colors.black87,
+                                                ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    if (coverUrl == null || coverUrl.isEmpty)
-                                      Center(
-                                        child: Text(
-                                          Provider.of<LanguageProvider>(context, listen: false).t('profile.add_cover_image'),
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            color: isDark
-                                                ? Colors.white70
-                                                : const Color(0xFF666666),
-                                            fontWeight: FontWeight.w500,
+                                            ],
                                           ),
                                         ),
                                       ),
-                                  ],
+                                      if (coverUrl == null || coverUrl.isEmpty)
+                                        Center(
+                                          child: Text(
+                                            Provider.of<LanguageProvider>(context, listen: false).t('profile.add_cover_image'),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : const Color(0xFF666666),
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
 
@@ -2556,50 +2589,61 @@ class _ProfilePageState extends State<ProfilePage> {
                                           // Avatar positioned to overlap cover
                                           Transform.translate(
                                             offset: const Offset(0, -50),
-                                            child: Container(
-                                              width: 120,
-                                              height: 120,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                border: Border.all(
-                                                  color: isDark
-                                                      ? const Color(0xFF1F1F1F)
-                                                      : Colors.white,
-                                                  width: 4,
-                                                ),
-                                              ),
-                                              child: CircleAvatar(
-                                                radius: 58,
-                                                backgroundImage:
-                                                    (profileUrl != null &&
-                                                        profileUrl.isNotEmpty)
-                                                    ? NetworkImage(profileUrl)
-                                                    : null,
-                                                child:
-                                                    (profileUrl == null ||
-                                                        profileUrl.isEmpty)
-                                                    ? Text(
-                                                        (fullName.isNotEmpty
-                                                                ? fullName
-                                                                      .substring(
-                                                                        0,
-                                                                        1,
-                                                                      )
-                                                                : '?')
-                                                            .toUpperCase(),
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                              fontSize: 40,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700,
-                                                              color: isDark
-                                                                  ? Colors.white
-                                                                  : Colors
-                                                                        .black,
-                                                            ),
+                                            child: GestureDetector(
+                                              onTap: (profileUrl != null && profileUrl.isNotEmpty)
+                                                  ? () => showExpandablePhoto(
+                                                        context: context,
+                                                        imageUrl: profileUrl,
+                                                        isProfilePhoto: true,
+                                                        heroTag: 'profile_avatar_desktop_$_myUserId',
+                                                        fallbackInitial: fullName.isNotEmpty ? fullName.substring(0, 1) : '?',
                                                       )
-                                                    : null,
+                                                  : null,
+                                              child: Container(
+                                                width: 120,
+                                                height: 120,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: isDark
+                                                        ? const Color(0xFF1F1F1F)
+                                                        : Colors.white,
+                                                    width: 4,
+                                                  ),
+                                                ),
+                                                child: CircleAvatar(
+                                                  radius: 58,
+                                                  backgroundImage:
+                                                      (profileUrl != null &&
+                                                          profileUrl.isNotEmpty)
+                                                      ? NetworkImage(profileUrl)
+                                                      : null,
+                                                  child:
+                                                      (profileUrl == null ||
+                                                          profileUrl.isEmpty)
+                                                      ? Text(
+                                                          (fullName.isNotEmpty
+                                                                  ? fullName
+                                                                        .substring(
+                                                                          0,
+                                                                          1,
+                                                                        )
+                                                                  : '?')
+                                                              .toUpperCase(),
+                                                          style:
+                                                              GoogleFonts.inter(
+                                                                fontSize: 40,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                                color: isDark
+                                                                    ? Colors.white
+                                                                    : Colors
+                                                                          .black,
+                                                              ),
+                                                        )
+                                                      : null,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -3593,6 +3637,31 @@ class _ProfilePageState extends State<ProfilePage> {
                       MaterialPageRoute(
                         settings: const RouteSettings(name: 'insights'),
                         builder: (context) => const InsightsPage(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    Ionicons.musical_notes_outline,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                    size: 22,
+                  ),
+                  title: Text(
+                    Provider.of<LanguageProvider>(context, listen: false).t('story_music.title'),
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        settings: const RouteSettings(name: 'story_music'),
+                        builder: (context) => const StoryMusicListPage(),
                       ),
                     );
                   },

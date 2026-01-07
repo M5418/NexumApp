@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../core/i18n/language_provider.dart';
 
 class StoryEditorToolbar extends StatelessWidget {
   final bool isImage;
@@ -39,16 +41,16 @@ class StoryEditorToolbar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           if (isImage)
-            _toolIcon(icon: Icons.edit, label: 'Edit', onTap: onEdit)
+            Builder(builder: (ctx) => _toolIcon(icon: Icons.edit, label: Provider.of<LanguageProvider>(ctx, listen: false).t('story.edit'), onTap: onEdit))
           else
             const SizedBox(width: 56),
-          _toolIcon(icon: Icons.music_note, label: 'Music', onTap: onPickMusic),
-          _toolIcon(
-              icon: Icons.perm_media, label: 'Choose', onTap: onPickMedia),
+          Builder(builder: (ctx) => _toolIcon(icon: Icons.music_note, label: Provider.of<LanguageProvider>(ctx, listen: false).t('story.music'), onTap: onPickMusic)),
+          Builder(builder: (ctx) => _toolIcon(
+              icon: Icons.perm_media, label: Provider.of<LanguageProvider>(ctx, listen: false).t('story.choose'), onTap: onPickMedia)),
           if (canRemove)
-            _toolIcon(
-                icon: Icons.delete_outline, label: 'Remove', onTap: onRemove),
-          _toolIcon(icon: Icons.refresh, label: 'Reset', onTap: onReset),
+            Builder(builder: (ctx) => _toolIcon(
+                icon: Icons.delete_outline, label: Provider.of<LanguageProvider>(ctx, listen: false).t('story.delete'), onTap: onRemove)),
+          Builder(builder: (ctx) => _toolIcon(icon: Icons.refresh, label: Provider.of<LanguageProvider>(ctx, listen: false).t('story.reset'), onTap: onReset)),
         ],
       ),
     );

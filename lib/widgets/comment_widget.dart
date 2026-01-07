@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../models/comment.dart';
-import '../other_user_profile_page.dart';
-import '../profile_page.dart';
+import '../utils/profile_navigation.dart';
 import 'report_bottom_sheet.dart';
 
 class CommentWidget extends StatefulWidget {
@@ -81,26 +79,13 @@ class _CommentWidgetState extends State<CommentWidget> {
               // User avatar
               GestureDetector(
                 onTap: () {
-                  final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-                  if (currentUserId == widget.comment.userId) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-                    );
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        settings: const RouteSettings(name: 'other_user_profile'),
-                        builder: (context) => OtherUserProfilePage(
-                          userId: widget.comment.userId,
-                          userName: widget.comment.userName,
-                          userAvatarUrl: widget.comment.userAvatarUrl,
-                          userBio: '',
-                        ),
-                      ),
-                    );
-                  }
+                  navigateToUserProfile(
+                    context: context,
+                    userId: widget.comment.userId,
+                    userName: widget.comment.userName,
+                    userAvatarUrl: widget.comment.userAvatarUrl,
+                    userBio: '',
+                  );
                 },
                 child: CircleAvatar(
                   radius: widget.depth > 0 ? 14 : 18,
@@ -120,28 +105,13 @@ class _CommentWidgetState extends State<CommentWidget> {
                       children: [
                         GestureDetector(
                           onTap: () {
-                            if (fb.FirebaseAuth.instance.currentUser != null) {
-                              final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-                              if (currentUserId == widget.comment.userId) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-                                );
-                              } else {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    settings: const RouteSettings(name: 'other_user_profile'),
-                                    builder: (context) => OtherUserProfilePage(
-                                      userId: widget.comment.userId,
-                                      userName: widget.comment.userName,
-                                      userAvatarUrl: widget.comment.userAvatarUrl,
-                                      userBio: '',
-                                    ),
-                                  ),
-                                );
-                              }
-                            }
+                            navigateToUserProfile(
+                              context: context,
+                              userId: widget.comment.userId,
+                              userName: widget.comment.userName,
+                              userAvatarUrl: widget.comment.userAvatarUrl,
+                              userBio: '',
+                            );
                           },
                           child: Text(
                             widget.comment.userName,

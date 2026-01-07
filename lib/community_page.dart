@@ -19,6 +19,7 @@ import 'core/admin_config.dart';
 import 'widgets/post_card.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/segmented_tabs.dart';
+import 'community_create_post_page.dart';
 
 class CommunityPage extends StatefulWidget {
   final String communityId;
@@ -943,6 +944,25 @@ class _CommunityPageState extends State<CommunityPage> {
 
         return Scaffold(
           backgroundColor: backgroundColor,
+          floatingActionButton: FloatingActionButton(
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  settings: const RouteSettings(name: 'community_create_post'),
+                  builder: (_) => CommunityCreatePostPage(
+                    communityId: widget.communityId,
+                    communityName: _community?.getLocalizedName(Provider.of<LanguageProvider>(context, listen: false).code) ?? widget.communityName,
+                  ),
+                ),
+              );
+              if (result == true && mounted) {
+                _loadPostsAndBuildMedia();
+              }
+            },
+            backgroundColor: const Color(0xFFBFAE01),
+            child: const Icon(Icons.add, color: Colors.black),
+          ),
           appBar: AppBar(
             backgroundColor: appBarBg,
             foregroundColor: appBarFg,

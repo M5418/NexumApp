@@ -6,10 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'core/i18n/language_provider.dart';
-import 'other_user_profile_page.dart';
-import 'profile_page.dart';
+import 'utils/profile_navigation.dart';
 import 'repositories/interfaces/story_repository.dart';
 
 import 'widgets/share_bottom_sheet.dart';
@@ -89,15 +87,15 @@ class StoryItem {
 
   const StoryItem.video({
     required this.videoUrl,
+    this.audioUrl,
+    this.audioTitle,
     this.liked = false,
     this.likesCount = 0,
     this.commentsCount = 0,
   })  : type = StoryMediaType.video,
         imageUrl = null,
         text = null,
-        backgroundColor = null,
-        audioUrl = null,
-        audioTitle = null;
+        backgroundColor = null;
 
   const StoryItem.text({
     required this.text,
@@ -160,7 +158,7 @@ class _StoryFrame {
 }
 
 class _StoryViewerPageState extends State<StoryViewerPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final PageController _pageController = PageController();
 
   List<StoryUser> _users = [];
@@ -231,6 +229,8 @@ class _StoryViewerPageState extends State<StoryViewerPage>
             case 'video':
               items.add(StoryItem.video(
                 videoUrl: s.mediaUrl,
+                audioUrl: s.audioUrl,
+                audioTitle: s.audioTitle,
                 liked: s.liked,
                 likesCount: s.likesCount,
                 commentsCount: s.commentsCount,
@@ -389,7 +389,25 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       _videoController = c;
       await c.initialize();
       await c.setLooping(true);
-      await c.setVolume(_isMuted ? 0.0 : 1.0);
+      
+      // If story has custom audio, mute video and play the audio track instead
+      final audioUrl = frame.item.audioUrl;
+      if (audioUrl != null && audioUrl.isNotEmpty) {
+        await c.setVolume(0.0); // Mute video's native audio
+        try {
+          final p = AudioPlayer();
+          _audioPlayer = p;
+          await p.setReleaseMode(ReleaseMode.loop);
+          await p.setVolume(_isMuted ? 0.0 : 1.0);
+          await p.play(UrlSource(audioUrl));
+        } catch (e) {
+          debugPrint('🎵 [Story] Could not play audio: $e');
+          _audioPlayer = null;
+        }
+      } else {
+        await c.setVolume(_isMuted ? 0.0 : 1.0);
+      }
+      
       if (mounted) setState(() {});
       unawaited(c.play());
     } else if (frame.item.type == StoryMediaType.image) {
@@ -440,9 +458,14 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   void _toggleMute() {
     setState(() => _isMuted = !_isMuted);
     final v = _videoController;
-    if (v != null) unawaited(v.setVolume(_isMuted ? 0.0 : 1.0));
     final a = _audioPlayer;
-    if (a != null) unawaited(a.setVolume(_isMuted ? 0.0 : 1.0));
+    // If we have custom audio playing, only toggle audio player (keep video muted)
+    if (a != null) {
+      unawaited(a.setVolume(_isMuted ? 0.0 : 1.0));
+    } else if (v != null) {
+      // No custom audio - toggle video's native audio
+      unawaited(v.setVolume(_isMuted ? 0.0 : 1.0));
+    }
   }
 
   Duration _durationForItem(StoryItem item) {
@@ -457,7 +480,20 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   }
 
   void _startProgressForFrame(_StoryFrame frame) {
-    _progressController?.dispose();
+    // Safely dispose old controller if it exists and hasn't been disposed
+    final oldController = _progressController;
+    _progressController = null;
+    if (oldController != null) {
+      try {
+        oldController.stop();
+        oldController.dispose();
+      } catch (_) {
+        // Already disposed, ignore
+      }
+    }
+    
+    if (!mounted) return;
+    
     final controller = AnimationController(
       vsync: this,
       duration: _durationForItem(frame.item),
@@ -520,7 +556,11 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   }
 
   void _pauseStory() {
-    _progressController?.stop();
+    try {
+      _progressController?.stop();
+    } catch (_) {
+      // Controller may be disposed, ignore
+    }
     final v = _videoController;
     if (v != null && v.value.isInitialized && v.value.isPlaying) {
       v.pause();
@@ -532,9 +572,13 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   }
 
   void _resumeStory() {
-    final pc = _progressController;
-    if (pc != null && !pc.isAnimating && pc.value < 1.0) {
-      pc.forward();
+    try {
+      final pc = _progressController;
+      if (pc != null && !pc.isAnimating && pc.value < 1.0) {
+        pc.forward();
+      }
+    } catch (_) {
+      // Controller may be disposed, ignore
     }
     final v = _videoController;
     if (v != null && v.value.isInitialized && !v.value.isPlaying) {
@@ -752,26 +796,13 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         // Avatar
         GestureDetector(
           onTap: () {
-            final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-            if (currentUserId == f.user.userId) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-              );
-            } else {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  settings: const RouteSettings(name: 'other_user_profile'),
-                  builder: (context) => OtherUserProfilePage(
-                    userId: f.user.userId,
-                    userName: f.user.name,
-                    userAvatarUrl: f.user.avatarUrl ?? '',
-                    userBio: '',
-                  ),
-                ),
-              );
-            }
+            navigateToUserProfile(
+              context: context,
+              userId: f.user.userId,
+              userName: f.user.name,
+              userAvatarUrl: f.user.avatarUrl ?? '',
+              userBio: '',
+            );
           },
           child: Container(
             width: 36,
@@ -795,26 +826,13 @@ class _StoryViewerPageState extends State<StoryViewerPage>
         Expanded(
           child: GestureDetector(
             onTap: () {
-              final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-              if (currentUserId == f.user.userId) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(settings: const RouteSettings(name: 'other_user_profile'), builder: (context) => const ProfilePage()),
-                );
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    settings: const RouteSettings(name: 'other_user_profile'),
-                    builder: (context) => OtherUserProfilePage(
-                      userId: f.user.userId,
-                      userName: f.user.name,
-                      userAvatarUrl: f.user.avatarUrl ?? '',
-                      userBio: '',
-                    ),
-                  ),
-                );
-              }
+              navigateToUserProfile(
+                context: context,
+                userId: f.user.userId,
+                userName: f.user.name,
+                userAvatarUrl: f.user.avatarUrl ?? '',
+                userBio: '',
+              );
             },
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -885,31 +903,266 @@ class _StoryViewerPageState extends State<StoryViewerPage>
           ),
         ),
         const SizedBox(width: 8),
-        // Report button
-        GestureDetector(
-          onTap: () {
-            final sid = f.storyId;
-            if (sid == null) return;
-            ReportBottomSheet.show(
-              context,
-              targetType: 'story',
-              targetId: sid,
-              authorName: f.user.name,
-              authorUsername: f.user.handle,
-            );
-          },
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 204),
-              shape: BoxShape.circle,
+        // Report button (only for other users' stories)
+        if (!_isMyStory(f))
+          GestureDetector(
+            onTap: () {
+              final sid = f.storyId;
+              if (sid == null) return;
+              ReportBottomSheet.show(
+                context,
+                targetType: 'story',
+                targetId: sid,
+                authorName: f.user.name,
+                authorUsername: f.user.handle,
+              );
+            },
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 204),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.flag_outlined, size: 18, color: Colors.red),
             ),
-            child: const Icon(Icons.flag_outlined, size: 18, color: Colors.red),
+          ),
+        // Ellipsis menu (only for own stories)
+        if (_isMyStory(f))
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _showStoryDetailsSheet(f),
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 204),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.more_horiz, size: 18, color: Colors.black),
+            ),
+          ),
+      ],
+    );
+  }
+  
+  bool _isMyStory(_StoryFrame f) {
+    // Check if this story belongs to the current user
+    final ring = widget.rings.firstWhere(
+      (r) => r['userId'] == f.user.userId,
+      orElse: () => {},
+    );
+    return ring['isMine'] == true;
+  }
+  
+  void _showStoryDetailsSheet(_StoryFrame f) {
+    _pauseStory();
+    final sid = f.storyId;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final lang = Provider.of<LanguageProvider>(ctx, listen: false);
+        
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF666666).withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Title
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    lang.t('story.story_details'),
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Stats row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      // Likes
+                      _statItem(
+                        icon: Icons.favorite,
+                        count: f.item.likesCount,
+                        label: lang.t('story.likes'),
+                        color: Colors.red,
+                        isDark: isDark,
+                      ),
+                      // Comments
+                      _statItem(
+                        icon: Icons.chat_bubble,
+                        count: f.item.commentsCount,
+                        label: lang.t('story.comments'),
+                        color: const Color(0xFFBFAE01),
+                        isDark: isDark,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
+                // Delete button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _confirmDeleteStory(sid);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      label: Text(
+                        lang.t('story.delete_story'),
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    ).whenComplete(() {
+      if (mounted) _resumeStory();
+    });
+  }
+  
+  Widget _statItem({
+    required IconData icon,
+    required int count,
+    required String label,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Column(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 24),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          count.toString(),
+          style: GoogleFonts.inter(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : Colors.black,
+          ),
+        ),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: isDark ? Colors.white54 : Colors.black54,
           ),
         ),
       ],
     );
+  }
+  
+  Future<void> _confirmDeleteStory(String? storyId) async {
+    if (storyId == null) return;
+    
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang.t('story.delete_story_title'), style: GoogleFonts.inter()),
+        content: Text(
+          lang.t('story.delete_story_message'),
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(lang.t('story.cancel'), style: GoogleFonts.inter(color: const Color(0xFF666666))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(lang.t('story.delete'), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed == true && mounted) {
+      try {
+        final storyRepo = context.read<StoryRepository>();
+        await storyRepo.deleteStory(storyId);
+        
+        if (!mounted) return;
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(lang.t('story.story_deleted'), style: GoogleFonts.inter()),
+            backgroundColor: const Color(0xFFBFAE01),
+          ),
+        );
+        
+        // Go to next story or close viewer if no more stories
+        if (_currentIndex < _frames.length - 1) {
+          _goToNextStory();
+        } else if (_currentIndex > 0) {
+          _goToPreviousStory();
+        } else {
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(lang.t('story.delete_failed'), style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }  
 
     Widget _buildProgressBars() {
@@ -966,6 +1219,31 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   }
 
   Widget _commentBar() {
+    final f = _frames.isNotEmpty ? _frames[_currentIndex] : null;
+    final isMyStory = f != null && _isMyStory(f);
+    
+    // For own stories, only show share button
+    if (isMyStory) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Share button only for own stories
+          GestureDetector(
+            onTap: _share,
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 64),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.ios_share, color: Colors.black),
+            ),
+          ),
+        ],
+      );
+    }
+    
     Future<void> sendComment() async {
       final text = _commentController.text.trim();
       if (text.isEmpty || _frames.isEmpty) return;
@@ -975,14 +1253,14 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       // Immediately clear text and unfocus for instant feedback
       _commentController.clear();
       _commentFocusNode.unfocus();
-      _snack('Sending...', const Color(0xFFBFAE01));
+      _snack(Provider.of<LanguageProvider>(context, listen: false).t('story.sending'), const Color(0xFFBFAE01));
       
       // Send in background without blocking UI
       try {
         await context.read<StoryRepository>().replyToStory(storyId: sid, message: text);
-        _snack('Reply sent', const Color(0xFFBFAE01));
+        _snack(Provider.of<LanguageProvider>(context, listen: false).t('story.reply_sent'), const Color(0xFFBFAE01));
       } catch (e) {
-        _snack('Failed to reply', Colors.red);
+        _snack(Provider.of<LanguageProvider>(context, listen: false).t('story.reply_failed'), Colors.red);
       }
     }
 

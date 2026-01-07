@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:readmore/readmore.dart';
 import 'package:ionicons/ionicons.dart';
 import '../models/post.dart';
-import '../other_user_profile_page.dart';
+import '../utils/profile_navigation.dart';
 import 'auto_play_video.dart';
 import 'reaction_picker.dart';
 import '../core/time_utils.dart';
@@ -417,17 +417,12 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
             children: [
               GestureDetector(
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      settings: const RouteSettings(name: 'other_user_profile'),
-                      builder: (context) => OtherUserProfilePage(
-                        userId: widget.post.authorId,
-                        userName: widget.post.userName,
-                        userAvatarUrl: widget.post.userAvatarUrl,
-                        userBio: '',
-                      ),
-                    ),
+                  navigateToUserProfile(
+                    context: context,
+                    userId: widget.post.authorId,
+                    userName: widget.post.userName,
+                    userAvatarUrl: widget.post.userAvatarUrl,
+                    userBio: '',
                   );
                 },
                 child: Container(
@@ -448,17 +443,12 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        settings: const RouteSettings(name: 'other_user_profile'),
-                        builder: (context) => OtherUserProfilePage(
-                          userId: widget.post.authorId,
-                          userName: widget.post.userName,
-                          userAvatarUrl: widget.post.userAvatarUrl,
-                          userBio: '',
-                        ),
-                      ),
+                    navigateToUserProfile(
+                      context: context,
+                      userId: widget.post.authorId,
+                      userName: widget.post.userName,
+                      userAvatarUrl: widget.post.userAvatarUrl,
+                      userBio: '',
                     );
                   },
                   child: Column(

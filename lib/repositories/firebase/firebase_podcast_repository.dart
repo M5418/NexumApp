@@ -186,6 +186,7 @@ class FirebasePodcastRepository implements PodcastRepository {
     String? author,
     String? description,
     String? coverUrl,
+    String? coverThumbUrl,
     String? audioUrl,
     int? durationSec,
     String? language,
@@ -201,6 +202,7 @@ class FirebasePodcastRepository implements PodcastRepository {
     if (author != null) updates['author'] = author;
     if (description != null) updates['description'] = description;
     if (coverUrl != null) updates['coverUrl'] = coverUrl;
+    if (coverThumbUrl != null) updates['coverThumbUrl'] = coverThumbUrl;
     if (audioUrl != null) updates['audioUrl'] = audioUrl;
     if (durationSec != null) updates['durationSec'] = durationSec;
     if (language != null) updates['language'] = language;
