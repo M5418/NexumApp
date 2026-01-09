@@ -803,49 +803,93 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
         debugPrint('✅ Uploaded: full=${(compressedBytes.length / 1024).toStringAsFixed(0)}KB, thumb=${thumbBytes != null ? (thumbBytes.length / 1024).toStringAsFixed(0) : 0}KB');
         return {'url': fullUrl, 'thumbUrl': thumbUrl};
       } else if (type == MediaType.video && !kIsWeb) {
-        debugPrint('🎥 Compressing video before upload: ${file.name}');
+        debugPrint('🎥 Processing video for upload: ${file.name}');
         
+        // Generate video thumbnail for feed (fast, low quality for feed)
         File? thumbFile;
         try {
           thumbFile = await VideoCompress.getFileThumbnail(
             file.path,
-            quality: 50,
+            quality: 30, // Lower quality for faster generation
             position: -1,
           );
-        } catch (_) {}
-        
-        final compressedFile = await compressionService.compressVideo(
-          filePath: file.path,
-          quality: VideoQuality.HighestQuality,
-        );
-        
-        if (compressedFile == null) {
-          debugPrint('⚠️ Video compression failed, using original');
-          final bytes = await file.readAsBytes();
-          final res = await FilesApi().uploadBytes(bytes, ext: ext);
-          final url = res['url'] ?? '';
-          String thumbUrl = url;
-          if (thumbFile != null) {
-            final thumbBytes = await thumbFile.readAsBytes();
-            final thumbRes = await FilesApi().uploadBytes(thumbBytes, ext: 'jpg');
-            thumbUrl = thumbRes['url'] ?? url;
-          }
-          return {'url': url, 'thumbUrl': thumbUrl};
+        } catch (_) {
+          debugPrint('⚠️ Thumbnail generation failed');
         }
         
-        final compressedBytes = await compressedFile.readAsBytes();
-        final videoUpload = FilesApi().uploadBytes(compressedBytes, ext: ext);
-        final thumbUpload = thumbFile != null 
-            ? FilesApi().uploadBytes(await thumbFile.readAsBytes(), ext: 'jpg')
-            : Future.value(<String, dynamic>{'url': ''});
+        // Check file size first to decide compression strategy
+        final originalFile = File(file.path);
+        final originalSize = await originalFile.length();
+        debugPrint('📊 Original video size: ${(originalSize / 1024 / 1024).toStringAsFixed(2)} MB');
         
-        final results = await Future.wait([videoUpload, thumbUpload]);
+        File? fileToUpload;
+        String? compressionInfo;
+        
+        // Skip compression for small videos (< 20MB) to save time
+        if (originalSize < 20 * 1024 * 1024) {
+          debugPrint('⏭️ Video is small (<20MB), uploading without compression');
+          fileToUpload = originalFile;
+          compressionInfo = 'original';
+        } else {
+          debugPrint('🗜️ Compressing large video...');
+          // Use faster compression settings
+          final compressedFile = await compressionService.compressVideo(
+            filePath: file.path,
+            quality: VideoQuality.MediumQuality, // Faster than HighestQuality
+          );
+          
+          if (compressedFile != null) {
+            final compressedSize = await compressedFile.length();
+            final reduction = ((originalSize - compressedSize) / originalSize * 100);
+            debugPrint('✅ Compressed to ${(compressedSize / 1024 / 1024).toStringAsFixed(2)} MB (${reduction.toStringAsFixed(1)}% reduction)');
+            fileToUpload = compressedFile;
+            compressionInfo = 'compressed';
+          } else {
+            debugPrint('⚠️ Compression failed, using original');
+            fileToUpload = originalFile;
+            compressionInfo = 'original';
+          }
+        }
+        
+        // Upload video and thumbnail in parallel
+        debugPrint('📤 Uploading video ($compressionInfo)...');
+        final videoBytes = await fileToUpload.readAsBytes();
+        
+        // Start uploads in parallel
+        final futures = <Future<Map<String, String>>>[];
+        
+        // Video upload
+        futures.add(FilesApi().uploadBytes(videoBytes, ext: ext));
+        
+        // Thumbnail upload (if available)
+        if (thumbFile != null) {
+          futures.add(thumbFile.readAsBytes().then((bytes) => 
+            FilesApi().uploadBytes(bytes, ext: 'jpg')));
+        } else {
+          futures.add(Future.value({'url': ''}));
+        }
+        
+        // Wait for both uploads
+        final results = await Future.wait(futures);
         final videoUrl = results[0]['url'] ?? '';
         final thumbUrl = results[1]['url'] ?? videoUrl;
         
+        debugPrint('✅ Video uploaded successfully');
+        
+        // Clean up compressed file if different from original
+        if (compressionInfo == 'compressed' && fileToUpload != originalFile) {
+          try {
+            await fileToUpload.delete();
+            debugPrint('🧹 Cleaned up compressed file');
+          } catch (_) {
+            // Ignore cleanup errors
+          }
+        }
+        
         return {'url': videoUrl, 'thumbUrl': thumbUrl};
       } else {
-        debugPrint('📤 Uploading without compression: ${file.name}');
+        // Web video - upload original (no compression available)
+        debugPrint('📤 Web: Uploading video without compression: ${file.name}');
         final bytes = await file.readAsBytes();
         final res = await FilesApi().uploadBytes(bytes, ext: ext);
         return {'url': res['url'] ?? '', 'thumbUrl': res['url'] ?? ''};

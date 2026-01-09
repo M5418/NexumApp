@@ -323,8 +323,8 @@ service cloud.firestore {
     match /podcasts/{podcastId} {
       allow read: if true;
       allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
+      allow update: if signedIn() && (isOwner(resource.data.authorId) || isAdmin());
+      allow delete: if signedIn() && (isOwner(resource.data.authorId) || isAdmin());
     }
     
     // Podcast categories

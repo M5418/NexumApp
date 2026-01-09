@@ -143,7 +143,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     // Full screen, no safe area, bezel to bezel - covers entire device including notch/bezels
     return Container(
-      color: Colors.white,
+      color: Colors.black,
       child: Image.asset(
         'assets/splash/nexumAp.png',
         fit: BoxFit.cover,
@@ -154,7 +154,7 @@ class _SplashScreenState extends State<SplashScreen> {
           return Container(
             width: double.infinity,
             height: double.infinity,
-            color: const Color(0xFFBFAE01),
+            color: Colors.black,
             child: const Center(
               child: Text(
                 'Nexum',

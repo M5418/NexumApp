@@ -103,12 +103,12 @@ class MediaCompressionService {
     }
   }
 
-  /// Compress video with high quality settings
-  /// Quality: VideoQuality.HighestQuality
+  /// Compress video with optimized settings for speed
+  /// Quality: VideoQuality.MediumQuality (faster than HighestQuality)
   /// Returns compressed file or original if compression fails/not needed
   Future<File?> compressVideo({
     required String filePath,
-    VideoQuality quality = VideoQuality.HighestQuality,
+    VideoQuality quality = VideoQuality.MediumQuality,
   }) async {
     try {
       debugPrint('🎥 Compressing video: $filePath');
@@ -116,9 +116,9 @@ class MediaCompressionService {
       final originalSize = await originalFile.length();
       debugPrint('   Original size: ${(originalSize / 1024 / 1024).toStringAsFixed(2)} MB');
 
-      // Skip compression for small videos (< 10MB)
-      if (originalSize < 10 * 1024 * 1024) {
-        debugPrint('   ⏭️ Video is small (<10MB), skipping compression');
+      // Skip compression for small videos (< 20MB) - increased threshold for speed
+      if (originalSize < 20 * 1024 * 1024) {
+        debugPrint('   ⏭️ Video is small (<20MB), skipping compression');
         return originalFile;
       }
 
@@ -127,12 +127,13 @@ class MediaCompressionService {
         debugPrint('   📊 Compression progress: ${progress.toStringAsFixed(1)}%');
       });
 
-      // Compress video
+      // Compress video with faster settings
       final info = await VideoCompress.compressVideo(
         filePath,
-        quality: quality,
+        quality: quality, // Default to MediumQuality for faster compression
         deleteOrigin: false, // Keep original file
         includeAudio: true,
+        frameRate: 30, // Limit to 30fps for faster processing
       );
 
       if (info == null || info.file == null) {

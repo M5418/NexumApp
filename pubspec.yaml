@@ -140,7 +140,7 @@ flutter_launcher_icons:
 
 flutter_native_splash:
   # Splash screen configuration for iOS and Android
-  color: "#FFFFFF"  # Background color (white)
+  color: "#000000"  # Background color (black)
   image: assets/splash/nexumsplashimage.png
   
   # iOS-specific settings
