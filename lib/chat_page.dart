@@ -63,6 +63,8 @@ class _ChatPageState extends State<ChatPage> {
   bool _isRecordingLocked = false; // Locked via swipe up
   double _swipeUpOffset = 0; // Track swipe distance for animation
   DateTime? _recordingStartTime; // Track when recording started for min duration
+  Timer? _recordingTimer; // Timer for updating recording duration display
+  Duration _recordingDuration = Duration.zero; // Current recording duration
   bool _isLoading = false;
   bool _sending = false;
   String? _loadError;
@@ -1222,6 +1224,13 @@ void dispose() {
     return '${two(duration.inMinutes.remainder(60))}:${two(duration.inSeconds.remainder(60))}';
   }
 
+  String _formatRecordingDuration(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    final tenths = (duration.inMilliseconds ~/ 100) % 10;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.$tenths';
+  }
+
   Future<void> _startRecording() async {
     if (_isRecording) return;
     
@@ -1249,15 +1258,35 @@ void dispose() {
     }
 
     // Start recording immediately - no delay
-    setState(() => _isRecording = true);
+    setState(() {
+      _isRecording = true;
+      _recordingDuration = Duration.zero;
+    });
+    
+    // Start timer to update duration display every 100ms
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (_recordingStartTime != null && mounted) {
+        setState(() {
+          _recordingDuration = DateTime.now().difference(_recordingStartTime!);
+        });
+      }
+    });
+    
     await _audioRecorder.startRecording();
   }
 
   Future<void> _stopRecordingAndSend() async {
     if (!_isRecording) return;
 
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    
     final result = await _audioRecorder.stopRecording();
-    setState(() => _isRecording = false);
+    setState(() {
+      _isRecording = false;
+      _recordingDuration = Duration.zero;
+    });
 
     if (result != null) {
       await _sendVoiceMessage(result);
@@ -1266,10 +1295,15 @@ void dispose() {
 
   void _cancelRecordingInline() async {
     if (!_isRecording) return;
+    
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    
     await _audioRecorder.stopRecording();
     setState(() {
       _isRecording = false;
       _isRecordingLocked = false;
+      _recordingDuration = Duration.zero;
     });
   }
 
@@ -1379,8 +1413,12 @@ void dispose() {
                               const Icon(Icons.mic, color: Colors.red, size: 20),
                               const SizedBox(width: 8),
                               Text(
-                                Provider.of<LanguageProvider>(context, listen: false).t('chat.recording'),
-                                style: GoogleFonts.inter(color: Colors.red),
+                                _formatRecordingDuration(_recordingDuration),
+                                style: GoogleFonts.inter(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w600,
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                ),
                               ),
                             ],
                           ),

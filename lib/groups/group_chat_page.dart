@@ -47,6 +47,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
   bool _isRecordingLocked = false; // Locked via swipe up
   double _swipeUpOffset = 0; // Track swipe distance for animation
   DateTime? _recordingStartTime; // Track when recording started for min duration
+  Timer? _recordingTimer; // Timer for updating recording duration display
+  Duration _recordingDuration = Duration.zero; // Current recording duration
   GroupMessage? _replyTo;
 
   String? get _currentUserId => fb.FirebaseAuth.instance.currentUser?.uid;
@@ -337,7 +339,21 @@ class _GroupChatPageState extends State<GroupChatPage> {
     }
 
     // Start recording immediately - no delay
-    setState(() => _isRecording = true);
+    setState(() {
+      _isRecording = true;
+      _recordingDuration = Duration.zero;
+    });
+    
+    // Start timer to update duration display every 100ms
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (_recordingStartTime != null && mounted) {
+        setState(() {
+          _recordingDuration = DateTime.now().difference(_recordingStartTime!);
+        });
+      }
+    });
+    
     await _audioRecorder.startRecording();
   }
 
@@ -345,9 +361,15 @@ class _GroupChatPageState extends State<GroupChatPage> {
     if (!_isRecording) return;
     final storageRepo = context.read<StorageRepository>();
 
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    
     final result = await _audioRecorder.stopRecording();
     final path = result?.filePath;
-    setState(() => _isRecording = false);
+    setState(() {
+      _isRecording = false;
+      _recordingDuration = Duration.zero;
+    });
 
     if (path == null) return;
 
@@ -385,11 +407,23 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
   void _cancelRecording() async {
     if (!_isRecording) return;
+    
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    
     await _audioRecorder.stopRecording();
     setState(() {
       _isRecording = false;
       _isRecordingLocked = false;
+      _recordingDuration = Duration.zero;
     });
+  }
+
+  String _formatRecordingDuration(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    final tenths = (duration.inMilliseconds ~/ 100) % 10;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.$tenths';
   }
 
   void _showReactionPicker(GroupMessage message) {
@@ -1039,8 +1073,11 @@ class _GroupChatPageState extends State<GroupChatPage> {
                           const Icon(Icons.mic, color: Colors.red, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            Provider.of<LanguageProvider>(context, listen: false).t('chat.recording'),
-                            style: GoogleFonts.inter(color: Colors.red),
+                            _formatRecordingDuration(_recordingDuration),
+                            style: GoogleFonts.inter(
+                              color: Colors.red,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
