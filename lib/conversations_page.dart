@@ -28,7 +28,6 @@ import 'repositories/interfaces/conversation_repository.dart';
 import 'repositories/interfaces/community_repository.dart';
 import 'repositories/firebase/firebase_notification_repository.dart';
 import 'responsive/responsive_breakpoints.dart';
-import 'core/time_utils.dart';
 import 'services/community_interest_sync_service.dart';
 import 'services/app_cache_service.dart';
 import 'core/profile_api.dart';
@@ -371,12 +370,15 @@ class _ConversationsPageState extends State<ConversationsPage>
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final messageDate = DateTime(localDt.year, localDt.month, localDt.day);
-    final diff = today.difference(messageDate).inDays;
+    final diffDays = today.difference(messageDate).inDays;
     
-    if (diff == 0) {
+    if (diffDays == 0) {
       // Today: show time only (HH:MM)
       return '${localDt.hour.toString().padLeft(2, '0')}:${localDt.minute.toString().padLeft(2, '0')}';
-    } else if (diff > 0 && diff < 7) {
+    } else if (diffDays == 1) {
+      // Yesterday
+      return 'Yesterday';
+    } else if (diffDays > 1 && diffDays < 7) {
       // This week: show day name
       const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
       return days[localDt.weekday - 1];
@@ -1955,6 +1957,29 @@ class _GroupListTile extends StatelessWidget {
     required this.onLongPress,
   });
 
+  String _formatGroupTime(DateTime dt) {
+    final localDt = dt.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(localDt.year, localDt.month, localDt.day);
+    final diffDays = today.difference(messageDate).inDays;
+    
+    if (diffDays == 0) {
+      // Today: show time only (HH:MM)
+      return '${localDt.hour.toString().padLeft(2, '0')}:${localDt.minute.toString().padLeft(2, '0')}';
+    } else if (diffDays == 1) {
+      // Yesterday
+      return 'Yesterday';
+    } else if (diffDays > 1 && diffDays < 7) {
+      // This week: show day name
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      return days[localDt.weekday - 1];
+    } else {
+      // Older: show DD/MM/YYYY
+      return '${localDt.day.toString().padLeft(2, '0')}/${localDt.month.toString().padLeft(2, '0')}/${localDt.year}';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textColor = isDark ? Colors.white : Colors.black;
@@ -2025,7 +2050,7 @@ class _GroupListTile extends StatelessWidget {
                         ),
                         if (group.lastMessageAt != null)
                           Text(
-                            TimeUtils.relativeLabel(group.lastMessageAt!, locale: 'en_short'),
+                            _formatGroupTime(group.lastMessageAt!),
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: unreadCount > 0 ? const Color(0xFFBFAE01) : subtitleColor,
