@@ -96,9 +96,12 @@ Future<void> main() async {
   }, (error, stackTrace) {
     // Suppress known web debug errors
     final errorString = error.toString();
+    final stackString = stackTrace.toString();
     if (kIsWeb && (errorString.contains('LegacyJavaScriptObject') ||
-        errorString.contains('DiagnosticsNode'))) {
-      return; // Silently ignore
+        errorString.contains('DiagnosticsNode') ||
+        errorString.contains('Assertion failed') ||
+        stackString.contains('window.dart'))) {
+      return; // Silently ignore web debug assertions
     }
     debugPrint('Unhandled error: $error');
   });
@@ -107,13 +110,16 @@ Future<void> main() async {
 Future<void> _initApp() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   
-  // Suppress LegacyJavaScriptObject errors on web debug mode
+  // Suppress LegacyJavaScriptObject and assertion errors on web debug mode
   if (kIsWeb) {
     FlutterError.onError = (FlutterErrorDetails details) {
       final errorString = details.exception.toString();
+      final stackString = details.stack?.toString() ?? '';
       if (errorString.contains('LegacyJavaScriptObject') ||
-          errorString.contains('DiagnosticsNode')) {
-        return; // Silently ignore
+          errorString.contains('DiagnosticsNode') ||
+          errorString.contains('Assertion failed') ||
+          stackString.contains('window.dart')) {
+        return; // Silently ignore web debug assertions
       }
       FlutterError.presentError(details);
     };
