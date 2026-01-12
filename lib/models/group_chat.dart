@@ -207,6 +207,7 @@ class GroupMessage {
   final List<String> readBy;
   final bool isDeleted;
   final String? deletedBy;
+  final bool isSending; // For optimistic UI - true while uploading
 
   GroupMessage({
     required this.id,
@@ -226,6 +227,7 @@ class GroupMessage {
     this.readBy = const [],
     this.isDeleted = false,
     this.deletedBy,
+    this.isSending = false,
   });
 
   Map<String, dynamic> toMap() {

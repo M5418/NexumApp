@@ -106,37 +106,72 @@ class _GroupChatPageState extends State<GroupChatPage> {
     final text = content ?? _messageController.text.trim();
     if (text.isEmpty && attachments.isEmpty) return;
 
-    setState(() => _sending = true);
+    final uid = _currentUserId;
+    if (uid == null) return;
+
+    // Create optimistic message
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final user = fb.FirebaseAuth.instance.currentUser;
+    final optimisticMsg = GroupMessage(
+      id: tempId,
+      groupId: _group.id,
+      senderId: uid,
+      senderName: user?.displayName ?? 'You',
+      senderAvatar: user?.photoURL,
+      content: text,
+      type: type,
+      attachments: attachments,
+      createdAt: DateTime.now(),
+      replyToId: _replyTo?.id,
+      replyToSenderName: _replyTo?.senderName,
+      replyToContent: _replyTo?.content,
+      replyToType: _replyTo?.type,
+      isSending: true,
+    );
+
+    // Add optimistic message immediately
+    setState(() {
+      _messages.insert(0, optimisticMsg);
+      _replyTo = null;
+      _sending = true;
+    });
     _messageController.clear();
 
+    // Scroll to bottom
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+
+    // Send in background
     try {
       await _groupRepo.sendMessage(
         groupId: _group.id,
         content: text,
         type: type,
         attachments: attachments,
-        replyToId: _replyTo?.id,
-        replyToSenderName: _replyTo?.senderName,
-        replyToContent: _replyTo?.content,
-        replyToType: _replyTo?.type,
+        replyToId: optimisticMsg.replyToId,
+        replyToSenderName: optimisticMsg.replyToSenderName,
+        replyToContent: optimisticMsg.replyToContent,
+        replyToType: optimisticMsg.replyToType,
       );
 
-      setState(() {
-        _replyTo = null;
-        _sending = false;
-      });
-
-      // Scroll to bottom
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+      // Remove temp message - real one will come from stream
+      if (mounted) {
+        setState(() {
+          _messages.removeWhere((m) => m.id == tempId);
+          _sending = false;
+        });
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _sending = false);
+      setState(() {
+        _messages.removeWhere((m) => m.id == tempId);
+        _sending = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to send: $e')),
       );
@@ -735,7 +770,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: message.isDeleted ? Colors.grey[600] : bubbleColor,
+                      color: message.isDeleted ? Colors.grey[600] : (message.isSending ? bubbleColor.withValues(alpha: 0.7) : bubbleColor),
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
                         topRight: const Radius.circular(16),
@@ -783,11 +818,27 @@ class _GroupChatPageState extends State<GroupChatPage> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.mic, color: bubbleTextColor, size: 20),
+                                    Icon(
+                                      message.isSending ? Icons.upload : Icons.play_arrow,
+                                      color: bubbleTextColor,
+                                      size: 24,
+                                    ),
                                     const SizedBox(width: 8),
-                                    Text(
-                                      'Voice message',
-                                      style: GoogleFonts.inter(color: bubbleTextColor),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          message.isSending 
+                                              ? Provider.of<LanguageProvider>(context, listen: false).t('chat.sending')
+                                              : 'Voice message',
+                                          style: GoogleFonts.inter(color: bubbleTextColor, fontSize: 13),
+                                        ),
+                                        if (att['duration'] != null)
+                                          Text(
+                                            '${(att['duration'] as int) ~/ 60}:${((att['duration'] as int) % 60).toString().padLeft(2, '0')}',
+                                            style: GoogleFonts.inter(color: bubbleTextColor.withValues(alpha: 0.7), fontSize: 11),
+                                          ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -827,12 +878,30 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
                         // Timestamp
                         const SizedBox(height: 4),
-                        Text(
-                          _formatTime(message.createdAt),
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: isMe ? Colors.black54 : Colors.grey,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              message.isSending 
+                                  ? Provider.of<LanguageProvider>(context, listen: false).t('chat.sending')
+                                  : _formatTime(message.createdAt),
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                color: isMe ? Colors.black54 : Colors.grey,
+                              ),
+                            ),
+                            if (message.isSending) ...[
+                              const SizedBox(width: 4),
+                              SizedBox(
+                                width: 10,
+                                height: 10,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: isMe ? Colors.black54 : Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
