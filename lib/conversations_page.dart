@@ -366,7 +366,24 @@ class _ConversationsPageState extends State<ConversationsPage>
 
   String _formatTime(DateTime? dt) {
     if (dt == null) return '';
-    return TimeUtils.relativeLabel(dt, locale: 'en_short');
+    
+    final localDt = dt.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(localDt.year, localDt.month, localDt.day);
+    final diff = today.difference(messageDate).inDays;
+    
+    if (diff == 0) {
+      // Today: show time only (HH:MM)
+      return '${localDt.hour.toString().padLeft(2, '0')}:${localDt.minute.toString().padLeft(2, '0')}';
+    } else if (diff > 0 && diff < 7) {
+      // This week: show day name
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      return days[localDt.weekday - 1];
+    } else {
+      // Older: show DD/MM/YYYY
+      return '${localDt.day.toString().padLeft(2, '0')}/${localDt.month.toString().padLeft(2, '0')}/${localDt.year}';
+    }
   }
 
   // Clean story reply text to show only message without media URL
