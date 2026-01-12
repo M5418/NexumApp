@@ -1685,6 +1685,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
           },
           child: ActivityPostCard(
             post: post,
+            isDarkMode: Theme.of(context).brightness == Brightness.dark,
             onReactionChanged: (postId, reaction) {
               // Handle reaction change
             },
@@ -1752,6 +1753,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
           },
           child: HomePostCard(
             post: post,
+            isDarkMode: Theme.of(context).brightness == Brightness.dark,
             onReactionChanged: (postId, reaction) {
               // Handle reaction change
             },
