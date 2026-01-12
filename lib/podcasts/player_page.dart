@@ -21,7 +21,7 @@ class _PlayerPageState extends State<PlayerPage> {
   StreamSubscription<PlaybackState>? _playbackSub;
   StreamSubscription<MediaItem?>? _mediaSub;
 
-  bool _loading = true;
+  bool _audioLoading = true; // Flag for audio loading state
   String? _error;
 
   Duration _position = Duration.zero;
@@ -32,6 +32,11 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
+    // Set initial duration immediately from podcast data
+    if (widget.podcast.durationSec != null && widget.podcast.durationSec! > 0) {
+      _duration = Duration(seconds: widget.podcast.durationSec!);
+    }
+    // Initialize player in background - UI shows immediately
     _initPlayer();
   }
 
@@ -48,7 +53,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (url.isEmpty) {
       setState(() {
         _error = 'No audio available';
-        _loading = false;
+        _audioLoading = false;
       });
       return;
     }
@@ -77,11 +82,6 @@ class _PlayerPageState extends State<PlayerPage> {
         }
       });
       
-      // Get initial duration from podcast if available
-      if (widget.podcast.durationSec != null && widget.podcast.durationSec! > 0) {
-        _duration = Duration(seconds: widget.podcast.durationSec!);
-      }
-      
       // Load and play the podcast with background support
       await _audioHandler!.loadAndPlay(
         id: widget.podcast.id,
@@ -91,15 +91,19 @@ class _PlayerPageState extends State<PlayerPage> {
         artUri: widget.podcast.coverUrl,
       );
 
-      setState(() {
-        _loading = false;
-        _error = null;
-      });
+      if (mounted) {
+        setState(() {
+          _audioLoading = false;
+          _error = null;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _loading = false;
-        _error = 'Failed to load audio: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _audioLoading = false;
+          _error = 'Failed to load audio: $e';
+        });
+      }
     }
   }
 
@@ -219,9 +223,7 @@ class _PlayerPageState extends State<PlayerPage> {
           ),
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
-          : _error != null
+      body: _error != null
               ? Center(child: Text(_error!, style: GoogleFonts.inter()))
               : Padding(
                   padding: const EdgeInsets.all(24),
@@ -371,7 +373,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
                           // Play/Pause button with gradient (25px radius)
                           GestureDetector(
-                            onTap: _togglePlayPause,
+                            onTap: _audioLoading ? null : _togglePlayPause,
                             child: Container(
                               width: 72,
                               height: 72,
@@ -390,11 +392,20 @@ class _PlayerPageState extends State<PlayerPage> {
                                   ),
                                 ],
                               ),
-                              child: Icon(
-                                playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                color: Colors.black,
-                                size: 36,
-                              ),
+                              child: _audioLoading
+                                  ? const SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.black,
+                                        strokeWidth: 3,
+                                      ),
+                                    )
+                                  : Icon(
+                                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                      color: Colors.black,
+                                      size: 36,
+                                    ),
                             ),
                           ),
 

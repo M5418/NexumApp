@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
 import 'player_page.dart';
@@ -9,8 +10,10 @@ import 'add_to_playlist_sheet.dart';
 import 'edit_podcast_page.dart';
 import '../repositories/interfaces/bookmark_repository.dart';
 import '../repositories/interfaces/podcast_repository.dart';
+import '../repositories/interfaces/user_repository.dart';
 import '../repositories/models/bookmark_model.dart';
 import '../core/i18n/language_provider.dart';
+import '../other_user_profile_page.dart';
 
 class PodcastDetailsPage extends StatefulWidget {
   final Podcast podcast;
@@ -27,6 +30,10 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
   bool _isBookmarked = false;
   bool _isOwner = false;
   bool _deleting = false;
+  
+  // Author profile data
+  String? _authorAvatarUrl;
+  String _authorFullName = '';
 
   @override
   void initState() {
@@ -34,6 +41,45 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
     podcast = widget.podcast;
     _checkBookmarkStatus();
     _checkOwnership();
+    _loadAuthorProfile();
+  }
+  
+  Future<void> _loadAuthorProfile() async {
+    if (podcast.authorId == null || podcast.authorId!.isEmpty) return;
+    try {
+      final userRepo = context.read<UserRepository>();
+      final profile = await userRepo.getUserProfile(podcast.authorId!);
+      if (profile != null && mounted) {
+        final firstName = profile.firstName?.trim() ?? '';
+        final lastName = profile.lastName?.trim() ?? '';
+        setState(() {
+          _authorAvatarUrl = profile.avatarUrl;
+          _authorFullName = '$firstName $lastName'.trim();
+          if (_authorFullName.isEmpty) {
+            _authorFullName = profile.displayName ?? profile.username ?? podcast.author ?? 'Unknown';
+          }
+        });
+      }
+    } catch (_) {}
+  }
+  
+  void _navigateToAuthorProfile() {
+    if (podcast.authorId == null || podcast.authorId!.isEmpty) return;
+    final currentUid = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (podcast.authorId == currentUid) return; // Don't navigate to own profile
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'other_user_profile'),
+        builder: (_) => OtherUserProfilePage(
+          userId: podcast.authorId!,
+          userName: _authorFullName,
+          userAvatarUrl: _authorAvatarUrl ?? '',
+          userBio: '',
+        ),
+      ),
+    );
   }
 
   void _checkOwnership() {
@@ -352,7 +398,7 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title & Author
+                      // Title
                       Text(
                         podcast.title,
                         style: GoogleFonts.inter(
@@ -362,13 +408,53 @@ class _PodcastDetailsPageState extends State<PodcastDetailsPage> {
                           height: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        podcast.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown_author'),
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFFBFAE01),
+                      const SizedBox(height: 12),
+                      
+                      // Author Profile Row - Tappable
+                      GestureDetector(
+                        onTap: _navigateToAuthorProfile,
+                        child: Row(
+                          children: [
+                            // Author Avatar
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor: const Color(0xFFBFAE01),
+                              backgroundImage: (_authorAvatarUrl != null && _authorAvatarUrl!.isNotEmpty)
+                                  ? CachedNetworkImageProvider(_authorAvatarUrl!)
+                                  : null,
+                              child: (_authorAvatarUrl == null || _authorAvatarUrl!.isEmpty)
+                                  ? Text(
+                                      _authorFullName.isNotEmpty ? _authorFullName[0].toUpperCase() : 'U',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 10),
+                            // Author Name
+                            Expanded(
+                              child: Text(
+                                _authorFullName.isNotEmpty 
+                                    ? _authorFullName 
+                                    : (podcast.author ?? Provider.of<LanguageProvider>(context, listen: false).t('common.unknown_author')),
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFFBFAE01),
+                                ),
+                              ),
+                            ),
+                            // Arrow indicator
+                            if (podcast.authorId != null && podcast.authorId != fb.FirebaseAuth.instance.currentUser?.uid)
+                              Icon(
+                                Icons.chevron_right,
+                                color: isDark ? Colors.white54 : Colors.black45,
+                                size: 20,
+                              ),
+                          ],
                         ),
                       ),
                       

@@ -4,12 +4,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import '../core/files_api.dart';
 import '../services/media_compression_service.dart';
 import '../data/interest_domains.dart';
 import '../repositories/interfaces/draft_repository.dart';
 import '../repositories/interfaces/podcast_repository.dart';
+import '../repositories/interfaces/user_repository.dart';
 import '../repositories/models/draft_model.dart';
 import '../core/i18n/language_provider.dart';
 
@@ -24,7 +26,6 @@ class CreatePodcastPage extends StatefulWidget {
 
 class _CreatePodcastPageState extends State<CreatePodcastPage> {
   final _titleCtrl = TextEditingController();
-  final _authorCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _languageCtrl = TextEditingController();
   final _tagsCtrl = TextEditingController();
@@ -41,13 +42,36 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   final MediaCompressionService _compressionService = MediaCompressionService();
   bool _isEditingDraft = false;
   String? _draftId;
+  
+  // User's full name - fetched on init
+  String _authorName = '';
 
   @override
   void initState() {
     super.initState();
+    _loadUserName();
     if (widget.draft != null) {
       _loadDraft(widget.draft!);
     }
+  }
+  
+  Future<void> _loadUserName() async {
+    try {
+      final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      final userRepo = context.read<UserRepository>();
+      final profile = await userRepo.getUserProfile(uid);
+      if (profile != null && mounted) {
+        final firstName = profile.firstName?.trim() ?? '';
+        final lastName = profile.lastName?.trim() ?? '';
+        setState(() {
+          _authorName = '$firstName $lastName'.trim();
+          if (_authorName.isEmpty) {
+            _authorName = profile.displayName ?? profile.username ?? 'Unknown';
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _loadDraft(DraftModel draft) {
@@ -66,7 +90,6 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
   @override
   void dispose() {
     _titleCtrl.dispose();
-    _authorCtrl.dispose();
     _descCtrl.dispose();
     _languageCtrl.dispose();
     _tagsCtrl.dispose();
@@ -230,7 +253,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
       return;
     }
     
-    if (_authorCtrl.text.trim().isEmpty) {
+    if (_authorName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_podcast.author_required'), style: GoogleFonts.inter()), backgroundColor: Colors.red),
       );
@@ -268,7 +291,7 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
 
       await podcastRepo.createPodcast(
         title: _titleCtrl.text.trim(),
-        author: _authorCtrl.text.trim(),
+        author: _authorName,
         description: _descCtrl.text.trim(),
         coverUrl: _coverUrl,
         coverThumbUrl: _coverThumbUrl,
@@ -659,28 +682,6 @@ class _CreatePodcastPageState extends State<CreatePodcastPage> {
                   style: GoogleFonts.inter(),
                   decoration: InputDecoration(
                     labelText: 'Title *',
-                    labelStyle: GoogleFonts.inter(),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.1)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Color(0xFFBFAE01), width: 2),
-                    ),
-                    filled: true,
-                    fillColor: isDark ? const Color(0xFF111111) : const Color(0xFFFAFAFA),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Author
-                TextField(
-                  controller: _authorCtrl,
-                  style: GoogleFonts.inter(),
-                  decoration: InputDecoration(
-                    labelText: 'Author *',
                     labelStyle: GoogleFonts.inter(),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                     enabledBorder: OutlineInputBorder(
