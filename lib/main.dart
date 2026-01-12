@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -89,20 +90,31 @@ void _sanityLogFirebase() {
 }
 
 Future<void> main() async {
+  // Wrap entire app in zone to catch async errors on web
+  runZonedGuarded(() async {
+    await _initApp();
+  }, (error, stackTrace) {
+    // Suppress known web debug errors
+    final errorString = error.toString();
+    if (kIsWeb && (errorString.contains('LegacyJavaScriptObject') ||
+        errorString.contains('DiagnosticsNode'))) {
+      return; // Silently ignore
+    }
+    debugPrint('Unhandled error: $error');
+  });
+}
+
+Future<void> _initApp() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   
   // Suppress LegacyJavaScriptObject errors on web debug mode
-  // These occur when Flutter's widget inspector tries to debug Firestore JS objects
   if (kIsWeb) {
     FlutterError.onError = (FlutterErrorDetails details) {
       final errorString = details.exception.toString();
-      // Suppress known web debug errors that don't affect functionality
       if (errorString.contains('LegacyJavaScriptObject') ||
           errorString.contains('DiagnosticsNode')) {
-        debugPrint('⚠️ Suppressed web debug error: ${details.exception.runtimeType}');
-        return;
+        return; // Silently ignore
       }
-      // For all other errors, use default handler
       FlutterError.presentError(details);
     };
   }
