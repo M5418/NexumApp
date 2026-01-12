@@ -171,25 +171,41 @@ class FirebaseConversationRepository implements ConversationRepository {
     if (u == null) return;
 
     final convRef = _convs.doc(conversationId);
-    // reset unread counter for me
-    await convRef.update({'unread.${u.uid}': 0, 'updatedAt': FieldValue.serverTimestamp()});
+    
+    // First check if the current user actually has unread messages
+    // Only the receiver of messages should mark them as read
+    final convDoc = await convRef.get();
+    if (!convDoc.exists) return;
+    
+    final convData = convDoc.data() ?? {};
+    final lastFromUserId = convData['lastFromUserId']?.toString() ?? '';
+    final unreadMap = Map<String, dynamic>.from(convData['unread'] ?? {});
+    final myUnreadCount = int.tryParse((unreadMap[u.uid] ?? 0).toString()) ?? 0;
+    
+    // Only reset unread counter if:
+    // 1. Current user has unread messages (myUnreadCount > 0)
+    // 2. Current user is NOT the sender of the last message
+    if (myUnreadCount > 0 && lastFromUserId != u.uid) {
+      await convRef.update({'unread.${u.uid}': 0, 'updatedAt': FieldValue.serverTimestamp()});
 
-    // best-effort mark recent messages as read (avoid inequality constraints)
-    final msgs = await convRef
-        .collection('messages')
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .get();
-    final batch = _db.batch();
-    for (final m in msgs.docs) {
-      final md = m.data();
-      if ((md['senderId'] ?? '') != u.uid) {
-        batch.update(m.reference, {
-          'readBy': FieldValue.arrayUnion([u.uid]),
-        });
+      // Mark recent messages as read (only messages sent TO me, not BY me)
+      final msgs = await convRef
+          .collection('messages')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .get();
+      final batch = _db.batch();
+      for (final m in msgs.docs) {
+        final md = m.data();
+        // Only mark messages from others as read
+        if ((md['senderId'] ?? '') != u.uid) {
+          batch.update(m.reference, {
+            'readBy': FieldValue.arrayUnion([u.uid]),
+          });
+        }
       }
+      await batch.commit();
     }
-    await batch.commit();
   }
 
   @override

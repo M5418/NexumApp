@@ -602,8 +602,12 @@ class _ConversationsPageState extends State<ConversationsPage>
       setState(() {
         _selectedChat = item;
         _selectedCommunity = null;
+        // Only reset unread count locally if user has unread messages
+        // The actual reset happens in markRead which checks if user is the receiver
         final idx = _chats.indexWhere((c) => c.conversationId == item.conversationId);
-        if (idx != -1) _chats[idx] = _chats[idx].copyWith(unreadCount: 0);
+        if (idx != -1 && _chats[idx].unreadCount > 0) {
+          _chats[idx] = _chats[idx].copyWith(unreadCount: 0);
+        }
       });
       try {
         await _convRepo.markRead(item.conversationId);
@@ -859,14 +863,17 @@ class _ConversationsPageState extends State<ConversationsPage>
                   try {
                     await _convRepo.markRead(item.conversationId);
                     if (!ctx.mounted) return;
-                    setState(() {
-                      final idx = _chats.indexWhere(
-                        (c) => c.conversationId == item.conversationId,
-                      );
-                      if (idx != -1) {
-                        _chats[idx] = _chats[idx].copyWith(unreadCount: 0);
-                      }
-                    });
+                    // Only reset locally if user had unread messages
+                    if (item.unreadCount > 0) {
+                      setState(() {
+                        final idx = _chats.indexWhere(
+                          (c) => c.conversationId == item.conversationId,
+                        );
+                        if (idx != -1) {
+                          _chats[idx] = _chats[idx].copyWith(unreadCount: 0);
+                        }
+                      });
+                    }
                   } catch (e) {
                     if (!ctx.mounted) return;
                     ScaffoldMessenger.of(ctx).showSnackBar(
