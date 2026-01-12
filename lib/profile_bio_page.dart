@@ -167,7 +167,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                     controller: _bioController,
                     maxLines: null,
                     expands: true,
-                    maxLength: 1000,
+                    maxLength: 150,
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       color: isDarkMode ? Colors.white : Colors.black,
@@ -333,7 +333,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
                                     controller: _bioController,
                                     maxLines: null,
                                     expands: true,
-                                    maxLength: 1000,
+                                    maxLength: 150,
                                     style: GoogleFonts.inter(
                                       fontSize: 16,
                                       color: isDarkMode ? Colors.white : Colors.black,

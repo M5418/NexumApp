@@ -824,6 +824,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _usernameController,
+                    maxLength: 20,
                     decoration: const InputDecoration(
                       hintText: 'Enter your username',
                       border: OutlineInputBorder(
@@ -851,6 +852,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
                     controller: _bioController,
                     minLines: 3,
                     maxLines: 5,
+                    maxLength: 150,
                     decoration: const InputDecoration(
                       hintText: 'Tell something about you',
                       border: OutlineInputBorder(

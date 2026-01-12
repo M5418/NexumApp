@@ -157,6 +157,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
               const SizedBox(height: 24),
               TextField(
                 controller: _usernameController,
+                maxLength: 20,
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   color: isDarkMode ? Colors.white : Colors.black,
@@ -301,6 +302,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                               const SizedBox(height: 20),
                               TextField(
                                 controller: _usernameController,
+                                maxLength: 20,
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   color: isDarkMode ? Colors.white : Colors.black,
