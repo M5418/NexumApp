@@ -589,7 +589,9 @@ class _EditProfilPageState extends State<EditProfilPage> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
           children: [
             // Cover + Avatar
             Stack(

@@ -16,6 +16,7 @@ import 'repositories/interfaces/story_repository.dart';
 import 'repositories/models/story_music_model.dart';
 import 'services/media_compression_service.dart';
 import 'widgets/story_music_picker_sheet.dart';
+import 'widgets/story_video_trimmer.dart';
 
 enum StoryComposeType { image, video, text, mixed }
 
@@ -295,6 +296,51 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
       } catch (_) {}
 
       if (isVideo) {
+        // Check if video needs trimming (> 30 seconds)
+        if (!kIsWeb) {
+          final videoFile = File(f.path);
+          final tempVc = VideoPlayerController.file(videoFile);
+          try {
+            await tempVc.initialize();
+            final duration = tempVc.value.duration;
+            await tempVc.dispose();
+            
+            // If video is longer than 30 seconds, show trimmer
+            if (duration.inSeconds > 30) {
+              if (!mounted) return;
+              final trimmedPath = await Navigator.push<String>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StoryVideoTrimmerPage(
+                    videoFile: videoFile,
+                    maxDuration: const Duration(seconds: 30),
+                  ),
+                ),
+              );
+              
+              if (trimmedPath == null || !mounted) continue;
+              
+              // Use trimmed video
+              final trimmedFile = File(trimmedPath);
+              final vc = VideoPlayerController.file(trimmedFile);
+              await vc.initialize();
+              await vc.setLooping(true);
+              _items.add(MediaItem(
+                file: XFile(trimmedPath),
+                isVideo: true,
+                videoController: vc,
+                videoDuration: vc.value.duration,
+                muted: false,
+                fileSizeBytes: await trimmedFile.length(),
+              ));
+              continue;
+            }
+          } catch (e) {
+            debugPrint('Error checking video duration: $e');
+          }
+        }
+        
+        // Normal video handling (under 30s or web)
         final vc = kIsWeb
             ? VideoPlayerController.networkUrl(Uri.parse(f.path))
             : VideoPlayerController.file(File(f.path));

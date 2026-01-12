@@ -5,8 +5,23 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
 import 'services/push_notification_service.dart';
+import 'services/onboarding_service.dart';
 import 'home_feed_page.dart';
 import 'sign_in_page.dart';
+import 'profile_flow_start.dart';
+import 'profile_name_page.dart';
+import 'profile_birthday_page.dart';
+import 'profile_gender_page.dart';
+import 'profile_address_page.dart';
+import 'profile_bio_page.dart';
+import 'interest_selection_page.dart';
+import 'connect_friends_page.dart';
+import 'profile_photo_page.dart';
+import 'profile_cover_page.dart';
+import 'profile_completion_welcome.dart';
+import 'status_selection_page.dart';
+import 'profile_experience_page.dart';
+import 'profile_training_page.dart';
 import 'repositories/interfaces/post_repository.dart';
 import 'repositories/interfaces/story_repository.dart';
 import 'repositories/models/post_model.dart';
@@ -24,7 +39,9 @@ class AppWrapper extends StatefulWidget {
 class _AppWrapperState extends State<AppWrapper> {
   final AuthService _authService = AuthService();
   final PushNotificationService _pushService = PushNotificationService();
+  final OnboardingService _onboardingService = OnboardingService();
   StreamSubscription<Map<String, dynamic>>? _notificationSub;
+  bool _onboardingChecked = false;
 
   @override
   void initState() {
@@ -35,6 +52,16 @@ class _AppWrapperState extends State<AppWrapper> {
   Future<void> _initializeAndPreload() async {
     // Initialize auth - this is fast, no artificial delays
     await _authService.initialize();
+    
+    // Initialize onboarding service if user is logged in
+    final currentUser = fb.FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      await _onboardingService.initialize(currentUser.uid);
+    }
+    
+    if (mounted) {
+      setState(() => _onboardingChecked = true);
+    }
     
     // Initialize push notifications and splash (skip on web)
     if (!kIsWeb) {
@@ -98,16 +125,69 @@ class _AppWrapperState extends State<AppWrapper> {
     super.dispose();
   }
 
+  /// Get the appropriate page based on onboarding step
+  Widget _getOnboardingPage(OnboardingStep step) {
+    switch (step) {
+      case OnboardingStep.signUp:
+      case OnboardingStep.profileFlowStart:
+        return const ProfileFlowStart();
+      case OnboardingStep.name:
+        return const ProfileNamePage();
+      case OnboardingStep.birthday:
+        return const ProfileBirthdayPage();
+      case OnboardingStep.gender:
+        return const ProfileGenderPage();
+      case OnboardingStep.address:
+        return const ProfileAddressPage();
+      case OnboardingStep.photo:
+        return const ProfilePhotoPage();
+      case OnboardingStep.cover:
+        return const ProfileCoverPage();
+      case OnboardingStep.welcome:
+        return const ProfileCompletionWelcome();
+      case OnboardingStep.status:
+        return const StatusSelectionPage();
+      case OnboardingStep.experience:
+        return const ProfileExperiencePage();
+      case OnboardingStep.training:
+        return const ProfileTrainingPage();
+      case OnboardingStep.bio:
+        return const ProfileBioPage();
+      case OnboardingStep.interests:
+        return const InterestSelectionPage();
+      case OnboardingStep.connectFriends:
+        return const ConnectFriendsPage();
+      case OnboardingStep.completed:
+        return const HomeFeedPage();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: _authService,
       builder: (context, child) {
-        if (_authService.isLoggedIn) {
-          return const HomeFeedPage();
-        } else {
+        if (!_authService.isLoggedIn) {
           return const SignInPage();
         }
+        
+        // User is logged in - check onboarding status
+        if (!_onboardingChecked) {
+          // Still loading onboarding status - show loading indicator
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
+            ),
+          );
+        }
+        
+        // Check if onboarding is complete
+        if (_onboardingService.isOnboardingComplete) {
+          return const HomeFeedPage();
+        }
+        
+        // User needs to complete onboarding - show appropriate page
+        return _getOnboardingPage(_onboardingService.currentStep);
       },
     );
   }

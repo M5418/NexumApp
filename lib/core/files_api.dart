@@ -85,7 +85,30 @@ class FilesApi {
 
       // Video
       case 'mp4':
+      case 'm4v':
         return 'video/mp4';
+      case 'mov':
+      case 'qt':
+        return 'video/quicktime';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'mkv':
+        return 'video/x-matroska';
+      case 'wmv':
+        return 'video/x-ms-wmv';
+      case 'flv':
+        return 'video/x-flv';
+      case '3gp':
+        return 'video/3gpp';
+      case '3g2':
+        return 'video/3gpp2';
+      case 'webm':
+        return 'video/webm';
+      case 'ogv':
+        return 'video/ogg';
+      case 'ts':
+      case 'mts':
+        return 'video/mp2t';
 
       // Audio
       case 'm4a':
@@ -96,8 +119,13 @@ class FilesApi {
         return 'audio/wav';
       case 'aac':
         return 'audio/aac';
-      case 'webm':
-        return 'audio/webm';
+      case 'ogg':
+      case 'oga':
+        return 'audio/ogg';
+      case 'flac':
+        return 'audio/flac';
+      case 'wma':
+        return 'audio/x-ms-wma';
 
       default:
         return 'application/octet-stream';

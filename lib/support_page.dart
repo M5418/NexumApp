@@ -168,6 +168,9 @@ class _SupportPageState extends State<SupportPage> {
         ),
         child: SafeArea(
           child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Column(

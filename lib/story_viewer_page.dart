@@ -176,6 +176,11 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   final FocusNode _commentFocusNode = FocusNode();
 
   AnimationController? _progressController;
+  
+  // Drag-to-dismiss state
+  double _dragOffset = 0.0;
+  double _dragScale = 1.0;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -338,32 +343,30 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     List<StoryUser> users,
     List<_StoryFrame> frames,
   ) {
-    // If tapping on "Your story" (isMine), start from the first user's first story
-    if (tappedRingIndex >= 0 && tappedRingIndex < rings.length) {
-      final tapped = rings[tappedRingIndex];
-      if ((tapped['isMine'] as bool?) == true) {
-        for (int k = 0; k < frames.length; k++) {
-          if (frames[k].userIndex == 0 && frames[k].itemIndex == 0) {
-            return k;
-          }
-        }
-        return 0;
-      }
+    if (tappedRingIndex < 0 || tappedRingIndex >= rings.length || frames.isEmpty) {
+      return 0;
     }
-    int userIdxWithoutMine = 0;
-    for (int i = 0; i < rings.length; i++) {
-      final r = rings[i];
-      if ((r['isMine'] as bool?) == true) continue;
-      if (i == tappedRingIndex) break;
-      userIdxWithoutMine++;
-    }
-    userIdxWithoutMine = userIdxWithoutMine.clamp(0, users.length - 1);
+    
+    // Get the userId of the tapped ring
+    final tappedRing = rings[tappedRingIndex];
+    final tappedUserId = (tappedRing['userId'] ?? '').toString();
+    
+    if (tappedUserId.isEmpty) return 0;
+    
+    // Find the first frame for this user
     for (int k = 0; k < frames.length; k++) {
-      if (frames[k].userIndex == userIdxWithoutMine &&
-          frames[k].itemIndex == 0) {
+      if (frames[k].user.userId == tappedUserId && frames[k].itemIndex == 0) {
         return k;
       }
     }
+    
+    // Fallback: find any frame for this user
+    for (int k = 0; k < frames.length; k++) {
+      if (frames[k].user.userId == tappedUserId) {
+        return k;
+      }
+    }
+    
     return 0;
   }
 
@@ -468,14 +471,19 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     }
   }
 
-  Duration _durationForItem(StoryItem item) {
-    // Videos: 30s, Images/Text: 15s
+  Duration _durationForItem(StoryItem item, {Duration? videoDuration}) {
+    // Photos/Text: 5 seconds, Videos: actual duration capped at 30s
     switch (item.type) {
       case StoryMediaType.video:
-        return const Duration(seconds: 30);
+        if (videoDuration != null) {
+          // Cap at 30 seconds max
+          final maxDuration = const Duration(seconds: 30);
+          return videoDuration > maxDuration ? maxDuration : videoDuration;
+        }
+        return const Duration(seconds: 30); // Fallback
       case StoryMediaType.image:
       case StoryMediaType.text:
-        return const Duration(seconds: 15);
+        return const Duration(seconds: 5);
     }
   }
 
@@ -494,9 +502,15 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     
     if (!mounted) return;
     
+    // Get video duration if this is a video story
+    Duration? videoDuration;
+    if (frame.item.type == StoryMediaType.video && _videoController != null) {
+      videoDuration = _videoController!.value.duration;
+    }
+    
     final controller = AnimationController(
       vsync: this,
-      duration: _durationForItem(frame.item),
+      duration: _durationForItem(frame.item, videoDuration: videoDuration),
       animationBehavior: AnimationBehavior.preserve,
     );
     _progressController = controller;
@@ -609,120 +623,156 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                 )
               : SafeArea(
                   bottom: false,
-                  child: NotificationListener<OverscrollNotification>(
-                    onNotification: (n) {
-                      if (_currentIndex == _frames.length - 1 &&
-                          n.overscroll > 0) {
-                        Navigator.of(context).maybePop();
-                      }
-                      return false;
+                  child: GestureDetector(
+                    onVerticalDragStart: (_) {
+                      _isDragging = true;
+                      _pauseStory();
                     },
-                    child: Stack(
-                      children: [
-                        PageView.builder(
-                          controller: _pageController,
-                          itemCount: _frames.length,
-                          onPageChanged: (i) async {
-                            setState(() {
-                              _currentIndex = i;
-                              _liked = _frames[i].item.liked;
-                              _commentController.clear();
-                            });
-                            await _startPlaybackForFrame(_frames[i]);
-                          },
-                          itemBuilder: (context, index) =>
-                              _buildFrame(_frames[index]),
-                        ),
-
-                        // Top gradient
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          child: Container(
-                            height: 120,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 153),
-                                  Colors.transparent,
-                                ],
-                              ),
+                    onVerticalDragUpdate: (details) {
+                      if (details.delta.dy > 0) {
+                        setState(() {
+                          _dragOffset += details.delta.dy;
+                          _dragScale = (1 - (_dragOffset / 800)).clamp(0.8, 1.0);
+                        });
+                      }
+                    },
+                    onVerticalDragEnd: (details) {
+                      _isDragging = false;
+                      if (_dragOffset > 150 || details.velocity.pixelsPerSecond.dy > 500) {
+                        // Dismiss with animation
+                        Navigator.of(context).pop();
+                      } else {
+                        // Snap back
+                        setState(() {
+                          _dragOffset = 0;
+                          _dragScale = 1.0;
+                        });
+                        _resumeStory();
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: _isDragging ? Duration.zero : const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      transform: Matrix4.diagonal3Values(_dragScale, _dragScale, 1.0)
+                        ..setTranslationRaw(0.0, _dragOffset, 0.0),
+                      child: NotificationListener<OverscrollNotification>(
+                        onNotification: (n) {
+                          if (_currentIndex == _frames.length - 1 &&
+                              n.overscroll > 0) {
+                            Navigator.of(context).maybePop();
+                          }
+                          return false;
+                        },
+                        child: Stack(
+                          children: [
+                            PageView.builder(
+                              controller: _pageController,
+                              itemCount: _frames.length,
+                              onPageChanged: (i) async {
+                                setState(() {
+                                  _currentIndex = i;
+                                  _liked = _frames[i].item.liked;
+                                  _commentController.clear();
+                                });
+                                await _startPlaybackForFrame(_frames[i]);
+                              },
+                              itemBuilder: (context, index) =>
+                                  _buildFrame(_frames[index]),
                             ),
-                          ),
-                        ),
 
-                        // Progress bars
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          right: 8,
-                          child: _buildProgressBars(),
-                        ),
-
-                        // Header
-                        Positioned(top: 40, left: 12, right: 12, child: _header()),
-
-                        // Tap zones
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          top: 80, // below progress + header
-                          bottom: 120, // above comment bar
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onLongPressStart: (_) => _pauseStory(),
-                            onLongPressEnd: (_) => _resumeStory(),
-                            onLongPressCancel: _resumeStory,
-                            child: Row(
-                              children: [
-                                // Left 1/3 = previous
-                                Expanded(
-                                  flex: 1,
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: _goToPreviousStory,
+                            // Top gradient
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.black.withValues(alpha: 153),
+                                      Colors.transparent,
+                                    ],
                                   ),
                                 ),
-                                // Right 2/3 = next
-                                Expanded(
-                                  flex: 2,
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: _goToNextStory,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        // Bottom gradient
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: Container(
-                            height: 160,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 153),
-                                  Colors.transparent,
-                                ],
                               ),
                             ),
-                          ),
-                        ),
 
-                        // Comment + actions bar
-                        Positioned(
-                            left: 12, right: 12, bottom: 24, child: _commentBar()),
-                      ],
+                            // Progress bars
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              right: 8,
+                              child: _buildProgressBars(),
+                            ),
+
+                            // Header
+                            Positioned(top: 40, left: 12, right: 12, child: _header()),
+
+                            // Tap zones
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: 80,
+                              bottom: 120,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onLongPressStart: (_) => _pauseStory(),
+                                onLongPressEnd: (_) => _resumeStory(),
+                                onLongPressCancel: _resumeStory,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 1,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: _goToPreviousStory,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: _goToNextStory,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // Bottom gradient
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: 160,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      Colors.black.withValues(alpha: 153),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // Comment + actions bar
+                            Positioned(
+                              left: 12,
+                              right: 12,
+                              bottom: 24,
+                              child: _commentBar(),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

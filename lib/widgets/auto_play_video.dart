@@ -7,6 +7,7 @@ class AutoPlayVideo extends StatefulWidget {
   final double width;
   final double height;
   final BorderRadius? borderRadius;
+  final VoidCallback? onTap; // Callback when video is tapped (e.g., navigate to post)
 
   // Global mute controller: toggling this will mute/unmute ALL AutoPlayVideo instances
   static final ValueNotifier<bool> muteNotifier = ValueNotifier<bool>(true);
@@ -31,6 +32,7 @@ class AutoPlayVideo extends StatefulWidget {
     required this.width,
     required this.height,
     this.borderRadius,
+    this.onTap,
   });
 
   @override
@@ -216,10 +218,10 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
                 ),
               ),
 
-            // Tap overlay to request play/pause for this item (honors single-player rule)
+            // Tap overlay - navigate to post if onTap provided, otherwise toggle play/pause
             Positioned.fill(
               child: GestureDetector(
-                onTap: _onTapTogglePlayPause,
+                onTap: widget.onTap ?? _onTapTogglePlayPause,
                 child: Container(color: Colors.transparent),
               ),
             ),

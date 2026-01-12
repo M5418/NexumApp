@@ -6,6 +6,8 @@ import 'profile_bio_page.dart';
 import 'core/profile_api.dart';
 import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'widgets/onboarding_app_bar_actions.dart';
 
 class ProfileTrainingPage extends StatefulWidget {
   final String firstName;
@@ -147,6 +149,10 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
     setState(() => _isSaving = true);
     try {
       await ProfileApi().update({'trainings': trainings});
+      
+      // Update onboarding step
+      await OnboardingService().setStep(OnboardingStep.bio);
+      
       if (!mounted) return;
 
       final next = ProfileBioPage(
@@ -159,7 +165,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
       } else {
         Navigator.push(
           context,
-          MaterialPageRoute(settings: const RouteSettings(name: 'interest_selection'), builder: (context) => next),
+          MaterialPageRoute(settings: const RouteSettings(name: 'profile_bio'), builder: (context) => next),
         );
       }
     } catch (e) {
@@ -206,7 +212,7 @@ class _ProfileTrainingPageState extends State<ProfileTrainingPage> {
             children: [
               const SizedBox(height: 32),
               Text(
-                "Add your trainings & education",
+                lang.t('profile_training.heading'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -465,14 +471,17 @@ class _MobileAppBar extends StatelessWidget {
                     ),
                     onPressed: () => Navigator.pop(context),
                   ),
-                  Text(
-                    lang.t('profile_training.title'),
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: isDarkMode ? Colors.white : Colors.black,
+                  Expanded(
+                    child: Text(
+                      lang.t('profile_training.title'),
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: isDarkMode ? Colors.white : Colors.black,
+                      ),
                     ),
                   ),
+                  OnboardingAppBarActions(isDark: isDarkMode),
                 ],
               ),
               const SizedBox(height: 16),

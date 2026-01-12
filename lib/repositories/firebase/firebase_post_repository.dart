@@ -55,7 +55,9 @@ class FirebasePostRepository implements PostRepository {
         // Improved video detection for Firebase Storage URLs with query params
         final l = url.toLowerCase();
         final isVideo = l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
-            l.contains('.avi') || l.contains('.mkv') ||
+            l.contains('.avi') || l.contains('.mkv') || l.contains('.m4v') ||
+            l.contains('.wmv') || l.contains('.flv') || l.contains('.3gp') ||
+            l.contains('.3g2') || l.contains('.ogv') || l.contains('.ts') ||
             l.contains('/videos/') || l.contains('video_') || l.contains('video%2f');
         thumbs.add(MediaThumb(
           type: isVideo ? 'video' : 'image',
@@ -119,7 +121,9 @@ class FirebasePostRepository implements PostRepository {
         // Improved video detection for Firebase Storage URLs with query params
         final l = url.toLowerCase();
         final isVideo = l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
-            l.contains('.avi') || l.contains('.mkv') ||
+            l.contains('.avi') || l.contains('.mkv') || l.contains('.m4v') ||
+            l.contains('.wmv') || l.contains('.flv') || l.contains('.3gp') ||
+            l.contains('.3g2') || l.contains('.ogv') || l.contains('.ts') ||
             l.contains('/videos/') || l.contains('video_') || l.contains('video%2f');
         mediaThumbsData.add({
           'type': isVideo ? 'video' : 'image',

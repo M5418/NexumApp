@@ -853,7 +853,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       final l = url.toLowerCase();
       // Check for video extensions (before query params)
       if (l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') || 
-          l.contains('.avi') || l.contains('.mkv')) {
+          l.contains('.avi') || l.contains('.mkv') || l.contains('.m4v') ||
+          l.contains('.wmv') || l.contains('.flv') || l.contains('.3gp') ||
+          l.contains('.3g2') || l.contains('.ogv') || l.contains('.ts')) {
         return true;
       }
       // Check for video path patterns in Firebase Storage URLs
@@ -959,7 +961,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     bool isVideoUrl(String url) {
       final l = url.toLowerCase();
       if (l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') || 
-          l.contains('.avi') || l.contains('.mkv')) {
+          l.contains('.avi') || l.contains('.mkv') || l.contains('.m4v') ||
+          l.contains('.wmv') || l.contains('.flv') || l.contains('.3gp') ||
+          l.contains('.3g2') || l.contains('.ogv') || l.contains('.ts')) {
         return true;
       }
       if (l.contains('/videos/') || l.contains('video_') || l.contains('video%2f')) {
@@ -2511,7 +2515,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
                     // Stories row
                     SizedBox(
-                      height: 90,
+                      height: 110,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: ListView.builder(
@@ -2523,9 +2527,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                 final isMine = ring.userId == _currentUserId;
 
                                 return Container(
-                                  width: 70,
+                                  width: 80,
                                   margin: EdgeInsets.only(
-                                    right: index < _storyRings.length - 1 ? 16 : 0,
+                                    right: index < _storyRings.length - 1 ? 12 : 0,
                                   ),
                                   child: story_widget.StoryRing(
                                     imageUrl: ring.userAvatar,

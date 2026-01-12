@@ -178,7 +178,16 @@ class ProfileCacheService extends ChangeNotifier {
     _mediaItems = [];
     _isProfileLoaded = false;
     _isPostsLoaded = false;
-    notifyListeners();
+    _safeNotifyListeners();
+  }
+  
+  /// Safe notify that catches disposed listener errors
+  void _safeNotifyListeners() {
+    try {
+      notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ [ProfileCache] notifyListeners error (safe to ignore): $e');
+    }
   }
   
   /// Refresh profile data

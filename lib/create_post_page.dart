@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:video_compress/video_compress.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -463,6 +465,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       return MediaThumb(
         type: MediaType.video,
         videoThumbnailUrl: _mediaItems.first.thumbnailUrl,
+        videoPath: _mediaItems.first.path, // Pass video path for preview
         width: double.infinity,
         height: 200,
         borderRadius: 25,
@@ -487,6 +490,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
             type: item.type,
             imageUrl: item.path,
             videoThumbnailUrl: item.thumbnailUrl,
+            videoPath: item.type == MediaType.video ? item.path : null,
             onRemove: () {
               setState(() {
                 _mediaItems.removeAt(index);
@@ -908,16 +912,33 @@ class _CreatePostPageState extends State<CreatePostPage> {
         String? thumbnailPath;
         if (!kIsWeb) {
           try {
-            final thumbnail = await VideoCompress.getFileThumbnail(
-              video.path,
-              quality: 50,
+            // Try video_thumbnail package first (more reliable)
+            final tempDir = await getTemporaryDirectory();
+            thumbnailPath = await VideoThumbnail.thumbnailFile(
+              video: video.path,
+              thumbnailPath: tempDir.path,
+              imageFormat: ImageFormat.JPEG,
+              maxWidth: 512,
+              quality: 75,
             );
-            thumbnailPath = thumbnail.path;
+            debugPrint('✅ Video thumbnail generated: $thumbnailPath');
           } catch (e) {
-            debugPrint('⚠️ Failed to generate video thumbnail: $e');
+            debugPrint('⚠️ video_thumbnail failed: $e');
+            // Fallback to VideoCompress
+            try {
+              final thumbnail = await VideoCompress.getFileThumbnail(
+                video.path,
+                quality: 50,
+              );
+              thumbnailPath = thumbnail.path;
+              debugPrint('✅ VideoCompress thumbnail generated: $thumbnailPath');
+            } catch (e2) {
+              debugPrint('⚠️ VideoCompress also failed: $e2');
+            }
           }
         }
         
+        if (!mounted) return;
         setState(() {
           // Only one video allowed, replace any existing media
           _mediaItems
@@ -926,7 +947,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 type: MediaType.video, 
                 path: video.path, 
                 xfile: video,
-                thumbnailUrl: thumbnailPath ?? video.path)); // Use thumbnail or fallback to video path
+                thumbnailUrl: thumbnailPath)); // Only use actual thumbnail, null shows placeholder
         });
       }
     } on PlatformException catch (e) {

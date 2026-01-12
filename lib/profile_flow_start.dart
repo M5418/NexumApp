@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'core/i18n/language_provider.dart';
 import 'profile_name_page.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'widgets/onboarding_app_bar_actions.dart';
 
 class ProfileFlowStart extends StatelessWidget {
   const ProfileFlowStart({super.key});
@@ -33,6 +35,9 @@ class ProfileFlowStart extends StatelessWidget {
             ),
           ),
           centerTitle: true,
+          actions: [
+            OnboardingAppBarActions(isDark: isDarkMode),
+          ],
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(25),
@@ -171,7 +176,10 @@ class ProfileFlowStart extends StatelessWidget {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      // Update onboarding step
+                      await OnboardingService().setStep(OnboardingStep.name);
+                      if (!context.mounted) return;
                       Navigator.push(
                         context,
                         MaterialPageRoute(settings: const RouteSettings(name: 'profile_name'), builder: (_) => const ProfileNamePage()),
@@ -360,7 +368,10 @@ class ProfileFlowStart extends StatelessWidget {
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: () {
+                          onPressed: () async {
+                            // Update onboarding step
+                            await OnboardingService().setStep(OnboardingStep.name);
+                            if (!context.mounted) return;
                             _pushWithPopupTransition(context, const ProfileNamePage());
                           },
                           style: ElevatedButton.styleFrom(

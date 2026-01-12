@@ -68,9 +68,11 @@ class _SignInPageState extends State<SignInPage> {
       final res = await repo.signInWithEmail(email: email, password: password);
 
       if (res.success) {
-        // Preload all caches BEFORE navigating so all pages are instant
+        // Clear old cached data first, then preload new user's data
         final user = fb.FirebaseAuth.instance.currentUser;
         if (user != null) {
+          ProfileCacheService().clear();
+          AppCacheService().clear();
           await Future.wait([
             ProfileCacheService().preloadCurrentUserData(user.uid),
             AppCacheService().preloadAppData(user.uid),

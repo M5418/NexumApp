@@ -146,7 +146,16 @@ class AppCacheService extends ChangeNotifier {
     _isConversationsLoaded = false;
     _isCommunitiesLoaded = false;
     _isSuggestedUsersLoaded = false;
-    notifyListeners();
+    _safeNotifyListeners();
+  }
+  
+  /// Safe notify that catches disposed listener errors
+  void _safeNotifyListeners() {
+    try {
+      notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ [AppCache] notifyListeners error (safe to ignore): $e');
+    }
   }
   
   /// Refresh all data

@@ -27,13 +27,13 @@ class StoryRing extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        width: 70,
+        width: 80,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 70,
-              height: 70,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: isMine
@@ -71,7 +71,7 @@ class StoryRing extends StatelessWidget {
                       ? Stack(
                           children: [
                             Padding(
-                              padding: const EdgeInsets.all(3),
+                              padding: const EdgeInsets.all(4),
                               child: Container(
                                 decoration: const BoxDecoration(shape: BoxShape.circle),
                                 clipBehavior: Clip.antiAlias,
@@ -120,29 +120,67 @@ class StoryRing extends StatelessWidget {
                           ],
                         )
                       // Show + icon when no active stories
-                      : Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF666666),
-                              width: 2,
-                              style: BorderStyle.solid,
-                            ),
-                          ),
-                          child: Center(
-                            child: GestureDetector(
-                              onTap: onAddTap ?? onTap,
-                              behavior: HitTestBehavior.opaque,
-                              child: const Icon(
-                                Icons.add,
-                                color: Color(0xFF666666),
-                                size: 24,
+                      : Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Container(
+                                width: 75,
+                                height: 75,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF666666).withValues(alpha: 0.2),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: imageUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: imageUrl!,
+                                        width: 75,
+                                        height: 75,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Container(
+                                          width: 75,
+                                          height: 75,
+                                          color: const Color(0xFF666666).withValues(alpha: 0.2),
+                                          child: const Center(
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                                            ),
+                                          ),
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          width: 75,
+                                          height: 75,
+                                          color: const Color(0xFF666666).withValues(alpha: 0.2),
+                                          child: const Icon(Icons.person, color: Color(0xFF666666), size: 38),
+                                        ),
+                                      )
+                                    : const Center(child: Icon(Icons.person, color: Color(0xFF666666), size: 38)),
                               ),
                             ),
-                          ),
+                            // Small + button at bottom right
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: GestureDetector(
+                                onTap: onAddTap ?? onTap,
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFBFAE01),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                  child: const Icon(Icons.add, size: 14, color: Colors.black),
+                                ),
+                              ),
+                            ),
+                          ],
                         ))
                   : Padding(
-                      padding: const EdgeInsets.all(3),
+                      padding: const EdgeInsets.all(4),
                       child: Container(
                         decoration: const BoxDecoration(shape: BoxShape.circle),
                         clipBehavior: Clip.antiAlias,

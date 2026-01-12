@@ -11,7 +11,6 @@ import 'player_page.dart';
 import 'podcast_categories_page.dart';
 import 'favorites_page.dart';
 import 'my_library_page.dart';
-import '../data/interest_domains.dart';
 import 'podcast_search_page.dart';
 import 'podcasts_three_column_page.dart';
 import '../responsive/responsive_breakpoints.dart';
@@ -99,11 +98,10 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
   String? _errorTop;
   List<Podcast> _top = [];
 
-  bool _loadingDomain = true;
-  String? _errorDomain;
-  List<Podcast> _domainItems = [];
-  String _domainTitle = 'Educations'; // UI label
-  String? _domainCategoryParam; // actual category string from interestDomains
+  // All podcasts for vertical list
+  bool _loadingAll = true;
+  String? _errorAll;
+  List<Podcast> _allPodcasts = [];
 
   String _selectedLanguage = 'All';
   bool _hasInitializedLanguage = false;
@@ -114,11 +112,10 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
   @override
   void initState() {
     super.initState();
-    _pickDomainSection();
     // FASTFEED: Load cached podcasts instantly, then refresh
     _loadFromCacheInstantly();
     _loadTop();
-    _loadDomain();
+    _loadAllPodcasts();
   }
 
   /// INSTANT: Load cached podcasts (no network wait)
@@ -126,7 +123,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
     try {
       // Load top podcasts from cache
       final topModels = await _firebasePodcastRepo.listPodcastsFromCache(
-        limit: 20,
+        limit: 10,
         isPublished: true,
       );
       if (topModels.isNotEmpty && mounted) {
@@ -136,19 +133,16 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
         });
       }
       
-      // Load domain podcasts from cache
-      if (_domainCategoryParam != null) {
-        final domainModels = await _firebasePodcastRepo.listPodcastsFromCache(
-          limit: 20,
-          isPublished: true,
-          category: _domainCategoryParam,
-        );
-        if (domainModels.isNotEmpty && mounted) {
-          setState(() {
-            _domainItems = domainModels.map(Podcast.fromModel).toList();
-            _loadingDomain = false;
-          });
-        }
+      // Load all podcasts from cache
+      final allModels = await _firebasePodcastRepo.listPodcastsFromCache(
+        limit: 50,
+        isPublished: true,
+      );
+      if (allModels.isNotEmpty && mounted) {
+        setState(() {
+          _allPodcasts = allModels.map(Podcast.fromModel).toList();
+          _loadingAll = false;
+        });
       }
     } catch (_) {
       // Cache miss - will load from server
@@ -192,7 +186,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
     for (final p in _top) {
       if ((p.language ?? '').isNotEmpty) set.add(p.language!);
     }
-    for (final p in _domainItems) {
+    for (final p in _allPodcasts) {
       if ((p.language ?? '').isNotEmpty) set.add(p.language!);
     }
     return set.toList();
@@ -201,17 +195,8 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
   List<Podcast> get _filteredTop =>
       _selectedLanguage == 'All' ? _top : _top.where((p) => (p.language ?? '') == _selectedLanguage).toList();
 
-  List<Podcast> get _filteredDomain =>
-      _selectedLanguage == 'All' ? _domainItems : _domainItems.where((p) => (p.language ?? '') == _selectedLanguage).toList();
-
-  void _pickDomainSection() {
-    // Try to find a domain that matches Education in your interests, else fallback to the first.
-    final fallback = interestDomains.isNotEmpty ? interestDomains.first : null;
-    final edu = interestDomains.where((d) => d.toLowerCase().contains('educ')).toList();
-    _domainCategoryParam = (edu.isNotEmpty ? edu.first : fallback);
-    // Keep the UI label matching your screenshot
-    _domainTitle = 'Educations';
-  }
+  List<Podcast> get _filteredAll =>
+      _selectedLanguage == 'All' ? _allPodcasts : _allPodcasts.where((p) => (p.language ?? '') == _selectedLanguage).toList();
 
   Future<void> _loadTop() async {
     setState(() {
@@ -220,7 +205,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
     });
     try {
       final repo = context.read<PodcastRepository>();
-      final models = await repo.listPodcasts(page: 1, limit: 20, isPublished: true);
+      final models = await repo.listPodcasts(page: 1, limit: 10, isPublished: true);
       _top = models.map(Podcast.fromModel).toList();
     } catch (e) {
       _errorTop = 'Failed to load top podcasts: $e';
@@ -229,32 +214,27 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
     }
   }
 
-  Future<void> _loadDomain() async {
+  Future<void> _loadAllPodcasts() async {
     setState(() {
-      _loadingDomain = true;
-      _errorDomain = null;
+      _loadingAll = true;
+      _errorAll = null;
     });
     try {
-      if (_domainCategoryParam == null) {
-        _domainItems = [];
-      } else {
-        final repo = context.read<PodcastRepository>();
-        final models = await repo.listPodcasts(page: 1, limit: 20, isPublished: true, category: _domainCategoryParam);
-        _domainItems = models.map(Podcast.fromModel).toList();
-      }
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.listPodcasts(page: 1, limit: 50, isPublished: true);
+      _allPodcasts = models.map(Podcast.fromModel).toList();
     } catch (e) {
-      _errorDomain = 'Failed to load $_domainTitle: $e';
+      _errorAll = 'Failed to load podcasts: $e';
     } finally {
-      if (mounted) setState(() => _loadingDomain = false);
+      if (mounted) setState(() => _loadingAll = false);
     }
   }
-
 
   void _openCreate() {
     Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'create_podcast'), builder: (_) => const CreatePodcastPage())).then((changed) {
       if (changed == true) {
         _loadTop();
-        _loadDomain();
+        _loadAllPodcasts();
       }
     });
   }
@@ -317,12 +297,12 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
         color: const Color(0xFFBFAE01),
         onRefresh: () async {
           await _loadTop();
-          await _loadDomain();
+          await _loadAllPodcasts();
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Quick actions grid (4 items, pill style) - matches screenshot
+            // Quick actions grid (4 items, pill style)
             GridView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -361,7 +341,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
             ),
             const SizedBox(height: 16),
 
-            // Top Podcast section
+            // Top Podcast section (horizontal, max 10)
             _SectionHeader(
               title: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.top_podcast'),
               onMore: () => Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'all_podcasts'), builder: (_) => const AllPodcastsPage())),
@@ -380,7 +360,7 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
               )
             else
               _HorizontalPodcastList(
-                items: _filteredTop,
+                items: _filteredTop.take(10).toList(),
                 isDark: isDark,
                 onTap: (p) => Navigator.push(
                   context,
@@ -388,42 +368,44 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
                 ),
               ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Educations (domain) section
+            // All Podcasts section (vertical scroll)
             _SectionHeader(
-              title: _domainTitle,
-              onMore: (_domainCategoryParam == null)
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings: const RouteSettings(name: 'category_podcasts'),
-                          builder: (_) => CategoryPodcastsPage(category: _domainCategoryParam!),
-                        ),
-                      ),
+              title: Provider.of<LanguageProvider>(context, listen: false).t('podcasts.all_podcasts'),
+              onMore: null,
               isDark: isDark,
             ),
             const SizedBox(height: 8),
-            if (_loadingDomain)
+            if (_loadingAll)
               const SizedBox(
-                height: 160,
+                height: 200,
                 child: Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01))),
               )
-            else if (_errorDomain != null)
+            else if (_errorAll != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(_errorDomain!, style: GoogleFonts.inter(color: Colors.red)),
+                child: Text(_errorAll!, style: GoogleFonts.inter(color: Colors.red)),
               )
             else
-              _HorizontalPodcastList(
-                items: _filteredDomain,
-                isDark: isDark,
-                onTap: (p) => Navigator.push(
-                  context,
-                  MaterialPageRoute(settings: const RouteSettings(name: 'podcast_details'), builder: (_) => PodcastDetailsPage(podcast: p)),
+              // Vertical list of all podcasts
+              ..._filteredAll.map((p) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _VerticalPodcastCard(
+                  podcast: p,
+                  isDark: isDark,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(settings: const RouteSettings(name: 'podcast_details'), builder: (_) => PodcastDetailsPage(podcast: p)),
+                  ),
+                  onPlay: (p.audioUrl ?? '').isNotEmpty
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: p)),
+                          )
+                      : null,
                 ),
-              ),
+              )),
           ],
         ),
       ),
@@ -532,7 +514,7 @@ class _HorizontalPodcastList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 190,
+      height: 200,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -540,17 +522,18 @@ class _HorizontalPodcastList extends StatelessWidget {
         itemBuilder: (ctx, i) {
           final p = items[i];
           return SizedBox(
-            width: 140,
+            width: 130,
             child: GestureDetector(
               onTap: () => onTap(p),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Cover
+                  // Cover (fixed size)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: AspectRatio(
-                      aspectRatio: 1,
+                    child: SizedBox(
+                      width: 130,
+                      height: 130,
                       // FASTFEED: Use listCoverUrl (thumbnail) for fast list loading
                       child: (p.listCoverUrl ?? '').isNotEmpty
                           ? Image.network(
@@ -571,32 +554,224 @@ class _HorizontalPodcastList extends StatelessWidget {
                             ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  // Title
-                  Text(
-                    p.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white : Colors.black,
-                      height: 1.2,
+                  const SizedBox(height: 8),
+                  // Title (flexible to take remaining space)
+                  Expanded(
+                    child: Text(
+                      p.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : Colors.black,
+                        height: 1.2,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 2),
                   // Author
                   Text(
                     p.author ?? 'Unknown',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF666666)),
+                    style: GoogleFonts.inter(fontSize: 10, color: const Color(0xFF666666)),
                   ),
                 ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// Vertical podcast card for the all podcasts list (larger with description)
+class _VerticalPodcastCard extends StatelessWidget {
+  final Podcast podcast;
+  final bool isDark;
+  final VoidCallback onTap;
+  final VoidCallback? onPlay;
+
+  const _VerticalPodcastCard({
+    required this.podcast,
+    required this.isDark,
+    required this.onTap,
+    this.onPlay,
+  });
+
+  String _formatDuration(int? seconds) {
+    if (seconds == null || seconds <= 0) return '';
+    final mins = seconds ~/ 60;
+    if (mins >= 60) {
+      final hrs = mins ~/ 60;
+      final remainMins = mins % 60;
+      return '${hrs}h ${remainMins}m';
+    }
+    return '$mins min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            if (!isDark)
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top row: Cover + Info + Play button
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Cover image (larger)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 90,
+                      height: 90,
+                      child: (podcast.listCoverUrl ?? '').isNotEmpty
+                          ? Image.network(
+                              podcast.listCoverUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                                child: const Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 32),
+                              ),
+                            )
+                          : Container(
+                              color: isDark ? const Color(0xFF111111) : const Color(0xFFEAEAEA),
+                              child: const Icon(Icons.podcasts, color: Color(0xFFBFAE01), size: 32),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Title, Author, Stats
+                  Expanded(
+                    child: SizedBox(
+                      height: 90, // Match cover image height
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              podcast.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.white : Colors.black,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            podcast.author ?? 'Unknown',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF888888),
+                            ),
+                          ),
+                          // Stats row
+                          Row(
+                            children: [
+                              if (podcast.durationSec != null && podcast.durationSec! > 0) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.access_time, size: 10, color: Color(0xFF888888)),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        _formatDuration(podcast.durationSec),
+                                        style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w500, color: const Color(0xFF888888)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.headphones, size: 10, color: Color(0xFF888888)),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '${podcast.plays}',
+                                      style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w500, color: const Color(0xFF888888)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Play button
+                  if (onPlay != null)
+                    GestureDetector(
+                      onTap: onPlay,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFBFAE01),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.play_arrow, color: Colors.black, size: 26),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Description (if available)
+            if ((podcast.description ?? '').isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Text(
+                  podcast.description!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: isDark ? const Color(0xFFAAAAAA) : const Color(0xFF666666),
+                    height: 1.4,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

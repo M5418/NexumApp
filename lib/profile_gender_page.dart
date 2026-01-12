@@ -5,6 +5,8 @@ import 'profile_address_page.dart';
 import 'core/profile_api.dart';
 import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'widgets/onboarding_app_bar_actions.dart';
 
 class ProfileGenderPage extends StatefulWidget {
   final String firstName;
@@ -69,14 +71,17 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
-                        Text(
-                          lang.t('profile_setup.profil_details'),
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                        Expanded(
+                          child: Text(
+                            lang.t('profile_setup.profil_details'),
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? Colors.white : Colors.black,
+                            ),
                           ),
                         ),
+                        OnboardingAppBarActions(isDark: isDarkMode),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -86,15 +91,20 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
             ),
           ),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(24.0),
+        body: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 24.0,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24.0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 32),
               // Subtitle
               Text(
-                "What's your gender?",
+                lang.t('profile_gender.question'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -152,7 +162,7 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
                   ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 40),
               // Next Button
               SizedBox(
                 width: double.infinity,
@@ -357,6 +367,10 @@ class _ProfileGenderPageState extends State<ProfileGenderPage> {
     setState(() => _isSaving = true);
     try {
       await ProfileApi().update({'gender': _selectedGender});
+      
+      // Update onboarding step
+      await OnboardingService().setStep(OnboardingStep.address);
+      
       if (!mounted) return;
 
       final next = ProfileAddressPage(

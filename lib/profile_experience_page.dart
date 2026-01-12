@@ -6,6 +6,8 @@ import 'core/i18n/language_provider.dart';
 import 'profile_training_page.dart';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'widgets/onboarding_app_bar_actions.dart';
 
 class ProfileExperiencePage extends StatefulWidget {
   final String firstName;
@@ -147,6 +149,10 @@ class _ProfileExperiencePageState extends State<ProfileExperiencePage> {
     setState(() => _isSaving = true);
     try {
       await ProfileApi().update({'professional_experiences': experiences});
+      
+      // Update onboarding step
+      await OnboardingService().setStep(OnboardingStep.training);
+      
       if (!mounted) return;
 
       final next = ProfileTrainingPage(
@@ -490,14 +496,17 @@ class _MobileAppBar extends StatelessWidget {
                     ),
                     onPressed: () => Navigator.pop(context),
                   ),
-                  Text(
-                    lang.t('profile_experience.experience'),
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: isDarkMode ? Colors.white : Colors.black,
+                  Expanded(
+                    child: Text(
+                      lang.t('profile_experience.experience'),
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: isDarkMode ? Colors.white : Colors.black,
+                      ),
                     ),
                   ),
+                  OnboardingAppBarActions(isDark: isDarkMode),
                 ],
               ),
               const SizedBox(height: 16),

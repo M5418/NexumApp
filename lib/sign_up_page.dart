@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'sign_in_page.dart';
 import 'profile_flow_start.dart';
@@ -9,6 +10,7 @@ import 'core/i18n/language_provider.dart';
 import 'core/i18n/translations.dart';
 import 'repositories/interfaces/auth_repository.dart';
 import 'repositories/interfaces/user_repository.dart';
+import 'services/onboarding_service.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -33,6 +35,20 @@ class _SignUpPageState extends State<SignUpPage> {
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
+  }
+
+  void _openTermsPage(BuildContext context) {
+    launchUrl(
+      Uri.parse('https://nexum-backend.web.app/terms-and-conditions'),
+      mode: LaunchMode.inAppWebView,
+    );
+  }
+
+  void _openPrivacyPage(BuildContext context) {
+    launchUrl(
+      Uri.parse('https://nexum-backend.web.app/privacy-policy'),
+      mode: LaunchMode.inAppWebView,
+    );
   }
 
   @override
@@ -275,30 +291,31 @@ class _SignUpPageState extends State<SignUpPage> {
                               TextSpan(
                                 text: lang.t('auth.terms_prefix'),
                               ),
-                              TextSpan(
-                                text: lang.t('auth.terms'),
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  color: const Color(0xFF666666),
-                                  decoration: TextDecoration.underline,
+                              WidgetSpan(
+                                child: GestureDetector(
+                                  onTap: () => _openTermsPage(context),
+                                  child: Text(
+                                    lang.t('auth.terms'),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      color: const Color(0xFFBFAE01),
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
                                 ),
                               ),
-                              const TextSpan(text: ', '),
-                              TextSpan(
-                                text: lang.t('auth.conditions'),
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  color: const Color(0xFF666666),
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
-                              const TextSpan(text: ', and '),
-                              TextSpan(
-                                text: lang.t('auth.privacy'),
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  color: const Color(0xFF666666),
-                                  decoration: TextDecoration.underline,
+                              TextSpan(text: lang.t('auth.and')),
+                              WidgetSpan(
+                                child: GestureDetector(
+                                  onTap: () => _openPrivacyPage(context),
+                                  child: Text(
+                                    lang.t('auth.privacy'),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      color: const Color(0xFFBFAE01),
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
                                 ),
                               ),
                               const TextSpan(text: '.'),
@@ -584,9 +601,16 @@ class _SignUpPageState extends State<SignUpPage> {
         'interestDomains': [],
         // Flags
         'isVerified': false,
+        // Onboarding tracking
+        'onboardingStep': OnboardingStep.signUp.index,
       });
       
       debugPrint('✅ User document created successfully with all fields');
+      
+      // Initialize onboarding service and set initial step
+      final onboardingService = OnboardingService();
+      await onboardingService.initialize(uid);
+      await onboardingService.setStep(OnboardingStep.profileFlowStart);
 
       // Navigate to profile setup; user is already signed in with Firebase
       if (mounted) {

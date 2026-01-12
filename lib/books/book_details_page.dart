@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'books_home_page.dart' show Book;
-import 'book_epub_page.dart';
 import 'book_read_page.dart';
 import 'book_play_page.dart';
 import '../repositories/interfaces/bookmark_repository.dart';
@@ -85,15 +83,12 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
 
     // Debug logging
     debugPrint('📚 [BookDetails] Book: ${book.title}');
-    debugPrint('📚 [BookDetails] EPUB URL: ${book.epubUrl ?? "null"}');
     debugPrint('📚 [BookDetails] PDF URL: ${book.pdfUrl ?? "null"}');
     debugPrint('📚 [BookDetails] Audio URL: ${book.audioUrl ?? "null"}');
     
     // Determine which format is available for reading
-    // Note: EPUB viewer only works on mobile (Android/iOS), not on web
-    final hasEpub = !kIsWeb && (book.epubUrl ?? '').isNotEmpty;
     final hasPdf = (book.pdfUrl ?? '').isNotEmpty;
-    final hasReadable = hasEpub || hasPdf;
+    final hasReadable = hasPdf;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -312,26 +307,16 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                       SizedBox(
                         width: double.infinity,
                         child: _buildActionButton(
-                          label: hasEpub
-                              ? Provider.of<LanguageProvider>(context, listen: false).t('books.start_reading_epub')
-                              : (hasPdf ? Provider.of<LanguageProvider>(context, listen: false).t('books.start_reading_pdf') : Provider.of<LanguageProvider>(context, listen: false).t('books.start_reading')),
+                          label: hasPdf ? Provider.of<LanguageProvider>(context, listen: false).t('books.start_reading_pdf') : Provider.of<LanguageProvider>(context, listen: false).t('books.start_reading'),
                           icon: Icons.auto_stories,
                           isPrimary: true,
                           onPressed: hasReadable
                               ? () {
-                                  if (hasEpub) {
-                                    debugPrint('📖 [BookDetails] Opening EPUB reader');
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(settings: const RouteSettings(name: 'book_epub'), builder: (_) => BookEpubPage(book: book)),
-                                    );
-                                  } else if (hasPdf) {
-                                    debugPrint('📖 [BookDetails] Opening PDF reader');
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(settings: const RouteSettings(name: 'book_read'), builder: (_) => BookReadPage(book: book)),
-                                    );
-                                  }
+                                  debugPrint('📖 [BookDetails] Opening PDF reader');
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(settings: const RouteSettings(name: 'book_read'), builder: (_) => BookReadPage(book: book)),
+                                  );
                                 }
                               : null,
                         ),

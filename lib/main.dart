@@ -4,6 +4,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'app_wrapper.dart';
+import 'post_page.dart';
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -290,6 +291,18 @@ class MyApp extends StatelessWidget {
             themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
             navigatorObservers: kIsWeb ? [] : [AnalyticsRouteObserver()],
             home: const AppWrapper(),
+            onGenerateRoute: (settings) {
+              // Handle /post route for video tap navigation
+              if (settings.name == '/post') {
+                final args = settings.arguments as Map<String, dynamic>?;
+                final postId = args?['postId'] as String?;
+                return MaterialPageRoute(
+                  settings: settings,
+                  builder: (_) => PostPage(postId: postId),
+                );
+              }
+              return null;
+            },
           );
         },
       ),

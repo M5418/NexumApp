@@ -5,6 +5,7 @@ import 'core/i18n/language_provider.dart';
 import 'interest_selection_page.dart';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
 
 class ProfileBioPage extends StatefulWidget {
   final String firstName;
@@ -36,6 +37,10 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
     setState(() => _isSaving = true);
     try {
       await ProfileApi().update({'bio': bio.isEmpty ? null : bio});
+      
+      // Update onboarding step
+      await OnboardingService().setStep(OnboardingStep.interests);
+      
       if (!mounted) return;
 
       final next = InterestSelectionPage(
@@ -47,14 +52,14 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
       if (!context.isMobile) {
         _pushWithPopupTransition(context, next);
       } else {
-        Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_photo'), builder: (_) => next));
+        Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'interests'), builder: (_) => next));
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to save bio. Try again.',
+            Provider.of<LanguageProvider>(context, listen: false).t('profile_bio.save_failed'),
             style: GoogleFonts.inter(),
           ),
         ),
@@ -72,6 +77,7 @@ class _ProfileBioPageState extends State<ProfileBioPage> {
     if (context.isMobile) {
       // MOBILE: original layout unchanged
       return Scaffold(
+        resizeToAvoidBottomInset: true,
         backgroundColor: isDarkMode ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8),
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(100.0),

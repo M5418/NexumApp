@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
 
 class ProfileCoverPage extends StatefulWidget {
   final String firstName;
@@ -208,6 +209,10 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
 
   void _navigateToWelcome() async {
     await _uploadIfNeeded();
+    
+    // Update onboarding step
+    await OnboardingService().setStep(OnboardingStep.welcome);
+    
     if (!mounted) return;
 
     final next = ProfileCompletionWelcome(
@@ -361,7 +366,7 @@ class _ProfileCoverPageState extends State<ProfileCoverPage> {
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'Add Cover Photo',
+                                          lang.t('profile_cover.add_cover'),
                                           style: GoogleFonts.inter(
                                             fontSize: 16,
                                             color: isDark

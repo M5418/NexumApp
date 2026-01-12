@@ -342,7 +342,12 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
           body: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
               children: [
                 // Group Avatar
                 Center(

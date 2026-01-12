@@ -5,6 +5,8 @@ import 'profile_gender_page.dart';
 import 'core/profile_api.dart';
 import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'widgets/onboarding_app_bar_actions.dart';
 
 class ProfileBirthdayPage extends StatefulWidget {
   final String firstName;
@@ -78,6 +80,10 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
     setState(() => _isSaving = true);
     try {
       await ProfileApi().update({'birthday': birthday});
+      
+      // Update onboarding step
+      await OnboardingService().setStep(OnboardingStep.gender);
+      
       if (!mounted) return;
 
       final next = ProfileGenderPage(
@@ -145,14 +151,17 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
-                        Text(
-                          Provider.of<LanguageProvider>(context).t('profile_setup.title'),
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                        Expanded(
+                          child: Text(
+                            Provider.of<LanguageProvider>(context).t('profile_setup.title'),
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? Colors.white : Colors.black,
+                            ),
                           ),
                         ),
+                        OnboardingAppBarActions(isDark: isDarkMode),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -162,8 +171,13 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
             ),
           ),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(24.0),
+        body: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 24.0,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24.0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -227,7 +241,7 @@ class _ProfileBirthdayPageState extends State<ProfileBirthdayPage> {
                   ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
                 height: 52,

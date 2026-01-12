@@ -12,6 +12,9 @@ import 'responsive/responsive_breakpoints.dart';
 import 'utils/profile_navigation.dart';
 import 'home_feed_page.dart';
 import 'core/admin_config.dart';
+import 'services/onboarding_service.dart';
+import 'services/profile_cache_service.dart';
+import 'services/app_cache_service.dart';
 
 class ConnectFriendsPage extends StatefulWidget {
   final String firstName;
@@ -213,6 +216,18 @@ Happy connecting! 🚀''';
     // ⚡ OPTIMIZATION: Send welcome message asynchronously without blocking navigation
     // Fire and forget - don't await, let it complete in background
     unawaited(_sendWelcomeMessage());
+    
+    // Mark onboarding as complete
+    await OnboardingService().markComplete();
+    
+    // Clear old cached data and preload new user's data
+    final currentUser = fb.FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      ProfileCacheService().clear();
+      AppCacheService().clear();
+      // Preload new user's profile data for instant display
+      await ProfileCacheService().preloadCurrentUserData(currentUser.uid);
+    }
 
     // Navigate to home feed immediately - smooth, no delay
     if (!mounted) return;
@@ -372,7 +387,7 @@ Happy connecting! 🚀''';
                             ),
                           ),
                           child: Text(
-                            'Done',
+                            Provider.of<LanguageProvider>(context).t('connect_friends.done'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -397,7 +412,7 @@ Happy connecting! 🚀''';
       children: [
         if (!desktop) const SizedBox(height: 8),
         Text(
-          'Find and connect with friends to see what they\'re up to.',
+          Provider.of<LanguageProvider>(context).t('connect_friends.subtitle'),
           style: GoogleFonts.inter(
             fontSize: desktop ? 15 : 16,
             color: const Color(0xFF666666),

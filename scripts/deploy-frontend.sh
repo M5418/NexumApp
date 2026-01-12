@@ -78,6 +78,12 @@ echo -e "${YELLOW}Building for production...${NC}"
 flutter build web --release
 echo -e "${GREEN}✓ Web build completed${NC}"
 
+# Copy static HTML pages to build folder
+print_section "Copying Static Pages"
+cp web/terms-and-conditions.html build/web/
+cp web/privacy-policy.html build/web/
+echo -e "${GREEN}✓ Terms and Privacy pages copied${NC}"
+
 # Deploy to Firebase Hosting
 print_section "Deploying to Firebase Hosting"
 firebase deploy --only hosting

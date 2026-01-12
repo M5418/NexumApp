@@ -6,6 +6,7 @@ import 'connect_friends_page.dart';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'services/community_interest_sync_service.dart';
+import 'services/onboarding_service.dart';
 
 class InterestSelectionPage extends StatefulWidget {
   final List<String>? initialSelected;
@@ -541,6 +542,9 @@ class _InterestSelectionPageState extends State<InterestSelectionPage> {
       await ProfileApi().update({
         'interest_domains': _selectedInterests.toList(),
       });
+      
+      // Update onboarding step
+      await OnboardingService().setStep(OnboardingStep.connectFriends);
       
       if (!mounted) return;
 

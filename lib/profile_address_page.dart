@@ -251,6 +251,9 @@ class _ProfileAddressPageState extends State<ProfileAddressPage> {
 
                 Expanded(
                   child: SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
+                    ),
                     child: Column(
                       children: [
                         // Street Address

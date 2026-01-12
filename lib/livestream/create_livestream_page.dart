@@ -261,7 +261,12 @@ class _CreateLiveStreamPageState extends State<CreateLiveStreamPage> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
           children: [
             // Thumbnail picker
             GestureDetector(

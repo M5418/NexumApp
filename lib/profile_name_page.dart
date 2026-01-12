@@ -5,6 +5,8 @@ import 'profile_birthday_page.dart';
 import 'core/profile_api.dart';
 import 'core/i18n/language_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'widgets/onboarding_app_bar_actions.dart';
 
 class ProfileNamePage extends StatefulWidget {
   const ProfileNamePage({super.key});
@@ -68,14 +70,17 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
-                        Text(
-                          lang.t('profile_setup.profil_details'),
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                        Expanded(
+                          child: Text(
+                            lang.t('profile_setup.profil_details'),
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? Colors.white : Colors.black,
+                            ),
                           ),
                         ),
+                        OnboardingAppBarActions(isDark: isDarkMode),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -85,14 +90,19 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
             ),
           ),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(24.0),
+        body: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 24.0,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24.0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 32),
               Text(
-                "What's your name?",
+                lang.t('profile_name.question'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -101,7 +111,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Enter your real names and choose an unique username',
+                lang.t('profile_name.help'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w400,
@@ -162,7 +172,7 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
                   contentPadding: EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -392,6 +402,10 @@ class _ProfileNamePageState extends State<ProfileNamePage> {
       });
       
       debugPrint('✅ Name and username saved successfully');
+      
+      // Update onboarding step
+      await OnboardingService().setStep(OnboardingStep.birthday);
+      
       if (!mounted) return;
 
       final next = ProfileBirthdayPage(firstName: first, lastName: last);

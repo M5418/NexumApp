@@ -301,6 +301,14 @@ class _PostCardState extends State<PostCard> {
           width: double.infinity,
           height: 200,
           borderRadius: BorderRadius.circular(25),
+          onTap: () {
+            // Navigate to post detail page
+            Navigator.pushNamed(
+              context,
+              '/post',
+              arguments: {'postId': _effectivePostId()},
+            );
+          },
         ),
       );
     }

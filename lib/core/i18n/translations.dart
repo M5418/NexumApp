@@ -40,9 +40,9 @@ class Translations {
       'auth.password': 'Password',
       'auth.confirm_password': 'Confirm Password',
       'auth.terms_prefix': 'By signing up you agree to our ',
-      'auth.terms': 'terms',
-      'auth.conditions': 'conditions',
-      'auth.privacy': 'privacy',
+      'auth.terms': 'Terms of Service',
+      'auth.and': ' and ',
+      'auth.privacy': 'Privacy Policy',
       'auth.sign_up': 'Sign Up',
       'auth.already_have_account': 'Already have an account? ',
       'auth.sign_in': 'Sign In',
@@ -496,6 +496,7 @@ class Translations {
       'podcasts.delete_failed': 'Failed to delete podcast',
       'podcasts.updated': 'Podcast updated successfully',
       'podcasts.update_failed': 'Failed to update podcast',
+      'podcasts.all_podcasts': 'All Podcasts',
 
       // Create Podcast
       'create_podcast.title': 'Create Podcast',
@@ -1146,6 +1147,13 @@ class Translations {
       'story.current': 'Current',
       'story.no_music_available': 'No music available',
       'story.music_removed_for_video': 'Music removed - video audio enabled',
+      'story.trim_video': 'Trim Video',
+      'story.trimming_video': 'Trimming video...',
+      'story.trim_failed': 'Failed to trim video',
+      'story.done': 'Done',
+      'story.selected': 'Selected',
+      'story.max_duration': 'Max duration',
+      'story.trim_instructions': 'Drag the handles to select up to 30 seconds of video for your story.',
 
       // Story Music Management
       'story_music.title': 'Story Music',
@@ -1552,6 +1560,43 @@ class Translations {
       'profile_flow.time_to_complete': '3-5 minutes to complete',
       'profile_flow.start_button': 'Start Profile Setup',
 
+      // Onboarding dropdown
+      'onboarding.already_have_account': 'Already have an account?',
+      'onboarding.already_have_account_confirm': 'This will sign you out and redirect you to the login page. The account you just created will be marked for review.',
+      'onboarding.forgot_password': 'Forgot password?',
+      'onboarding.forgot_password_confirm': 'This will sign you out and redirect you to the password reset page. The account you just created will be marked for review.',
+
+      // Profile Name Page
+      'profile_name.question': "What's your name?",
+      'profile_name.help': 'Enter your real names and choose a unique username',
+
+      // Profile Gender Page
+      'profile_gender.question': "What's your gender?",
+
+      // Profile Photo Page (additional keys)
+      'profile_photo.continue': 'Continue',
+      'profile_photo.skip': 'Skip for Now',
+
+      // Profile Cover Page (additional keys)
+      'profile_cover.continue': 'Continue',
+      'profile_cover.skip': 'Skip for Now',
+
+      // Profile Training Page
+      'profile_training.heading': 'Add your trainings & education',
+
+      // Profile Bio Page
+      'profile_bio.save_failed': 'Failed to save bio. Try again.',
+
+      // Profile Completion Welcome Page
+      'welcome.title': 'Welcome to Nexum',
+      'welcome.slogan': 'New way to connect the world',
+      'welcome.personalize': "Let's personalize your experience",
+      'welcome.start': "Let's start",
+
+      // Connect Friends Page
+      'connect_friends.subtitle': "Find and connect with friends to see what they're up to.",
+      'connect_friends.done': 'Done',
+
       // Interest Selection
       'interests.title': 'Select Your Interests',
       'interests.subtitle': 'Choose topics you\'re interested in to personalize your feed',
@@ -1734,9 +1779,9 @@ class Translations {
       'auth.password': 'Mot de passe',
       'auth.confirm_password': 'Confirmer le mot de passe',
       'auth.terms_prefix': "En vous inscrivant, vous acceptez nos ",
-      'auth.terms': "conditions d'utilisation",
-      'auth.conditions': 'conditions',
-      'auth.privacy': 'politique de confidentialité',
+      'auth.terms': "Conditions d'utilisation",
+      'auth.and': ' et ',
+      'auth.privacy': 'Politique de confidentialité',
       'auth.sign_up': "S'inscrire",
       'auth.already_have_account': 'Vous avez déjà un compte ? ',
       'auth.sign_in': 'Se connecter',
@@ -1851,6 +1896,7 @@ class Translations {
       'podcasts.delete_failed': 'Échec de la suppression du podcast',
       'podcasts.updated': 'Podcast mis à jour avec succès',
       'podcasts.update_failed': 'Échec de la mise à jour du podcast',
+      'podcasts.all_podcasts': 'Tous les podcasts',
 
       // Create Podcast
       'create_podcast.title': 'Créer un podcast',
@@ -2620,6 +2666,13 @@ class Translations {
       'story.current': 'Actuel',
       'story.no_music_available': 'Aucune musique disponible',
       'story.music_removed_for_video': 'Musique retirée - audio vidéo activé',
+      'story.trim_video': 'Couper la vidéo',
+      'story.trimming_video': 'Découpage en cours...',
+      'story.trim_failed': 'Échec du découpage',
+      'story.done': 'Terminé',
+      'story.selected': 'Sélectionné',
+      'story.max_duration': 'Durée max',
+      'story.trim_instructions': 'Faites glisser les poignées pour sélectionner jusqu\'à 30 secondes de vidéo.',
 
       // Story Music Management
       'story_music.title': 'Musiques Story',
@@ -2970,6 +3023,43 @@ class Translations {
       'profile_flow.time_to_complete': '3-5 minutes pour terminer',
       'profile_flow.start_button': 'Commencer la configuration',
 
+      // Onboarding dropdown
+      'onboarding.already_have_account': 'Vous avez déjà un compte ?',
+      'onboarding.already_have_account_confirm': 'Cela vous déconnectera et vous redirigera vers la page de connexion. Le compte que vous venez de créer sera marqué pour examen.',
+      'onboarding.forgot_password': 'Mot de passe oublié ?',
+      'onboarding.forgot_password_confirm': 'Cela vous déconnectera et vous redirigera vers la page de réinitialisation du mot de passe. Le compte que vous venez de créer sera marqué pour examen.',
+
+      // Profile Name Page
+      'profile_name.question': 'Comment vous appelez-vous ?',
+      'profile_name.help': 'Entrez vos vrais noms et choisissez un nom d\'utilisateur unique',
+
+      // Profile Gender Page
+      'profile_gender.question': 'Quel est votre genre ?',
+
+      // Profile Photo Page (additional keys)
+      'profile_photo.continue': 'Continuer',
+      'profile_photo.skip': 'Passer pour l\'instant',
+
+      // Profile Cover Page (additional keys)
+      'profile_cover.continue': 'Continuer',
+      'profile_cover.skip': 'Passer pour l\'instant',
+
+      // Profile Training Page
+      'profile_training.heading': 'Ajoutez vos formations et études',
+
+      // Profile Bio Page
+      'profile_bio.save_failed': 'Échec de l\'enregistrement de la bio. Réessayez.',
+
+      // Profile Completion Welcome Page
+      'welcome.title': 'Bienvenue sur Nexum',
+      'welcome.slogan': 'Une nouvelle façon de connecter le monde',
+      'welcome.personalize': 'Personnalisons votre expérience',
+      'welcome.start': 'Commençons',
+
+      // Connect Friends Page
+      'connect_friends.subtitle': 'Trouvez et connectez-vous avec des amis pour voir ce qu\'ils font.',
+      'connect_friends.done': 'Terminé',
+
       // Interest Selection
       'interests.title': 'Sélectionnez vos intérêts',
       'interests.subtitle': 'Choisissez les sujets qui vous intéressent pour personnaliser votre fil',
@@ -3152,9 +3242,9 @@ class Translations {
       'auth.password': 'Senha',
       'auth.confirm_password': 'Confirmar senha',
       'auth.terms_prefix': 'Ao se cadastrar, você concorda com nossos ',
-      'auth.terms': 'termos de uso',
-      'auth.conditions': 'condições',
-      'auth.privacy': 'política de privacidade',
+      'auth.terms': 'Termos de Serviço',
+      'auth.and': ' e ',
+      'auth.privacy': 'Política de Privacidade',
       'auth.sign_up': 'Cadastrar-se',
       'auth.already_have_account': 'Já tem uma conta? ',
       'auth.sign_in': 'Entrar',
@@ -3266,6 +3356,7 @@ class Translations {
       'podcasts.delete_failed': 'Falha ao excluir podcast',
       'podcasts.updated': 'Podcast atualizado com sucesso',
       'podcasts.update_failed': 'Falha ao atualizar podcast',
+      'podcasts.all_podcasts': 'Todos os podcasts',
 
       // Create Podcast
       'create_podcast.title': 'Criar podcast',
@@ -3915,6 +4006,13 @@ class Translations {
       'story.delete_failed': 'Falha ao excluir história',
       'story.image_story': 'História de imagem',
       'story.video_story': 'História de vídeo',
+      'story.trim_video': 'Cortar vídeo',
+      'story.trimming_video': 'Cortando vídeo...',
+      'story.trim_failed': 'Falha ao cortar vídeo',
+      'story.done': 'Concluído',
+      'story.selected': 'Selecionado',
+      'story.max_duration': 'Duração máx',
+      'story.trim_instructions': 'Arraste as alças para selecionar até 30 segundos de vídeo.',
 
       // App Branding
       'app.name': 'NEXUM',
@@ -4178,6 +4276,43 @@ class Translations {
       'profile_flow.time_to_complete': '3-5 minutos para completar',
       'profile_flow.start_button': 'Iniciar configuração',
 
+      // Onboarding dropdown
+      'onboarding.already_have_account': 'Já tem uma conta?',
+      'onboarding.already_have_account_confirm': 'Isso irá desconectá-lo e redirecioná-lo para a página de login. A conta que você acabou de criar será marcada para revisão.',
+      'onboarding.forgot_password': 'Esqueceu a senha?',
+      'onboarding.forgot_password_confirm': 'Isso irá desconectá-lo e redirecioná-lo para a página de redefinição de senha. A conta que você acabou de criar será marcada para revisão.',
+
+      // Profile Name Page
+      'profile_name.question': 'Qual é o seu nome?',
+      'profile_name.help': 'Digite seus nomes reais e escolha um nome de usuário único',
+
+      // Profile Gender Page
+      'profile_gender.question': 'Qual é o seu gênero?',
+
+      // Profile Photo Page (additional keys)
+      'profile_photo.continue': 'Continuar',
+      'profile_photo.skip': 'Pular por enquanto',
+
+      // Profile Cover Page (additional keys)
+      'profile_cover.continue': 'Continuar',
+      'profile_cover.skip': 'Pular por enquanto',
+
+      // Profile Training Page
+      'profile_training.heading': 'Adicione suas formações e educação',
+
+      // Profile Bio Page
+      'profile_bio.save_failed': 'Falha ao salvar a bio. Tente novamente.',
+
+      // Profile Completion Welcome Page
+      'welcome.title': 'Bem-vindo ao Nexum',
+      'welcome.slogan': 'Uma nova forma de conectar o mundo',
+      'welcome.personalize': 'Vamos personalizar sua experiência',
+      'welcome.start': 'Vamos começar',
+
+      // Connect Friends Page
+      'connect_friends.subtitle': 'Encontre e conecte-se com amigos para ver o que eles estão fazendo.',
+      'connect_friends.done': 'Concluído',
+
       // Interest Selection
       'interests.title': 'Selecione seus interesses',
       'interests.subtitle': 'Escolha tópicos de seu interesse para personalizar seu feed',
@@ -4218,9 +4353,9 @@ class Translations {
       'auth.password': 'Contraseña',
       'auth.confirm_password': 'Confirmar contraseña',
       'auth.terms_prefix': 'Al registrarte, aceptas nuestros ',
-      'auth.terms': 'términos de uso',
-      'auth.conditions': 'condiciones',
-      'auth.privacy': 'política de privacidad',
+      'auth.terms': 'Términos de Servicio',
+      'auth.and': ' y ',
+      'auth.privacy': 'Política de Privacidad',
       'auth.sign_up': 'Registrarse',
       'auth.already_have_account': '¿Ya tienes una cuenta? ',
       'auth.sign_in': 'Iniciar sesión',
@@ -4332,6 +4467,7 @@ class Translations {
       'podcasts.delete_failed': 'Error al eliminar podcast',
       'podcasts.updated': 'Podcast actualizado con éxito',
       'podcasts.update_failed': 'Error al actualizar podcast',
+      'podcasts.all_podcasts': 'Todos los podcasts',
 
       // Create Podcast
       'create_podcast.title': 'Crear podcast',
@@ -4974,6 +5110,13 @@ class Translations {
       'story.delete_failed': 'Error al eliminar historia',
       'story.image_story': 'Historia de imagen',
       'story.video_story': 'Historia de video',
+      'story.trim_video': 'Recortar video',
+      'story.trimming_video': 'Recortando video...',
+      'story.trim_failed': 'Error al recortar video',
+      'story.done': 'Listo',
+      'story.selected': 'Seleccionado',
+      'story.max_duration': 'Duración máx',
+      'story.trim_instructions': 'Arrastra los controles para seleccionar hasta 30 segundos de video.',
 
       // App Branding
       'app.name': 'NEXUM',
@@ -5236,6 +5379,43 @@ class Translations {
       'profile_flow.time_to_complete': '3-5 minutos para completar',
       'profile_flow.start_button': 'Iniciar configuración',
 
+      // Onboarding dropdown
+      'onboarding.already_have_account': '¿Ya tienes una cuenta?',
+      'onboarding.already_have_account_confirm': 'Esto te cerrará la sesión y te redirigirá a la página de inicio de sesión. La cuenta que acabas de crear será marcada para revisión.',
+      'onboarding.forgot_password': '¿Olvidaste tu contraseña?',
+      'onboarding.forgot_password_confirm': 'Esto te cerrará la sesión y te redirigirá a la página de restablecimiento de contraseña. La cuenta que acabas de crear será marcada para revisión.',
+
+      // Profile Name Page
+      'profile_name.question': '¿Cuál es tu nombre?',
+      'profile_name.help': 'Ingresa tus nombres reales y elige un nombre de usuario único',
+
+      // Profile Gender Page
+      'profile_gender.question': '¿Cuál es tu género?',
+
+      // Profile Photo Page (additional keys)
+      'profile_photo.continue': 'Continuar',
+      'profile_photo.skip': 'Omitir por ahora',
+
+      // Profile Cover Page (additional keys)
+      'profile_cover.continue': 'Continuar',
+      'profile_cover.skip': 'Omitir por ahora',
+
+      // Profile Training Page
+      'profile_training.heading': 'Agrega tus formaciones y educación',
+
+      // Profile Bio Page
+      'profile_bio.save_failed': 'Error al guardar la bio. Inténtalo de nuevo.',
+
+      // Profile Completion Welcome Page
+      'welcome.title': 'Bienvenido a Nexum',
+      'welcome.slogan': 'Una nueva forma de conectar el mundo',
+      'welcome.personalize': 'Personalicemos tu experiencia',
+      'welcome.start': 'Empecemos',
+
+      // Connect Friends Page
+      'connect_friends.subtitle': 'Encuentra y conéctate con amigos para ver qué están haciendo.',
+      'connect_friends.done': 'Listo',
+
       // Interest Selection
       'interests.title': 'Selecciona tus intereses',
       'interests.subtitle': 'Elige temas de tu interés para personalizar tu feed',
@@ -5277,7 +5457,7 @@ class Translations {
       'auth.confirm_password': 'Passwort bestätigen',
       'auth.terms_prefix': 'Mit der Registrierung stimmst du unseren ',
       'auth.terms': 'Nutzungsbedingungen',
-      'auth.conditions': 'Bedingungen',
+      'auth.and': ' und ',
       'auth.privacy': 'Datenschutzrichtlinie',
       'auth.sign_up': 'Registrieren',
       'auth.already_have_account': 'Du hast bereits ein Konto? ',
@@ -5389,6 +5569,7 @@ class Translations {
       'podcasts.deleted': 'Podcast erfolgreich gelöscht',
       'podcasts.delete_failed': 'Podcast konnte nicht gelöscht werden',
       'podcasts.updated': 'Podcast erfolgreich aktualisiert',
+      'podcasts.all_podcasts': 'Alle Podcasts',
       'podcasts.update_failed': 'Podcast konnte nicht aktualisiert werden',
 
       // Create Podcast
@@ -6032,6 +6213,13 @@ class Translations {
       'story.delete_failed': 'Story konnte nicht gelöscht werden',
       'story.image_story': 'Bild-Story',
       'story.video_story': 'Video-Story',
+      'story.trim_video': 'Video schneiden',
+      'story.trimming_video': 'Video wird geschnitten...',
+      'story.trim_failed': 'Video konnte nicht geschnitten werden',
+      'story.done': 'Fertig',
+      'story.selected': 'Ausgewählt',
+      'story.max_duration': 'Max. Dauer',
+      'story.trim_instructions': 'Ziehe die Griffe, um bis zu 30 Sekunden Video auszuwählen.',
 
       // App Branding
       'app.name': 'NEXUM',
@@ -6294,6 +6482,43 @@ class Translations {
       'profile_flow.estimated_time': 'Geschätzte Zeit',
       'profile_flow.time_to_complete': '3-5 Minuten zum Abschluss',
       'profile_flow.start_button': 'Profil-Einrichtung starten',
+
+      // Onboarding dropdown
+      'onboarding.already_have_account': 'Haben Sie bereits ein Konto?',
+      'onboarding.already_have_account_confirm': 'Dies wird Sie abmelden und zur Anmeldeseite weiterleiten. Das gerade erstellte Konto wird zur Überprüfung markiert.',
+      'onboarding.forgot_password': 'Passwort vergessen?',
+      'onboarding.forgot_password_confirm': 'Dies wird Sie abmelden und zur Passwort-Zurücksetzungsseite weiterleiten. Das gerade erstellte Konto wird zur Überprüfung markiert.',
+
+      // Profile Name Page
+      'profile_name.question': 'Wie heißen Sie?',
+      'profile_name.help': 'Geben Sie Ihre echten Namen ein und wählen Sie einen einzigartigen Benutzernamen',
+
+      // Profile Gender Page
+      'profile_gender.question': 'Was ist Ihr Geschlecht?',
+
+      // Profile Photo Page (additional keys)
+      'profile_photo.continue': 'Weiter',
+      'profile_photo.skip': 'Vorerst überspringen',
+
+      // Profile Cover Page (additional keys)
+      'profile_cover.continue': 'Weiter',
+      'profile_cover.skip': 'Vorerst überspringen',
+
+      // Profile Training Page
+      'profile_training.heading': 'Fügen Sie Ihre Ausbildungen hinzu',
+
+      // Profile Bio Page
+      'profile_bio.save_failed': 'Bio konnte nicht gespeichert werden. Versuchen Sie es erneut.',
+
+      // Profile Completion Welcome Page
+      'welcome.title': 'Willkommen bei Nexum',
+      'welcome.slogan': 'Eine neue Art, die Welt zu verbinden',
+      'welcome.personalize': 'Lassen Sie uns Ihre Erfahrung personalisieren',
+      'welcome.start': 'Los geht\'s',
+
+      // Connect Friends Page
+      'connect_friends.subtitle': 'Finden und verbinden Sie sich mit Freunden, um zu sehen, was sie machen.',
+      'connect_friends.done': 'Fertig',
 
       // Interest Selection
       'interests.title': 'Wählen Sie Ihre Interessen',

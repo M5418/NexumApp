@@ -9,6 +9,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'widgets/onboarding_app_bar_actions.dart';
 
 class ProfilePhotoPage extends StatefulWidget {
   final String firstName;
@@ -205,6 +207,10 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
 
   void _navigateToNextPage() async {
     await _uploadIfNeeded();
+    
+    // Update onboarding step
+    await OnboardingService().setStep(OnboardingStep.cover);
+    
     if (!mounted) return;
 
     final next = ProfileCoverPage(
@@ -261,14 +267,17 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
-                        Text(
-                          lang.t('profile_photo.title'),
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : Colors.black,
+                        Expanded(
+                          child: Text(
+                            lang.t('profile_photo.title'),
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
                           ),
                         ),
+                        OnboardingAppBarActions(isDark: isDark),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -284,7 +293,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
             children: [
               const SizedBox(height: 24),
               Text(
-                'Add Profile Photo',
+                lang.t('profile_photo.add_photo'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -293,7 +302,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Choose a photo that represents you',
+                lang.t('profile_photo.choose_represents'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   color: const Color(0xFF666666),
@@ -332,7 +341,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Add Photo',
+                              lang.t('profile_photo.add_button'),
                               style: GoogleFonts.inter(
                                 fontSize: 16,
                                 color: isDark ? Colors.white54 : Colors.black54,
@@ -356,7 +365,7 @@ class _ProfilePhotoPageState extends State<ProfilePhotoPage> {
                     elevation: 0,
                   ),
                   child: Text(
-                    _hasSelectedPhoto ? 'Continue' : 'Skip for Now',
+                    _hasSelectedPhoto ? lang.t('profile_photo.continue') : lang.t('profile_photo.skip'),
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

@@ -12,6 +12,9 @@ import 'security_login_page.dart';
 import 'notification_preferences_page.dart';
 
 import 'services/auth_service.dart';
+import 'services/profile_cache_service.dart';
+import 'services/app_cache_service.dart';
+import 'services/onboarding_service.dart';
 import 'app_wrapper.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'core/i18n/language_provider.dart';
@@ -332,7 +335,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _performLogout() async {
     try {
-      // Clear local state
+      // Clear all cached user data first
+      ProfileCacheService().clear();
+      AppCacheService().clear();
+      OnboardingService().clear();
+      
+      // Sign out from Firebase
       await AuthService().signOut();
 
       // Reset navigation to AppWrapper

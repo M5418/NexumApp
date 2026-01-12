@@ -5,6 +5,8 @@ import 'core/i18n/language_provider.dart';
 import 'profile_experience_page.dart';
 import 'core/profile_api.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'widgets/onboarding_app_bar_actions.dart';
 
 class StatusSelectionPage extends StatefulWidget {
   final String firstName;
@@ -37,6 +39,10 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
     setState(() => _isSaving = true);
     try {
       await ProfileApi().update({'status': _selectedStatus});
+      
+      // Update onboarding step
+      await OnboardingService().setStep(OnboardingStep.experience);
+      
       if (!mounted) return;
 
       final next = ProfileExperiencePage(
@@ -104,14 +110,17 @@ class _StatusSelectionPageState extends State<StatusSelectionPage> {
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
-                        Text(
-                          Provider.of<LanguageProvider>(context, listen: false).t('status.title'),
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                        Expanded(
+                          child: Text(
+                            Provider.of<LanguageProvider>(context, listen: false).t('status.title'),
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? Colors.white : Colors.black,
+                            ),
                           ),
                         ),
+                        OnboardingAppBarActions(isDark: isDarkMode),
                       ],
                     ),
                     const SizedBox(height: 16),

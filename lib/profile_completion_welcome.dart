@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'status_selection_page.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'services/onboarding_service.dart';
+import 'core/i18n/language_provider.dart';
 
 class ProfileCompletionWelcome extends StatelessWidget {
   final String firstName;
@@ -37,7 +40,12 @@ class ProfileCompletionWelcome extends StatelessWidget {
     ));
   }
 
-  void _navigateToStatusSelection(BuildContext context) {
+  Future<void> _navigateToStatusSelection(BuildContext context) async {
+    // Update onboarding step
+    await OnboardingService().setStep(OnboardingStep.status);
+    
+    if (!context.mounted) return;
+    
     final next = StatusSelectionPage(
       firstName: firstName,
       lastName: lastName,
@@ -47,7 +55,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
     if (!context.isMobile) {
       _pushWithPopupTransition(context, next);
     } else {
-      Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'profile_photo'), builder: (_) => next));
+      Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'status_selection'), builder: (_) => next));
     }
   }
 
@@ -146,7 +154,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
 
                       // Welcome Message
                       Text(
-                        'Welcome to Nexum',
+                        Provider.of<LanguageProvider>(context).t('welcome.title'),
                         style: GoogleFonts.inter(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -158,7 +166,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
 
                       // Slogan
                       Text(
-                        'New way to connect the world',
+                        Provider.of<LanguageProvider>(context).t('welcome.slogan'),
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -170,7 +178,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
 
                       // Personalization Message
                       Text(
-                        'Let\'s personalize your experience',
+                        Provider.of<LanguageProvider>(context).t('welcome.personalize'),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.normal,
@@ -195,7 +203,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            'Let\'s start',
+                            Provider.of<LanguageProvider>(context).t('welcome.start'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -311,7 +319,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
                               const SizedBox(height: 28),
 
                               Text(
-                                'Welcome to Nexum',
+                                Provider.of<LanguageProvider>(context).t('welcome.title'),
                                 style: GoogleFonts.inter(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
@@ -322,7 +330,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
                               const SizedBox(height: 10),
 
                               Text(
-                                'New way to connect the world',
+                                Provider.of<LanguageProvider>(context).t('welcome.slogan'),
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -333,7 +341,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
                               const SizedBox(height: 20),
 
                               Text(
-                                'Let\'s personalize your experience',
+                                Provider.of<LanguageProvider>(context).t('welcome.personalize'),
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
                                   fontWeight: FontWeight.normal,
@@ -360,7 +368,7 @@ class ProfileCompletionWelcome extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            'Let\'s start',
+                            Provider.of<LanguageProvider>(context).t('welcome.start'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
