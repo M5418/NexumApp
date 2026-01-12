@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
+import 'package:audio_service/audio_service.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
 import 'add_to_playlist_sheet.dart';
+import '../services/audio_handler.dart';
 
 class PlayerPage extends StatefulWidget {
   final Podcast podcast;
@@ -16,9 +17,9 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> {
-  final _player = AudioPlayer();
-  StreamSubscription<Duration>? _posSub;
-  StreamSubscription<PlayerState>? _stateSub;
+  PodcastAudioHandler? _audioHandler;
+  StreamSubscription<PlaybackState>? _playbackSub;
+  StreamSubscription<MediaItem?>? _mediaSub;
 
   bool _loading = true;
   String? _error;
@@ -26,6 +27,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   double _playbackSpeed = 1.0;
+  bool _playing = false;
 
   @override
   void initState() {
@@ -35,9 +37,8 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
-    _posSub?.cancel();
-    _stateSub?.cancel();
-    _player.dispose();
+    _playbackSub?.cancel();
+    _mediaSub?.cancel();
     _sendProgress();
     super.dispose();
   }
@@ -53,49 +54,42 @@ class _PlayerPageState extends State<PlayerPage> {
     }
 
     try {
-      // Try restoring progress
-      try {
-        // Placeholder: progress will be handled elsewhere
-        final d = <String, dynamic>{};
-        final p = d['progress'];
-        if (p != null) {
-          final lastPos = int.tryParse((p['last_position_sec'] ?? 0).toString()) ?? 0;
-          if (lastPos > 0) _position = Duration(seconds: lastPos);
-          final total = int.tryParse((p['duration_sec'] ?? 0).toString()) ?? 0;
-          if (total > 0) _duration = Duration(seconds: total);
-        }
-      } catch (_) {}
-
-      await _player.setUrl(url);
+      // Initialize audio service for background playback
+      _audioHandler = await PodcastAudioService.init();
       
-      // Get duration from player, or use podcast's durationSec as fallback
-      final playerDuration = _player.duration;
-      if (playerDuration != null && playerDuration.inSeconds > 0) {
-        _duration = playerDuration;
-      } else if (widget.podcast.durationSec != null && widget.podcast.durationSec! > 0) {
+      // Listen to playback state changes
+      _playbackSub = _audioHandler!.playbackState.listen((state) {
+        if (mounted) {
+          setState(() {
+            _position = state.position;
+            _playing = state.playing;
+            _playbackSpeed = state.speed;
+          });
+        }
+      });
+      
+      // Listen to media item changes (for duration)
+      _mediaSub = _audioHandler!.mediaItem.listen((item) {
+        if (mounted && item != null && item.duration != null) {
+          setState(() {
+            _duration = item.duration!;
+          });
+        }
+      });
+      
+      // Get initial duration from podcast if available
+      if (widget.podcast.durationSec != null && widget.podcast.durationSec! > 0) {
         _duration = Duration(seconds: widget.podcast.durationSec!);
       }
       
-      if (_position > Duration.zero) {
-        await _player.seek(_position);
-      }
-
-      _posSub = _player.positionStream.listen((pos) {
-        if (mounted) {
-          setState(() => _position = pos);
-        }
-      });
-      
-      _stateSub = _player.playerStateStream.listen((_) {
-        if (mounted) setState(() {});
-      });
-      
-      // Listen to duration changes (for streaming)
-      _player.durationStream.listen((duration) {
-        if (mounted && duration != null && duration.inSeconds > 0) {
-          setState(() => _duration = duration);
-        }
-      });
+      // Load and play the podcast with background support
+      await _audioHandler!.loadAndPlay(
+        id: widget.podcast.id,
+        title: widget.podcast.title,
+        artist: widget.podcast.author ?? 'Unknown',
+        audioUrl: url,
+        artUri: widget.podcast.coverUrl,
+      );
 
       setState(() {
         _loading = false;
@@ -110,23 +104,26 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _togglePlayPause() async {
-    if (_player.playerState.playing) {
-      await _player.pause();
+    if (_audioHandler == null) return;
+    if (_playing) {
+      await _audioHandler!.pause();
     } else {
-      await _player.play();
+      await _audioHandler!.play();
     }
     _sendProgress();
   }
 
   Future<void> _seekTo(double seconds) async {
+    if (_audioHandler == null) return;
     final clamped = seconds.clamp(0, (_duration.inSeconds.toDouble()).clamp(1, 1e9));
     final pos = Duration(seconds: clamped.round());
-    await _player.seek(pos);
+    await _audioHandler!.seek(pos);
     setState(() => _position = pos);
     _sendProgress();
   }
 
   Future<void> _changeSpeed() async {
+    if (_audioHandler == null) return;
     if (_playbackSpeed == 1.0) {
       _playbackSpeed = 1.25;
     } else if (_playbackSpeed == 1.25) {
@@ -136,7 +133,7 @@ class _PlayerPageState extends State<PlayerPage> {
     } else {
       _playbackSpeed = 1.0;
     }
-    await _player.setSpeed(_playbackSpeed);
+    await _audioHandler!.setSpeed(_playbackSpeed);
     setState(() {});
   }
 
@@ -154,7 +151,7 @@ class _PlayerPageState extends State<PlayerPage> {
     // Desktop: limit cover width to 300px
     final coverMaxWidth = isWide ? 300.0 : double.infinity;
 
-    final playing = _player.playerState.playing;
+    final playing = _playing;
 
     return Scaffold(
       backgroundColor: bg,
@@ -288,7 +285,7 @@ class _PlayerPageState extends State<PlayerPage> {
                           progress: _position,
                           total: _duration,
                           buffered: _duration,
-                          onSeek: (duration) => _player.seek(duration),
+                          onSeek: (duration) => _audioHandler?.seek(duration),
                           barHeight: 8,
                           baseBarColor: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0),
                           progressBarColor: const Color(0xFFBFAE01),

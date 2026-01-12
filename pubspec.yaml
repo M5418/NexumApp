@@ -59,6 +59,8 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   web: ^1.1.1
   just_audio: ^0.10.5
+  just_audio_background: ^0.0.1-beta.13
+  audio_service: ^0.18.15
   audio_video_progress_bar: ^2.0.3
   animated_emoji: ^3.2.1
   pdfx: ^2.7.0
