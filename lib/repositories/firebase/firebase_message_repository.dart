@@ -29,7 +29,48 @@ class FirebaseMessageRepository implements MessageRepository {
 
   MessageRecordModel _fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
     final m = d.data() ?? {};
-    final atts = (m['attachments'] as List?)?.map((e) => _attFrom(Map<String, dynamic>.from(e as Map))).toList() ?? const [];
+    
+    // Safely parse attachments - handle web LegacyJavaScriptObject
+    final attachmentsList = m['attachments'];
+    final atts = <AttachmentModel>[];
+    if (attachmentsList != null && attachmentsList is List) {
+      for (final e in attachmentsList) {
+        try {
+          if (e is Map) {
+            atts.add(_attFrom(Map<String, dynamic>.from(e)));
+          } else if (e != null) {
+            // Try to convert from dynamic (web compatibility)
+            final map = Map<String, dynamic>.from(e as dynamic);
+            atts.add(_attFrom(map));
+          }
+        } catch (_) {
+          // Skip malformed attachment
+        }
+      }
+    }
+    
+    // Safely parse replyTo - handle web LegacyJavaScriptObject
+    Map<String, dynamic>? replyToMap;
+    final replyToData = m['replyTo'];
+    if (replyToData != null) {
+      try {
+        if (replyToData is Map) {
+          replyToMap = Map<String, dynamic>.from(replyToData);
+        }
+      } catch (_) {
+        // Skip malformed replyTo
+      }
+    }
+    
+    // Safely parse createdAt timestamp
+    DateTime createdAt = DateTime.now();
+    final createdAtData = m['createdAt'];
+    if (createdAtData is Timestamp) {
+      createdAt = createdAtData.toDate();
+    } else if (createdAtData is DateTime) {
+      createdAt = createdAtData;
+    }
+    
     return MessageRecordModel(
       id: d.id,
       conversationId: (m['conversationId'] ?? '').toString(),
@@ -37,12 +78,12 @@ class FirebaseMessageRepository implements MessageRepository {
       receiverId: (m['receiverId'] ?? '').toString(),
       type: (m['type'] ?? 'text').toString(),
       text: (m['text'] ?? '').toString(),
-      createdAt: (m['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: createdAt,
       readAt: null,
       attachments: atts,
       myReaction: null,
       reaction: (m['latestReaction'] ?? '').toString().isEmpty ? null : (m['latestReaction'] ?? '').toString(),
-      replyTo: (m['replyTo'] is Map) ? Map<String, dynamic>.from(m['replyTo']) : null,
+      replyTo: replyToMap,
     );
   }
 
