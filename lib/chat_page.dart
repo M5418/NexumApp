@@ -319,19 +319,9 @@ Future<void> _handleUnblock() async {
       final hasNewMessages = mapped.isNotEmpty && 
           (_messages.isEmpty || mapped.first.id != _messages.first.id);
       
-      // Smart merge: Keep optimistic (temp_) messages until server data replaces them
-      final tempMessages = _messages.where((m) => m.id.startsWith('temp_')).toList();
-      final serverIds = mapped.map((m) => m.id).toSet();
-      
       setState(() {
         _messages.clear();
         _messages.addAll(mapped);
-        // Re-add temp messages that aren't yet on server (still sending)
-        for (final temp in tempMessages) {
-          if (!serverIds.contains(temp.id)) {
-            _messages.add(temp);
-          }
-        }
         _messageReactions.clear();
         for (final r in records) {
           if ((r.reaction ?? '').isNotEmpty) {
@@ -371,20 +361,9 @@ Future<void> _refreshMessages() async {
 
     if (!mounted) return;
     
-    // Smart merge: Keep optimistic (temp_) messages until server data replaces them
-    // This prevents flicker when sending messages
-    final tempMessages = _messages.where((m) => m.id.startsWith('temp_')).toList();
-    final serverIds = mapped.map((m) => m.id).toSet();
-    
     setState(() {
       _messages.clear();
       _messages.addAll(mapped);
-      // Re-add temp messages that aren't yet on server (still sending)
-      for (final temp in tempMessages) {
-        if (!serverIds.contains(temp.id)) {
-          _messages.add(temp);
-        }
-      }
       _messageReactions.clear();
       for (final r in records) {
         if ((r.reaction ?? '').isNotEmpty) {
@@ -535,47 +514,21 @@ void dispose() {
   }
 
   Future<void> _sendMessage(String content) async {
-    // OPTIMISTIC UI: Show message immediately for instant feedback
-    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
-    final currentUid = fb.FirebaseAuth.instance.currentUser?.uid ?? 'me';
-    final optimisticMsg = Message(
-      id: tempId,
-      senderId: currentUid,
-      senderName: 'You',
-      senderAvatar: null,
-      content: content,
-      type: MessageType.text,
-      attachments: const [],
-      timestamp: DateTime.now(),
-      status: MessageStatus.sending,
-      isFromCurrentUser: true,
-      replyTo: _replyToMessage != null
-          ? ReplyTo(
-              messageId: _replyToMessage!.id,
-              senderName: _replyToMessage!.senderName,
-              content: _replyToMessage!.content,
-              type: _replyToMessage!.type,
-              mediaUrl: _replyToMessage!.attachments.isNotEmpty
-                  ? _replyToMessage!.attachments.first.url
-                  : null,
-            )
-          : null,
-    );
+    final replyToId = _replyToMessage?.id;
     
+    // Clear reply state immediately
     setState(() {
-      _messages.add(optimisticMsg);
       _replyToMessage = null;
     });
-    _scrollToBottom();
     
-    // Send in background
+    // Send message directly without temp bubble
     try {
       final convId = await _requireConversationId();
       await _msgRepo.sendText(
         conversationId: convId,
         otherUserId: null,
         text: content,
-        replyToMessageId: optimisticMsg.replyTo?.messageId,
+        replyToMessageId: replyToId,
       );
       
       // FASTFEED: Notify conversation list instantly
@@ -585,20 +538,10 @@ void dispose() {
         messageType: 'text',
       );
       
-      // Remove temp message before refresh to avoid duplicate display
-      if (mounted) {
-        setState(() {
-          _messages.removeWhere((m) => m.id == tempId);
-        });
-      }
-      
       // Refresh to get the real message from server
       await _refreshMessages();
+      _scrollToBottom();
     } catch (e) {
-      // Remove failed message
-      setState(() {
-        _messages.removeWhere((m) => m.id == tempId);
-      });
       if (mounted) _showSnack('Failed to send: $e');
     }
   }

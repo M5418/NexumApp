@@ -318,16 +318,38 @@ exports.onMessageCreated = onDocumentCreated(
     const conversationId = event.params.conversationId;
     const senderId = message.senderId;
 
+    // Skip if no sender ID
+    if (!senderId) {
+      logger.info('No senderId in message, skipping push');
+      return;
+    }
+
     // Get conversation to find recipient
     const convDoc = await db.collection('conversations').doc(conversationId).get();
-    if (!convDoc.exists) return;
+    if (!convDoc.exists) {
+      logger.info('Conversation not found', { conversationId });
+      return;
+    }
 
     const convData = convDoc.data();
     const participants = convData.participants || [];
     
-    // Find recipient (not the sender)
-    const recipientId = participants.find(p => p !== senderId);
-    if (!recipientId) return;
+    // Find ALL recipients (everyone except the sender)
+    const recipients = participants.filter(p => p && p !== senderId);
+    
+    if (recipients.length === 0) {
+      logger.info('No recipients found (sender is only participant)', { senderId, participants });
+      return;
+    }
+    
+    // For 1-on-1 chats, there should be exactly one recipient
+    const recipientId = recipients[0];
+    
+    // Double-check: NEVER send notification to the sender
+    if (recipientId === senderId) {
+      logger.error('BUG: recipientId equals senderId, aborting', { senderId, recipientId });
+      return;
+    }
 
     // Check if recipient has muted sender
     const muteCheck = await db.collection('mutes')
