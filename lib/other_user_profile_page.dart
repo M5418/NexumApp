@@ -25,6 +25,7 @@ import 'widgets/report_bottom_sheet.dart';
 import 'chat_page.dart';
 import 'shared_media_page.dart';
 import 'widgets/expandable_photo_viewer.dart';
+import 'core/admin_config.dart';
 
 
 class OtherUserProfilePage extends StatefulWidget {
@@ -1256,7 +1257,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                           ),
                         ),
 
-                        // Professional Experiences Section (real backend data)
+                        // Professional Experiences Section (hidden for admin)
+                        if (!AdminConfig.isAdmin(widget.userId))
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Column(
@@ -1327,7 +1329,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                           ),
                         ),
 
-                        // Trainings Section (real backend data)
+                        // Trainings Section (hidden for admin)
+                        if (!AdminConfig.isAdmin(widget.userId))
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Column(
@@ -1397,7 +1400,8 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                           ),
                         ),
 
-                        // Interest Section (real backend data)
+                        // Interest Section (hidden for admin)
+                        if (!AdminConfig.isAdmin(widget.userId))
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                           child: Column(
