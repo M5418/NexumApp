@@ -581,56 +581,48 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  void _showUserTagPicker() {
+  void _showUserTagPicker() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Load users first, then show the sheet
+    List<_TagUser> users = [];
+    try {
+      users = await _fetchConnectionUsers();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load connections: $e')),
+      );
+      return;
+    }
+    
+    if (!mounted) return;
+    
+    // State variables for the sheet
+    String query = '';
+    final Map<String, _TagUser> localSelected = {for (var u in _taggedUsers) u.id: u};
+    
     showModalBottomSheet(
       context: context,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? Colors.black
-          : Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       isScrollControlled: true,
-      builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-
-        return FutureBuilder<List<_TagUser>>(
-          future: _fetchConnectionUsers(),
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return SizedBox(
-                height: MediaQuery.of(context).size.height * 0.5,
-                child: const Center(child: CircularProgressIndicator()),
-              );
-            }
-            if (snap.hasError) {
-              return Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Failed to load connections',
-                  style: GoogleFonts.inter(color: Colors.red),
-                ),
-              );
-            }
-            final users = snap.data ?? [];
-            // Must be declared OUTSIDE StatefulBuilder to persist across rebuilds
-            String query = '';
-            final Map<String, _TagUser> localSelected = {for (var u in _taggedUsers) u.id: u};
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            List<_TagUser> filtered = users.where((u) {
+              if (query.isEmpty) return true;
+              return u.name.toLowerCase().contains(query) ||
+                  u.username.toLowerCase().contains(query);
+            }).toList();
             
-            return StatefulBuilder(
-              builder: (context, setSheetState) {
-                List<_TagUser> filtered = users;
-                void applyQuery(String q) {
-                  setSheetState(() {
-                    query = q.trim().toLowerCase();
-                  });
-                }
-
-                filtered = users.where((u) {
-                  if (query.isEmpty) return true;
-                  return u.name.toLowerCase().contains(query) ||
-                      u.username.toLowerCase().contains(query);
-                }).toList();
+            void applyQuery(String q) {
+              setSheetState(() {
+                query = q.trim().toLowerCase();
+              });
+            }
 
                 return Container(
                   height: MediaQuery.of(context).size.height * 0.75,
@@ -798,8 +790,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 );
               },
             );
-          },
-        );
       },
     );
   }
