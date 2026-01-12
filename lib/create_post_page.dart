@@ -303,7 +303,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFBFAE01).withValues(alpha: 26),
+                    color: const Color(0xFFBFAE01).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: const Color(0xFFBFAE01),
