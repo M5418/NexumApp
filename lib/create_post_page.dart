@@ -613,11 +613,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
               );
             }
             final users = snap.data ?? [];
+            // Must be declared OUTSIDE StatefulBuilder to persist across rebuilds
+            String query = '';
+            final Map<String, _TagUser> localSelected = {for (var u in _taggedUsers) u.id: u};
+            
             return StatefulBuilder(
               builder: (context, setSheetState) {
-                String query = '';
-                final Map<String, _TagUser> localSelected = {for (var u in _taggedUsers) u.id: u};
-
                 List<_TagUser> filtered = users;
                 void applyQuery(String q) {
                   setSheetState(() {
