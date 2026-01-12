@@ -213,6 +213,7 @@ class Translations {
       'chat.microphone_permission_required': 'Microphone permission required',
       'chat.photo': 'Photo',
       'chat.file': 'File',
+      'chat.recording': 'Recording...',
 
       // Notifications (consolidated)
       'notifications.title': 'Notifications',
@@ -2145,6 +2146,7 @@ class Translations {
       'chat.microphone_permission_required': 'Permission du microphone requise',
       'chat.photo': 'Photo',
       'chat.file': 'Fichier',
+      'chat.recording': 'Enregistrement...',
       'conversations.title': 'Conversations',
       'conversations.chats': 'Discussions',
       'conversations.communities': 'Communautés',

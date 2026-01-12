@@ -7,7 +7,6 @@ import 'package:video_compress/video_compress.dart';
 import 'models/message.dart';
 import 'widgets/message_bubble.dart';
 import 'package:file_picker/file_picker.dart';
-import 'widgets/chat_input.dart';
 import 'widgets/message_actions_sheet.dart';
 import 'package:provider/provider.dart';
 import 'repositories/interfaces/message_repository.dart';
@@ -47,6 +46,7 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _messageController = TextEditingController();
   final List<Message> _messages = [];
   Message? _replyToMessage;
   final Set<String> _starredIds = <String>{};
@@ -61,6 +61,7 @@ class _ChatPageState extends State<ChatPage> {
   String? _resolvedConversationId;
   bool _isRecording = false;
   bool _isLoading = false;
+  bool _sending = false;
   String? _loadError;
   Timer? _pollTimer;
   bool _isRefreshing = false;
@@ -351,6 +352,7 @@ Future<void> _refreshMessages() async {
 void dispose() {
   _pollTimer?.cancel();
   _scrollController.dispose();
+  _messageController.dispose();
   super.dispose();
 }
 
@@ -496,32 +498,6 @@ void dispose() {
         _messages.removeWhere((m) => m.id == tempId);
       });
       if (mounted) _showSnack('Failed to send: $e');
-    }
-  }
-
-  Future<void> _handleVoiceRecord() async {
-    try {
-      if (!_isRecording) {
-        await _audioRecorder.startRecording();
-        setState(() {
-          _isRecording = true;
-        });
-      } else {
-        final result = await _audioRecorder.stopRecording();
-        setState(() {
-          _isRecording = false;
-        });
-
-        if (result != null) {
-          await _sendVoiceMessage(result);
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _isRecording = false;
-      });
-      if (!mounted) return;
-      _showSnack('$e');
     }
   }
 
@@ -1253,6 +1229,235 @@ void dispose() {
     return '${two(duration.inMinutes.remainder(60))}:${two(duration.inSeconds.remainder(60))}';
   }
 
+  Future<void> _startRecording() async {
+    if (_isRecording) return;
+    
+    // Check permission with timeout to prevent UI freeze
+    bool hasPermission = false;
+    try {
+      hasPermission = await _audioRecorder.hasPermission().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('⚠️ Permission check timed out');
+          return false;
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Error checking microphone permission: $e');
+      return;
+    }
+    
+    if (!hasPermission) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('chat.microphone_permission_required'))),
+      );
+      return;
+    }
+
+    // Start recording immediately - no delay
+    setState(() => _isRecording = true);
+    await _audioRecorder.startRecording();
+  }
+
+  Future<void> _stopRecordingAndSend() async {
+    if (!_isRecording) return;
+
+    final result = await _audioRecorder.stopRecording();
+    setState(() => _isRecording = false);
+
+    if (result != null) {
+      await _sendVoiceMessage(result);
+    }
+  }
+
+  void _cancelRecordingInline() async {
+    if (!_isRecording) return;
+    await _audioRecorder.stopRecording();
+    setState(() => _isRecording = false);
+  }
+
+  Future<void> _sendTextMessage() async {
+    final content = _messageController.text.trim();
+    if (content.isEmpty) return;
+    
+    _messageController.clear();
+    setState(() => _sending = true);
+    
+    try {
+      await _sendMessage(content);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Widget _buildInputArea(bool isDark) {
+    final textColor = isDark ? Colors.white : Colors.black;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Reply preview
+            if (_replyToMessage != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[800] : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 3,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFBFAE01),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _replyToMessage!.senderName,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFBFAE01),
+                            ),
+                          ),
+                          Text(
+                            _replyToMessage!.content,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: Colors.grey,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _cancelReply,
+                      child: const Icon(Icons.close, size: 18, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            Row(
+              children: [
+                // Attachment button
+                IconButton(
+                  icon: Icon(Icons.add, color: Colors.grey[600]),
+                  onPressed: _sending ? null : _showAttachmentOptions,
+                ),
+
+                // Text input or recording indicator
+                Expanded(
+                  child: _isRecording
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.mic, color: Colors.red, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                Provider.of<LanguageProvider>(context, listen: false).t('chat.recording'),
+                                style: GoogleFonts.inter(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        )
+                      : TextField(
+                          controller: _messageController,
+                          style: GoogleFonts.inter(color: textColor),
+                          maxLines: 4,
+                          minLines: 1,
+                          decoration: InputDecoration(
+                            hintText: Provider.of<LanguageProvider>(context, listen: false).t('chat.type_message'),
+                            hintStyle: GoogleFonts.inter(color: Colors.grey),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Send or Voice button
+                if (_isRecording)
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.red),
+                        onPressed: _cancelRecordingInline,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send, color: Color(0xFFBFAE01)),
+                        onPressed: _stopRecordingAndSend,
+                      ),
+                    ],
+                  )
+                else if (_messageController.text.trim().isNotEmpty)
+                  IconButton(
+                    icon: Icon(
+                      Icons.send,
+                      color: _sending ? Colors.grey : const Color(0xFFBFAE01),
+                    ),
+                    onPressed: _sending ? null : _sendTextMessage,
+                  )
+                else
+                  GestureDetector(
+                    onTap: () {
+                      // Instant tap to start recording - no delay
+                      if (!_isRecording) {
+                        _startRecording();
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFBFAE01),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.mic, color: Colors.black, size: 20),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1321,13 +1526,7 @@ void dispose() {
           else if (_isBlockedBy)
             _buildBlockedByBanner(isDark)
           else
-            ChatInput(
-              onSendMessage: _sendMessage,
-              onVoiceRecord: _handleVoiceRecord,
-              onAttachment: _showAttachmentOptions,
-              replyToMessage: _replyToMessage?.content,
-              onCancelReply: _cancelReply,
-            ),
+            _buildInputArea(isDark),
         ],
       ),
     );
