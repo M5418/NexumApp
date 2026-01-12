@@ -62,6 +62,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _isRecording = false;
   bool _isRecordingLocked = false; // Locked via swipe up
   double _swipeUpOffset = 0; // Track swipe distance for animation
+  DateTime? _recordingStartTime; // Track when recording started for min duration
   bool _isLoading = false;
   bool _sending = false;
   String? _loadError;
@@ -1472,7 +1473,10 @@ void dispose() {
                         onPointerDown: (_) {
                           // INSTANT start recording on touch
                           if (!_isRecording) {
-                            setState(() => _swipeUpOffset = 0);
+                            setState(() {
+                              _swipeUpOffset = 0;
+                              _recordingStartTime = DateTime.now();
+                            });
                             _startRecording();
                           }
                         },
@@ -1490,16 +1494,27 @@ void dispose() {
                             }
                           }
                         },
-                        onPointerUp: (_) {
+                        onPointerUp: (_) async {
                           // Release to send (only if not locked)
                           if (_isRecording && !_isRecordingLocked) {
+                            // Ensure minimum recording time (500ms) for web to capture audio
+                            final minDuration = const Duration(milliseconds: 500);
+                            final elapsed = DateTime.now().difference(_recordingStartTime ?? DateTime.now());
+                            if (elapsed < minDuration) {
+                              await Future.delayed(minDuration - elapsed);
+                            }
                             _stopRecordingAndSend();
                           }
                           setState(() => _swipeUpOffset = 0);
                         },
-                        onPointerCancel: (_) {
+                        onPointerCancel: (_) async {
                           // Handle cancel same as release
                           if (_isRecording && !_isRecordingLocked) {
+                            final minDuration = const Duration(milliseconds: 500);
+                            final elapsed = DateTime.now().difference(_recordingStartTime ?? DateTime.now());
+                            if (elapsed < minDuration) {
+                              await Future.delayed(minDuration - elapsed);
+                            }
                             _stopRecordingAndSend();
                           }
                           setState(() => _swipeUpOffset = 0);
