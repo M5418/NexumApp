@@ -6,17 +6,20 @@ import '../utils/profile_navigation.dart';
 import '../providers/follow_state.dart';
 import '../core/i18n/language_provider.dart';
 import '../core/post_events.dart';
+import '../repositories/interfaces/conversation_repository.dart';
+import '../chat_page.dart';
+import '../models/message.dart';
 
 class ConnectionCard extends StatefulWidget {
   final String userId;
   final String coverUrl;
   final String avatarUrl;
   final String fullName;
-  final String username; // NEW
+  final String username;
   final String bio;
   final bool initialConnectionStatus;
   final bool theyConnectToYou;
-  final VoidCallback? onMessage;
+  final VoidCallback? onMessage; // Called when no conversation exists (show invite)
   final VoidCallback? onTap;
 
   const ConnectionCard({
@@ -25,7 +28,7 @@ class ConnectionCard extends StatefulWidget {
     required this.coverUrl,
     required this.avatarUrl,
     required this.fullName,
-    required this.username, // NEW
+    required this.username,
     required this.bio,
     this.initialConnectionStatus = false,
     this.theyConnectToYou = false,
@@ -258,13 +261,45 @@ class _ConnectionCardState extends State<ConnectionCard> {
 
                         const SizedBox(height: 8),
 
-                        // Message Button
+                        // Message Button - checks for existing conversation
                         SizedBox(
                           width: double.infinity,
                           height: 36,
                           child: OutlinedButton(
-                            onPressed: () {
-                              widget.onMessage?.call();
+                            onPressed: () async {
+                              final ctx = context;
+                              try {
+                                final convRepo = ctx.read<ConversationRepository>();
+                                final conversationId = await convRepo.checkConversationExists(widget.userId);
+                                
+                                if (!ctx.mounted) return;
+                                
+                                if (conversationId != null) {
+                                  // Conversation exists - navigate to chat
+                                  final chatUser = ChatUser(
+                                    id: widget.userId,
+                                    name: widget.fullName,
+                                    avatarUrl: widget.avatarUrl,
+                                  );
+                                  Navigator.push(
+                                    ctx,
+                                    MaterialPageRoute(
+                                      settings: const RouteSettings(name: 'chat'),
+                                      builder: (_) => ChatPage(
+                                        otherUser: chatUser,
+                                        isDarkMode: Theme.of(ctx).brightness == Brightness.dark,
+                                        conversationId: conversationId,
+                                      ),
+                                    ),
+                                  );
+                                } else {
+                                  // No conversation - show invite
+                                  widget.onMessage?.call();
+                                }
+                              } catch (e) {
+                                // Fallback to invite on error
+                                widget.onMessage?.call();
+                              }
                             },
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(
@@ -276,7 +311,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
                               ),
                             ),
                             child: Text(
-                              'Message',
+                              Provider.of<LanguageProvider>(context, listen: false).t('profile.message'),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
