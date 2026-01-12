@@ -16,9 +16,11 @@ import '../data/interest_domains.dart';
 import '../core/i18n/language_provider.dart';
 
 class CreateBookPage extends StatefulWidget {
-  const CreateBookPage({super.key});
+  final dynamic editBook; // Book object for editing, null for creating
+  
+  const CreateBookPage({super.key, this.editBook});
 
-  static Future<T?> showPopup<T>(BuildContext context) {
+  static Future<T?> showPopup<T>(BuildContext context, {dynamic editBook}) {
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: true,
@@ -33,7 +35,7 @@ class CreateBookPage extends StatefulWidget {
               color: Colors.transparent,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: const CreateBookPage(),
+                child: CreateBookPage(editBook: editBook),
               ),
             ),
           ),
@@ -88,8 +90,31 @@ class _CreateBookPageState extends State<CreateBookPage> {
   String? _audioUrl;
 
   bool _saving = false;
+  bool _isEditMode = false;
   
   final MediaCompressionService _compressionService = MediaCompressionService();
+
+  @override
+  void initState() {
+    super.initState();
+    _initEditMode();
+  }
+
+  void _initEditMode() {
+    if (widget.editBook != null) {
+      _isEditMode = true;
+      final book = widget.editBook;
+      _titleCtrl.text = book.title ?? '';
+      _authorCtrl.text = book.author ?? '';
+      _descCtrl.text = book.description ?? '';
+      _language = book.language ?? 'English';
+      _selectedCategories = List<String>.from(book.categories ?? []);
+      _coverUrl = book.coverUrl;
+      _coverThumbUrl = book.coverThumbUrl;
+      _pdfUrl = book.pdfUrl;
+      _audioUrl = book.audioUrl;
+    }
+  }
 
   @override
   void dispose() {
@@ -329,14 +354,15 @@ class _CreateBookPageState extends State<CreateBookPage> {
       );
       return;
     }
-    if (_coverFile == null && _coverBytes == null) {
+    // Cover is required for new books, optional for edits (keep existing)
+    if (!_isEditMode && _coverFile == null && _coverBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.cover_required'), style: GoogleFonts.inter())),
       );
       return;
     }
-    final hasPdf = _pdfFile != null || _pdfBytes != null;
-    final hasAudio = _audioFile != null || _audioBytes != null;
+    final hasPdf = _pdfFile != null || _pdfBytes != null || (_isEditMode && (_pdfUrl ?? '').isNotEmpty);
+    final hasAudio = _audioFile != null || _audioBytes != null || (_isEditMode && (_audioUrl ?? '').isNotEmpty);
     if (!hasPdf && !hasAudio) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('create_book.file_required'), style: GoogleFonts.inter())),
@@ -408,27 +434,52 @@ class _CreateBookPageState extends State<CreateBookPage> {
 
       if (!navContext.mounted) return;
       final bookRepo = navContext.read<BookRepository>();
-      await bookRepo.createBook(
-        title: _titleCtrl.text.trim(),
-        author: _authorCtrl.text.trim(),
-        description: _descCtrl.text.trim(),
-        coverUrl: _coverUrl!,
-        coverThumbUrl: _coverThumbUrl,
-        pdfUrl: (_pdfUrl ?? '').isEmpty ? null : _pdfUrl,
-        audioUrl: (_audioUrl ?? '').isEmpty ? null : _audioUrl,
-        language: _language,
-        category: _selectedCategories.join(', '),
-        tags: const [],
-        price: null,
-        isPublished: true,
-      );
-      if (!navContext.mounted) return;
-      ScaffoldMessenger.of(navContext).showSnackBar(
-        SnackBar(
-          content: Text(Provider.of<LanguageProvider>(navContext, listen: false).t('create_book.book_created'), style: GoogleFonts.inter()),
-          backgroundColor: const Color(0xFFBFAE01),
-        ),
-      );
+      
+      if (_isEditMode && widget.editBook != null) {
+        // Update existing book
+        await bookRepo.updateBook(
+          widget.editBook.id,
+          title: _titleCtrl.text.trim(),
+          author: _authorCtrl.text.trim(),
+          description: _descCtrl.text.trim(),
+          coverUrl: _coverUrl,
+          pdfUrl: (_pdfUrl ?? '').isEmpty ? null : _pdfUrl,
+          audioUrl: (_audioUrl ?? '').isEmpty ? null : _audioUrl,
+          language: _language,
+          category: _selectedCategories.join(', '),
+          tags: const [],
+        );
+        if (!navContext.mounted) return;
+        ScaffoldMessenger.of(navContext).showSnackBar(
+          SnackBar(
+            content: Text('Book updated successfully', style: GoogleFonts.inter()),
+            backgroundColor: const Color(0xFFBFAE01),
+          ),
+        );
+      } else {
+        // Create new book
+        await bookRepo.createBook(
+          title: _titleCtrl.text.trim(),
+          author: _authorCtrl.text.trim(),
+          description: _descCtrl.text.trim(),
+          coverUrl: _coverUrl!,
+          coverThumbUrl: _coverThumbUrl,
+          pdfUrl: (_pdfUrl ?? '').isEmpty ? null : _pdfUrl,
+          audioUrl: (_audioUrl ?? '').isEmpty ? null : _audioUrl,
+          language: _language,
+          category: _selectedCategories.join(', '),
+          tags: const [],
+          price: null,
+          isPublished: true,
+        );
+        if (!navContext.mounted) return;
+        ScaffoldMessenger.of(navContext).showSnackBar(
+          SnackBar(
+            content: Text(Provider.of<LanguageProvider>(navContext, listen: false).t('create_book.book_created'), style: GoogleFonts.inter()),
+            backgroundColor: const Color(0xFFBFAE01),
+          ),
+        );
+      }
       Navigator.of(navContext).pop(true);
     } catch (e) {
       if (!mounted) return;

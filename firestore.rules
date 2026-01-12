@@ -295,12 +295,18 @@ service cloud.firestore {
       allow delete: if signedIn();
     }
     
-    // Books
+    // Books - Admin only for create/update/delete
+    // Admin user ID: pRtNrwPbDQZLyo8Sx5Tpski8rLj1
     match /books/{bookId} {
       allow read: if true;
-      allow create: if signedIn();
-      allow update: if signedIn();
-      allow delete: if isAdmin();
+      allow create: if signedIn() && request.auth.uid == 'pRtNrwPbDQZLyo8Sx5Tpski8rLj1';
+      allow update: if signedIn() && (
+        // Admin can update anything
+        request.auth.uid == 'pRtNrwPbDQZLyo8Sx5Tpski8rLj1' ||
+        // Regular users can only update likes/bookmarks arrays (not other fields)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'bookmarks']))
+      );
+      allow delete: if signedIn() && request.auth.uid == 'pRtNrwPbDQZLyo8Sx5Tpski8rLj1';
     }
     
     // Book categories

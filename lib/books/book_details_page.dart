@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'books_home_page.dart' show Book;
 import 'book_read_page.dart';
 import 'book_play_page.dart';
+import 'create_book_page.dart';
 import '../repositories/interfaces/bookmark_repository.dart';
+import '../repositories/interfaces/book_repository.dart';
 import '../core/i18n/language_provider.dart';
+import '../core/admin_config.dart';
 
 class BookDetailsPage extends StatefulWidget {
   final Book book;
@@ -19,11 +23,82 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
   late Book book;
   bool _togglingLike = false;
   bool _togglingFav = false;
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
     book = widget.book;
+    _checkAdmin();
+  }
+
+  void _checkAdmin() {
+    final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+    setState(() {
+      _isAdmin = AdminConfig.isAdmin(uid);
+    });
+  }
+
+  Future<void> _deleteBook() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Book'),
+        content: Text('Are you sure you want to delete "${book.title}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final bookRepo = context.read<BookRepository>();
+      await bookRepo.deleteBook(book.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Book deleted successfully')),
+      );
+      Navigator.pop(context, true); // Return true to indicate deletion
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete book: $e')),
+      );
+    }
+  }
+
+  Future<void> _editBook() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateBookPage(editBook: book),
+      ),
+    );
+    
+    if (result == true && mounted) {
+      // Refresh book data
+      try {
+        final bookRepo = context.read<BookRepository>();
+        final updatedModel = await bookRepo.getBook(book.id);
+        if (updatedModel != null && mounted) {
+          setState(() {
+            book = Book.fromModel(updatedModel);
+          });
+        }
+      } catch (e) {
+        debugPrint('Error refreshing book: $e');
+      }
+    }
   }
 
   Future<void> _toggleLike() async {
@@ -149,6 +224,31 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
               child: const Icon(Icons.share_outlined, color: Colors.white, size: 20),
             ),
           ),
+          // Admin-only edit and delete buttons
+          if (_isAdmin) ...[
+            IconButton(
+              onPressed: _editBook,
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.edit_outlined, color: Color(0xFFBFAE01), size: 20),
+              ),
+            ),
+            IconButton(
+              onPressed: _deleteBook,
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+              ),
+            ),
+          ],
           const SizedBox(width: 8),
         ],
       ),
