@@ -993,6 +993,9 @@ class Translations {
       // Create Post
       'create_post.tag_people': 'Tag People',
       'create_post.choose_community': 'Choose Community',
+      'create_post.body_hint': "What's on your mind?",
+      'create_post.no_users_found': 'No users found',
+      'create_post.type_to_search': 'Type to search users',
 
       // Connection Card
       'connection.toggle_failed': 'Failed to toggle connection',

@@ -12,6 +12,7 @@ import 'core/i18n/language_provider.dart';
 import 'core/files_api.dart';
 import 'repositories/firebase/firebase_post_repository.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
+import 'repositories/firebase/firebase_follow_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'services/media_compression_service.dart';
 import 'core/profile_api.dart';
@@ -416,180 +417,239 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
     }
   }
 
-  void _showTagUserSheet() {
+  void _showTagUserSheet() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final lang = Provider.of<LanguageProvider>(context, listen: false);
-
+    
+    // Load connections first (same pattern as create_post_page)
+    List<_TagUser> users = [];
+    try {
+      final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      
+      final userRepo = FirebaseUserRepository();
+      final followRepo = FirebaseFollowRepository();
+      
+      // Get followers and following
+      final followers = await followRepo.getFollowers(userId: uid, limit: 500);
+      final following = await followRepo.getFollowing(userId: uid, limit: 500);
+      
+      final ids = <String>{
+        ...followers.map((f) => f.followerId),
+        ...following.map((f) => f.followedId),
+      }..remove('')..remove(uid);
+      
+      if (ids.isEmpty) {
+        users = [];
+      } else {
+        final profiles = await userRepo.getUsers(ids.toList());
+        users = profiles.map((u) {
+          final name = '${u.firstName ?? ''} ${u.lastName ?? ''}'.trim();
+          return _TagUser(
+            id: u.uid,
+            name: name.isNotEmpty ? name : (u.username ?? 'User'),
+            username: u.username != null ? '@${u.username}' : '',
+            avatarUrl: u.avatarUrl,
+            avatarLetter: name.isNotEmpty ? name[0].toUpperCase() : 'U',
+          );
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Error loading connections: $e');
+    }
+    
+    if (!mounted) return;
+    
+    // State variables for the sheet
+    String query = '';
+    final Map<String, _TagUser> localSelected = {for (var u in _taggedUsers) u.id: u};
+    
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
-        String query = '';
-        List<_TagUser> results = [];
-        bool loading = false;
-
+      builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            Future<void> search(String q) async {
-              if (q.trim().isEmpty) {
-                setSheetState(() {
-                  results = [];
-                  loading = false;
-                });
-                return;
-              }
-
-              setSheetState(() => loading = true);
-
-              try {
-                final userRepo = FirebaseUserRepository();
-                final users = await userRepo.searchUsers(query: q.trim());
-                final currentUid = fb.FirebaseAuth.instance.currentUser?.uid;
-
-                setSheetState(() {
-                  results = users
-                      .where((u) => u.uid != currentUid)
-                      .map((u) {
-                        final name = '${u.firstName ?? ''} ${u.lastName ?? ''}'.trim();
-                        return _TagUser(
-                          id: u.uid,
-                          name: name.isNotEmpty ? name : (u.username ?? 'User'),
-                          username: u.username != null ? '@${u.username}' : '',
-                          avatarUrl: u.avatarUrl,
-                          avatarLetter: name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                        );
-                      })
-                      .toList();
-                  loading = false;
-                });
-              } catch (e) {
-                setSheetState(() {
-                  results = [];
-                  loading = false;
-                });
-              }
+            List<_TagUser> filtered = users.where((u) {
+              if (query.isEmpty) return true;
+              return u.name.toLowerCase().contains(query) ||
+                  u.username.toLowerCase().contains(query);
+            }).toList();
+            
+            void applyQuery(String q) {
+              setSheetState(() {
+                query = q.trim().toLowerCase();
+              });
             }
 
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 500),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Handle
-                    Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF666666).withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Title
-                    Text(
-                      lang.t('create_post.tag_users'),
-                      style: GoogleFonts.inter(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Search field
-                    TextField(
-                      autofocus: true,
-                      style: GoogleFonts.inter(
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: lang.t('create_post.search_users'),
-                        hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF666666)),
-                        filled: true,
-                        fillColor: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: isDark ? Colors.white : Colors.black,
+                          size: 24,
                         ),
                       ),
-                      onChanged: (v) {
-                        query = v;
-                        search(v);
-                      },
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(width: 16),
+                      Text(
+                        lang.t('create_post.tag_people'),
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (localSelected.isNotEmpty)
+                        Text(
+                          '${localSelected.length} selected',
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF666666),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-                    // Results
-                    Expanded(
-                      child: loading
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                  // Search bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF1A1A1A)
+                          : const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.search,
+                            color: Color(0xFF666666), size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            onChanged: applyQuery,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              hintText: lang.t('create_post.search_connections'),
+                              hintStyle: GoogleFonts.inter(
+                                fontSize: 16,
+                                color: const Color(0xFF666666),
                               ),
-                            )
-                          : results.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    query.isEmpty
-                                        ? lang.t('create_post.type_to_search')
-                                        : lang.t('create_post.no_users_found'),
-                                    style: GoogleFonts.inter(color: const Color(0xFF666666)),
-                                  ),
-                                )
-                              : ListView.builder(
-                                  itemCount: results.length,
-                                  itemBuilder: (context, index) {
-                                    final user = results[index];
-                                    final isTagged = _taggedUsers.any((t) => t.id == user.id);
-
-                                    return ListTile(
-                                      leading: _Avatar(
-                                        avatarUrl: user.avatarUrl,
-                                        letter: user.avatarLetter,
-                                      ),
-                                      title: Text(
-                                        user.name,
-                                        style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w500,
-                                          color: isDark ? Colors.white : Colors.black,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        user.username,
-                                        style: GoogleFonts.inter(
-                                          color: const Color(0xFF666666),
-                                        ),
-                                      ),
-                                      trailing: isTagged
-                                          ? const Icon(Icons.check_circle, color: Color(0xFFBFAE01))
-                                          : null,
-                                      onTap: () {
-                                        setState(() {
-                                          if (isTagged) {
-                                            _taggedUsers.removeWhere((t) => t.id == user.id);
-                                          } else {
-                                            _taggedUsers.add(user);
-                                          }
-                                        });
-                                        setSheetState(() {});
-                                      },
-                                    );
-                                  },
-                                ),
+                              border: InputBorder.none,
+                            ),
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // User list
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Text(
+                              query.isEmpty
+                                  ? lang.t('create_post.type_to_search')
+                                  : lang.t('create_post.no_users_found'),
+                              style: GoogleFonts.inter(
+                                  color: const Color(0xFF666666)),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final u = filtered[index];
+                              final selected =
+                                  localSelected.containsKey(u.id);
+                              return ListTile(
+                                leading: _Avatar(
+                                    avatarUrl: u.avatarUrl,
+                                    letter: u.avatarLetter),
+                                title: Text(
+                                  u.name,
+                                  style: GoogleFonts.inter(),
+                                ),
+                                subtitle: Text(
+                                  u.username,
+                                  style: GoogleFonts.inter(
+                                      color: const Color(0xFF666666)),
+                                ),
+                                trailing: selected
+                                    ? const Icon(Icons.check_circle,
+                                        color: Color(0xFFBFAE01))
+                                    : const Icon(
+                                        Icons.radio_button_unchecked,
+                                        color: Color(0xFFCCCCCC)),
+                                onTap: () {
+                                  setSheetState(() {
+                                    if (selected) {
+                                      localSelected.remove(u.id);
+                                    } else {
+                                      localSelected[u.id] = u;
+                                    }
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                  ),
+
+                  // Done button
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _taggedUsers
+                            ..clear()
+                            ..addAll(localSelected.values);
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0C0C0C),
+                          borderRadius: BorderRadius.circular(27),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Done',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           },
