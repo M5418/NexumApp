@@ -28,6 +28,7 @@ import 'repositories/models/post_model.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'services/profile_cache_service.dart';
 import 'services/app_cache_service.dart';
+import 'core/admin_config.dart';
 
 class AppWrapper extends StatefulWidget {
   const AppWrapper({super.key});
@@ -179,6 +180,12 @@ class _AppWrapperState extends State<AppWrapper> {
               child: CircularProgressIndicator(color: Color(0xFFBFAE01)),
             ),
           );
+        }
+        
+        // Skip onboarding for admin account
+        final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+        if (AdminConfig.isAdmin(currentUserId)) {
+          return const HomeFeedPage();
         }
         
         // Check if onboarding is complete
