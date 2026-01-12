@@ -13,6 +13,7 @@ import '../repositories/interfaces/storage_repository.dart';
 import '../services/media_compression_service.dart';
 import '../models/group_chat.dart';
 import '../utils/profile_navigation.dart';
+import 'add_members_page.dart';
 
 class GroupInfoPage extends StatefulWidget {
   final GroupChat group;
@@ -221,11 +222,28 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   Future<void> _addMembers() async {
     if (!_isAdmin) return;
 
-    // Navigate to member selection (reuse create group page logic)
-    // For now, show a simple dialog
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('groups.add_members_coming_soon'))),
+    final result = await Navigator.push<List<String>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddMembersPage(group: _group),
+      ),
     );
+
+    if (result != null && result.isNotEmpty) {
+      // Reload members and refresh group
+      await _loadMembers();
+      final updated = await _groupRepo.getGroup(_group.id);
+      if (updated != null && mounted) {
+        setState(() => _group = updated);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${result.length} ${Provider.of<LanguageProvider>(context, listen: false).t('groups.members_added')}',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _removeMember(GroupMember member) async {
