@@ -438,6 +438,13 @@ class _CommunityPageState extends State<CommunityPage> {
       );
     }
     
+    // Convert tagged users from PostModel to Post format
+    final taggedUsers = m.taggedUsers.map((t) => TaggedUser(
+      id: t.id,
+      name: t.name,
+      avatarUrl: t.avatarUrl,
+    )).toList();
+    
     return Post(
       id: m.id,
       authorId: m.authorId,
@@ -460,6 +467,7 @@ class _CommunityPageState extends State<CommunityPage> {
       isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
       repostedBy: repostedBy,
       originalPostId: m.repostOf,
+      taggedUsers: taggedUsers,
     );
   }
 

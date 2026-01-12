@@ -76,7 +76,7 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
   final List<MediaItem> _mediaItems = [];
-  final List<String> _taggedUsers = [];
+  final List<_TagUser> _taggedUsers = [];
 
   bool _posting = false;
 
@@ -551,7 +551,7 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                                   itemCount: results.length,
                                   itemBuilder: (context, index) {
                                     final user = results[index];
-                                    final isTagged = _taggedUsers.contains(user.id);
+                                    final isTagged = _taggedUsers.any((t) => t.id == user.id);
 
                                     return ListTile(
                                       leading: _Avatar(
@@ -577,9 +577,9 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                                       onTap: () {
                                         setState(() {
                                           if (isTagged) {
-                                            _taggedUsers.remove(user.id);
+                                            _taggedUsers.removeWhere((t) => t.id == user.id);
                                           } else {
-                                            _taggedUsers.add(user.id);
+                                            _taggedUsers.add(user);
                                           }
                                         });
                                         setSheetState(() {});
@@ -657,11 +657,22 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
       }
       
       debugPrint('🚀 Creating post to community ${widget.communityId}');
+      
+      // Convert tagged users to the format expected by repository
+      final taggedUsersData = _taggedUsers.isNotEmpty
+          ? _taggedUsers.map((u) => {
+              'id': u.id,
+              'name': u.name,
+              'avatarUrl': u.avatarUrl ?? '',
+            }).toList()
+          : null;
+      
       final postId = await _postRepo.createPost(
         text: content, 
         mediaUrls: mediaUrls.isNotEmpty ? mediaUrls : null,
         thumbUrls: thumbUrls.isNotEmpty ? thumbUrls : null,
         communityId: widget.communityId,
+        taggedUsers: taggedUsersData,
       );
       debugPrint('✅ Post created with ID: $postId');
 

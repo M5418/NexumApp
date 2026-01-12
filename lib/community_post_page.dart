@@ -237,6 +237,11 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                   (model.repostOf != null && model.repostOf!.isNotEmpty),
               repostedBy: null,
               originalPostId: model.repostOf,
+              taggedUsers: model.taggedUsers.map((t) => TaggedUser(
+                id: t.id,
+                name: t.name,
+                avatarUrl: t.avatarUrl,
+              )).toList(),
             );
       if (p == null) {
         throw Exception('Post not found');
