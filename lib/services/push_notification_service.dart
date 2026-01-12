@@ -65,6 +65,12 @@ class PushNotificationService {
         break;
         
       case 'post':
+      case 'like':
+      case 'comment':
+      case 'comment_reply':
+      case 'like_on_comment':
+      case 'repost':
+      case 'mention':
         final postId = data['postId'] as String?;
         if (postId != null) {
           Navigator.pushNamed(context, '/post', arguments: {'postId': postId});
@@ -73,14 +79,39 @@ class PushNotificationService {
         
       case 'connection':
       case 'connection_request':
-        final userId = data['userId'] as String?;
+      case 'follow':
+      case 'new_connection':
+        final userId = data['userId'] as String? ?? data['fromUserId'] as String?;
         if (userId != null) {
           Navigator.pushNamed(context, '/profile', arguments: {'userId': userId});
         }
         break;
         
       case 'invitation':
+      case 'invitation_received':
+      case 'invitation_accepted':
         Navigator.pushNamed(context, '/invitations');
+        break;
+        
+      case 'new_podcast':
+        final podcastId = data['podcastId'] as String?;
+        if (podcastId != null) {
+          Navigator.pushNamed(context, '/podcast', arguments: {'podcastId': podcastId});
+        }
+        break;
+        
+      case 'new_book':
+        final bookId = data['bookId'] as String?;
+        if (bookId != null) {
+          Navigator.pushNamed(context, '/book', arguments: {'bookId': bookId});
+        }
+        break;
+        
+      case 'added_to_group':
+        final groupId = data['groupId'] as String?;
+        if (groupId != null) {
+          Navigator.pushNamed(context, '/group', arguments: {'groupId': groupId});
+        }
         break;
         
       case 'notification':

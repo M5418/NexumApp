@@ -48,6 +48,15 @@ enum NotificationType {
   mention,
   repost,
   system,
+  // New notification types
+  invitationReceived,
+  invitationAccepted,
+  newConnection,
+  commentReply,
+  likeOnComment,
+  newPodcast,
+  newBook,
+  addedToGroup,
 }
 
 class NotificationModel {

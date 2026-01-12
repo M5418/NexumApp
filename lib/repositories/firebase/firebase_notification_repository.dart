@@ -25,6 +25,30 @@ class FirebaseNotificationRepository implements NotificationRepository {
           return NotificationType.mention;
         case 'repost':
           return NotificationType.repost;
+        case 'invitationReceived':
+        case 'invitation_received':
+          return NotificationType.invitationReceived;
+        case 'invitationAccepted':
+        case 'invitation_accepted':
+          return NotificationType.invitationAccepted;
+        case 'newConnection':
+        case 'new_connection':
+          return NotificationType.newConnection;
+        case 'commentReply':
+        case 'comment_reply':
+          return NotificationType.commentReply;
+        case 'likeOnComment':
+        case 'like_on_comment':
+          return NotificationType.likeOnComment;
+        case 'newPodcast':
+        case 'new_podcast':
+          return NotificationType.newPodcast;
+        case 'newBook':
+        case 'new_book':
+          return NotificationType.newBook;
+        case 'addedToGroup':
+        case 'added_to_group':
+          return NotificationType.addedToGroup;
         default:
           return NotificationType.system;
       }

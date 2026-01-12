@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'repositories/interfaces/notification_repository.dart';
 import 'core/i18n/language_provider.dart';
 import 'repositories/firebase/firebase_notification_repository.dart';
@@ -8,6 +9,14 @@ import 'repositories/firebase/firebase_notification_repository.dart';
 // Navigation targets
 import 'post_page.dart';
 import 'responsive/responsive_breakpoints.dart';
+import 'other_user_profile_page.dart';
+import 'invitation_page.dart';
+import 'books/book_details_page.dart';
+import 'books/books_home_page.dart' show Book;
+import 'podcasts/podcast_details_page.dart';
+import 'podcasts/podcasts_home_page.dart' show Podcast;
+import 'groups/group_info_page.dart';
+import 'models/group_chat.dart';
 
 class NotificationPage extends StatefulWidget {
   const NotificationPage({super.key});
@@ -110,14 +119,195 @@ class _NotificationPageState extends State<NotificationPage> {
       // ignore
     }
 
-    // Minimal navigation for like/comment types when refId present
-    if (n.refId != null && n.refId!.isNotEmpty && mounted) {
-      if (n.type == NotificationType.like || n.type == NotificationType.comment) {
+    if (!mounted) return;
+    
+    final data = n.data ?? {};
+    final refId = n.refId ?? '';
+    final db = FirebaseFirestore.instance;
+    
+    switch (n.type) {
+      case NotificationType.like:
+      case NotificationType.comment:
+      case NotificationType.commentReply:
+      case NotificationType.likeOnComment:
+      case NotificationType.repost:
+      case NotificationType.mention:
+        // Navigate to post detail
+        if (refId.isNotEmpty) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              settings: const RouteSettings(name: 'post_detail'),
+              builder: (_) => PostPage(postId: refId),
+            ),
+          );
+        }
+        break;
+        
+      case NotificationType.follow:
+      case NotificationType.newConnection:
+        // Navigate to user profile - fetch user data first
+        final userId = data['fromUserId']?.toString() ?? refId;
+        if (userId.isNotEmpty) {
+          try {
+            final userDoc = await db.collection('users').doc(userId).get();
+            if (!mounted) return;
+            final userData = userDoc.data() ?? {};
+            final userName = userData['displayName']?.toString() ?? 
+                userData['username']?.toString() ?? 'User';
+            final userAvatar = userData['avatarUrl']?.toString() ?? '';
+            final userBio = userData['bio']?.toString() ?? '';
+            
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: 'profile'),
+                builder: (_) => OtherUserProfilePage(
+                  userId: userId,
+                  userName: userName,
+                  userAvatarUrl: userAvatar,
+                  userBio: userBio,
+                ),
+              ),
+            );
+          } catch (_) {
+            // Fallback navigation with minimal data
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  settings: const RouteSettings(name: 'profile'),
+                  builder: (_) => OtherUserProfilePage(
+                    userId: userId,
+                    userName: 'User',
+                    userAvatarUrl: '',
+                    userBio: '',
+                  ),
+                ),
+              );
+            }
+          }
+        }
+        break;
+        
+      case NotificationType.invitationReceived:
+      case NotificationType.invitationAccepted:
+        // Navigate to invitations page
         Navigator.push(
           context,
-          MaterialPageRoute(settings: const RouteSettings(name: 'post_detail'), builder: (_) => PostPage(postId: n.refId!)),
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'invitations'),
+            builder: (_) => const InvitationPage(),
+          ),
         );
-      }
+        break;
+        
+      case NotificationType.newPodcast:
+        // Navigate to podcast details - fetch podcast data first
+        final podcastId = data['podcastId']?.toString() ?? refId;
+        if (podcastId.isNotEmpty) {
+          try {
+            final podcastDoc = await db.collection('podcasts').doc(podcastId).get();
+            if (!mounted) return;
+            if (podcastDoc.exists) {
+              final podcastData = podcastDoc.data() ?? {};
+              final podcast = Podcast(
+                id: podcastId,
+                title: podcastData['title']?.toString() ?? '',
+                author: podcastData['author']?.toString() ?? podcastData['authorName']?.toString(),
+                authorId: podcastData['authorId']?.toString(),
+                coverUrl: podcastData['coverUrl']?.toString(),
+                audioUrl: podcastData['audioUrl']?.toString(),
+                durationSec: podcastData['durationSec'] as int?,
+                category: podcastData['category']?.toString(),
+                description: podcastData['description']?.toString(),
+                createdAt: (podcastData['createdAt'] as Timestamp?)?.toDate(),
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  settings: const RouteSettings(name: 'podcast_detail'),
+                  builder: (_) => PodcastDetailsPage(podcast: podcast),
+                ),
+              );
+            }
+          } catch (_) {
+            // Ignore navigation on error
+          }
+        }
+        break;
+        
+      case NotificationType.newBook:
+        // Navigate to book details - fetch book data first
+        final bookId = data['bookId']?.toString() ?? refId;
+        if (bookId.isNotEmpty) {
+          try {
+            final bookDoc = await db.collection('books').doc(bookId).get();
+            if (!mounted) return;
+            if (bookDoc.exists) {
+              final bookData = bookDoc.data() ?? {};
+              final book = Book(
+                id: bookId,
+                title: bookData['title']?.toString() ?? '',
+                author: bookData['author']?.toString(),
+                description: bookData['description']?.toString(),
+                coverUrl: bookData['coverUrl']?.toString(),
+                epubUrl: bookData['epubUrl']?.toString(),
+                category: bookData['category']?.toString(),
+                createdAt: (bookData['createdAt'] as Timestamp?)?.toDate(),
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  settings: const RouteSettings(name: 'book_detail'),
+                  builder: (_) => BookDetailsPage(book: book),
+                ),
+              );
+            }
+          } catch (_) {
+            // Ignore navigation on error
+          }
+        }
+        break;
+        
+      case NotificationType.addedToGroup:
+        // Navigate to group info page - fetch group data first
+        final groupId = data['groupId']?.toString() ?? refId;
+        if (groupId.isNotEmpty) {
+          try {
+            final groupDoc = await db.collection('group_chats').doc(groupId).get();
+            if (!mounted) return;
+            if (groupDoc.exists) {
+              final groupData = groupDoc.data() ?? {};
+              final now = DateTime.now();
+              final group = GroupChat(
+                id: groupId,
+                name: groupData['name']?.toString() ?? '',
+                description: groupData['description']?.toString(),
+                avatarUrl: groupData['avatarUrl']?.toString(),
+                createdBy: groupData['createdBy']?.toString() ?? '',
+                adminIds: List<String>.from(groupData['adminIds'] ?? []),
+                memberIds: List<String>.from(groupData['memberIds'] ?? []),
+                createdAt: (groupData['createdAt'] as Timestamp?)?.toDate() ?? now,
+                updatedAt: (groupData['updatedAt'] as Timestamp?)?.toDate() ?? now,
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  settings: const RouteSettings(name: 'group_info'),
+                  builder: (_) => GroupInfoPage(group: group),
+                ),
+              );
+            }
+          } catch (_) {
+            // Ignore navigation on error
+          }
+        }
+        break;
+        
+      case NotificationType.system:
+        // System notifications - no navigation
+        break;
     }
   }
 
