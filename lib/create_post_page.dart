@@ -73,7 +73,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final TextEditingController _bodyController = TextEditingController();
   final List<CommunityModel> _selectedCommunities = [];
   final List<MediaItem> _mediaItems = [];
-  final List<String> _taggedUsers = [];
+  final List<_TagUser> _taggedUsers = [];
   final int _maxCommunities = 3;
 
   bool _posting = false;
@@ -107,10 +107,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
       ));
     }
     
-    // Load tagged users
-    if (draft.taggedUsers != null) {
-      _taggedUsers.addAll(draft.taggedUsers!);
-    }
+    // Load tagged users (convert from IDs to _TagUser objects - will need to fetch user data)
+    // For now, drafts only store IDs, so we skip loading tagged users from drafts
+    // TODO: Store full user data in drafts if needed
     
     setState(() {});
   }
@@ -297,7 +296,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _taggedUsers.map((user) {
+              children: _taggedUsers.map((tagUser) {
                 return Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -321,7 +320,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        user,
+                        tagUser.name,
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           color: const Color(0xFFBFAE01),
@@ -332,7 +331,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                       GestureDetector(
                         onTap: () {
                           setState(() {
-                            _taggedUsers.remove(user);
+                            _taggedUsers.remove(tagUser);
                           });
                         },
                         child: const Icon(
@@ -617,7 +616,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
             return StatefulBuilder(
               builder: (context, setSheetState) {
                 String query = '';
-                final Set<String> localSelected = {..._taggedUsers};
+                final Map<String, _TagUser> localSelected = {for (var u in _taggedUsers) u.id: u};
 
                 List<_TagUser> filtered = users;
                 void applyQuery(String q) {
@@ -726,11 +725,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                     const Divider(height: 1),
                                 itemBuilder: (context, index) {
                                   final u = filtered[index];
-                                  final label = u.username.isNotEmpty
-                                      ? u.username
-                                      : u.name;
                                   final selected =
-                                      localSelected.contains(label);
+                                      localSelected.containsKey(u.id);
                                   return ListTile(
                                     leading: _Avatar(
                                         avatarUrl: u.avatarUrl,
@@ -753,9 +749,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                     onTap: () {
                                       setSheetState(() {
                                         if (selected) {
-                                          localSelected.remove(label);
+                                          localSelected.remove(u.id);
                                         } else {
-                                          localSelected.add(label);
+                                          localSelected[u.id] = u;
                                         }
                                       });
                                     },
@@ -773,7 +769,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             setState(() {
                               _taggedUsers
                                 ..clear()
-                                ..addAll(localSelected);
+                                ..addAll(localSelected.values);
                             });
                             Navigator.pop(context);
                           },
@@ -1308,7 +1304,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           title: _titleController.text.trim(),
           body: body,
           mediaUrls: mediaUrls.isNotEmpty ? mediaUrls : null,
-          taggedUsers: _taggedUsers.isNotEmpty ? _taggedUsers : null,
+          taggedUsers: _taggedUsers.isNotEmpty ? _taggedUsers.map((u) => u.id).toList() : null,
           communities: _selectedCommunities.map((c) => c.id).toList(),
         );
       } else {
@@ -1317,7 +1313,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           title: _titleController.text.trim(),
           body: body,
           mediaUrls: mediaUrls.isNotEmpty ? mediaUrls : null,
-          taggedUsers: _taggedUsers.isNotEmpty ? _taggedUsers : null,
+          taggedUsers: _taggedUsers.isNotEmpty ? _taggedUsers.map((u) => u.id).toList() : null,
           communities: _selectedCommunities.map((c) => c.id).toList(),
         );
       }
@@ -1480,11 +1476,22 @@ class _CreatePostPageState extends State<CreatePostPage> {
       }
       
       debugPrint('🚀 Creating post with ${mediaUrls.length} thumbnails${communityId != null ? ' to community $communityId' : ''}');
+      
+      // Convert tagged users to the format expected by repository
+      final taggedUsersData = _taggedUsers.isNotEmpty
+          ? _taggedUsers.map((u) => {
+              'id': u.id,
+              'name': u.name,
+              'avatarUrl': u.avatarUrl ?? '',
+            }).toList()
+          : null;
+      
       final postId = await _postRepo.createPost(
         text: content, 
         mediaUrls: mediaUrls.isNotEmpty ? mediaUrls : null,
         thumbUrls: thumbUrls.isNotEmpty ? thumbUrls : null,
         communityId: communityId,
+        taggedUsers: taggedUsersData,
       );
       debugPrint('✅ Post created with ID: $postId');
 

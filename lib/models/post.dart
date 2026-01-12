@@ -32,6 +32,19 @@ class RepostedBy {
   });
 }
 
+/// Tagged user info for display
+class TaggedUser {
+  final String id;
+  final String name;
+  final String? avatarUrl;
+
+  const TaggedUser({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+  });
+}
+
 class Post {
   final String id;
   final String authorId;
@@ -48,6 +61,7 @@ class Post {
   final bool isRepost;
   final RepostedBy? repostedBy;
   final String? originalPostId;
+  final List<TaggedUser> taggedUsers;
 
   const Post({
     required this.id,
@@ -65,6 +79,7 @@ class Post {
     required this.isRepost,
     this.repostedBy,
     this.originalPostId,
+    this.taggedUsers = const [],
   });
 
   Post copyWith({
@@ -83,6 +98,7 @@ class Post {
     bool? isRepost,
     RepostedBy? repostedBy,
     String? originalPostId,
+    List<TaggedUser>? taggedUsers,
   }) {
     return Post(
       id: id ?? this.id,
@@ -100,6 +116,7 @@ class Post {
       isRepost: isRepost ?? this.isRepost,
       repostedBy: repostedBy ?? this.repostedBy,
       originalPostId: originalPostId ?? this.originalPostId,
+      taggedUsers: taggedUsers ?? this.taggedUsers,
     );
     }
 }

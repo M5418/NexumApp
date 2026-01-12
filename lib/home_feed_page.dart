@@ -917,6 +917,13 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       );
     }
     
+    // Convert tagged users from PostModel to Post format
+    final taggedUsers = m.taggedUsers.map((t) => TaggedUser(
+      id: t.id,
+      name: t.name,
+      avatarUrl: t.avatarUrl,
+    )).toList();
+    
     return Post(
       id: m.id,
       authorId: m.authorId,
@@ -939,6 +946,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       isRepost: (m.repostOf != null && m.repostOf!.isNotEmpty),
       repostedBy: repostedBy,
       originalPostId: m.repostOf,
+      taggedUsers: taggedUsers,
     );
   }
 
@@ -1007,6 +1015,13 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     
     int clamp(int v) => v < 0 ? 0 : v;
     
+    // Convert tagged users from original post
+    final taggedUsers = original.taggedUsers.map((t) => TaggedUser(
+      id: t.id,
+      name: t.name,
+      avatarUrl: t.avatarUrl,
+    )).toList();
+    
     return Post(
       id: repost.id,
       authorId: original.authorId,
@@ -1034,6 +1049,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         actionType: 'reposted this',
       ),
       originalPostId: repost.repostOf,
+      taggedUsers: taggedUsers,
     );
   }
 

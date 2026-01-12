@@ -29,6 +29,35 @@ class MediaThumb {
   }
 }
 
+/// Tagged user data stored in Firestore
+class TaggedUserData {
+  final String id;
+  final String name;
+  final String? avatarUrl;
+
+  const TaggedUserData({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+  });
+
+  factory TaggedUserData.fromMap(Map<String, dynamic> map) {
+    return TaggedUserData(
+      id: map['id'] ?? '',
+      name: map['name'] ?? '',
+      avatarUrl: map['avatarUrl'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+    };
+  }
+}
+
 class PostModel {
   final String id;
   final String authorId;
@@ -47,6 +76,9 @@ class PostModel {
   // Media thumbnails for feed (thumb only, no HD)
   final List<MediaThumb> mediaThumbs;
   
+  // Tagged users in this post
+  final List<TaggedUserData> taggedUsers;
+  
   // For pagination
   final DocumentSnapshot? snapshot;
   
@@ -63,6 +95,7 @@ class PostModel {
     this.authorName,
     this.authorAvatarUrl,
     this.mediaThumbs = const [],
+    this.taggedUsers = const [],
     this.snapshot,
   });
   
@@ -74,6 +107,14 @@ class PostModel {
     if (data['mediaThumbs'] != null && data['mediaThumbs'] is List) {
       thumbs = (data['mediaThumbs'] as List)
           .map((t) => MediaThumb.fromMap(Map<String, dynamic>.from(t)))
+          .toList();
+    }
+    
+    // Parse taggedUsers if available
+    List<TaggedUserData> tagged = [];
+    if (data['taggedUsers'] != null && data['taggedUsers'] is List) {
+      tagged = (data['taggedUsers'] as List)
+          .map((t) => TaggedUserData.fromMap(Map<String, dynamic>.from(t)))
           .toList();
     }
     
@@ -90,6 +131,7 @@ class PostModel {
       authorName: data['authorName'],
       authorAvatarUrl: data['authorAvatarUrl'],
       mediaThumbs: thumbs,
+      taggedUsers: tagged,
       snapshot: doc,
     );
   }
@@ -110,6 +152,9 @@ class PostModel {
     if (mediaThumbs.isNotEmpty) {
       map['mediaThumbs'] = mediaThumbs.map((t) => t.toMap()).toList();
     }
+    if (taggedUsers.isNotEmpty) {
+      map['taggedUsers'] = taggedUsers.map((t) => t.toMap()).toList();
+    }
     return map;
   }
   
@@ -126,6 +171,7 @@ class PostModel {
     String? authorName,
     String? authorAvatarUrl,
     List<MediaThumb>? mediaThumbs,
+    List<TaggedUserData>? taggedUsers,
     DocumentSnapshot? snapshot,
   }) {
     return PostModel(
@@ -141,6 +187,7 @@ class PostModel {
       authorName: authorName ?? this.authorName,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       mediaThumbs: mediaThumbs ?? this.mediaThumbs,
+      taggedUsers: taggedUsers ?? this.taggedUsers,
       snapshot: snapshot ?? this.snapshot,
     );
   }

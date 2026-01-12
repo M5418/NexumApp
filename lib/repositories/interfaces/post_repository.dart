@@ -9,6 +9,7 @@ abstract class PostRepository {
     List<String>? thumbUrls, // Thumbnail URLs for fast feed loading
     String? repostOf,
     String? communityId,
+    List<Map<String, String>>? taggedUsers, // [{id, name, avatarUrl}]
   });
   
   // Get single post

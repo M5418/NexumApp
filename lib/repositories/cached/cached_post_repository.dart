@@ -16,6 +16,7 @@ class CachedPostRepository implements PostRepository {
     List<String>? thumbUrls,
     String? repostOf,
     String? communityId,
+    List<Map<String, String>>? taggedUsers,
   }) async {
     final postId = await _source.createPost(
       text: text,
@@ -23,6 +24,7 @@ class CachedPostRepository implements PostRepository {
       thumbUrls: thumbUrls,
       repostOf: repostOf,
       communityId: communityId,
+      taggedUsers: taggedUsers,
     );
     
     // Invalidate feed caches

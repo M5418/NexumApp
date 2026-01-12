@@ -424,6 +424,81 @@ class _HomePostCardState extends State<HomePostCard> {
     );
   }
 
+  String _buildTaggedUsersText() {
+    final tagged = widget.post.taggedUsers;
+    if (tagged.isEmpty) return '';
+    if (tagged.length == 1) {
+      return 'with ${tagged.first.name}';
+    } else if (tagged.length == 2) {
+      return 'with ${tagged[0].name} and ${tagged[1].name}';
+    } else {
+      return 'with ${tagged[0].name} and ${tagged.length - 1} others';
+    }
+  }
+
+  void _showTaggedUsers(BuildContext context) {
+    final tagged = widget.post.taggedUsers;
+    if (tagged.isEmpty) return;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: widget.isDarkMode == true ? const Color(0xFF1A1A1A) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tagged People',
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: widget.isDarkMode == true ? Colors.white : Colors.black,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...tagged.map((user) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                backgroundImage: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                    ? CachedNetworkImageProvider(user.avatarUrl!)
+                    : null,
+                backgroundColor: const Color(0xFFBFAE01),
+                child: user.avatarUrl == null || user.avatarUrl!.isEmpty
+                    ? Text(
+                        user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                        style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                      )
+                    : null,
+              ),
+              title: Text(
+                user.name,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w500,
+                  color: widget.isDarkMode == true ? Colors.white : Colors.black,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                navigateToUserProfile(
+                  context: context,
+                  userId: user.id,
+                  userName: user.name,
+                  userAvatarUrl: user.avatarUrl ?? '',
+                  userBio: '',
+                );
+              },
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -539,6 +614,34 @@ class _HomePostCardState extends State<HomePostCard> {
               ),
             ],
           ),
+
+          // Tagged users display
+          if (widget.post.taggedUsers.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => _showTaggedUsers(context),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.person_outline,
+                    size: 14,
+                    color: const Color(0xFFBFAE01),
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      _buildTaggedUsersText(),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: const Color(0xFFBFAE01),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 12),
 

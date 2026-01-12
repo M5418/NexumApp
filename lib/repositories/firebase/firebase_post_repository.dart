@@ -17,8 +17,46 @@ class FirebasePostRepository implements PostRepository {
     return PostModel.fromFirestore(doc);
   }
 
+  /// Send notifications to tagged users (non-blocking, fire-and-forget)
+  void _sendTagNotifications({
+    required String postId,
+    required List<Map<String, String>> taggedUsers,
+    required String authorId,
+    required String authorName,
+  }) async {
+    try {
+      final notifications = _db.collection('notifications');
+      final batch = _db.batch();
+      
+      for (final user in taggedUsers) {
+        final userId = user['id'];
+        if (userId == null || userId.isEmpty || userId == authorId) continue;
+        
+        final notifRef = notifications.doc();
+        batch.set(notifRef, {
+          'userId': userId,
+          'type': 'tag',
+          'title': 'You were tagged',
+          'body': '$authorName tagged you in a post',
+          'data': {
+            'postId': postId,
+            'authorId': authorId,
+            'authorName': authorName,
+          },
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      
+      await batch.commit();
+      debugPrint('✅ Tag notifications sent to ${taggedUsers.length} users');
+    } catch (e) {
+      debugPrint('⚠️ Failed to send tag notifications: $e');
+    }
+  }
+
   @override
-  Future<String> createPost({required String text, List<String>? mediaUrls, List<String>? thumbUrls, String? repostOf, String? communityId}) async {
+  Future<String> createPost({required String text, List<String>? mediaUrls, List<String>? thumbUrls, String? repostOf, String? communityId, List<Map<String, String>>? taggedUsers}) async {
     try {
       final u = _auth.currentUser;
       if (u == null) {
@@ -65,6 +103,13 @@ class FirebasePostRepository implements PostRepository {
         ));
       }
       
+      // Convert tagged users to TaggedUserData
+      final taggedUsersList = (taggedUsers ?? []).map((t) => TaggedUserData(
+        id: t['id'] ?? '',
+        name: t['name'] ?? '',
+        avatarUrl: t['avatarUrl'],
+      )).toList();
+      
       final data = PostModel(
         id: '',
         authorId: u.uid,
@@ -77,6 +122,7 @@ class FirebasePostRepository implements PostRepository {
         authorName: authorName,
         authorAvatarUrl: authorAvatarUrl,
         mediaThumbs: thumbs,
+        taggedUsers: taggedUsersList,
       ).toMap();
       
       debugPrint('📝 Post data prepared: ${data.keys.toList()}');
@@ -88,6 +134,17 @@ class FirebasePostRepository implements PostRepository {
       
       final ref = await collection.add(data);
       debugPrint('✅ Post created successfully with ID: ${ref.id} in $collectionName');
+      
+      // Send notifications to tagged users (non-blocking)
+      if (taggedUsers != null && taggedUsers.isNotEmpty) {
+        _sendTagNotifications(
+          postId: ref.id,
+          taggedUsers: taggedUsers,
+          authorId: u.uid,
+          authorName: authorName ?? 'Someone',
+        );
+      }
+      
       return ref.id;
     } catch (e, stackTrace) {
       debugPrint('❌ FIREBASE ERROR creating post: $e');

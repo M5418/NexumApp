@@ -471,6 +471,81 @@ class _PostCardState extends State<PostCard> {
       );
     }
 
+    String buildTaggedUsersText() {
+      final tagged = widget.post.taggedUsers;
+      if (tagged.isEmpty) return '';
+      if (tagged.length == 1) {
+        return 'with ${tagged.first.name}';
+      } else if (tagged.length == 2) {
+        return 'with ${tagged[0].name} and ${tagged[1].name}';
+      } else {
+        return 'with ${tagged[0].name} and ${tagged.length - 1} others';
+      }
+    }
+
+    void showTaggedUsersSheet(BuildContext ctx) {
+      final tagged = widget.post.taggedUsers;
+      if (tagged.isEmpty) return;
+      
+      showModalBottomSheet(
+        context: ctx,
+        backgroundColor: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (sheetCtx) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tagged People',
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode ? Colors.white : Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...tagged.map((user) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundImage: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                      ? CachedNetworkImageProvider(user.avatarUrl!)
+                      : null,
+                  backgroundColor: const Color(0xFFBFAE01),
+                  child: user.avatarUrl == null || user.avatarUrl!.isEmpty
+                      ? Text(
+                          user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                        )
+                      : null,
+                ),
+                title: Text(
+                  user.name,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w500,
+                    color: isDarkMode ? Colors.white : Colors.black,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  navigateToUserProfile(
+                    context: ctx,
+                    userId: user.id,
+                    userName: user.name,
+                    userAvatarUrl: user.avatarUrl ?? '',
+                    userBio: '',
+                  );
+                },
+              )),
+            ],
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: () => widget.onTap?.call(_effectivePostId()),
       child: Container(
@@ -569,6 +644,34 @@ class _PostCardState extends State<PostCard> {
                 ),
               ],
             ),
+
+            // Tagged users display
+            if (widget.post.taggedUsers.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () => showTaggedUsersSheet(context),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person_outline,
+                      size: 14,
+                      color: reactionColor,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        buildTaggedUsersText(),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: reactionColor,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 6),
 
