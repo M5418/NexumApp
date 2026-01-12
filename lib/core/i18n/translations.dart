@@ -210,6 +210,9 @@ class Translations {
       'chat.last_seen': 'Last seen recently',
       'chat.type_message_hint': 'Type a message...',
       'chat.retry': 'Retry',
+      'chat.microphone_permission_required': 'Microphone permission required',
+      'chat.photo': 'Photo',
+      'chat.file': 'File',
 
       // Notifications (consolidated)
       'notifications.title': 'Notifications',
@@ -2139,6 +2142,9 @@ class Translations {
       // Conversations
       'chat.type_message': 'Tapez un message...',
       'chat.sending': 'Envoi en cours...',
+      'chat.microphone_permission_required': 'Permission du microphone requise',
+      'chat.photo': 'Photo',
+      'chat.file': 'Fichier',
       'conversations.title': 'Conversations',
       'conversations.chats': 'Discussions',
       'conversations.communities': 'Communautés',

@@ -275,17 +275,32 @@ class _GroupChatPageState extends State<GroupChatPage> {
   Future<void> _startRecording() async {
     if (_isRecording) return;
     
-    final hasPermission = await _audioRecorder.hasPermission();
+    // Check permission with timeout to prevent UI freeze
+    bool hasPermission = false;
+    try {
+      hasPermission = await _audioRecorder.hasPermission().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('⚠️ Permission check timed out');
+          return false;
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Error checking microphone permission: $e');
+      return;
+    }
+    
     if (!hasPermission) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Microphone permission required')),
+        SnackBar(content: Text(Provider.of<LanguageProvider>(context, listen: false).t('chat.microphone_permission_required'))),
       );
       return;
     }
 
-    await _audioRecorder.startRecording();
+    // Start recording immediately - no delay
     setState(() => _isRecording = true);
+    await _audioRecorder.startRecording();
   }
 
   Future<void> _stopRecordingAndSend() async {
@@ -967,8 +982,12 @@ class _GroupChatPageState extends State<GroupChatPage> {
               )
             else
               GestureDetector(
-                onLongPressStart: (_) => _startRecording(),
-                onLongPressEnd: (_) => _stopRecordingAndSend(),
+                onTap: () {
+                  // Instant tap to start recording - no delay
+                  if (!_isRecording) {
+                    _startRecording();
+                  }
+                },
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: const BoxDecoration(
