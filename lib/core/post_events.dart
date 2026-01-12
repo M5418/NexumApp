@@ -53,3 +53,27 @@ class CommentEvents {
     _controller.add(event);
   }
 }
+
+/// Event for connection state sync across the app
+class ConnectionEvent {
+  final String targetUserId;
+  final bool isConnected;
+
+  ConnectionEvent({
+    required this.targetUserId,
+    required this.isConnected,
+  });
+}
+
+class ConnectionEvents {
+  ConnectionEvents._();
+
+  static final StreamController<ConnectionEvent> _controller =
+      StreamController<ConnectionEvent>.broadcast();
+
+  static Stream<ConnectionEvent> get stream => _controller.stream;
+
+  static void emit(ConnectionEvent event) {
+    _controller.add(event);
+  }
+}

@@ -2149,14 +2149,48 @@ class Translations {
       'conversations.unmute': 'Réactiver le son',
 
       // Connections
+      'connections.people': 'Personnes',
       'connections.select_user': 'Sélectionner un utilisateur',
       'connections.see_more': 'Voir plus',
+      'connections.connected': 'Connecté',
+      'connections.connect': 'Connecter',
+      'connections.disconnect': 'Déconnecter',
+      'connections.invitation_sent': 'Invitation envoyée',
+      'connections.connect_failed': 'Échec de la connexion',
+      'connections.disconnect_failed': 'Échec de la déconnexion',
       'connections.connect_back': 'Connecter en retour',
       'connections.action_failed': 'Action échouée',
+      'connections.professional_experiences': 'Expériences professionnelles',
+      'connections.no_experiences': 'Aucune expérience à afficher',
+      'connections.trainings': 'Formations',
+      'connections.no_trainings': 'Aucune formation à afficher',
+      'connections.interests': 'Intérêts',
+      'connections.no_interests': 'Aucun intérêt à afficher',
+      'connections.activity': 'Activité',
+      'connections.posts': 'Publications',
+      'connections.podcasts': 'Podcasts',
+      'connections.media': 'Médias',
+      'connections.no_activity': 'Aucune activité trouvée',
+      'connections.no_posts': 'Aucune publication trouvée',
+      'connections.no_podcasts': 'Aucun podcast trouvé',
+      'connections.no_media': 'Aucun média trouvé',
 
       // My Connections
+      'my_connections.title': 'Mes connexions',
+      'my_connections.search': 'Rechercher des connexions...',
+      'my_connections.no_connections': 'Aucune connexion pour le moment',
+      'my_connections.load_failed': 'Échec du chargement des connexions',
+      'my_connections.action_failed': 'Échec de la connexion/déconnexion',
       'my_connections.tab_connected_to_me': 'Connectés à moi',
       'my_connections.tab_i_connect': 'Je me connecte',
+      'my_connections.connected': 'Connecté',
+
+      // Connect Friends
+      'connect_friends.title': 'Connecter avec des amis',
+      'connect_friends.search': 'Rechercher des amis...',
+      'connect_friends.no_friends': 'Aucun ami trouvé',
+      'connect_friends.load_failed': 'Échec du chargement des amis',
+      'connect_friends.action_failed': 'Échec de la connexion/déconnexion',
 
       // Invitations
       'invitations.tab_invitations': 'Invitations',
@@ -2293,30 +2327,14 @@ class Translations {
       'change_email.success': 'Email changé avec succès',
       'change_email.failed': 'Échec du changement d\'email',
 
-      // My Connections
-      'my_connections.title': 'Mes connexions',
-      'my_connections.search': 'Rechercher des connexions...',
-      'my_connections.no_connections': 'Aucune connexion',
-      'my_connections.load_failed': 'Échec du chargement',
-      'my_connections.action_failed': 'Échec de l\'action',
-
-      // Invitations
-      'invitations.title': 'Invitations',
+      // Invitations (additional)
       'invitations.sent': 'Envoyées',
       'invitations.received': 'Reçues',
       'invitations.no_sent': 'Aucune invitation envoyée',
       'invitations.no_received': 'Aucune invitation reçue',
       'invitations.accept': 'Accepter',
       'invitations.reject': 'Refuser',
-      'invitations.delete': 'Supprimer',
-      'invitations.close': 'Fermer',
 
-      // Connect Friends
-      'connect_friends.title': 'Connecter avec des amis',
-      'connect_friends.search': 'Rechercher des amis...',
-      'connect_friends.no_friends': 'Aucun ami trouvé',
-      'connect_friends.load_failed': 'Échec du chargement',
-      'connect_friends.action_failed': 'Échec de l\'action',
       // Security Login
       'security.subtitle': 'Utilisez une application d\'authentificateur pour sécuriser vos connexions',
       'security.notification_subtitle': 'Soyez notifié lorsqu\'un nouvel appareil se connecte à votre compte',
@@ -3240,9 +3258,6 @@ class Translations {
 
       // Image
       'image.added_favorites': 'Ajouté aux favoris',
-
-      // My Connections
-      'my_connections.connected': 'Connecté',
 
     },
     'pt': {

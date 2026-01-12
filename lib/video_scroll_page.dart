@@ -1118,19 +1118,30 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
                             onTap: () async {
                               final repo = context.read<FollowRepository>();
                               final messenger = ScaffoldMessenger.of(context);
+                              final lang = Provider.of<LanguageProvider>(context, listen: false);
                               try {
                                 if (youConnectTo) {
                                   // Disconnect
                                   await repo.unfollowUser(post.authorId);
+                                  // Emit event to sync across app
+                                  ConnectionEvents.emit(ConnectionEvent(
+                                    targetUserId: post.authorId,
+                                    isConnected: false,
+                                  ));
                                 } else {
                                   // Connect or Connect Back
                                   await repo.followUser(post.authorId);
+                                  // Emit event to sync across app
+                                  ConnectionEvents.emit(ConnectionEvent(
+                                    targetUserId: post.authorId,
+                                    isConnected: true,
+                                  ));
                                 }
                               } catch (e) {
                                 if (mounted) {
                                   messenger.showSnackBar(
                                     SnackBar(
-                                      content: Text('Failed to update connection', style: GoogleFonts.inter()),
+                                      content: Text(lang.t('connections.action_failed'), style: GoogleFonts.inter()),
                                     ),
                                   );
                                 }

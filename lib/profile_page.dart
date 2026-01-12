@@ -1412,27 +1412,37 @@ class _ProfilePageState extends State<ProfilePage> {
                                         ),
                                       ),
                                     ),
-                                    // Stats Row
+                                    // Stats Row - Tap to navigate to My Connections
                                     Transform.translate(
                                       offset: const Offset(0, -30),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          _buildStatColumn(
-                                            _formatCount(
-                                              p['connections_inbound_count'],
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => const MyConnectionsPage(),
                                             ),
-                                            Provider.of<LanguageProvider>(context, listen: false).t('profile.connections_label'),
-                                          ),
-                                          const SizedBox(width: 40),
-                                          _buildStatColumn(
-                                            _formatCount(
-                                              p['connections_outbound_count'],
+                                          );
+                                        },
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            _buildStatColumn(
+                                              _formatCount(
+                                                p['connections_inbound_count'],
+                                              ),
+                                              Provider.of<LanguageProvider>(context, listen: false).t('profile.connections_label'),
                                             ),
-                                            Provider.of<LanguageProvider>(context, listen: false).t('profile.connected_label'),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 40),
+                                            _buildStatColumn(
+                                              _formatCount(
+                                                p['connections_outbound_count'],
+                                              ),
+                                              Provider.of<LanguageProvider>(context, listen: false).t('profile.connected_label'),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                     // Name and Bio
@@ -2579,27 +2589,37 @@ class _ProfilePageState extends State<ProfilePage> {
                                             ),
                                           ),
 
-                                          // Stats Row
+                                          // Stats Row - Tap to navigate to My Connections
                                           Transform.translate(
                                             offset: const Offset(0, -30),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                _buildStatColumn(
-                                                  _formatCount(
-                                                    p['connections_inbound_count'],
+                                            child: GestureDetector(
+                                              onTap: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) => const MyConnectionsPage(),
                                                   ),
-                                                  'Connections',
-                                                ),
-                                                const SizedBox(width: 40),
-                                                _buildStatColumn(
-                                                  _formatCount(
-                                                    p['connections_outbound_count'],
+                                                );
+                                              },
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  _buildStatColumn(
+                                                    _formatCount(
+                                                      p['connections_inbound_count'],
+                                                    ),
+                                                    Provider.of<LanguageProvider>(context, listen: false).t('profile.connections_label'),
                                                   ),
-                                                  'Connected',
-                                                ),
-                                              ],
+                                                  const SizedBox(width: 40),
+                                                  _buildStatColumn(
+                                                    _formatCount(
+                                                      p['connections_outbound_count'],
+                                                    ),
+                                                    Provider.of<LanguageProvider>(context, listen: false).t('profile.connected_label'),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                           ),
 

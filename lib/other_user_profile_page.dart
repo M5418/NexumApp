@@ -8,6 +8,8 @@ import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
 import 'widgets/message_invite_card.dart';
 import 'widgets/comment_bottom_sheet.dart';
+import 'core/post_events.dart';
+import 'my_connections_page.dart';
 import 'models/post.dart';
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
@@ -1062,22 +1064,32 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                 ),
                               ),
 
-                              // Stats Row (match ProfilePage style)
+                              // Stats Row (match ProfilePage style) - Tap to navigate to My Connections
                               Transform.translate(
                                 offset: const Offset(0, -30),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _buildStatColumn(
-                                      _formatCount(_followersCount),
-                                      Provider.of<LanguageProvider>(context, listen: false).t('profile.connections_label'),
-                                    ),
-                                    const SizedBox(width: 40),
-                                    _buildStatColumn(
-                                      _formatCount(_followingCount),
-                                      Provider.of<LanguageProvider>(context, listen: false).t('profile.connected_label'),
-                                    ),
-                                  ],
+                                child: GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const MyConnectionsPage(),
+                                      ),
+                                    );
+                                  },
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      _buildStatColumn(
+                                        _formatCount(_followersCount),
+                                        Provider.of<LanguageProvider>(context, listen: false).t('profile.connections_label'),
+                                      ),
+                                      const SizedBox(width: 40),
+                                      _buildStatColumn(
+                                        _formatCount(_followingCount),
+                                        Provider.of<LanguageProvider>(context, listen: false).t('profile.connected_label'),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
 
@@ -1144,8 +1156,14 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
                                         onPressed: () async {
                                           // Capture messenger before async operations
                                           final messenger = ScaffoldMessenger.of(context);
+                                          final wasConnected = context.read<FollowState>().isConnected(widget.userId);
                                           try {
                                             await context.read<FollowState>().toggle(widget.userId);
+                                            // Emit event to sync across app
+                                            ConnectionEvents.emit(ConnectionEvent(
+                                              targetUserId: widget.userId,
+                                              isConnected: !wasConnected,
+                                            ));
                                           } catch (e) {
                                             if (!mounted) return;
                                             messenger.showSnackBar(

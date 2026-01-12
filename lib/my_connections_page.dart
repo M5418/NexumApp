@@ -3,11 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'providers/follow_state.dart';
 import 'core/i18n/language_provider.dart';
+import 'core/post_events.dart';
 import 'widgets/segmented_tabs.dart';
 import 'widgets/animated_navbar.dart';
 import 'repositories/firebase/firebase_user_repository.dart';
 import 'repositories/firebase/firebase_follow_repository.dart';
 import 'utils/profile_navigation.dart';
+import 'dart:async';
 
 class MyConnectionUser {
   final String id;
@@ -495,8 +497,14 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
 
     return GestureDetector(
       onTap: () async {
+        final wasConnected = context.read<FollowState>().isConnected(user.id);
         try {
           await context.read<FollowState>().toggle(user.id);
+          // Emit event to sync across app
+          ConnectionEvents.emit(ConnectionEvent(
+            targetUserId: user.id,
+            isConnected: !wasConnected,
+          ));
         } catch (e) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -512,8 +520,8 @@ class _MyConnectionsPageState extends State<MyConnectionsPage>
         ),
         child: Text(
           (follow.theyConnectToYou(user.id) && !isConnected)
-              ? 'Connect Back'
-              : 'Connect',
+              ? lang.t('connections.connect_back')
+              : lang.t('connections.connect'),
           style: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: FontWeight.w600,

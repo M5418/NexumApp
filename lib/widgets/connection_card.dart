@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../utils/profile_navigation.dart';
 import '../providers/follow_state.dart';
 import '../core/i18n/language_provider.dart';
+import '../core/post_events.dart';
 
 class ConnectionCard extends StatefulWidget {
   final String userId;
@@ -206,8 +207,14 @@ class _ConnectionCardState extends State<ConnectionCard> {
                           child: ElevatedButton(
                             onPressed: () async {
                               final ctx = context;
+                              final wasConnected = ctx.read<FollowState>().isConnected(widget.userId);
                               try {
                                 await ctx.read<FollowState>().toggle(widget.userId);
+                                // Emit event to sync across app
+                                ConnectionEvents.emit(ConnectionEvent(
+                                  targetUserId: widget.userId,
+                                  isConnected: !wasConnected,
+                                ));
                               } catch (e) {
                                 if (!ctx.mounted) return;
                                 ScaffoldMessenger.of(ctx).showSnackBar(
@@ -237,8 +244,10 @@ class _ConnectionCardState extends State<ConnectionCard> {
                             ),
                             child: Text(
                               connected
-                                  ? 'Disconnect'
-                                  : (theyConnect ? 'Connect Back' : 'Connect'),
+                                  ? Provider.of<LanguageProvider>(context, listen: false).t('connections.disconnect')
+                                  : (theyConnect 
+                                      ? Provider.of<LanguageProvider>(context, listen: false).t('connections.connect_back') 
+                                      : Provider.of<LanguageProvider>(context, listen: false).t('connections.connect')),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
