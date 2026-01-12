@@ -73,13 +73,19 @@ class StoryRing extends StatelessWidget {
                             Padding(
                               padding: const EdgeInsets.all(4),
                               child: Container(
+                                width: 72,
+                                height: 72,
                                 decoration: const BoxDecoration(shape: BoxShape.circle),
                                 clipBehavior: Clip.antiAlias,
                                 child: imageUrl != null
                                     ? CachedNetworkImage(
                                         imageUrl: imageUrl!,
+                                        width: 72,
+                                        height: 72,
                                         fit: BoxFit.cover,
                                         placeholder: (context, url) => Container(
+                                          width: 72,
+                                          height: 72,
                                           color: const Color(0xFF666666).withValues(alpha: 0.2),
                                           child: const Center(
                                             child: CircularProgressIndicator(
@@ -89,13 +95,17 @@ class StoryRing extends StatelessWidget {
                                           ),
                                         ),
                                         errorWidget: (context, url, error) => Container(
+                                          width: 72,
+                                          height: 72,
                                           color: const Color(0xFF666666).withValues(alpha: 0.2),
-                                          child: const Icon(Icons.person, color: Color(0xFF666666), size: 30),
+                                          child: const Icon(Icons.person, color: Color(0xFF666666), size: 36),
                                         ),
                                       )
                                     : Container(
+                                        width: 72,
+                                        height: 72,
                                         color: const Color(0xFF666666).withValues(alpha: 0.2),
-                                        child: const Icon(Icons.person, color: Color(0xFF666666), size: 30),
+                                        child: const Icon(Icons.person, color: Color(0xFF666666), size: 36),
                                       ),
                               ),
                             ),

@@ -33,7 +33,6 @@ import 'notification_page.dart';
 import 'story_viewer_page.dart';
 import 'story_compose_pages.dart';
 import 'widgets/tools_overlay.dart';
-import 'widgets/my_stories_bottom_sheet.dart';
 import 'podcasts/podcasts_home_page.dart';
 import 'books/books_home_page.dart';
 import 'mentorship/mentorship_home_page.dart';
@@ -2033,79 +2032,61 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     : Provider.of<LanguageProvider>(context, listen: false).t('feed.user')),
                         isMine: isMine,
                         isSeen: !ring.hasUnseen,
-                        onAddTap: isMine
+                        hasActiveStories: isMine && ring.stories.isNotEmpty,
+                        onAddTap: (isMine && ring.stories.isNotEmpty)
                             ? () {
-                                if (ring.storyCount > 0 &&
-                                    _currentUserId != null) {
-                                  MyStoriesBottomSheet.show(
-                                    context,
-                                    currentUserId: _currentUserId!,
-                                    onAddStory: () {
-                                      StoryTypePicker.show(
+                                StoryTypePicker.show(
+                                  context,
+                                  position: const Offset(320, 120),
+                                  onSelected: (type) async {
+                                    if (_useDesktopPopup(context)) {
+                                      await StoryComposerPopup.show(context, type: type);
+                                    } else {
+                                      await Navigator.push(
                                         context,
-                                        onSelected: (type) async {
-                                          if (_useDesktopPopup(context)) {
-                                            await StoryComposerPopup.show(
-                                                context,
-                                                type: type);
-                                          } else {
-                                            await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                  settings: const RouteSettings(name: 'story_composer'),
-                                                  builder: (_) =>
-                                                      _composerPage(type)),
-                                            );
-                                          }
-                                        },
+                                        MaterialPageRoute(
+                                          settings: const RouteSettings(name: 'story_composer'),
+                                          builder: (_) => _composerPage(type),
+                                        ),
                                       );
-                                    },
-                                  );
-                                }
-                                // If no stories, tapping + does nothing
+                                    }
+                                  },
+                                );
                               }
                             : null,
                         onTap: () async {
                           if (isMine) {
-                            if (ring.storyCount > 0 && _currentUserId != null) {
-                              MyStoriesBottomSheet.show(
+                            if (ring.stories.isNotEmpty && _currentUserId != null) {
+                              // User has active stories - open story viewer
+                              await StoryViewerPopup.show(
                                 context,
-                                currentUserId: _currentUserId!,
-                                onAddStory: () {
-                                  StoryTypePicker.show(
-                                    context,
-                                    onSelected: (type) async {
-                                      if (_useDesktopPopup(context)) {
-                                        await StoryComposerPopup.show(context,
-                                            type: type);
-                                      } else {
-                                        await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              settings: const RouteSettings(name: 'story_composer'),
-                                              builder: (_) =>
-                                                  _composerPage(type)),
-                                        );
-                                      }
-                                    },
-                                  );
-                                },
+                                rings: _storyRings
+                                    .map((r) => {
+                                          'userId': r.userId,
+                                          'imageUrl': r.userAvatar,
+                                          'label': r.userName,
+                                          'isMine': r.userId == _currentUserId,
+                                          'isSeen': !r.hasUnseen,
+                                        })
+                                    .toList(),
+                                initialRingIndex: index,
                               );
+                              await _loadData();
                             } else {
                               // No stories - show type picker as popup
                               StoryTypePicker.show(
                                 context,
-                                position: const Offset(320, 120), // Position for desktop sidebar
+                                position: const Offset(320, 120),
                                 onSelected: (type) async {
                                   if (_useDesktopPopup(context)) {
-                                    await StoryComposerPopup.show(context,
-                                        type: type);
+                                    await StoryComposerPopup.show(context, type: type);
                                   } else {
                                     await Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                          settings: const RouteSettings(name: 'story_composer'),
-                                          builder: (_) => _composerPage(type)),
+                                        settings: const RouteSettings(name: 'story_composer'),
+                                        builder: (_) => _composerPage(type),
+                                      ),
                                     );
                                   }
                                 },
@@ -2129,8 +2110,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                             } else {
                               await Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  settings: const RouteSettings(name: 'story_viewer'),
+                                TransparentRoute(
                                   builder: (_) => StoryViewerPage(
                                     rings: _storyRings
                                         .map((r) => {
@@ -2592,8 +2572,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                       } else {
                                         await Navigator.push(
                                           context,
-                                          MaterialPageRoute(
-                                            settings: const RouteSettings(name: 'story_viewer'),
+                                          TransparentRoute(
                                             builder: (_) => StoryViewerPage(
                                               rings: _storyRings
                                                   .map((r) => {
@@ -2651,8 +2630,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     } else {
                                       await Navigator.push(
                                         context,
-                                        MaterialPageRoute(
-                                          settings: const RouteSettings(name: 'story_viewer'),
+                                        TransparentRoute(
                                           builder: (_) => StoryViewerPage(
                                             rings: _storyRings
                                                 .map((r) => {

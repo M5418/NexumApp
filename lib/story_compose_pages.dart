@@ -17,6 +17,7 @@ import 'repositories/models/story_music_model.dart';
 import 'services/media_compression_service.dart';
 import 'widgets/story_music_picker_sheet.dart';
 import 'widgets/story_video_trimmer.dart';
+import 'widgets/story_video_trimmer_web.dart';
 
 enum StoryComposeType { image, video, text, mixed }
 
@@ -297,7 +298,59 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
 
       if (isVideo) {
         // Check if video needs trimming (> 30 seconds)
-        if (!kIsWeb) {
+        if (kIsWeb) {
+          // On web, check duration and show web trimmer if too long
+          final tempVc = VideoPlayerController.networkUrl(Uri.parse(f.path));
+          try {
+            await tempVc.initialize();
+            final duration = tempVc.value.duration;
+            
+            if (duration.inSeconds > 30) {
+              await tempVc.dispose();
+              if (!mounted) return;
+              
+              // Show web video trimmer page
+              final trimResult = await Navigator.push<Map<String, dynamic>>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StoryVideoTrimmerWebPage(
+                    videoUrl: f.path,
+                    videoDuration: duration,
+                    maxDuration: const Duration(seconds: 30),
+                  ),
+                ),
+              );
+              
+              if (trimResult == null || !mounted) continue;
+              
+              // Get the selected trim range
+              final startMs = trimResult['startMs'] as int? ?? 0;
+              final endMs = trimResult['endMs'] as int? ?? 30000;
+              final trimmedDuration = Duration(milliseconds: endMs - startMs);
+              
+              // Re-initialize and use the video with trim info
+              final vc = VideoPlayerController.networkUrl(Uri.parse(f.path));
+              await vc.initialize();
+              await vc.setLooping(true);
+              // Seek to start position
+              await vc.seekTo(Duration(milliseconds: startMs));
+              
+              _items.add(MediaItem(
+                file: f,
+                isVideo: true,
+                videoController: vc,
+                videoDuration: trimmedDuration,
+                muted: false,
+                fileSizeBytes: size,
+              ));
+              continue;
+            }
+            await tempVc.dispose();
+          } catch (e) {
+            debugPrint('Error checking video duration on web: $e');
+          }
+        } else {
+          // Native platforms - use video trimmer
           final videoFile = File(f.path);
           final tempVc = VideoPlayerController.file(videoFile);
           try {
@@ -340,7 +393,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
           }
         }
         
-        // Normal video handling (under 30s or web)
+        // Normal video handling (under 30s)
         final vc = kIsWeb
             ? VideoPlayerController.networkUrl(Uri.parse(f.path))
             : VideoPlayerController.file(File(f.path));

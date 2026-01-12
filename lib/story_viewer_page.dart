@@ -13,6 +13,41 @@ import 'repositories/interfaces/story_repository.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/report_bottom_sheet.dart';
 
+/// Transparent page route for story viewer to show feed behind during drag
+class TransparentRoute<T> extends PageRoute<T> {
+  final WidgetBuilder builder;
+  
+  TransparentRoute({required this.builder}) : super();
+  
+  @override
+  bool get opaque => false;
+  
+  @override
+  Color? get barrierColor => null;
+  
+  @override
+  String? get barrierLabel => null;
+  
+  @override
+  bool get maintainState => true;
+  
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 300);
+  
+  @override
+  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
+    return builder(context);
+  }
+  
+  @override
+  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+    return FadeTransition(
+      opacity: animation,
+      child: child,
+    );
+  }
+}
+
 enum StoryMediaType { image, video, text }
 
 // Popup wrapper to show a centered story viewer dialog
@@ -72,6 +107,7 @@ class StoryItem {
   final bool liked;
   final int likesCount;
   final int commentsCount;
+  final bool viewed; // Whether this story has been viewed by current user
 
   const StoryItem.image({
     required this.imageUrl,
@@ -80,6 +116,7 @@ class StoryItem {
     this.liked = false,
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.viewed = false,
   })  : type = StoryMediaType.image,
         videoUrl = null,
         text = null,
@@ -92,6 +129,7 @@ class StoryItem {
     this.liked = false,
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.viewed = false,
   })  : type = StoryMediaType.video,
         imageUrl = null,
         text = null,
@@ -103,6 +141,7 @@ class StoryItem {
     this.liked = false,
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.viewed = false,
   })  : type = StoryMediaType.text,
         imageUrl = null,
         videoUrl = null,
@@ -228,6 +267,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                 liked: s.liked,
                 likesCount: s.likesCount,
                 commentsCount: s.commentsCount,
+                viewed: s.viewed,
               ));
               ids.add(s.id);
               break;
@@ -239,6 +279,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                 liked: s.liked,
                 likesCount: s.likesCount,
                 commentsCount: s.commentsCount,
+                viewed: s.viewed,
               ));
               ids.add(s.id);
               break;
@@ -252,12 +293,13 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                 liked: s.liked,
                 likesCount: s.likesCount,
                 commentsCount: s.commentsCount,
+                viewed: s.viewed,
               ));
               ids.add(s.id);
               break;
             default:
               // Fallback treat as image
-              items.add(StoryItem.image(imageUrl: s.mediaUrl));
+              items.add(StoryItem.image(imageUrl: s.mediaUrl, viewed: s.viewed));
               ids.add(s.id);
           }
         }
@@ -353,7 +395,14 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     
     if (tappedUserId.isEmpty) return 0;
     
-    // Find the first frame for this user
+    // Find the first UNSEEN frame for this user (resume from where they left off)
+    for (int k = 0; k < frames.length; k++) {
+      if (frames[k].user.userId == tappedUserId && !frames[k].item.viewed) {
+        return k;
+      }
+    }
+    
+    // If all stories are viewed, start from the first story of this user
     for (int k = 0; k < frames.length; k++) {
       if (frames[k].user.userId == tappedUserId && frames[k].itemIndex == 0) {
         return k;
@@ -514,6 +563,12 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       animationBehavior: AnimationBehavior.preserve,
     );
     _progressController = controller;
+    
+    // Add listener to trigger rebuild for progress bar animation
+    controller.addListener(() {
+      if (mounted) setState(() {});
+    });
+    
     controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         _goToNextStory();
@@ -606,9 +661,14 @@ class _StoryViewerPageState extends State<StoryViewerPage>
 
   @override
   Widget build(BuildContext context) {
+    // Calculate background opacity based on drag (fades as you drag down)
+    final bgOpacity = (1.0 - (_dragOffset / 300)).clamp(0.0, 1.0);
+    
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: _loading
+      backgroundColor: Colors.transparent,
+      body: Container(
+        color: Colors.black.withValues(alpha: bgOpacity),
+        child: _loading
           ? const Center(
               child: CircularProgressIndicator(
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
@@ -653,8 +713,16 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                     child: AnimatedContainer(
                       duration: _isDragging ? Duration.zero : const Duration(milliseconds: 200),
                       curve: Curves.easeOut,
-                      transform: Matrix4.diagonal3Values(_dragScale, _dragScale, 1.0)
-                        ..setTranslationRaw(0.0, _dragOffset, 0.0),
+                      transformAlignment: Alignment.center,
+                      transform: Matrix4.translationValues(0.0, _dragOffset, 0.0)
+                        ..multiply(Matrix4.diagonal3Values(_dragScale, _dragScale, 1.0)),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: _dragOffset > 0 
+                            ? BorderRadius.circular(25) 
+                            : BorderRadius.zero,
+                      ),
+                      clipBehavior: _dragOffset > 0 ? Clip.antiAlias : Clip.none,
                       child: NotificationListener<OverscrollNotification>(
                         onNotification: (n) {
                           if (_currentIndex == _frames.length - 1 &&
@@ -776,6 +844,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                     ),
                   ),
                 ),
+      ),
     );
   }
 

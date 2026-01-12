@@ -1154,6 +1154,12 @@ class Translations {
       'story.selected': 'Selected',
       'story.max_duration': 'Max duration',
       'story.trim_instructions': 'Drag the handles to select up to 30 seconds of video for your story.',
+      'story.video_too_long_title': 'Video Too Long',
+      'story.video_too_long_message': 'Stories can only be up to 30 seconds. On web, video trimming is not available. Would you like to use the first 30 seconds of this video?',
+      'story.use_first_30s': 'Use First 30s',
+      'story.start': 'Start',
+      'story.end': 'End',
+      'story.trim_instructions_web': 'Use the sliders to select which 30-second portion of the video to use for your story.',
 
       // Story Music Management
       'story_music.title': 'Story Music',
@@ -2673,6 +2679,12 @@ class Translations {
       'story.selected': 'Sélectionné',
       'story.max_duration': 'Durée max',
       'story.trim_instructions': 'Faites glisser les poignées pour sélectionner jusqu\'à 30 secondes de vidéo.',
+      'story.video_too_long_title': 'Vidéo trop longue',
+      'story.video_too_long_message': 'Les stories ne peuvent durer que 30 secondes maximum. Sur le web, le découpage vidéo n\'est pas disponible. Voulez-vous utiliser les 30 premières secondes ?',
+      'story.use_first_30s': 'Utiliser les 30 premières sec.',
+      'story.start': 'Début',
+      'story.end': 'Fin',
+      'story.trim_instructions_web': 'Utilisez les curseurs pour sélectionner quelle portion de 30 secondes utiliser.',
 
       // Story Music Management
       'story_music.title': 'Musiques Story',
@@ -4013,6 +4025,12 @@ class Translations {
       'story.selected': 'Selecionado',
       'story.max_duration': 'Duração máx',
       'story.trim_instructions': 'Arraste as alças para selecionar até 30 segundos de vídeo.',
+      'story.video_too_long_title': 'Vídeo muito longo',
+      'story.video_too_long_message': 'As histórias podem ter no máximo 30 segundos. Na web, o corte de vídeo não está disponível. Deseja usar os primeiros 30 segundos?',
+      'story.use_first_30s': 'Usar primeiros 30s',
+      'story.start': 'Início',
+      'story.end': 'Fim',
+      'story.trim_instructions_web': 'Use os controles para selecionar qual parte de 30 segundos usar.',
 
       // App Branding
       'app.name': 'NEXUM',
@@ -5117,6 +5135,12 @@ class Translations {
       'story.selected': 'Seleccionado',
       'story.max_duration': 'Duración máx',
       'story.trim_instructions': 'Arrastra los controles para seleccionar hasta 30 segundos de video.',
+      'story.video_too_long_title': 'Video demasiado largo',
+      'story.video_too_long_message': 'Las historias solo pueden durar hasta 30 segundos. En la web, el recorte de video no está disponible. ¿Deseas usar los primeros 30 segundos?',
+      'story.use_first_30s': 'Usar primeros 30s',
+      'story.start': 'Inicio',
+      'story.end': 'Fin',
+      'story.trim_instructions_web': 'Usa los controles para seleccionar qué parte de 30 segundos usar.',
 
       // App Branding
       'app.name': 'NEXUM',
@@ -6220,6 +6244,12 @@ class Translations {
       'story.selected': 'Ausgewählt',
       'story.max_duration': 'Max. Dauer',
       'story.trim_instructions': 'Ziehe die Griffe, um bis zu 30 Sekunden Video auszuwählen.',
+      'story.video_too_long_title': 'Video zu lang',
+      'story.video_too_long_message': 'Stories können nur bis zu 30 Sekunden lang sein. Im Web ist das Schneiden von Videos nicht verfügbar. Möchten Sie die ersten 30 Sekunden verwenden?',
+      'story.use_first_30s': 'Erste 30s verwenden',
+      'story.start': 'Start',
+      'story.end': 'Ende',
+      'story.trim_instructions_web': 'Verwenden Sie die Regler, um auszuwählen, welchen 30-Sekunden-Abschnitt Sie verwenden möchten.',
 
       // App Branding
       'app.name': 'NEXUM',
