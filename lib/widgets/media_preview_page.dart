@@ -185,20 +185,22 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
       }
       } else {
         // Mobile/Desktop: prefer XFile, then path, else bytes
-        if (editedPath != null && editedPath.isNotEmpty) {
-        final xf = XFile(editedPath, mimeType: mime, name: io.File(editedPath).uri.pathSegments.last);
-        setState(() => _files[_index] = xf);
-      } else if (editedBytes != null) {
-        final ext = _extForMime(mime);
-        final dirPath = io.File(current.path).parent.path;
-        final sep = io.Platform.pathSeparator;
-        final filename = 'edited_${DateTime.now().millisecondsSinceEpoch}.$ext';
-        final outPath = '$dirPath$sep$filename';
-        final outFile = io.File(outPath);
-        await outFile.writeAsBytes(editedBytes);
-        final xf = XFile(outFile.path, mimeType: mime, name: filename);
-        setState(() => _files[_index] = xf);
-      }
+        if (editedXFile != null) {
+          setState(() => _files[_index] = editedXFile!);
+        } else if (editedPath != null && editedPath.isNotEmpty) {
+          final xf = XFile(editedPath, mimeType: mime, name: io.File(editedPath).uri.pathSegments.last);
+          setState(() => _files[_index] = xf);
+        } else if (editedBytes != null) {
+          final ext = _extForMime(mime);
+          final dirPath = io.File(current.path).parent.path;
+          final sep = io.Platform.pathSeparator;
+          final filename = 'edited_${DateTime.now().millisecondsSinceEpoch}.$ext';
+          final outPath = '$dirPath$sep$filename';
+          final outFile = io.File(outPath);
+          await outFile.writeAsBytes(editedBytes);
+          final xf = XFile(outFile.path, mimeType: mime, name: filename);
+          setState(() => _files[_index] = xf);
+        }
       }
     } catch (e) {
       if (!mounted) return;

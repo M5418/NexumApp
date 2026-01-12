@@ -386,6 +386,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   }
 
   Future<void> _sendFiles() async {
+    final lang = Provider.of<LanguageProvider>(context, listen: false);
     try {
       final res = await FilePicker.platform.pickFiles(
         allowMultiple: true,
@@ -394,7 +395,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
       );
       if (res == null || res.files.isEmpty) return;
-      _snack(Provider.of<LanguageProvider>(context, listen: false).t('mentorship.uploading_files'));
+      _snack(lang.t('mentorship.uploading_files'));
       final profile = ProfileApi();
       final atts = <Map<String, dynamic>>[];
       for (final f in res.files) {
@@ -449,7 +450,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
       await _load();
     } catch (e) {
       _hideSnack();
-      _snack('${Provider.of<LanguageProvider>(context, listen: false).t('mentorship.failed_send_files')}: $e');
+      _snack('${lang.t('mentorship.failed_send_files')}: $e');
     }
   }
 

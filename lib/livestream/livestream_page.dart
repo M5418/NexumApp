@@ -206,9 +206,9 @@ class _LiveStreamPageState extends State<LiveStreamPage>
   }
 
   Future<void> _leaveStream() async {
+    final repo = context.read<LiveStreamRepository>();
     try {
       await _agoraService?.leaveChannel();
-      final repo = context.read<LiveStreamRepository>();
       await repo.leaveLiveStream(widget.streamId);
     } catch (e) {
       debugPrint('Error leaving stream: $e');
@@ -493,7 +493,7 @@ class _LiveStreamPageState extends State<LiveStreamPage>
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.black.withOpacity(0.8),
+            Colors.black.withValues(alpha: 0.8),
             Colors.transparent,
           ],
         ),
@@ -637,7 +637,7 @@ class _LiveStreamPageState extends State<LiveStreamPage>
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
           colors: [
-            Colors.black.withOpacity(0.8),
+            Colors.black.withValues(alpha: 0.8),
             Colors.transparent,
           ],
         ),
@@ -649,7 +649,7 @@ class _LiveStreamPageState extends State<LiveStreamPage>
             child: Container(
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Row(
@@ -704,7 +704,7 @@ class _LiveStreamPageState extends State<LiveStreamPage>
   Widget _buildChatPanel(LanguageProvider lang, bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
+        color: Colors.black.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(16),
       ),
       child: ListView.builder(
@@ -808,7 +808,7 @@ class _LiveStreamPageState extends State<LiveStreamPage>
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black.withValues(alpha: 0.4),
                 shape: BoxShape.circle,
               ),
               child: Center(

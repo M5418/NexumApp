@@ -166,6 +166,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   bool _activityLoadTriggered = false;
   bool _podcastsLoadTriggered = false;
+  bool _postsLoadTriggered = false;
   
   void _applyProfileCacheSync() {
     // Profile map is already in the exact format ProfilePage UI expects (snake_case)
@@ -196,6 +197,10 @@ class _ProfilePageState extends State<ProfilePage> {
     } else if (_profileCache.isPostsLoaded) {
       _loadingMyPosts = false;
       _loadingMedia = false;
+    } else if (_myUserId != null && _myUserId!.isNotEmpty && !_postsLoadTriggered) {
+      // Fallback: Load posts from network if cache is empty
+      _postsLoadTriggered = true;
+      _loadMyPosts();
     }
 
     if (mounted) {
@@ -439,71 +444,6 @@ class _ProfilePageState extends State<ProfilePage> {
     // Add pagination logic here when needed
     await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) setState(() => _isLoadingMoreActivity = false);
-  }
-
-  Future<void> _loadProfile() async {
-    try {
-      final res = await ProfileApi().me();
-      final data = Map<String, dynamic>.from(res['data'] ?? {});
-      
-      // The ProfileApi.me() returns user ID as 'id'
-      String meId = (data['id'] ?? '').toString();
-      if (meId.isEmpty) {
-        meId = (data['user_id'] ?? '').toString();
-      }
-      if (meId.isEmpty) {
-        meId = (data['uid'] ?? '').toString();
-      }
-      
-      // Fallback: Get directly from FirebaseAuth
-      if (meId.isEmpty) {
-        final fbAuth = fb.FirebaseAuth.instance;
-        final currentUser = fbAuth.currentUser;
-        if (currentUser != null) {
-          meId = currentUser.uid;
-          debugPrint('📋 Using FirebaseAuth UID as fallback: $meId');
-        }
-      }
-      
-      debugPrint('📋 Profile loaded. User ID: $meId');
-      debugPrint('📋 Profile data keys: ${data.keys.toList()}');
-      
-      if (!mounted) return;
-      setState(() {
-        _profile = data;
-        _myUserId = meId.isNotEmpty ? meId : null;
-        _loadingProfile = false;
-      });
-      if (_myUserId != null && _myUserId!.isNotEmpty) {
-        debugPrint('📋 Loading all tabs for user: $_myUserId');
-        _loadAllTabs();
-      } else {
-        // No user ID, make sure all loading states are false
-        if (mounted) {
-          setState(() {
-            _loadingMyPosts = false;
-            _loadingActivity = false;
-            _loadingMedia = false;
-            _loadingPodcasts = false;
-            _errorMyPosts = 'User not authenticated';
-            _errorActivity = 'User not authenticated';
-            _errorPodcasts = 'User not authenticated';
-          });
-        }
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loadingProfile = false;
-        _loadingMyPosts = false;
-        _loadingActivity = false;
-        _loadingMedia = false;
-        _loadingPodcasts = false;
-        _errorMyPosts = 'Failed to load profile';
-        _errorActivity = 'Failed to load profile';
-        _errorPodcasts = 'Failed to load profile';
-      });
-    }
   }
 
   Future<void> _loadUnreadNotifications() async {
@@ -799,16 +739,6 @@ class _ProfilePageState extends State<ProfilePage> {
           : (p['repost_of'] ?? original['id'] ?? original['post_id'])
                 .toString(),
     );
-  }
-
-  Future<void> _loadAllTabs() async {
-    // Load tabs sequentially to avoid too many simultaneous setState calls
-    if (!mounted) return;
-    await _loadMyPosts();
-    if (!mounted) return;
-    await _loadActivity();
-    if (!mounted) return;
-    await _loadMyPodcasts();
   }
 
   Future<void> _loadMyPosts() async {
@@ -1740,7 +1670,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 final updates =
                                                     <String, dynamic>{};
 
-                                                final newFullName = (r.fullName ?? '')
+                                                final newFullName = r.fullName
                                                     .trim();
                                                 if (newFullName.isNotEmpty &&
                                                     newFullName !=
@@ -1765,7 +1695,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       lastName;
                                                 }
 
-                                                final newUsername = (r.username ?? '')
+                                                final newUsername = r.username
                                                     .trim();
                                                 if (newUsername.isNotEmpty &&
                                                     newUsername !=
@@ -1773,10 +1703,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   updates['username'] =
                                                       newUsername;
                                                 }
-                                                updates['bio'] = r.bio ?? '';
+                                                updates['bio'] = r.bio;
 
                                                 updates['professional_experiences'] =
-                                                    (r.experiences ?? []).map((e) {
+                                                    r.experiences.map((e) {
                                                   final m = <String, dynamic>{
                                                     'title': e.title,
                                                   };
@@ -1788,8 +1718,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   return m;
                                                 }).toList();
 
-                                                updates['trainings'] = (r
-                                                    .trainings ?? [])
+                                                updates['trainings'] = r
+                                                    .trainings
                                                     .map((t) {
                                                   final m = <String, dynamic>{
                                                     'title': t.title,
@@ -1803,7 +1733,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                 }).toList();
 
                                                 updates['interest_domains'] =
-                                                    r.interests ?? [];
+                                                    r.interests;
 
                                                 // INSTANT: Update UI immediately with new data (optimistic update)
                                                 if (mounted) {
@@ -1853,7 +1783,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                   try {
                                                     // Sync interests with community memberships
                                                     await CommunityInterestSyncService().syncUserInterests(
-                                                      r.interests ?? [], 
+                                                      r.interests, 
                                                       oldInterests: interests,
                                                     );
                                                     
@@ -2931,7 +2861,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       final updates =
                                                           <String, dynamic>{};
 
-                                                      final newFullName = (r.fullName ?? '')
+                                                      final newFullName = r.fullName
                                                           .trim();
                                                       if (newFullName.isNotEmpty &&
                                                           newFullName !=
@@ -2956,7 +2886,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                             lastName;
                                                       }
 
-                                                      final newUsername = (r.username ?? '')
+                                                      final newUsername = r.username
                                                           .trim();
                                                       if (newUsername.isNotEmpty &&
                                                           newUsername !=
@@ -2965,10 +2895,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         updates['username'] =
                                                             newUsername;
                                                       }
-                                                      updates['bio'] = r.bio ?? '';
+                                                      updates['bio'] = r.bio;
 
                                                       updates['professional_experiences'] =
-                                                          (r.experiences ?? []).map((e) {
+                                                          r.experiences.map((e) {
                                                         final m = <String, dynamic>{
                                                           'title': e.title,
                                                         };
@@ -2980,7 +2910,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         return m;
                                                       }).toList();
 
-                                                      updates['trainings'] = (r.trainings ?? []).map((t) {
+                                                      updates['trainings'] = r.trainings.map((t) {
                                                         final m = <String, dynamic>{'title': t.title};
                                                         if ((t.subtitle ?? '').trim().isNotEmpty) {
                                                           m['subtitle'] = t.subtitle;
@@ -2988,7 +2918,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         return m;
                                                       }).toList();
 
-                                                      updates['interest_domains'] = r.interests ?? [];
+                                                      updates['interest_domains'] = r.interests;
 
                                                       // INSTANT: Update UI immediately with new data (optimistic update)
                                                       if (mounted) {
@@ -3034,7 +2964,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       () async {
                                                         try {
                                                           await CommunityInterestSyncService().syncUserInterests(
-                                                            r.interests ?? [], 
+                                                            r.interests, 
                                                             oldInterests: interests,
                                                           );
                                                           await api.update(updates);

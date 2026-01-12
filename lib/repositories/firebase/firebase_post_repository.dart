@@ -52,9 +52,11 @@ class FirebasePostRepository implements PostRepository {
       for (var i = 0; i < urls.length; i++) {
         final url = urls[i];
         final thumbUrl = (thumbUrls != null && i < thumbUrls.length) ? thumbUrls[i] : url;
-        final isVideo = url.toLowerCase().contains('.mp4') ||
-            url.toLowerCase().contains('.mov') ||
-            url.toLowerCase().contains('.webm');
+        // Improved video detection for Firebase Storage URLs with query params
+        final l = url.toLowerCase();
+        final isVideo = l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
+            l.contains('.avi') || l.contains('.mkv') ||
+            l.contains('/videos/') || l.contains('video_') || l.contains('video%2f');
         thumbs.add(MediaThumb(
           type: isVideo ? 'video' : 'image',
           thumbUrl: thumbUrl,
@@ -114,9 +116,11 @@ class FirebasePostRepository implements PostRepository {
       for (var i = 0; i < mediaUrls.length; i++) {
         final url = mediaUrls[i];
         final thumbUrl = i < thumbUrls.length ? thumbUrls[i] : url;
-        final isVideo = url.toLowerCase().contains('.mp4') ||
-            url.toLowerCase().contains('.mov') ||
-            url.toLowerCase().contains('.webm');
+        // Improved video detection for Firebase Storage URLs with query params
+        final l = url.toLowerCase();
+        final isVideo = l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
+            l.contains('.avi') || l.contains('.mkv') ||
+            l.contains('/videos/') || l.contains('video_') || l.contains('video%2f');
         mediaThumbsData.add({
           'type': isVideo ? 'video' : 'image',
           'thumbUrl': thumbUrl,

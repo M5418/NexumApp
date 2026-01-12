@@ -105,7 +105,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   int _sharedMediaCount = 0;
   int _sharedLinksCount = 0;
   int _sharedDocsCount = 0;
-  bool _loadingSharedMedia = false;
 
   @override
   void initState() {
@@ -840,7 +839,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
 
   /// Load shared media counts from conversation
   Future<void> _loadSharedMediaCounts() async {
-    setState(() => _loadingSharedMedia = true);
     try {
       final counts = await SharedMediaHelper.getSharedMediaCounts(widget.userId);
       if (!mounted) return;
@@ -848,12 +846,9 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         _sharedMediaCount = counts['media'] ?? 0;
         _sharedLinksCount = counts['links'] ?? 0;
         _sharedDocsCount = counts['docs'] ?? 0;
-        _loadingSharedMedia = false;
       });
     } catch (e) {
       debugPrint('⚠️ [OtherProfile] Failed to load shared media counts: $e');
-      if (!mounted) return;
-      setState(() => _loadingSharedMedia = false);
     }
   }
 

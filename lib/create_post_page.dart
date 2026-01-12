@@ -1389,28 +1389,73 @@ class _CreatePostPageState extends State<CreatePostPage> {
         final thumbFutures = _mediaItems.map((item) async {
           try {
             if (item.xfile != null) {
-              final bytes = await item.xfile!.readAsBytes();
-              final thumb = await compressionService.generateFeedThumbnailFromBytes(
-                bytes: bytes,
-                filename: item.xfile!.name,
-                maxSize: 400,
-                quality: 60,
-              );
-              if (thumb != null) {
-                final thumbUrl = await profileApi.uploadBytes(thumb, ext: 'jpg');
-                return thumbUrl;
+              // Handle video thumbnails differently from images
+              if (item.type == MediaType.video) {
+                // For videos, generate thumbnail using VideoCompress (mobile) or use placeholder (web)
+                if (!kIsWeb) {
+                  try {
+                    final thumbFile = await VideoCompress.getFileThumbnail(
+                      item.xfile!.path,
+                      quality: 50,
+                      position: -1,
+                    );
+                    final thumbBytes = await thumbFile.readAsBytes();
+                    final thumbUrl = await profileApi.uploadBytes(thumbBytes, ext: 'jpg');
+                    debugPrint('✅ Video thumbnail generated and uploaded');
+                    return {'thumbUrl': thumbUrl, 'isVideo': true};
+                  } catch (e) {
+                    debugPrint('⚠️ Video thumbnail generation failed: $e');
+                  }
+                }
+                // For web or if thumbnail fails, return empty (will upload video directly)
+                return {'thumbUrl': '', 'isVideo': true};
+              } else {
+                // For images, use image compression
+                final bytes = await item.xfile!.readAsBytes();
+                final thumb = await compressionService.generateFeedThumbnailFromBytes(
+                  bytes: bytes,
+                  filename: item.xfile!.name,
+                  maxSize: 400,
+                  quality: 60,
+                );
+                if (thumb != null) {
+                  final thumbUrl = await profileApi.uploadBytes(thumb, ext: 'jpg');
+                  return {'thumbUrl': thumbUrl, 'isVideo': false};
+                }
               }
             }
           } catch (e) {
             debugPrint('⚠️ Thumbnail generation failed: $e');
           }
-          return '';
+          return {'thumbUrl': '', 'isVideo': item.type == MediaType.video};
         }).toList();
         
-        thumbUrls = await Future.wait(thumbFutures);
-        // Use thumbnails as placeholder media URLs for instant display
-        mediaUrls = thumbUrls.where((u) => u.isNotEmpty).toList();
-        debugPrint('✅ Thumbnails uploaded: ${mediaUrls.length}');
+        final thumbResults = await Future.wait(thumbFutures);
+        
+        // Check if we have a video post
+        final hasVideoItem = thumbResults.any((r) => r['isVideo'] == true);
+        
+        if (hasVideoItem) {
+          // For video posts: upload video immediately (can't show placeholder)
+          // This ensures video is available right after post creation
+          debugPrint('🎥 Video post detected - uploading video before creating post...');
+          for (int i = 0; i < _mediaItems.length; i++) {
+            final item = _mediaItems[i];
+            if (item.type == MediaType.video && item.xfile != null) {
+              final uploaded = await _uploadXFile(item.xfile!, item.type);
+              if (uploaded['url']?.isNotEmpty == true) {
+                mediaUrls.add(uploaded['url']!);
+                thumbUrls.add(uploaded['thumbUrl'] ?? uploaded['url']!);
+              }
+            }
+          }
+          debugPrint('✅ Video uploaded: ${mediaUrls.length} URLs');
+        } else {
+          // For image posts: use thumbnails as placeholders
+          thumbUrls = thumbResults.map((r) => (r['thumbUrl'] as String?) ?? '').toList();
+          mediaUrls = thumbUrls.where((u) => u.isNotEmpty).toList();
+          debugPrint('✅ Image thumbnails uploaded: ${mediaUrls.length}');
+        }
       }
       
       debugPrint('🚀 Creating post with ${mediaUrls.length} thumbnails${communityId != null ? ' to community $communityId' : ''}');

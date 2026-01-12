@@ -198,7 +198,7 @@ Future<void> main() async {
   }
   
   // Log final App Check status
-  debugPrint('📱 App Check Status: ${appCheckActivated ? "ACTIVE" : "INACTIVE (app will work normally)"}');
+  debugPrint('📱 App Check Status: ${appCheckActivated ? "ACTIVE" : "INACTIVE (app will work normally)"}'); // ignore: dead_code - appCheckActivated may be enabled in future
   
   // Initialize interest-based communities (one-time setup, safe to call multiple times)
   // Skip on web to avoid potential freeze issues

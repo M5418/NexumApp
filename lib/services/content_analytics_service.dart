@@ -7,15 +7,15 @@ class ContentAnalyticsService {
   final MonetizationRepository _monetizationRepo;
 
   // CPM rates per content type (USD per 1000 impressions)
-  static const double POST_CPM = 2.50;
-  static const double PODCAST_CPM = 5.00;
-  static const double BOOK_CPM = 3.00;
+  static const double postCpm = 2.50;
+  static const double podcastCpm = 5.00;
+  static const double bookCpm = 3.00;
 
   // Engagement value multipliers for earnings calculation
-  static const double LIKE_VALUE = 0.01;
-  static const double COMMENT_VALUE = 0.05;
-  static const double SHARE_VALUE = 0.10;
-  static const double BOOKMARK_VALUE = 0.02;
+  static const double likeValue = 0.01;
+  static const double commentValue = 0.05;
+  static const double shareValue = 0.10;
+  static const double bookmarkValue = 0.02;
 
   ContentAnalyticsService(this._monetizationRepo);
 
@@ -23,12 +23,12 @@ class ContentAnalyticsService {
   double _getCPMRate(String contentType) {
     switch (contentType.toLowerCase()) {
       case 'podcast':
-        return PODCAST_CPM;
+        return podcastCpm;
       case 'book':
-        return BOOK_CPM;
+        return bookCpm;
       case 'post':
       default:
-        return POST_CPM;
+        return postCpm;
     }
   }
 
@@ -45,10 +45,10 @@ class ContentAnalyticsService {
     int shares = 0,
     int bookmarks = 0,
   }) {
-    return (likes * LIKE_VALUE) +
-        (comments * COMMENT_VALUE) +
-        (shares * SHARE_VALUE) +
-        (bookmarks * BOOKMARK_VALUE);
+    return (likes * likeValue) +
+        (comments * commentValue) +
+        (shares * shareValue) +
+        (bookmarks * bookmarkValue);
   }
 
   /// Track a view/impression for content
@@ -103,7 +103,7 @@ class ContentAnalyticsService {
         contentId: contentId,
         contentType: contentType,
         userId: userId,
-        amount: LIKE_VALUE,
+        amount: likeValue,
         source: 'engagement',
       );
 
@@ -132,7 +132,7 @@ class ContentAnalyticsService {
         contentId: contentId,
         contentType: contentType,
         userId: userId,
-        amount: COMMENT_VALUE,
+        amount: commentValue,
         source: 'engagement',
       );
 
@@ -161,7 +161,7 @@ class ContentAnalyticsService {
         contentId: contentId,
         contentType: contentType,
         userId: userId,
-        amount: SHARE_VALUE,
+        amount: shareValue,
         source: 'engagement',
       );
 
@@ -190,7 +190,7 @@ class ContentAnalyticsService {
         contentId: contentId,
         contentType: contentType,
         userId: userId,
-        amount: BOOKMARK_VALUE,
+        amount: bookmarkValue,
         source: 'engagement',
       );
 

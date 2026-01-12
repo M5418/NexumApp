@@ -1253,14 +1253,16 @@ class _StoryViewerPageState extends State<StoryViewerPage>
       // Immediately clear text and unfocus for instant feedback
       _commentController.clear();
       _commentFocusNode.unfocus();
-      _snack(Provider.of<LanguageProvider>(context, listen: false).t('story.sending'), const Color(0xFFBFAE01));
+      final lang = Provider.of<LanguageProvider>(context, listen: false);
+      final storyRepo = context.read<StoryRepository>();
+      _snack(lang.t('story.sending'), const Color(0xFFBFAE01));
       
       // Send in background without blocking UI
       try {
-        await context.read<StoryRepository>().replyToStory(storyId: sid, message: text);
-        _snack(Provider.of<LanguageProvider>(context, listen: false).t('story.reply_sent'), const Color(0xFFBFAE01));
+        await storyRepo.replyToStory(storyId: sid, message: text);
+        _snack(lang.t('story.reply_sent'), const Color(0xFFBFAE01));
       } catch (e) {
-        _snack(Provider.of<LanguageProvider>(context, listen: false).t('story.reply_failed'), Colors.red);
+        _snack(lang.t('story.reply_failed'), Colors.red);
       }
     }
 

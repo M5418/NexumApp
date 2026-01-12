@@ -31,7 +31,7 @@ class _AgoraDebugPanelState extends State<AgoraDebugPanel> {
     }
 
     return Material(
-      color: Colors.black.withOpacity(0.85),
+      color: Colors.black.withValues(alpha: 0.85),
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,9 +143,9 @@ class _AgoraDebugPanelState extends State<AgoraDebugPanel> {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: isError ? Colors.red.withOpacity(0.1) : Colors.grey[850],
+            color: isError ? Colors.red.withValues(alpha: 0.1) : Colors.grey[850],
             borderRadius: BorderRadius.circular(8),
-            border: isError ? Border.all(color: Colors.red.withOpacity(0.5)) : null,
+            border: isError ? Border.all(color: Colors.red.withValues(alpha: 0.5)) : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

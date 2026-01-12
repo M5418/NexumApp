@@ -26,7 +26,7 @@ class WhiteboardStroke {
     return {
       'id': id,
       'points': points.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
-      'color': color.value,
+      'color': color.toARGB32(),
       'strokeWidth': strokeWidth,
       'oderId': oderId,
       'createdAt': Timestamp.fromDate(createdAt),

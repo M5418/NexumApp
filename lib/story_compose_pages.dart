@@ -240,6 +240,7 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
 
   StoryMusicModel? _selectedTrack;
   AudioPlayer? _musicPlayer;
+  // ignore: unused_field - state tracking for music playback
   bool _isMusicPlaying = false;
 
   @override
@@ -844,18 +845,6 @@ class _MixedMediaStoryComposerPageState extends State<MixedMediaStoryComposerPag
     setState(() => _isMusicPlaying = false);
   }
   
-  Future<void> _pauseMusic() async {
-    await _musicPlayer?.pause();
-    setState(() => _isMusicPlaying = false);
-  }
-  
-  Future<void> _resumeMusic() async {
-    if (_selectedTrack != null) {
-      await _musicPlayer?.resume();
-      setState(() => _isMusicPlaying = true);
-    }
-  }
-
   void _resetAll() {
     _stopMusic();
     setState(() {

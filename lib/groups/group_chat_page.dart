@@ -144,6 +144,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
   }
 
   Future<void> _pickAndSendImage() async {
+    final storageRepo = context.read<StorageRepository>();
+    final compressionService = MediaCompressionService();
     final picker = ImagePicker();
     final images = await picker.pickMultiImage();
     if (images.isEmpty) return;
@@ -151,8 +153,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
     setState(() => _sending = true);
 
     try {
-      final storageRepo = context.read<StorageRepository>();
-      final compressionService = MediaCompressionService();
       final attachments = <Map<String, dynamic>>[];
 
       for (final image in images) {
@@ -214,6 +214,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   }
 
   Future<void> _pickAndSendFile() async {
+    final storageRepo = context.read<StorageRepository>();
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       type: FileType.any,
@@ -223,7 +224,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
     setState(() => _sending = true);
 
     try {
-      final storageRepo = context.read<StorageRepository>();
       final attachments = <Map<String, dynamic>>[];
 
       for (final file in result.files) {
@@ -290,6 +290,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
   Future<void> _stopRecordingAndSend() async {
     if (!_isRecording) return;
+    final storageRepo = context.read<StorageRepository>();
 
     final result = await _audioRecorder.stopRecording();
     final path = result?.filePath;
@@ -300,7 +301,6 @@ class _GroupChatPageState extends State<GroupChatPage> {
     setState(() => _sending = true);
 
     try {
-      final storageRepo = context.read<StorageRepository>();
       final storagePath = 'groups/${_group.id}/voice/${DateTime.now().millisecondsSinceEpoch}.m4a';
       
       final fileBytes = await File(path).readAsBytes();
@@ -729,7 +729,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
@@ -886,7 +886,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
         color: isDark ? Colors.black : Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -907,7 +907,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
                   ? Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
+                        color: Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Row(
@@ -1001,7 +1001,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.purple.withOpacity(0.1),
+                  color: Colors.purple.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.photo, color: Colors.purple),
@@ -1016,7 +1016,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.blue.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.insert_drive_file, color: Colors.blue),

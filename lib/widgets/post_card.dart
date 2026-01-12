@@ -213,6 +213,8 @@ class _PostCardState extends State<PostCard> {
           clipBehavior: Clip.antiAlias,
           child: CachedNetworkImage(
             imageUrl: validImageUrls.first,
+            // Use post ID as cache key to ensure proper cache invalidation when post is updated
+            cacheKey: '${widget.post.id}_img_0',
             cacheManager: CacheConfig.customCacheManager,
             maxWidthDiskCache: 1200,
             maxHeightDiskCache: 1200,
@@ -260,6 +262,8 @@ class _PostCardState extends State<PostCard> {
                 clipBehavior: Clip.antiAlias,
                 child: CachedNetworkImage(
                   imageUrl: validImageUrls[index],
+                  // Use post ID + index as cache key for proper cache invalidation
+                  cacheKey: '${widget.post.id}_img_$index',
                   cacheManager: CacheConfig.customCacheManager,
                   maxWidthDiskCache: 600,
                   maxHeightDiskCache: 800,
@@ -339,6 +343,8 @@ class _PostCardState extends State<PostCard> {
         );
       } : null,
       onDelete: isOwnPost ? () async {
+        final postRepo = context.read<PostRepository>();
+        final messenger = ScaffoldMessenger.of(context);
         // Show confirmation dialog
         final confirmed = await showDialog<bool>(
           context: context,
@@ -360,11 +366,10 @@ class _PostCardState extends State<PostCard> {
         
         if (confirmed == true) {
           try {
-            final postRepo = context.read<PostRepository>();
             await postRepo.deletePost(_effectivePostId());
             
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 const SnackBar(
                   content: Text('Post deleted successfully'),
                   backgroundColor: Colors.green,
@@ -373,7 +378,7 @@ class _PostCardState extends State<PostCard> {
             }
           } catch (e) {
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
                   content: Text('Failed to delete post: $e'),
                   backgroundColor: Colors.red,

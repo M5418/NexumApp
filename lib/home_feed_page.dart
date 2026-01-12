@@ -380,12 +380,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   /// BACKGROUND: Load stories without blocking posts
   Future<void> _loadStoriesInBackground() async {
+    final storyRepo = context.read<StoryRepository>();
     // FASTFEED: Load from cache first for instant display
     await _loadStoriesFromCacheInstantly();
     
     // Then refresh from server
     try {
-      final storyRepo = context.read<StoryRepository>();
       var rings = await storyRepo.getStoryRings();
       
       rings = await _sortStoryRingsAsync(rings, storyRepo);
@@ -848,6 +848,21 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     String? videoUrl;
     List<String> imageUrls;
     
+    // Helper to detect video URLs (handles Firebase Storage URLs with query params)
+    bool isVideoUrl(String url) {
+      final l = url.toLowerCase();
+      // Check for video extensions (before query params)
+      if (l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') || 
+          l.contains('.avi') || l.contains('.mkv')) {
+        return true;
+      }
+      // Check for video path patterns in Firebase Storage URLs
+      if (l.contains('/videos/') || l.contains('video_') || l.contains('video%2f')) {
+        return true;
+      }
+      return false;
+    }
+    
     if (m.mediaThumbs.isNotEmpty) {
       // Use mediaThumbs for images (preferred - small thumbnails for fast feed)
       // But use full mediaUrls for video playback
@@ -856,10 +871,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         mediaType = MediaType.video;
         // Use full video URL for playback, not thumbnail
         videoUrl = m.mediaUrls.firstWhere(
-          (u) {
-            final l = u.toLowerCase();
-            return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
-          },
+          (u) => isVideoUrl(u),
           orElse: () => m.mediaUrls.isNotEmpty ? m.mediaUrls.first : '',
         );
         imageUrls = [];
@@ -871,18 +883,12 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       }
     } else if (m.mediaUrls.isNotEmpty) {
       // Fallback to mediaUrls (legacy posts without mediaThumbs)
-      final hasVideo = m.mediaUrls.any((u) {
-        final l = u.toLowerCase();
-        return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
-      });
+      final hasVideo = m.mediaUrls.any((u) => isVideoUrl(u));
       
       if (hasVideo) {
         mediaType = MediaType.video;
         videoUrl = m.mediaUrls.firstWhere(
-          (u) {
-            final l = u.toLowerCase();
-            return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm');
-          },
+          (u) => isVideoUrl(u),
           orElse: () => m.mediaUrls.first,
         );
         imageUrls = [];
@@ -949,12 +955,25 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     String? videoUrl;
     List<String> imageUrls;
     
+    // Helper to detect video URLs (handles Firebase Storage URLs with query params)
+    bool isVideoUrl(String url) {
+      final l = url.toLowerCase();
+      if (l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') || 
+          l.contains('.avi') || l.contains('.mkv')) {
+        return true;
+      }
+      if (l.contains('/videos/') || l.contains('video_') || l.contains('video%2f')) {
+        return true;
+      }
+      return false;
+    }
+    
     if (original.mediaThumbs.isNotEmpty) {
       final hasVideo = original.mediaThumbs.any((t) => t.type == 'video');
       if (hasVideo) {
         mediaType = MediaType.video;
         videoUrl = original.mediaUrls.firstWhere(
-          (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
+          (u) => isVideoUrl(u),
           orElse: () => original.mediaUrls.isNotEmpty ? original.mediaUrls.first : '',
         );
         imageUrls = [];
@@ -964,13 +983,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         imageUrls = original.mediaThumbs.map((t) => t.thumbUrl).toList();
       }
     } else if (original.mediaUrls.isNotEmpty) {
-      final hasVideo = original.mediaUrls.any((u) => 
-        u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov')
-      );
+      final hasVideo = original.mediaUrls.any((u) => isVideoUrl(u));
       if (hasVideo) {
         mediaType = MediaType.video;
         videoUrl = original.mediaUrls.firstWhere(
-          (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
+          (u) => isVideoUrl(u),
           orElse: () => original.mediaUrls.first,
         );
         imageUrls = [];

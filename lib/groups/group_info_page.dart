@@ -61,6 +61,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
 
   Future<void> _updateGroupAvatar() async {
     if (!_isAdmin && _group.onlyAdminsCanEditInfo) return;
+    final storageRepo = context.read<StorageRepository>();
+    final compressionService = MediaCompressionService();
 
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
@@ -69,8 +71,6 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     setState(() => _updating = true);
 
     try {
-      final storageRepo = context.read<StorageRepository>();
-      final compressionService = MediaCompressionService();
       final storagePath = 'groups/avatars/${_group.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       String? url;
 

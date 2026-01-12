@@ -924,6 +924,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
 
   int _connectionsInboundCount = 0;
   int _connectionsOutboundCount = 0;
+  // ignore: unused_field - kept for future use
   int _connectionsTotalCount = 0;
 
   List<Map<String, dynamic>> _experiences = [];

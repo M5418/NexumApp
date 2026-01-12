@@ -213,7 +213,7 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFBFAE01).withOpacity(0.2),
+                                      color: const Color(0xFFBFAE01).withValues(alpha: 0.2),
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(Icons.group_add, color: Color(0xFFBFAE01), size: 20),
@@ -467,7 +467,7 @@ class _NewChatBottomSheetState extends State<NewChatBottomSheet> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFBFAE01).withOpacity(0.2),
+                        color: const Color(0xFFBFAE01).withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.group_add, color: Color(0xFFBFAE01), size: 20),

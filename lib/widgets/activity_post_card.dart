@@ -279,6 +279,8 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
         );
       } : null,
       onDelete: isOwnPost ? () async {
+        final postRepo = context.read<PostRepository>();
+        final messenger = ScaffoldMessenger.of(context);
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -299,11 +301,10 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
         
         if (confirmed == true) {
           try {
-            final postRepo = context.read<PostRepository>();
             await postRepo.deletePost(_effectivePostId());
             
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 const SnackBar(
                   content: Text('Post deleted successfully'),
                   backgroundColor: Colors.green,
@@ -312,7 +313,7 @@ class _ActivityPostCardState extends State<ActivityPostCard> {
             }
           } catch (e) {
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
                   content: Text('Failed to delete post: $e'),
                   backgroundColor: Colors.red,

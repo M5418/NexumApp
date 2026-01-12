@@ -208,10 +208,10 @@ class _StoryMusicListPageState extends State<StoryMusicListPage> {
               IconButton(
                 icon: const Icon(Icons.add, color: Color(0xFFBFAE01)),
                 onPressed: () async {
+                  final nav = Navigator.of(context);
                   await _stopPreview();
                   if (!mounted) return;
-                  final result = await Navigator.push(
-                    context,
+                  final result = await nav.push(
                     MaterialPageRoute(
                       settings: const RouteSettings(name: 'add_story_music'),
                       builder: (_) => const AddStoryMusicPage(),
@@ -247,10 +247,10 @@ class _StoryMusicListPageState extends State<StoryMusicListPage> {
                     ),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () async {
+              final nav = Navigator.of(context);
               await _stopPreview();
               if (!mounted) return;
-              final result = await Navigator.push(
-                context,
+              final result = await nav.push(
                 MaterialPageRoute(
                   settings: const RouteSettings(name: 'add_story_music'),
                   builder: (_) => const AddStoryMusicPage(),

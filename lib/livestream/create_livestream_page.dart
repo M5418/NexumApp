@@ -476,7 +476,7 @@ class _CreateLiveStreamPageState extends State<CreateLiveStreamPage> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFBFAE01).withOpacity(0.1),
+                          color: const Color(0xFFBFAE01).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -516,7 +516,7 @@ class _CreateLiveStreamPageState extends State<CreateLiveStreamPage> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFBFAE01).withOpacity(0.1),
+                          color: const Color(0xFFBFAE01).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -559,7 +559,7 @@ class _CreateLiveStreamPageState extends State<CreateLiveStreamPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFBFAE01).withOpacity(0.1),
+                color: const Color(0xFFBFAE01).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
@@ -609,7 +609,7 @@ class _CreateLiveStreamPageState extends State<CreateLiveStreamPage> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: const Color(0xFFBFAE01).withOpacity(0.1),
+            color: const Color(0xFFBFAE01).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: const Color(0xFFBFAE01), size: 20),

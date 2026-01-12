@@ -272,6 +272,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
 
   Future<void> _endStream() async {
     final lang = context.read<LanguageProvider>();
+    final repo = context.read<LiveStreamRepository>();
     
     final confirmed = await showDialog<bool>(
       context: context,
@@ -295,8 +296,8 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
     if (confirmed != true) return;
 
     try {
-      final repo = context.read<LiveStreamRepository>();
       await repo.endLiveStream(widget.streamId);
+      if (!mounted) return;
       
       _durationTimer?.cancel();
       
@@ -356,6 +357,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
 
   Future<void> _kickViewer(LiveStreamViewer viewer) async {
     final lang = context.read<LanguageProvider>();
+    final repo = context.read<LiveStreamRepository>();
     
     final confirmed = await showDialog<bool>(
       context: context,
@@ -379,7 +381,6 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
     if (confirmed != true) return;
 
     try {
-      final repo = context.read<LiveStreamRepository>();
       await repo.kickViewer(streamId: widget.streamId, viewerId: viewer.userId);
       if (!mounted) return;
       _loadViewers();
@@ -390,6 +391,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
 
   Future<void> _banViewer(LiveStreamViewer viewer) async {
     final lang = context.read<LanguageProvider>();
+    final repo = context.read<LiveStreamRepository>();
     
     final confirmed = await showDialog<bool>(
       context: context,
@@ -413,7 +415,6 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
     if (confirmed != true) return;
 
     try {
-      final repo = context.read<LiveStreamRepository>();
       await repo.banViewer(streamId: widget.streamId, viewerId: viewer.userId);
       if (!mounted) return;
       _loadViewers();
@@ -600,7 +601,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.black.withOpacity(0.8),
+            Colors.black.withValues(alpha: 0.8),
             Colors.transparent,
           ],
         ),
@@ -713,7 +714,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
           colors: [
-            Colors.black.withOpacity(0.8),
+            Colors.black.withValues(alpha: 0.8),
             Colors.transparent,
           ],
         ),
@@ -727,7 +728,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
               height: 44,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Row(
@@ -814,8 +815,8 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
             height: 50,
             decoration: BoxDecoration(
               color: isActive
-                  ? Colors.white.withOpacity(0.2)
-                  : Colors.red.withOpacity(0.3),
+                  ? Colors.white.withValues(alpha: 0.2)
+                  : Colors.red.withValues(alpha: 0.3),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -891,7 +892,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
   Widget _buildChatPanel(LanguageProvider lang) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
+        color: Colors.black.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(16),
       ),
       child: ListView.builder(
@@ -976,7 +977,7 @@ class _LiveStreamHostPageState extends State<LiveStreamHostPage>
     return GestureDetector(
       onTap: () => setState(() => _showViewers = false),
       child: Container(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withValues(alpha: 0.7),
         child: GestureDetector(
           onTap: () {}, // Prevent closing when tapping panel
           child: DraggableScrollableSheet(
