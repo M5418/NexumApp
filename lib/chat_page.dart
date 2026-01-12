@@ -1425,10 +1425,16 @@ void dispose() {
                   )
                 else
                   GestureDetector(
-                    onTap: () {
-                      // Instant tap to start recording - no delay
+                    onLongPressStart: (_) {
+                      // Long press to start recording
                       if (!_isRecording) {
                         _startRecording();
+                      }
+                    },
+                    onLongPressEnd: (_) {
+                      // Release to send
+                      if (_isRecording) {
+                        _stopRecordingAndSend();
                       }
                     },
                     child: Container(
