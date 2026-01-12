@@ -1172,29 +1172,38 @@ class _GroupChatPageState extends State<GroupChatPage> {
                         ),
                       ),
                     ),
-                  // Mic button
-                  GestureDetector(
-                    onLongPressStart: (_) {
-                      // Long press to start recording
+                  // Mic button - use Listener for instant response (no gesture delay)
+                  Listener(
+                    onPointerDown: (_) {
+                      // INSTANT start recording on touch
                       if (!_isRecording) {
                         setState(() => _swipeUpOffset = 0);
                         _startRecording();
                       }
                     },
-                    onLongPressMoveUpdate: (details) {
+                    onPointerMove: (details) {
                       if (_isRecording && !_isRecordingLocked) {
                         // Track swipe distance (negative Y = upward)
-                        final offset = -details.localOffsetFromOrigin.dy;
-                        setState(() => _swipeUpOffset = offset.clamp(0, 100));
+                        final offset = -details.localDelta.dy;
+                        setState(() {
+                          _swipeUpOffset = (_swipeUpOffset + offset).clamp(0, 100);
+                        });
                         
                         // Lock when swiped up enough
-                        if (offset > 80) {
+                        if (_swipeUpOffset > 80) {
                           setState(() => _isRecordingLocked = true);
                         }
                       }
                     },
-                    onLongPressEnd: (_) {
+                    onPointerUp: (_) {
                       // Release to send (only if not locked)
+                      if (_isRecording && !_isRecordingLocked) {
+                        _stopRecordingAndSend();
+                      }
+                      setState(() => _swipeUpOffset = 0);
+                    },
+                    onPointerCancel: (_) {
+                      // Handle cancel same as release
                       if (_isRecording && !_isRecordingLocked) {
                         _stopRecordingAndSend();
                       }
