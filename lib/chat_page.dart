@@ -559,10 +559,44 @@ void dispose() {
     final durationSec = recording.duration.inSeconds;
     final replyToId = _replyToMessage?.id;
     
-    // Clear reply state
-    setState(() => _replyToMessage = null);
+    // OPTIMISTIC UI: Show voice message immediately with "Sending..." status
+    final tempId = 'temp_voice_${DateTime.now().millisecondsSinceEpoch}';
+    final optimisticMsg = Message(
+      id: tempId,
+      senderId: uid,
+      senderName: 'You',
+      senderAvatar: null,
+      content: '',
+      type: MessageType.voice,
+      attachments: [
+        MediaAttachment(
+          id: 'temp_att',
+          url: 'uploading',
+          type: MediaType.voice,
+          duration: recording.duration,
+          fileSize: recording.fileSize,
+        ),
+      ],
+      timestamp: DateTime.now(),
+      status: MessageStatus.sending,
+      isFromCurrentUser: true,
+      replyTo: _replyToMessage != null
+          ? ReplyTo(
+              messageId: _replyToMessage!.id,
+              senderName: _replyToMessage!.senderName,
+              content: _replyToMessage!.content,
+              type: _replyToMessage!.type,
+            )
+          : null,
+    );
     
-    // Upload and send in background - no temp bubble
+    setState(() {
+      _messages.add(optimisticMsg);
+      _replyToMessage = null;
+    });
+    _scrollToBottom();
+    
+    // Upload and send in background
     try {
       String audioUrl;
       int sizeBytes;
@@ -627,10 +661,21 @@ void dispose() {
         messageType: 'voice',
       );
 
-      // Refresh to show the new message
-      if (mounted) await _refreshMessages();
+      // Remove temp message and refresh to get the real one
+      if (mounted) {
+        setState(() {
+          _messages.removeWhere((m) => m.id == tempId);
+        });
+        await _refreshMessages();
+      }
     } catch (e) {
-      if (mounted) _showSnack('Failed to send voice message: $e');
+      // Remove failed optimistic message
+      if (mounted) {
+        setState(() {
+          _messages.removeWhere((m) => m.id == tempId);
+        });
+        _showSnack('Failed to send voice message: $e');
+      }
     }
   }
 
@@ -1925,34 +1970,76 @@ void dispose() {
                               final isThisPlaying = _playingMessageId == message.id && _isPlaying;
                               final duration = att.duration ?? Duration.zero;
                               final displayDuration = _playingMessageId == message.id ? _currentPosition : duration;
+                              final progress = duration.inMilliseconds > 0 
+                                  ? (_currentPosition.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
+                                  : 0.0;
                               
                               return GestureDetector(
                                 onTap: isSending ? null : () => _playVoiceMessage(message.id, att.url),
                                 child: Container(
-                                  padding: const EdgeInsets.all(8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(
-                                        isSending ? Icons.upload : (isThisPlaying ? Icons.pause : Icons.play_arrow),
-                                        color: bubbleTextColor,
-                                        size: 24,
+                                      // Play/Pause button
+                                      Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          color: bubbleTextColor.withValues(alpha: 0.2),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          isSending ? Icons.upload : (isThisPlaying ? Icons.pause : Icons.play_arrow),
+                                          color: bubbleTextColor,
+                                          size: 20,
+                                        ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            isSending 
-                                                ? Provider.of<LanguageProvider>(context, listen: false).t('chat.sending')
-                                                : 'Voice message',
-                                            style: GoogleFonts.inter(color: bubbleTextColor, fontSize: 13),
-                                          ),
-                                          Text(
-                                            _formatDuration(displayDuration),
-                                            style: GoogleFonts.inter(color: bubbleTextColor.withValues(alpha: 0.7), fontSize: 11),
-                                          ),
-                                        ],
+                                      const SizedBox(width: 10),
+                                      // Waveform visualization
+                                      Flexible(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // Waveform bars
+                                            SizedBox(
+                                              height: 24,
+                                              width: 120,
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                                children: List.generate(20, (i) {
+                                                  // Generate pseudo-random heights based on index
+                                                  final heights = [0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 1.0, 0.5, 0.7, 
+                                                                   0.6, 0.9, 0.4, 0.8, 0.5, 0.7, 0.6, 0.9, 0.5, 0.7];
+                                                  final barProgress = i / 20;
+                                                  final isPlayed = _playingMessageId == message.id && barProgress <= progress;
+                                                  
+                                                  return Container(
+                                                    width: 3,
+                                                    height: 24 * heights[i],
+                                                    decoration: BoxDecoration(
+                                                      color: isSending 
+                                                          ? bubbleTextColor.withValues(alpha: 0.3)
+                                                          : (isPlayed ? bubbleTextColor : bubbleTextColor.withValues(alpha: 0.4)),
+                                                      borderRadius: BorderRadius.circular(2),
+                                                    ),
+                                                  );
+                                                }),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            // Duration
+                                            Text(
+                                              isSending 
+                                                  ? Provider.of<LanguageProvider>(context, listen: false).t('chat.sending')
+                                                  : _formatDuration(displayDuration),
+                                              style: GoogleFonts.inter(
+                                                color: bubbleTextColor.withValues(alpha: 0.7), 
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
