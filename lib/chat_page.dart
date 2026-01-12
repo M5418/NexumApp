@@ -2153,8 +2153,10 @@ void dispose() {
   }
 
   String _formatTime(DateTime time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
+    // Convert to local timezone for proper time display
+    final localTime = time.toLocal();
+    final hour = localTime.hour.toString().padLeft(2, '0');
+    final minute = localTime.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
 
@@ -2183,9 +2185,11 @@ void dispose() {
   }
 
   Widget _buildDaySeparator(DateTime date, bool isDark) {
+    // Convert to local timezone for proper date display
+    final localDate = date.toLocal();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final messageDate = DateTime(date.year, date.month, date.day);
+    final messageDate = DateTime(localDate.year, localDate.month, localDate.day);
 
     String dateText;
     if (messageDate == today) {
@@ -2200,7 +2204,7 @@ void dispose() {
         lang.t('chat.month_july'), lang.t('chat.month_august'), lang.t('chat.month_september'),
         lang.t('chat.month_october'), lang.t('chat.month_november'), lang.t('chat.month_december'),
       ];
-      dateText = '${months[date.month - 1]} ${date.day}, ${date.year}';
+      dateText = '${months[localDate.month - 1]} ${localDate.day}, ${localDate.year}';
     }
 
     return Container(
@@ -2226,9 +2230,12 @@ void dispose() {
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
-    return date1.year == date2.year &&
-        date1.month == date2.month &&
-        date1.day == date2.day;
+    // Convert to local timezone for proper comparison
+    final local1 = date1.toLocal();
+    final local2 = date2.toLocal();
+    return local1.year == local2.year &&
+        local1.month == local2.month &&
+        local1.day == local2.day;
   }
 
   bool _shouldShowTimestamp(int index) => true;
