@@ -469,7 +469,7 @@ void dispose() {
         senderName: (replyData['sender_name'] ?? 'User').toString(),
         content: (replyData['content'] ?? '').toString(),
         type: _mapStringToMessageType(replyData['type']?.toString() ?? 'text'),
-        mediaUrl: null,
+        mediaUrl: replyData['media_url']?.toString(),
       );
     }
 

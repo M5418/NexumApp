@@ -107,6 +107,73 @@ class FirebaseMessageRepository implements MessageRepository {
     return null;
   }
 
+  /// Build replyTo data by fetching the original message
+  Future<Map<String, dynamic>?> _buildReplyToData(String conversationId, String messageId) async {
+    try {
+      final msgDoc = await _conv(conversationId).doc(messageId).get();
+      if (!msgDoc.exists) return null;
+      
+      final data = msgDoc.data() ?? {};
+      final senderId = (data['senderId'] ?? '').toString();
+      
+      // Get sender name
+      String senderName = 'User';
+      try {
+        final userDoc = await _db.collection('users').doc(senderId).get();
+        if (userDoc.exists) {
+          final userData = userDoc.data() ?? {};
+          senderName = userData['firstName'] ?? userData['displayName'] ?? userData['username'] ?? 'User';
+        }
+      } catch (_) {}
+      
+      // Get content preview
+      String content = (data['text'] ?? '').toString();
+      final type = (data['type'] ?? 'text').toString();
+      
+      // For media messages, show a preview
+      if (content.isEmpty) {
+        switch (type) {
+          case 'image':
+            content = '📷 Photo';
+            break;
+          case 'video':
+            content = '🎬 Video';
+            break;
+          case 'voice':
+            content = '🎤 Voice message';
+            break;
+          case 'file':
+            content = '📎 File';
+            break;
+          case 'story_reply':
+            content = '📖 Story reply';
+            break;
+        }
+      }
+      
+      // Get media URL if available
+      String? mediaUrl;
+      final attachments = data['attachments'];
+      if (attachments != null && attachments is List && attachments.isNotEmpty) {
+        final firstAtt = attachments.first;
+        if (firstAtt is Map) {
+          mediaUrl = (firstAtt['url'] ?? firstAtt['thumbnail'])?.toString();
+        }
+      }
+      
+      return {
+        'message_id': messageId,
+        'sender_name': senderName,
+        'content': content,
+        'type': type,
+        'media_url': mediaUrl,
+      };
+    } catch (e) {
+      debugPrint('⚠️ Failed to build replyTo data: $e');
+      return null;
+    }
+  }
+
   Future<void> _updateConversationSummary({
     required String conversationId,
     required String type,
@@ -251,7 +318,7 @@ class FirebaseMessageRepository implements MessageRepository {
   Future<MessageRecordModel> sendText({String? conversationId, String? otherUserId, required String text, String? replyToMessageId}) async {
     debugPrint('💬 [MessageRepo] sendText called');
     debugPrint('💬 [MessageRepo] conversationId: $conversationId, otherUserId: $otherUserId');
-    debugPrint('💬 [MessageRepo] text: $text');
+    debugPrint('💬 [MessageRepo] text: $text, replyToMessageId: $replyToMessageId');
     
     final convId = await _ensureConversation(conversationId, otherUserId);
     debugPrint('💬 [MessageRepo] Resolved conversationId: $convId');
@@ -262,6 +329,12 @@ class FirebaseMessageRepository implements MessageRepository {
     final other = await _otherParticipant(convId);
     debugPrint('💬 [MessageRepo] senderId: $me, receiverId: $other');
     
+    // Build replyTo data if replying to a message
+    Map<String, dynamic>? replyToData;
+    if (replyToMessageId != null && replyToMessageId.isNotEmpty) {
+      replyToData = await _buildReplyToData(convId, replyToMessageId);
+    }
+    
     final data = {
       'conversationId': convId,
       'senderId': me,
@@ -269,7 +342,7 @@ class FirebaseMessageRepository implements MessageRepository {
       'type': 'text',
       'text': text,
       'attachments': [],
-      'replyTo': null,
+      'replyTo': replyToData,
       'readBy': [me],
       'createdAt': FieldValue.serverTimestamp(),
       'deletedFor': {},
@@ -309,6 +382,12 @@ class FirebaseMessageRepository implements MessageRepository {
       type = 'file';
     }
 
+    // Build replyTo data if replying to a message
+    Map<String, dynamic>? replyToData;
+    if (replyToMessageId != null && replyToMessageId.isNotEmpty) {
+      replyToData = await _buildReplyToData(convId, replyToMessageId);
+    }
+
     final data = {
       'conversationId': convId,
       'senderId': me,
@@ -316,7 +395,7 @@ class FirebaseMessageRepository implements MessageRepository {
       'type': type,
       'text': text,
       'attachments': atts,
-      'replyTo': null,
+      'replyTo': replyToData,
       'readBy': [me],
       'createdAt': FieldValue.serverTimestamp(),
       'deletedFor': {},
@@ -344,6 +423,12 @@ class FirebaseMessageRepository implements MessageRepository {
       fileName = 'voice_message.mp3';
     }
     
+    // Build replyTo data if replying to a message
+    Map<String, dynamic>? replyToData;
+    if (replyToMessageId != null && replyToMessageId.isNotEmpty) {
+      replyToData = await _buildReplyToData(convId, replyToMessageId);
+    }
+    
     final att = {
       'type': 'voice',
       'url': audioUrl,
@@ -358,7 +443,7 @@ class FirebaseMessageRepository implements MessageRepository {
       'type': 'voice',
       'text': '',
       'attachments': [att],
-      'replyTo': null,
+      'replyTo': replyToData,
       'readBy': [me],
       'createdAt': FieldValue.serverTimestamp(),
       'deletedFor': {},

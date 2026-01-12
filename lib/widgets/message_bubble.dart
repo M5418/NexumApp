@@ -1135,34 +1135,111 @@ class _MessageBubbleState extends State<MessageBubble>
 
   Widget _buildReplyPreview(bool isDark) {
     if (widget.message.replyTo == null) return const SizedBox.shrink();
+    final reply = widget.message.replyTo!;
+    final hasMedia = reply.mediaUrl != null && reply.mediaUrl!.isNotEmpty;
+    final isMediaType = reply.type == MessageType.image || 
+                        reply.type == MessageType.video ||
+                        reply.type == MessageType.voice;
+    
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F4F8),
+        color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF1F4F8),
         borderRadius: BorderRadius.circular(12),
-        border: const Border(
-          left: BorderSide(color: Color(0xFFB0B0B0), width: 3),
+        border: Border(
+          left: BorderSide(
+            color: isDark ? const Color(0xFFBFAE01) : const Color(0xFFB0B0B0), 
+            width: 3,
+          ),
         ),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.message.isFromCurrentUser ? 'You' : widget.message.senderName,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
+          // Media thumbnail if available
+          if (hasMedia && (reply.type == MessageType.image || reply.type == MessageType.video))
+            Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                color: isDark ? Colors.grey[800] : Colors.grey[300],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CachedNetworkImage(
+                      imageUrl: reply.mediaUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(color: Colors.grey[400]),
+                      errorWidget: (_, __, ___) => Icon(
+                        reply.type == MessageType.video ? Icons.videocam : Icons.image,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    if (reply.type == MessageType.video)
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.play_arrow, size: 14, color: Colors.white),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            widget.message.replyTo!.content,
-            style: GoogleFonts.inter(fontSize: 12, color: Colors.black87),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          // Text content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reply.senderName,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    // Icon for media types
+                    if (isMediaType && !hasMedia) ...[
+                      Icon(
+                        reply.type == MessageType.image ? Icons.image :
+                        reply.type == MessageType.video ? Icons.videocam :
+                        reply.type == MessageType.voice ? Icons.mic : Icons.attach_file,
+                        size: 14,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Expanded(
+                      child: Text(
+                        reply.content,
+                        style: GoogleFonts.inter(
+                          fontSize: 12, 
+                          color: isDark ? Colors.grey[400] : Colors.black87,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
