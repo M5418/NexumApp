@@ -359,8 +359,8 @@ class _PostPageState extends State<PostPage> {
       final authorName = model.authorName ?? 'User';
       final avatarUrl = model.authorAvatarUrl ?? '';
       
-      // Use media URLs directly - no normalization needed for display
-      final mediaUrls = model.mediaUrls;
+      // Normalize URLs to ensure they're loadable (gs:// -> https://)
+      final mediaUrls = await _normalizeUrls(model.mediaUrls);
       
       // Show post IMMEDIATELY with available data
       final detail = PostDetail(
