@@ -44,6 +44,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   bool _loading = true;
   bool _sending = false;
   bool _isRecording = false;
+  bool _isRecordingLocked = false; // Locked via swipe up
   GroupMessage? _replyTo;
 
   String? get _currentUserId => fb.FirebaseAuth.instance.currentUser?.uid;
@@ -384,7 +385,10 @@ class _GroupChatPageState extends State<GroupChatPage> {
   void _cancelRecording() async {
     if (!_isRecording) return;
     await _audioRecorder.stopRecording();
-    setState(() => _isRecording = false);
+    setState(() {
+      _isRecording = false;
+      _isRecordingLocked = false;
+    });
   }
 
   void _showReactionPicker(GroupMessage message) {
@@ -1027,7 +1031,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
             const SizedBox(width: 8),
 
-            // Send or Voice button (mic button stays visible during recording for release-to-send)
+            // Send or Voice button
             if (_messageController.text.trim().isNotEmpty && !_isRecording)
               IconButton(
                 icon: Icon(
@@ -1035,6 +1039,21 @@ class _GroupChatPageState extends State<GroupChatPage> {
                   color: _sending ? Colors.grey : const Color(0xFFBFAE01),
                 ),
                 onPressed: _sending ? null : () => _sendMessage(),
+              )
+            else if (_isRecording && _isRecordingLocked)
+              // Locked recording: show cancel and send buttons
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    onPressed: _cancelRecording,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Color(0xFFBFAE01)),
+                    onPressed: _stopRecordingAndSend,
+                  ),
+                ],
               )
             else
               GestureDetector(
@@ -1044,19 +1063,29 @@ class _GroupChatPageState extends State<GroupChatPage> {
                     _startRecording();
                   }
                 },
+                onLongPressMoveUpdate: (details) {
+                  // Swipe up to lock recording (negative Y = upward)
+                  if (_isRecording && !_isRecordingLocked && details.localOffsetFromOrigin.dy < -50) {
+                    setState(() => _isRecordingLocked = true);
+                  }
+                },
                 onLongPressEnd: (_) {
-                  // Release to send
-                  if (_isRecording) {
+                  // Release to send (only if not locked)
+                  if (_isRecording && !_isRecordingLocked) {
                     _stopRecordingAndSend();
                   }
                 },
                 child: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFBFAE01),
+                  decoration: BoxDecoration(
+                    color: _isRecording ? Colors.red : const Color(0xFFBFAE01),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.mic, color: Colors.black, size: 20),
+                  child: Icon(
+                    Icons.mic,
+                    color: _isRecording ? Colors.white : Colors.black,
+                    size: 20,
+                  ),
                 ),
               ),
           ],
