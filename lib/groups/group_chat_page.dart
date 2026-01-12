@@ -45,6 +45,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   bool _sending = false;
   bool _isRecording = false;
   bool _isRecordingLocked = false; // Locked via swipe up
+  double _swipeUpOffset = 0; // Track swipe distance for animation
   GroupMessage? _replyTo;
 
   String? get _currentUserId => fb.FirebaseAuth.instance.currentUser?.uid;
@@ -1056,37 +1057,84 @@ class _GroupChatPageState extends State<GroupChatPage> {
                 ],
               )
             else
-              GestureDetector(
-                onLongPressStart: (_) {
-                  // Long press to start recording
-                  if (!_isRecording) {
-                    _startRecording();
-                  }
-                },
-                onLongPressMoveUpdate: (details) {
-                  // Swipe up to lock recording (negative Y = upward)
-                  if (_isRecording && !_isRecordingLocked && details.localOffsetFromOrigin.dy < -50) {
-                    setState(() => _isRecordingLocked = true);
-                  }
-                },
-                onLongPressEnd: (_) {
-                  // Release to send (only if not locked)
-                  if (_isRecording && !_isRecordingLocked) {
-                    _stopRecordingAndSend();
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: _isRecording ? Colors.red : const Color(0xFFBFAE01),
-                    shape: BoxShape.circle,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Swipe up indicator (lock icon that moves up)
+                  if (_isRecording && !_isRecordingLocked)
+                    Positioned(
+                      bottom: 50 + _swipeUpOffset.clamp(0, 80),
+                      left: 0,
+                      right: 0,
+                      child: AnimatedOpacity(
+                        opacity: _swipeUpOffset > 10 ? 1.0 : 0.5,
+                        duration: const Duration(milliseconds: 100),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _swipeUpOffset > 50 ? Colors.green : Colors.grey[700],
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _swipeUpOffset > 50 ? Icons.lock : Icons.lock_open,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Icon(
+                              Icons.keyboard_arrow_up,
+                              color: _swipeUpOffset > 50 ? Colors.green : Colors.grey,
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  // Mic button
+                  GestureDetector(
+                    onLongPressStart: (_) {
+                      // Long press to start recording
+                      if (!_isRecording) {
+                        setState(() => _swipeUpOffset = 0);
+                        _startRecording();
+                      }
+                    },
+                    onLongPressMoveUpdate: (details) {
+                      if (_isRecording && !_isRecordingLocked) {
+                        // Track swipe distance (negative Y = upward)
+                        final offset = -details.localOffsetFromOrigin.dy;
+                        setState(() => _swipeUpOffset = offset.clamp(0, 100));
+                        
+                        // Lock when swiped up enough
+                        if (offset > 80) {
+                          setState(() => _isRecordingLocked = true);
+                        }
+                      }
+                    },
+                    onLongPressEnd: (_) {
+                      // Release to send (only if not locked)
+                      if (_isRecording && !_isRecordingLocked) {
+                        _stopRecordingAndSend();
+                      }
+                      setState(() => _swipeUpOffset = 0);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _isRecording ? Colors.red : const Color(0xFFBFAE01),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.mic,
+                        color: _isRecording ? Colors.white : Colors.black,
+                        size: 20,
+                      ),
+                    ),
                   ),
-                  child: Icon(
-                    Icons.mic,
-                    color: _isRecording ? Colors.white : Colors.black,
-                    size: 20,
-                  ),
-                ),
+                ],
               ),
           ],
         ),
