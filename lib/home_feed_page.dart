@@ -1394,7 +1394,15 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     final uids = list.map((m) => m.authorId).toSet().toList();
     final profiles = await _userRepo.getUsers(uids);
     final byId = {for (final p in profiles) p.uid: p};
-    return list.map((m) {
+    
+    // Check which comments the user has liked
+    final likedCommentIds = <String>{};
+    for (final m in list) {
+      final isLiked = await _commentRepo.hasUserLikedComment(m.id);
+      if (isLiked) likedCommentIds.add(m.id);
+    }
+    
+    final allComments = list.map((m) {
       final u = byId[m.authorId];
       // Build full name for comment author
       final commentFirstName = u?.firstName?.trim() ?? '';
@@ -1411,35 +1419,51 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         text: m.text,
         createdAt: m.createdAt,
         likesCount: m.likesCount,
-        isLikedByUser: false,
+        isLikedByUser: likedCommentIds.contains(m.id),
         replies: const [],
         parentCommentId: m.parentCommentId,
       );
     }).toList();
+    
+    // Build tree structure
+    return _buildCommentTree(allComments);
+  }
+  
+  List<Comment> _buildCommentTree(List<Comment> allComments) {
+    final List<Comment> topLevelComments = [];
+    final Map<String, List<Comment>> repliesMap = {};
+    
+    for (final comment in allComments) {
+      if (comment.parentCommentId == null || comment.parentCommentId!.isEmpty) {
+        topLevelComments.add(comment);
+      } else {
+        repliesMap.putIfAbsent(comment.parentCommentId!, () => []).add(comment);
+      }
+    }
+    
+    Comment attachReplies(Comment comment) {
+      final replies = repliesMap[comment.id] ?? [];
+      if (replies.isEmpty) return comment;
+      final nestedReplies = replies.map((r) => attachReplies(r)).toList();
+      nestedReplies.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return comment.copyWith(replies: nestedReplies);
+    }
+    
+    final result = topLevelComments.map((c) => attachReplies(c)).toList();
+    result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return result;
   }
 
   Future<void> _openCommentsSheet(String originalId) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    List<Comment> comments = [];
-    try {
-      comments = await _loadCommentsForPost(originalId);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${Provider.of<LanguageProvider>(context, listen: false).t('messages.load_comments_failed')}: ${_toError(e)}',
-              style: GoogleFonts.inter()),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-
+    
+    // Show bottom sheet INSTANTLY with empty comments (will load inside)
     if (!mounted) return;
 
     CommentBottomSheet.show(
       context,
       postId: originalId,
-      comments: comments,
+      comments: const [], // Empty - will load inside the sheet
       currentUserId: _currentUserId ?? '',
       isDarkMode: isDark,
       onAddComment: (text) async {

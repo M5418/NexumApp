@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'widgets/home_post_card.dart';
 import 'widgets/activity_post_card.dart';
 import 'widgets/message_invite_card.dart';
+import 'widgets/comment_bottom_sheet.dart';
 import 'models/post.dart';
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
@@ -1675,15 +1676,26 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
             onShare: (postId) {
               // Handle share
             },
-            onComment: (postId) {
-              // Handle comment
-            },
+            onComment: (postId) => _openCommentsSheet(postId),
             onRepost: (postId) {
               // Handle repost
             },
           ),
         );
       },
+    );
+  }
+
+  void _openCommentsSheet(String postId) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid ?? '';
+    
+    CommentBottomSheet.show(
+      context,
+      postId: postId,
+      comments: const [], // Empty - will load inside the sheet
+      currentUserId: currentUserId,
+      isDarkMode: isDark,
     );
   }
 
@@ -1731,9 +1743,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
             onShare: (postId) {
               // Handle share
             },
-            onComment: (postId) {
-              // Handle comment
-            },
+            onComment: (postId) => _openCommentsSheet(postId),
             onRepost: (postId) {
               // Handle repost
             },

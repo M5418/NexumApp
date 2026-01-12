@@ -8,24 +8,28 @@ class CommentWidget extends StatefulWidget {
   final Comment comment;
   final void Function(Comment comment)? onLike;
   final void Function(Comment comment)? onReply;
+  final void Function(Comment comment, String? parentCommentId)? onReplyWithParent;
   final void Function(Comment comment)? onDelete;
   final VoidCallback? onShowReplies;
   final bool showReplies;
   final int depth;
   final bool isDarkMode;
   final String currentUserId;
+  final String? parentCommentId; // Parent comment ID for nested replies
 
   const CommentWidget({
     super.key,
     required this.comment,
     this.onLike,
     this.onReply,
+    this.onReplyWithParent,
     this.onDelete,
     this.onShowReplies,
     this.showReplies = false,
     this.depth = 0,
     this.isDarkMode = true,
     required this.currentUserId,
+    this.parentCommentId,
   });
 
   @override
@@ -296,7 +300,14 @@ class _CommentWidgetState extends State<CommentWidget> {
 
                         // Reply button
                         GestureDetector(
-                          onTap: () => widget.onReply?.call(widget.comment),
+                          onTap: () {
+                            // If this is a nested reply, use onReplyWithParent to pass parent info
+                            if (widget.onReplyWithParent != null) {
+                              widget.onReplyWithParent!(widget.comment, widget.parentCommentId);
+                            } else {
+                              widget.onReply?.call(widget.comment);
+                            }
+                          },
                           child: Text(
                             'Reply',
                             style: GoogleFonts.inter(
@@ -344,7 +355,7 @@ class _CommentWidgetState extends State<CommentWidget> {
             ],
           ),
 
-          // Replies
+          // Replies - show when expanded
           if (widget.showReplies && widget.comment.replies.isNotEmpty)
             Column(
               children: widget.comment.replies.map((reply) {
@@ -353,9 +364,13 @@ class _CommentWidgetState extends State<CommentWidget> {
                   depth: widget.depth + 1,
                   isDarkMode: widget.isDarkMode,
                   currentUserId: widget.currentUserId,
+                  showReplies: true, // Always show nested replies when parent is expanded
                   onLike: widget.onLike,
-                  onReply: widget.onReply,
+                  onReplyWithParent: widget.onReplyWithParent,
                   onDelete: widget.onDelete,
+                  onShowReplies: reply.replies.isNotEmpty ? () {} : null,
+                  // Pass the top-level comment ID as parent for nested replies
+                  parentCommentId: widget.parentCommentId ?? widget.comment.id,
                 );
               }).toList(),
             ),

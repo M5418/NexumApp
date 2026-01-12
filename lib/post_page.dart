@@ -17,12 +17,13 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 import 'widgets/media_carousel.dart';
 import 'widgets/auto_play_video.dart';
-import 'widgets/comment_thread.dart';
+import 'widgets/comment_widget.dart';
 import 'widgets/animated_navbar.dart';
 import 'widgets/post_options_menu.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'utils/profile_navigation.dart';
 import 'core/time_utils.dart';
+import 'core/post_events.dart';
 import 'package:provider/provider.dart';
 import 'core/i18n/language_provider.dart';
 import 'repositories/interfaces/block_repository.dart';
@@ -60,6 +61,7 @@ class _PostPageState extends State<PostPage> {
   final FirebaseUserRepository _userRepo = FirebaseUserRepository();
   StreamSubscription<PostModel?>? _postSub;
   StreamSubscription<List<CommentModel>>? _commentsSub;
+  StreamSubscription<CommentLikeEvent>? _commentLikeSub;
   bool _isLiked = false;
   bool _isBookmarked = false;
 
@@ -68,6 +70,13 @@ class _PostPageState extends State<PostPage> {
   List<Comment> _comments = [];
   bool _loadingPost = false;
   bool _loadingComments = false;
+  
+  // Comment UI state
+  final Map<String, bool> _showRepliesMap = {};
+  String? _replyingToCommentId;
+  String? _replyingToUserName;
+  bool _isReplyingToReply = false;
+  String? _replyingToParentId;
 
   String? _currentUserId;
 
@@ -104,6 +113,7 @@ class _PostPageState extends State<PostPage> {
   void dispose() {
     _postSub?.cancel();
     _commentsSub?.cancel();
+    _commentLikeSub?.cancel();
     _commentController.dispose();
     _commentFocusNode.dispose();
     super.dispose();
@@ -112,6 +122,9 @@ class _PostPageState extends State<PostPage> {
   Future<void> _init() async {
     // Get user ID synchronously - it's already available
     _currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
+    
+    // Listen for comment like events from other parts of the app
+    _commentLikeSub = CommentEvents.stream.listen(_onCommentLikeEvent);
     
     if (widget.post != null) {
       // INSTANT: Apply post immediately - no await
@@ -491,25 +504,44 @@ class _PostPageState extends State<PostPage> {
 
   void _subscribeToComments(String id) {
     _commentsSub?.cancel();
-    _commentsSub = _commentRepo.commentsStream(postId: id, limit: 100).listen((list) async {
+    _commentsSub = _commentRepo.commentsStream(postId: id, limit: 200).listen((list) async {
       final uids = list.map((m) => m.authorId).toSet().toList();
       final profiles = await _userRepo.getUsers(uids);
       final byId = {for (final p in profiles) p.uid: p};
-      final comments = list.map((m) {
+      
+      // Check which comments the user has liked
+      final likedCommentIds = <String>{};
+      for (final m in list) {
+        final isLiked = await _commentRepo.hasUserLikedComment(m.id);
+        if (isLiked) likedCommentIds.add(m.id);
+      }
+      
+      final allComments = list.map((m) {
         final u = byId[m.authorId];
+        // Build full name for comment author
+        final firstName = u?.firstName?.trim() ?? '';
+        final lastName = u?.lastName?.trim() ?? '';
+        final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
+            ? '$firstName $lastName'.trim()
+            : (u?.displayName ?? u?.username ?? 'User');
+        
         return Comment(
           id: m.id,
           userId: m.authorId,
-          userName: (u?.displayName ?? u?.username ?? 'User'),
+          userName: fullName,
           userAvatarUrl: (u?.avatarUrl ?? ''),
           text: m.text,
           createdAt: m.createdAt,
           likesCount: m.likesCount,
-          isLikedByUser: false,
+          isLikedByUser: likedCommentIds.contains(m.id),
           replies: const [],
           parentCommentId: m.parentCommentId,
         );
       }).toList();
+      
+      // Build tree structure
+      final comments = _buildCommentTree(allComments);
+      
       if (!mounted) return;
       setState(() {
         _comments = comments;
@@ -527,25 +559,44 @@ class _PostPageState extends State<PostPage> {
       _loadingComments = true;
     });
     try {
-      final list = await _commentRepo.getComments(postId: _post!.id, limit: 100);
+      final list = await _commentRepo.getComments(postId: _post!.id, limit: 200);
       final uids = list.map((m) => m.authorId).toSet().toList();
       final profiles = await _userRepo.getUsers(uids);
       final byId = {for (final p in profiles) p.uid: p};
-      final comments = list.map((m) {
+      
+      // Check which comments the user has liked
+      final likedCommentIds = <String>{};
+      for (final m in list) {
+        final isLiked = await _commentRepo.hasUserLikedComment(m.id);
+        if (isLiked) likedCommentIds.add(m.id);
+      }
+      
+      final allComments = list.map((m) {
         final u = byId[m.authorId];
+        // Build full name for comment author
+        final firstName = u?.firstName?.trim() ?? '';
+        final lastName = u?.lastName?.trim() ?? '';
+        final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
+            ? '$firstName $lastName'.trim()
+            : (u?.displayName ?? u?.username ?? 'User');
+        
         return Comment(
           id: m.id,
           userId: m.authorId,
-          userName: (u?.displayName ?? u?.username ?? 'User'),
+          userName: fullName,
           userAvatarUrl: (u?.avatarUrl ?? ''),
           text: m.text,
           createdAt: m.createdAt,
           likesCount: m.likesCount,
-          isLikedByUser: false,
+          isLikedByUser: likedCommentIds.contains(m.id),
           replies: const [],
           parentCommentId: m.parentCommentId,
         );
       }).toList();
+      
+      // Build tree structure
+      final comments = _buildCommentTree(allComments);
+      
       if (!mounted) return;
       setState(() {
         _comments = comments;
@@ -569,6 +620,213 @@ class _PostPageState extends State<PostPage> {
           _loadingComments = false;
         });
       }
+    }
+  }
+  
+  List<Comment> _buildCommentTree(List<Comment> allComments) {
+    final List<Comment> topLevelComments = [];
+    final Map<String, List<Comment>> repliesMap = {};
+    
+    for (final comment in allComments) {
+      if (comment.parentCommentId == null || comment.parentCommentId!.isEmpty) {
+        topLevelComments.add(comment);
+      } else {
+        repliesMap.putIfAbsent(comment.parentCommentId!, () => []).add(comment);
+      }
+    }
+    
+    Comment attachReplies(Comment comment) {
+      final replies = repliesMap[comment.id] ?? [];
+      if (replies.isEmpty) return comment;
+      final nestedReplies = replies.map((r) => attachReplies(r)).toList();
+      nestedReplies.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return comment.copyWith(replies: nestedReplies);
+    }
+    
+    final result = topLevelComments.map((c) => attachReplies(c)).toList();
+    result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return result;
+  }
+
+  /// Handle comment like events from other parts of the app
+  void _onCommentLikeEvent(CommentLikeEvent event) {
+    if (!mounted) return;
+    
+    bool updateInTree(List<Comment> items) {
+      for (int i = 0; i < items.length; i++) {
+        if (items[i].id == event.commentId) {
+          items[i] = items[i].copyWith(
+            isLikedByUser: event.isLiked,
+            likesCount: event.likesCount,
+          );
+          return true;
+        }
+        final children = List<Comment>.from(items[i].replies);
+        if (updateInTree(children)) {
+          items[i] = items[i].copyWith(replies: children);
+          return true;
+        }
+      }
+      return false;
+    }
+    
+    setState(() {
+      updateInTree(_comments);
+    });
+  }
+
+  /// Add a reply to the comment tree (for optimistic updates)
+  bool _addReplyToTree(List<Comment> comments, String parentId, Comment reply) {
+    for (int i = 0; i < comments.length; i++) {
+      if (comments[i].id == parentId) {
+        final updatedReplies = List<Comment>.from(comments[i].replies)..add(reply);
+        comments[i] = comments[i].copyWith(replies: updatedReplies);
+        return true;
+      }
+      // Check nested replies
+      final nestedReplies = List<Comment>.from(comments[i].replies);
+      if (_addReplyToTree(nestedReplies, parentId, reply)) {
+        comments[i] = comments[i].copyWith(replies: nestedReplies);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _toggleReplies(String commentId) {
+    setState(() {
+      _showRepliesMap[commentId] = !(_showRepliesMap[commentId] ?? false);
+    });
+  }
+
+  void _startReply(String commentId, String userName, {String? parentCommentId}) {
+    setState(() {
+      _replyingToCommentId = commentId;
+      _replyingToUserName = userName;
+      _isReplyingToReply = parentCommentId != null;
+      _replyingToParentId = parentCommentId;
+    });
+    _commentFocusNode.requestFocus();
+  }
+
+  void _cancelReply() {
+    setState(() {
+      _replyingToCommentId = null;
+      _replyingToUserName = null;
+      _isReplyingToReply = false;
+      _replyingToParentId = null;
+    });
+  }
+
+  Future<void> _toggleCommentLike(Comment comment) async {
+    // Optimistic update
+    void applyLocal(bool liked) {
+      bool updateInTree(List<Comment> items) {
+        for (int i = 0; i < items.length; i++) {
+          if (items[i].id == comment.id) {
+            final newCount = (items[i].likesCount + (liked ? 1 : -1)).clamp(0, 1 << 30);
+            items[i] = items[i].copyWith(
+              isLikedByUser: liked,
+              likesCount: newCount,
+            );
+            return true;
+          }
+          final children = List<Comment>.from(items[i].replies);
+          final updated = updateInTree(children);
+          if (updated) {
+            items[i] = items[i].copyWith(replies: children);
+            return true;
+          }
+        }
+        return false;
+      }
+      setState(() {
+        updateInTree(_comments);
+      });
+    }
+
+    final willLike = !comment.isLikedByUser;
+    final newCount = (comment.likesCount + (willLike ? 1 : -1)).clamp(0, 1 << 30);
+    applyLocal(willLike);
+    
+    // Emit event to sync across app
+    CommentEvents.emitLike(CommentLikeEvent(
+      commentId: comment.id,
+      isLiked: willLike,
+      likesCount: newCount,
+    ));
+
+    try {
+      if (willLike) {
+        await _commentRepo.likeComment(comment.id);
+      } else {
+        await _commentRepo.unlikeComment(comment.id);
+      }
+    } catch (_) {
+      applyLocal(!willLike);
+      // Emit rollback event
+      CommentEvents.emitLike(CommentLikeEvent(
+        commentId: comment.id,
+        isLiked: !willLike,
+        likesCount: comment.likesCount,
+      ));
+    }
+  }
+
+  Future<void> _deleteComment(Comment comment) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final subtitleColor = isDark
+        ? Colors.white.withValues(alpha: 179)
+        : Colors.black.withValues(alpha: 179);
+
+    final okPressed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? Colors.grey[900] : Colors.white,
+        title: Text(
+          'Delete comment?',
+          style: GoogleFonts.inter(
+            color: isDark ? Colors.white : Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'This will remove the comment${comment.replies.isNotEmpty ? ' and its replies' : ''}.',
+          style: GoogleFonts.inter(color: subtitleColor),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: subtitleColor)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete', style: GoogleFonts.inter(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (okPressed != true) return;
+
+    try {
+      await _commentRepo.deleteComment(comment.id);
+      await _loadComments();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Comment deleted', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Delete failed', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -971,81 +1229,63 @@ class _PostPageState extends State<PostPage> {
     );
   }
 
-  // Comment bottom sheet removed - comments are displayed inline on the page
-    Future<void> _replyToCommentDesktop(String commentId) async {
-    if (_post == null) return;
-    final controller = TextEditingController();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final reply = await showDialog<String>(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-          title: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.reply_title'), style: GoogleFonts.inter()),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLines: 4,
-            style: GoogleFonts.inter(),
-            decoration: InputDecoration(
-              hintText: Provider.of<LanguageProvider>(context, listen: false).t('post.reply_hint'),
-              hintStyle: GoogleFonts.inter(color: const Color(0xFF666666)),
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(Provider.of<LanguageProvider>(context, listen: false).t('common.cancel'), style: GoogleFonts.inter()),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.send'),
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (reply == null || reply.isEmpty) return;
-    try {
-      await _commentRepo.createComment(
-          postId: _post!.id, text: reply, parentCommentId: commentId);
-      // Track comment analytics
-      _trackComment(_post!.id, _post!.authorId);
-      await _loadComments();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(Provider.of<LanguageProvider>(context, listen: false).t('post.reply_posted'), style: GoogleFonts.inter()),
-          backgroundColor: const Color(0xFF4CAF50),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Reply failed: ${_toError(e)}', style: GoogleFonts.inter()),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   Future<void> _submitComment() async {
     if (_post == null) return;
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
 
+    // Handle reply with @mention for nested replies
+    String finalText = text;
+    String? parentId;
+    if (_replyingToCommentId != null) {
+      if (_isReplyingToReply && _replyingToUserName != null) {
+        if (!text.startsWith('@$_replyingToUserName')) {
+          finalText = '@$_replyingToUserName $text';
+        }
+      }
+      parentId = _replyingToParentId ?? _replyingToCommentId;
+    }
+
+    // Get current user info for optimistic update
+    final currentUserId = _currentUserId ?? '';
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    
+    // Optimistic update - add comment immediately
+    final optimisticComment = Comment(
+      id: tempId,
+      userId: currentUserId,
+      userName: 'You', // Will be replaced on refresh
+      userAvatarUrl: '',
+      text: finalText,
+      createdAt: DateTime.now(),
+      likesCount: 0,
+      isLikedByUser: false,
+      replies: const [],
+      parentCommentId: parentId,
+    );
+
+    // Add to UI immediately
+    setState(() {
+      if (parentId != null) {
+        // Add as reply to parent comment
+        _addReplyToTree(_comments, parentId, optimisticComment);
+        _showRepliesMap[parentId] = true; // Auto-expand to show new reply
+      } else {
+        // Add as top-level comment
+        _comments.add(optimisticComment);
+      }
+    });
+
+    _commentController.clear();
+    _cancelReply();
+    _commentFocusNode.unfocus();
+
     try {
-      await _commentRepo.createComment(postId: _post!.id, text: text);
+      await _commentRepo.createComment(postId: _post!.id, text: finalText, parentCommentId: parentId);
       // Track comment analytics
       _trackComment(_post!.id, _post!.authorId);
-      _commentController.clear();
-      _commentFocusNode.unfocus();
+      // Refresh to get real comment with proper ID and user info
+      await _loadComments();
 
       final original = _post!;
       final updatedCounts = PostCounts(
@@ -1307,10 +1547,18 @@ class _PostPageState extends State<PostPage> {
                                     const SizedBox(height: 12),
                                 itemBuilder: (_, i) {
                                   final c = _comments[i];
-                                  return CommentThread(
+                                  return CommentWidget(
                                     comment: c,
-                                    onReply: (id) => _replyToCommentDesktop(id),
-                                    onLike: (_) {},
+                                    isDarkMode: Theme.of(context).brightness == Brightness.dark,
+                                    currentUserId: _currentUserId ?? '',
+                                    showReplies: _showRepliesMap[c.id] ?? false,
+                                    onLike: (comment) => _toggleCommentLike(comment),
+                                    onReply: (comment) => _startReply(comment.id, comment.userName),
+                                    onReplyWithParent: (comment, parentId) => _startReply(comment.id, comment.userName, parentCommentId: parentId),
+                                    onDelete: (comment) => _deleteComment(comment),
+                                    onShowReplies: c.replies.isNotEmpty
+                                        ? () => _toggleReplies(c.id)
+                                        : null,
                                   );
                                 },
                               )),
@@ -1644,13 +1892,18 @@ class _PostPageState extends State<PostPage> {
                 ..._comments.map(
                   (comment) => Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: CommentThread(
+                    child: CommentWidget(
                       comment: comment,
-                      isFirstReply: false,
-                      onReply: (commentId) {
-                        // Comments are displayed inline, no bottom sheet needed
-                      },
-                      onLike: (_) {},
+                      isDarkMode: Theme.of(context).brightness == Brightness.dark,
+                      currentUserId: _currentUserId ?? '',
+                      showReplies: _showRepliesMap[comment.id] ?? false,
+                      onLike: (c) => _toggleCommentLike(c),
+                      onReply: (c) => _startReply(c.id, c.userName),
+                      onReplyWithParent: (c, parentId) => _startReply(c.id, c.userName, parentCommentId: parentId),
+                      onDelete: (c) => _deleteComment(c),
+                      onShowReplies: comment.replies.isNotEmpty
+                          ? () => _toggleReplies(comment.id)
+                          : null,
                     ),
                   ),
                 ),

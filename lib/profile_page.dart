@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'services/community_interest_sync_service.dart';
 import 'widgets/post_card.dart';
 import 'widgets/home_post_card.dart';
+import 'widgets/comment_bottom_sheet.dart';
 import 'models/post.dart';
 import 'settings_page.dart';
 import 'insights_page.dart';
@@ -3841,6 +3842,19 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  void _openCommentsSheet(String postId) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid ?? '';
+    
+    CommentBottomSheet.show(
+      context,
+      postId: postId,
+      comments: const [], // Empty - will load inside the sheet
+      currentUserId: currentUserId,
+      isDarkMode: isDark,
+    );
+  }
+
   Widget _buildActivityTab() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -3907,7 +3921,7 @@ class _ProfilePageState extends State<ProfilePage> {
             onReactionChanged: (postId, reaction) {},
             onBookmarkToggle: (postId) {},
             onShare: (postId) {},
-            onComment: (postId) {},
+            onComment: (postId) => _openCommentsSheet(postId),
             onRepost: (postId) {},
           ),
         );
@@ -3981,7 +3995,7 @@ class _ProfilePageState extends State<ProfilePage> {
             onReactionChanged: (postId, reaction) {},
             onBookmarkToggle: (postId) {},
             onShare: (postId) {},
-            onComment: (postId) {},
+            onComment: (postId) => _openCommentsSheet(postId),
             onRepost: (postId) {},
           ),
         );

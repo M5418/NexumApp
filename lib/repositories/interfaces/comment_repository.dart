@@ -31,6 +31,9 @@ abstract class CommentRepository {
   Future<void> likeComment(String commentId);
   Future<void> unlikeComment(String commentId);
   
+  // Check if user has liked a comment
+  Future<bool> hasUserLikedComment(String commentId);
+  
   // Real-time comment stream for post
   Stream<List<CommentModel>> commentsStream({
     required String postId,

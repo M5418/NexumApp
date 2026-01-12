@@ -103,6 +103,14 @@ class FirebaseCommentRepository implements CommentRepository {
   }
 
   @override
+  Future<bool> hasUserLikedComment(String commentId) async {
+    final u = _auth.currentUser;
+    if (u == null) return false;
+    final likeDoc = await _commentRef(commentId).collection('likes').doc(u.uid).get();
+    return likeDoc.exists;
+  }
+
+  @override
   Stream<List<CommentModel>> commentsStream({required String postId, int limit = 50}) {
     return _comments
         .where('postId', isEqualTo: postId)

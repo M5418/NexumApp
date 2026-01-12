@@ -27,3 +27,29 @@ class PostEvents {
     _controller.add(event);
   }
 }
+
+/// Event for comment like/unlike sync across the app
+class CommentLikeEvent {
+  final String commentId;
+  final bool isLiked;
+  final int likesCount;
+
+  CommentLikeEvent({
+    required this.commentId,
+    required this.isLiked,
+    required this.likesCount,
+  });
+}
+
+class CommentEvents {
+  CommentEvents._();
+
+  static final StreamController<CommentLikeEvent> _controller =
+      StreamController<CommentLikeEvent>.broadcast();
+
+  static Stream<CommentLikeEvent> get stream => _controller.stream;
+
+  static void emitLike(CommentLikeEvent event) {
+    _controller.add(event);
+  }
+}

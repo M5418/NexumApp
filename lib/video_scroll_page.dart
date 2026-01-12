@@ -1458,25 +1458,13 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
   final ctx = context;
   final isDark = Theme.of(ctx).brightness == Brightness.dark;
 
-  List<Comment> comments = [];
-  try {
-    comments = await _loadCommentsForPost(postId);
-  } catch (e) {
-    if (!ctx.mounted) return;
-    ScaffoldMessenger.of(ctx).showSnackBar(
-      SnackBar(
-        content: Text('${Provider.of<LanguageProvider>(ctx, listen: false).t('video.load_comments_failed')}${_toError(e)}', style: GoogleFonts.inter()),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
+  // Show bottom sheet INSTANTLY with empty comments (will load inside)
   if (!ctx.mounted) return;
 
   CommentBottomSheet.show(
     ctx,
     postId: postId,
-    comments: comments,
+    comments: const [], // Empty - will load inside the sheet
     currentUserId: _currentUserId ?? '',
     isDarkMode: isDark,
     onAddComment: (text) async {
@@ -1551,21 +1539,64 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
     final uids = list.map((m) => m.authorId).toSet().toList();
     final profiles = await _userRepo.getUsers(uids);
     final byId = {for (final p in profiles) p.uid: p};
-    return list.map((m) {
+    
+    // Check which comments the user has liked
+    final likedCommentIds = <String>{};
+    for (final m in list) {
+      final isLiked = await _commentRepo.hasUserLikedComment(m.id);
+      if (isLiked) likedCommentIds.add(m.id);
+    }
+    
+    final allComments = list.map((m) {
       final u = byId[m.authorId];
+      // Build full name for comment author
+      final firstName = u?.firstName?.trim() ?? '';
+      final lastName = u?.lastName?.trim() ?? '';
+      final fullName = (firstName.isNotEmpty || lastName.isNotEmpty)
+          ? '$firstName $lastName'.trim()
+          : (u?.displayName ?? u?.username ?? Provider.of<LanguageProvider>(context, listen: false).t('video.user'));
+      
       return Comment(
         id: m.id,
         userId: m.authorId,
-        userName: (u?.displayName ?? u?.username ?? Provider.of<LanguageProvider>(context, listen: false).t('video.user')),
+        userName: fullName,
         userAvatarUrl: (u?.avatarUrl ?? ''),
         text: m.text,
         createdAt: m.createdAt,
         likesCount: m.likesCount,
-        isLikedByUser: false,
+        isLikedByUser: likedCommentIds.contains(m.id),
         replies: const [],
         parentCommentId: m.parentCommentId,
       );
     }).toList();
+    
+    // Build tree structure
+    return _buildCommentTree(allComments);
+  }
+  
+  List<Comment> _buildCommentTree(List<Comment> allComments) {
+    final List<Comment> topLevelComments = [];
+    final Map<String, List<Comment>> repliesMap = {};
+    
+    for (final comment in allComments) {
+      if (comment.parentCommentId == null || comment.parentCommentId!.isEmpty) {
+        topLevelComments.add(comment);
+      } else {
+        repliesMap.putIfAbsent(comment.parentCommentId!, () => []).add(comment);
+      }
+    }
+    
+    Comment attachReplies(Comment comment) {
+      final replies = repliesMap[comment.id] ?? [];
+      if (replies.isEmpty) return comment;
+      final nestedReplies = replies.map((r) => attachReplies(r)).toList();
+      nestedReplies.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return comment.copyWith(replies: nestedReplies);
+    }
+    
+    final result = topLevelComments.map((c) => attachReplies(c)).toList();
+    result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return result;
   }
 
   String _formatTimeAgo(DateTime dateTime) {
