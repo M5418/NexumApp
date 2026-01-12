@@ -348,8 +348,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
     if (path == null) return;
 
-    setState(() => _sending = true);
-
+    // Upload and send in background - no temp bubble for voice notes
     try {
       final storagePath = 'groups/${_group.id}/voice/${DateTime.now().millisecondsSinceEpoch}.m4a';
       
@@ -360,7 +359,9 @@ class _GroupChatPageState extends State<GroupChatPage> {
         contentType: 'audio/m4a',
       );
 
-      await _sendMessage(
+      // Send directly to Firestore without optimistic UI
+      await _groupRepo.sendMessage(
+        groupId: _group.id,
         content: '',
         type: 'voice',
         attachments: [
@@ -371,13 +372,12 @@ class _GroupChatPageState extends State<GroupChatPage> {
           }
         ],
       );
+      // Message will appear via stream subscription
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to send voice message: $e')),
       );
-    } finally {
-      if (mounted) setState(() => _sending = false);
     }
   }
 

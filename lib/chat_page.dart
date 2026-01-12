@@ -554,138 +554,82 @@ void dispose() {
       return;
     }
     
-    // OPTIMISTIC UI: Show voice message immediately
-    final tempId = 'temp_voice_${DateTime.now().millisecondsSinceEpoch}';
     final durationSec = recording.duration.inSeconds;
-    final optimisticMsg = Message(
-      id: tempId,
-      senderId: uid,
-      senderName: 'You',
-      senderAvatar: null,
-      content: '',
-      type: MessageType.voice,
-      attachments: [
-        MediaAttachment(
-          id: 'temp_att',
-          url: recording.filePath ?? 'uploading',
-          type: MediaType.voice,
-          duration: recording.duration,
-          fileSize: recording.fileSize,
-        ),
-      ],
-      timestamp: DateTime.now(),
-      status: MessageStatus.sending,
-      isFromCurrentUser: true,
-      replyTo: _replyToMessage != null
-          ? ReplyTo(
-              messageId: _replyToMessage!.id,
-              senderName: _replyToMessage!.senderName,
-              content: _replyToMessage!.content,
-              type: _replyToMessage!.type,
-            )
-          : null,
-    );
+    final replyToId = _replyToMessage?.id;
     
-    setState(() {
-      _messages.add(optimisticMsg);
-      _replyToMessage = null;
-    });
-    _scrollToBottom();
+    // Clear reply state
+    setState(() => _replyToMessage = null);
     
-    // Get conversation ID early for notification
-    String? convId;
+    // Upload and send in background - no temp bubble
     try {
-      convId = await _requireConversationId();
-    } catch (_) {}
-    
-    // FASTFEED: Notify conversation list instantly
-    if (convId != null) {
+      String audioUrl;
+      int sizeBytes;
+      String contentType;
+
+      if (kIsWeb) {
+        final bytes = await (_audioRecorder as dynamic).takeRecordedBytes() as Uint8List?;
+        if (bytes == null || bytes.isEmpty) {
+          throw Exception('No recorded audio');
+        }
+        final ext = (_audioRecorder as dynamic).currentExtension as String? ?? 'webm';
+        final path = _storageRepo.generateUniqueFileName(
+          uid: uid,
+          extension: ext,
+          prefix: 'voice_messages',
+        );
+        contentType = ext == 'm4a' || ext == 'aac' ? 'audio/mp4' : 'audio/webm';
+        audioUrl = await _storageRepo.uploadFile(
+          path: path,
+          bytes: bytes,
+          contentType: contentType,
+        );
+        sizeBytes = bytes.length;
+        debugPrint('📤 Uploaded web voice as .$ext');
+      } else {
+        if (recording.filePath == null) {
+          throw Exception('Recording file path is null');
+        }
+        final file = File(recording.filePath!);
+        if (!await file.exists()) {
+          throw Exception('Recording file not found');
+        }
+        final path = _storageRepo.generateUniqueFileName(
+          uid: uid,
+          extension: 'm4a',
+          prefix: 'voice_messages',
+        );
+        contentType = 'audio/m4a';
+        audioUrl = await _storageRepo.uploadFileFromPath(
+          path: path,
+          file: file,
+          contentType: contentType,
+        );
+        sizeBytes = recording.fileSize;
+        try { await file.delete(); } catch (_) {}
+      }
+
+      final convId = await _requireConversationId();
+      await _msgRepo.sendVoice(
+        conversationId: convId,
+        otherUserId: null,
+        audioUrl: audioUrl,
+        durationSec: durationSec,
+        fileSize: sizeBytes,
+        replyToMessageId: replyToId,
+      );
+
+      // Notify conversation list
       ConversationUpdateNotifier().notifyMessageSent(
         conversationId: convId,
         messageText: '🎤 Voice message',
         messageType: 'voice',
       );
+
+      // Refresh to show the new message
+      if (mounted) await _refreshMessages();
+    } catch (e) {
+      if (mounted) _showSnack('Failed to send voice message: $e');
     }
-    
-    // BACKGROUND: Upload and save message
-    () async {
-      try {
-        String audioUrl;
-        int sizeBytes;
-        String contentType;
-
-        if (kIsWeb) {
-          final bytes = await (_audioRecorder as dynamic).takeRecordedBytes() as Uint8List?;
-          if (bytes == null || bytes.isEmpty) {
-            throw Exception('No recorded audio');
-          }
-          // Get actual extension from recorder (may be m4a on Safari, webm on Chrome)
-          final ext = (_audioRecorder as dynamic).currentExtension as String? ?? 'webm';
-          final path = _storageRepo.generateUniqueFileName(
-            uid: uid,
-            extension: ext,
-            prefix: 'voice_messages',
-          );
-          // Set content type based on extension
-          contentType = ext == 'm4a' || ext == 'aac' ? 'audio/mp4' : 'audio/webm';
-          audioUrl = await _storageRepo.uploadFile(
-            path: path,
-            bytes: bytes,
-            contentType: contentType,
-          );
-          sizeBytes = bytes.length;
-          debugPrint('📤 Uploaded web voice as .$ext');
-        } else {
-          if (recording.filePath == null) {
-            throw Exception('Recording file path is null');
-          }
-          final file = File(recording.filePath!);
-          if (!await file.exists()) {
-            throw Exception('Recording file not found');
-          }
-          final path = _storageRepo.generateUniqueFileName(
-            uid: uid,
-            extension: 'm4a',
-            prefix: 'voice_messages',
-          );
-          contentType = 'audio/m4a';
-          audioUrl = await _storageRepo.uploadFileFromPath(
-            path: path,
-            file: file,
-            contentType: contentType,
-          );
-          sizeBytes = recording.fileSize;
-          // Clean up temp file
-          try { await file.delete(); } catch (_) {}
-        }
-
-        final cId = convId ?? await _requireConversationId();
-        await _msgRepo.sendVoice(
-          conversationId: cId,
-          otherUserId: null,
-          audioUrl: audioUrl,
-          durationSec: durationSec,
-          fileSize: sizeBytes,
-          replyToMessageId: optimisticMsg.replyTo?.messageId,
-        );
-
-        // Remove temp message and refresh to get the real one
-        if (mounted) {
-          setState(() {
-            _messages.removeWhere((m) => m.id == tempId);
-          });
-          await _refreshMessages();
-        }
-      } catch (e) {
-        // Remove failed optimistic message
-        if (mounted) {
-          setState(() {
-            _messages.removeWhere((m) => m.id == tempId);
-          });
-          _showSnack('Failed to send voice message: $e');
-        }
-      }
-    }();
   }
 
   void _scrollToBottom() {
