@@ -483,15 +483,15 @@ void dispose() {
         messageType: 'text',
       );
       
-      // Refresh to get the real message - keep optimistic until refresh completes
-      // The refresh will replace all messages including the temp one
-      await _refreshMessages();
-      // Remove temp message only after refresh (in case real message has different ID)
+      // Remove temp message before refresh to avoid duplicate display
       if (mounted) {
         setState(() {
           _messages.removeWhere((m) => m.id == tempId);
         });
       }
+      
+      // Refresh to get the real message from server
+      await _refreshMessages();
     } catch (e) {
       // Remove failed message
       setState(() {
