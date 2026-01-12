@@ -1767,6 +1767,7 @@ class _PostPageState extends State<PostPage> {
                   width: double.infinity,
                   height: 300,
                   borderRadius: BorderRadius.circular(25),
+                  useSharedController: true, // Seamless transition from home feed
                 ),
               const SizedBox(height: 8),
             ],

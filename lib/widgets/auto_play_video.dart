@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import '../core/video_controller_manager.dart';
 
 class AutoPlayVideo extends StatefulWidget {
   final String videoUrl;
@@ -8,6 +9,7 @@ class AutoPlayVideo extends StatefulWidget {
   final double height;
   final BorderRadius? borderRadius;
   final VoidCallback? onTap; // Callback when video is tapped (e.g., navigate to post)
+  final bool useSharedController; // Use shared controller for seamless transitions
 
   // Global mute controller: toggling this will mute/unmute ALL AutoPlayVideo instances
   static final ValueNotifier<bool> muteNotifier = ValueNotifier<bool>(true);
@@ -25,6 +27,10 @@ class AutoPlayVideo extends StatefulWidget {
       playingNotifier.value = id;
     }
   }
+  
+  // Currently playing video URL for seamless transitions
+  static String? currentlyPlayingUrl;
+  static Duration? currentPlaybackPosition;
 
   const AutoPlayVideo({
     super.key,
@@ -33,6 +39,7 @@ class AutoPlayVideo extends StatefulWidget {
     required this.height,
     this.borderRadius,
     this.onTap,
+    this.useSharedController = false,
   });
 
   @override
@@ -40,9 +47,10 @@ class AutoPlayVideo extends StatefulWidget {
 }
 
 class _AutoPlayVideoState extends State<AutoPlayVideo> {
-  late VideoPlayerController _controller;
+  VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _isVisible = false;
+  bool _ownsController = true; // Whether we should dispose the controller
 
   // Stable id for this instance during runtime
   late final String _id = UniqueKey().toString();
@@ -72,55 +80,109 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
     AutoPlayVideo.playingNotifier.addListener(_playingListener);
   }
 
-  void _initializeVideo() {
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-    _controller
-        .initialize()
-        .then((_) {
-          if (!mounted) return;
-          setState(() {
-            _isInitialized = true;
-          });
-          _controller.setLooping(true);
-          _controller.setVolume(AutoPlayVideo.isMuted ? 0.0 : 1.0);
-
-          // If this is visible on init, request to become the current player.
-          if (_isVisible) {
-            AutoPlayVideo.ensureCurrent(_id);
-          } else {
-            _controller.pause();
-          }
-        })
-        .catchError((error) {
-          debugPrint('Video initialization error: $error');
+  void _initializeVideo() async {
+    final manager = VideoControllerManager();
+    
+    // Check if we can reuse an existing controller (for seamless transitions)
+    if (widget.useSharedController && manager.hasInitializedController(widget.videoUrl)) {
+      final existingController = manager.getExistingController(widget.videoUrl);
+      if (existingController != null && existingController.value.isInitialized) {
+        _controller = existingController;
+        _ownsController = false; // Don't dispose - it's managed by the manager
+        
+        if (!mounted) return;
+        setState(() {
+          _isInitialized = true;
         });
+        
+        _controller!.setVolume(AutoPlayVideo.isMuted ? 0.0 : 1.0);
+        
+        // Continue playing from where it was
+        if (_isVisible) {
+          AutoPlayVideo.ensureCurrent(_id);
+        }
+        return;
+      }
+    }
+    
+    // Create new controller via manager for caching
+    if (widget.useSharedController) {
+      try {
+        _controller = await manager.getController(widget.videoUrl);
+        _ownsController = false; // Manager owns it
+        
+        if (!mounted) {
+          manager.releaseController(widget.videoUrl);
+          return;
+        }
+        
+        setState(() {
+          _isInitialized = true;
+        });
+        
+        _controller!.setVolume(AutoPlayVideo.isMuted ? 0.0 : 1.0);
+        
+        if (_isVisible) {
+          AutoPlayVideo.ensureCurrent(_id);
+        } else {
+          _controller!.pause();
+        }
+      } catch (e) {
+        debugPrint('Video initialization error: $e');
+      }
+    } else {
+      // Original behavior - create own controller
+      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      _ownsController = true;
+      
+      _controller!
+          .initialize()
+          .then((_) {
+            if (!mounted) return;
+            setState(() {
+              _isInitialized = true;
+            });
+            _controller!.setLooping(true);
+            _controller!.setVolume(AutoPlayVideo.isMuted ? 0.0 : 1.0);
+
+            // If this is visible on init, request to become the current player.
+            if (_isVisible) {
+              AutoPlayVideo.ensureCurrent(_id);
+            } else {
+              _controller!.pause();
+            }
+          })
+          .catchError((error) {
+            debugPrint('Video initialization error: $error');
+          });
+    }
   }
 
   void _applyMute() {
-    if (_isInitialized) {
-      _controller.setVolume(AutoPlayVideo.isMuted ? 0.0 : 1.0);
+    if (_isInitialized && _controller != null) {
+      _controller!.setVolume(AutoPlayVideo.isMuted ? 0.0 : 1.0);
     }
   }
 
   void _syncWithGlobalPlaying() {
-    if (!_isInitialized) return;
+    if (!_isInitialized || _controller == null) return;
     final current = AutoPlayVideo.currentPlayerId;
 
     if (current == _id) {
       // I am the chosen one. Play only if visible; otherwise keep paused.
       if (_isVisible) {
-        if (!_controller.value.isPlaying) {
-          _controller.play();
+        if (!_controller!.value.isPlaying) {
+          _controller!.play();
         }
       } else {
-        if (_controller.value.isPlaying) {
-          _controller.pause();
+        if (_controller!.value.isPlaying) {
+          _controller!.pause();
         }
       }
     } else {
       // Not the chosen one: ensure paused.
-      if (_controller.value.isPlaying) {
-        _controller.pause();
+      if (_controller!.value.isPlaying) {
+        _controller!.pause();
       }
     }
   }
@@ -136,15 +198,15 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
       });
     }
 
-    if (!_isInitialized) return;
+    if (!_isInitialized || _controller == null) return;
 
     if (nowVisible) {
       // Claim the player slot for this instance.
       AutoPlayVideo.ensureCurrent(_id);
     } else {
       // No longer visible: pause and release the slot if this was current.
-      if (_controller.value.isPlaying) {
-        _controller.pause();
+      if (_controller!.value.isPlaying) {
+        _controller!.pause();
       }
       if (AutoPlayVideo.currentPlayerId == _id) {
         AutoPlayVideo.setCurrentPlayer(null);
@@ -157,10 +219,10 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
   }
 
   void _onTapTogglePlayPause() {
-    if (!_isInitialized) return;
+    if (!_isInitialized || _controller == null) return;
 
-    if (_controller.value.isPlaying) {
-      _controller.pause();
+    if (_controller!.value.isPlaying) {
+      _controller!.pause();
       // If I was the current player, release the slot.
       if (AutoPlayVideo.currentPlayerId == _id) {
         AutoPlayVideo.setCurrentPlayer(null);
@@ -175,7 +237,13 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
   void dispose() {
     AutoPlayVideo.muteNotifier.removeListener(_muteListener);
     AutoPlayVideo.playingNotifier.removeListener(_playingListener);
-    _controller.dispose();
+    // Only dispose if we own the controller
+    if (_ownsController && _controller != null) {
+      _controller!.dispose();
+    } else if (!_ownsController && _controller != null) {
+      // Release reference to shared controller
+      VideoControllerManager().releaseController(widget.videoUrl);
+    }
     super.dispose();
   }
 
@@ -194,14 +262,14 @@ class _AutoPlayVideoState extends State<AutoPlayVideo> {
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            if (_isInitialized)
+            if (_isInitialized && _controller != null)
               SizedBox.expand(
                 child: FittedBox(
                   fit: BoxFit.cover,
                   child: SizedBox(
-                    width: _controller.value.size.width,
-                    height: _controller.value.size.height,
-                    child: VideoPlayer(_controller),
+                    width: _controller!.value.size.width,
+                    height: _controller!.value.size.height,
+                    child: VideoPlayer(_controller!),
                   ),
                 ),
               )

@@ -311,6 +311,7 @@ class _HomePostCardState extends State<HomePostCard> {
           width: double.infinity,
           height: 200,
           borderRadius: BorderRadius.circular(25),
+          useSharedController: true, // Enable seamless transition to post page
           onTap: () {
             // Navigate to post detail page
             Navigator.pushNamed(
