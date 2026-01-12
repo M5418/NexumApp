@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'core/i18n/language_provider.dart';
+import 'core/post_events.dart';
 import 'providers/follow_state.dart';
 
 import 'repositories/firebase/firebase_user_repository.dart';
@@ -96,8 +97,14 @@ class _ConnectFriendsPageState extends State<ConnectFriendsPage> {
   }
 
   Future<void> _toggleConnection(String userId) async {
+    final wasConnected = context.read<FollowState>().isConnected(userId);
     try {
       await context.read<FollowState>().toggle(userId);
+      // Emit event to sync across app
+      ConnectionEvents.emit(ConnectionEvent(
+        targetUserId: userId,
+        isConnected: !wasConnected,
+      ));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
