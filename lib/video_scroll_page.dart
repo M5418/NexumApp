@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 
 import 'models/post.dart';
 import 'models/comment.dart';
@@ -273,9 +274,16 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
         _hasMoreVideos = videos.length == _videosPerPage;
       });
       
-      // Track view of first video
+      // Track view of first video and preload next videos
       if (videos.isNotEmpty && mounted) {
         _trackVideoView(videos[0]);
+        // Preload first few videos after a short delay to let UI settle
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            _preloadVideos(0);
+            _playCurrentVideo(0);
+          }
+        });
       }
     } catch (e) {
       debugPrint('❌ Video Scroll error: $e');
@@ -739,25 +747,49 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
     }
   }
 
-  CustomVideoPlayer _getVideoPlayer(String videoUrl, Post post) {
+  CustomVideoPlayer _getVideoPlayer(String videoUrl, Post post, {bool autoPlay = true}) {
     if (!_videoPlayers.containsKey(videoUrl)) {
       _videoPlayerKeys[videoUrl] ??= GlobalKey<CustomVideoPlayerState>();
       _videoPlayers[videoUrl] = CustomVideoPlayer(
         key: _videoPlayerKeys[videoUrl],
         videoUrl: videoUrl,
         isLiked: post.userReaction == ReactionType.heart,
-        onLike: () {
-          // Handle double-tap like from player
-          _handleLikeFromPlayer(post);
+        autoPlay: autoPlay,
+        onLike: () => _handleLikeFromPlayer(post),
+        onUnlike: () => _handleUnlikeFromPlayer(post),
+        onInitialized: () {
+          if (mounted) setState(() {});
         },
-        onUnlike: () {
-          // Handle double-tap unlike from player
-          _handleUnlikeFromPlayer(post);
+        onPositionChanged: () {
+          // Rebuild to update progress bar position
+          if (mounted) setState(() {});
         },
-        // No onLongPressCallback - uses default speed options
       );
     }
     return _videoPlayers[videoUrl]!;
+  }
+  
+  /// Preload next 5 videos (initialize to buffer, but with autoPlay true so they play when swiped to)
+  void _preloadVideos(int currentIndex) {
+    for (int i = currentIndex + 1; i <= currentIndex + 5 && i < _videoPosts.length; i++) {
+      final post = _videoPosts[i];
+      if (post.videoUrl != null && !_videoPlayers.containsKey(post.videoUrl)) {
+        // Create with autoPlay: true so it plays immediately when user swipes to it
+        _getVideoPlayer(post.videoUrl!, post, autoPlay: true);
+      }
+    }
+  }
+  
+  /// Play current video (no auto-pause - user controls pause via tap)
+  void _playCurrentVideo(int index) {
+    if (index >= _videoPosts.length) return;
+    final post = _videoPosts[index];
+    if (post.videoUrl == null) return;
+    
+    final playerKey = _videoPlayerKeys[post.videoUrl];
+    if (playerKey?.currentState != null) {
+      playerKey!.currentState!.play();
+    }
   }
 
   @override
@@ -833,6 +865,12 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
                   onPageChanged: (index) {
                     _currentVideoIndex = index;
                     
+                    // Just play current video - NO pausing other videos
+                    _playCurrentVideo(index);
+                    
+                    // Preload next videos
+                    _preloadVideos(index);
+                    
                     // Track video view
                     if (index < _videoPosts.length) {
                       _trackVideoView(_videoPosts[index]);
@@ -843,7 +881,8 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
                   },
                   itemBuilder: (context, index) {
                     final post = _videoPosts[index];
-                    return _buildVideoItem(context, post, isDark);
+                    // Always auto-play - the video player will handle it
+                    return _buildVideoItem(context, post, isDark, autoPlay: true);
                   },
                 ),
                 if (_showReactionPicker && _reactionPickerPostId != null)
@@ -883,7 +922,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
     );
   }
 
-  Widget _buildVideoItem(BuildContext context, Post post, bool isDark) {
+  Widget _buildVideoItem(BuildContext context, Post post, bool isDark, {bool autoPlay = false}) {
     final isExpanded = _expandedTexts[post.id] ?? false;
 
     return Container(
@@ -895,10 +934,10 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
           // Video player
           if (post.videoUrl != null)
             Positioned.fill(
-              child: _getVideoPlayer(post.videoUrl!, post),
+              child: _getVideoPlayer(post.videoUrl!, post, autoPlay: autoPlay),
             ),
 
-          // Transparent gesture area (covers screen except action buttons)
+          // Transparent gesture area (covers screen except action buttons and progress bar)
           // Handles: tap (pause/play), double-tap (like)
           // Long press handled by video player (speed options)
           if (post.videoUrl != null)
@@ -906,7 +945,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
               top: 0,
               left: 0,
               right: 100, // Leave space for action buttons on the right
-              bottom: 0,
+              bottom: 80, // Leave space for progress bar at bottom
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 // Single tap → Pause/Play
@@ -1177,7 +1216,9 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
                     ),
                   ),
 
-                // Progress bar is now handled internally by CustomVideoPlayer (shows on pause)
+                // Progress bar below description
+                const SizedBox(height: 12),
+                _buildProgressBar(post.videoUrl),
               ],
             ),
           ),
@@ -1351,6 +1392,65 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
           ),
         ),
       ],
+    );
+  }
+
+  /// Build progress bar for video seeking
+  Widget _buildProgressBar(String? videoUrl) {
+    if (videoUrl == null) return const SizedBox.shrink();
+    
+    final playerKey = _videoPlayerKeys[videoUrl];
+    final playerState = playerKey?.currentState;
+    
+    if (playerState == null || !playerState.isInitialized) {
+      // Show placeholder progress bar while loading
+      return Container(
+        margin: const EdgeInsets.only(right: 80),
+        child: ProgressBar(
+          progress: Duration.zero,
+          total: const Duration(seconds: 1),
+          buffered: Duration.zero,
+          onSeek: (_) {},
+          barHeight: 3,
+          baseBarColor: Colors.white.withValues(alpha: 0.3),
+          progressBarColor: const Color(0xFFBFAE01),
+          bufferedBarColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+          thumbColor: const Color(0xFFBFAE01),
+          thumbRadius: 6,
+          thumbGlowRadius: 12,
+          thumbGlowColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+          timeLabelLocation: TimeLabelLocation.sides,
+          timeLabelType: TimeLabelType.totalTime,
+          timeLabelTextStyle: GoogleFonts.inter(
+            color: Colors.white70,
+            fontSize: 11,
+          ),
+        ),
+      );
+    }
+    
+    return Container(
+      margin: const EdgeInsets.only(right: 80),
+      child: ProgressBar(
+        progress: playerState.currentPosition,
+        total: playerState.totalDuration,
+        buffered: playerState.totalDuration,
+        onSeek: (position) => playerState.seekTo(position),
+        barHeight: 3,
+        baseBarColor: Colors.white.withValues(alpha: 0.3),
+        progressBarColor: const Color(0xFFBFAE01),
+        bufferedBarColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+        thumbColor: const Color(0xFFBFAE01),
+        thumbRadius: 6,
+        thumbGlowRadius: 12,
+        thumbGlowColor: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+        timeLabelLocation: TimeLabelLocation.sides,
+        timeLabelType: TimeLabelType.totalTime,
+        timeLabelTextStyle: GoogleFonts.inter(
+          color: Colors.white70,
+          fontSize: 11,
+        ),
+      ),
     );
   }
 

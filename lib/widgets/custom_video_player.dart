@@ -15,6 +15,18 @@ class CustomVideoPlayer extends StatefulWidget {
   
   // Long press callback (for reactions in video scroll)
   final VoidCallback? onLongPressCallback;
+  
+  // Auto-play control - default TRUE for instant playback
+  final bool autoPlay;
+  
+  // Whether to show the built-in progress bar
+  final bool showProgressBar;
+  
+  // Callback when video is initialized (for parent to rebuild progress bar)
+  final VoidCallback? onInitialized;
+  
+  // Callback when video position changes (for external progress bar updates)
+  final VoidCallback? onPositionChanged;
 
   const CustomVideoPlayer({
     super.key,
@@ -25,6 +37,10 @@ class CustomVideoPlayer extends StatefulWidget {
     this.startMuted = false,
     this.onMuteChanged,
     this.onLongPressCallback,
+    this.autoPlay = true,
+    this.showProgressBar = false,
+    this.onInitialized,
+    this.onPositionChanged,
   });
 
   @override
@@ -69,16 +85,56 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
           _isInitialized = true;
         });
         _controller!.setLooping(true);
-        _controller!.setVolume(_isMuted ? 0.0 : 1.0); // apply mute on init
-        _controller!.play();
+        _controller!.setVolume(_isMuted ? 0.0 : 1.0);
+        if (widget.autoPlay) {
+          _controller!.play();
+        }
         _controller!.addListener(_videoListener);
+        // Notify parent that video is initialized (for progress bar update)
+        widget.onInitialized?.call();
       }
     });
+  }
+  
+  /// Public method to start playing (for preload optimization)
+  void play() {
+    if (_controller != null && _isInitialized) {
+      _controller!.play();
+    }
+  }
+  
+  /// Public method to pause (for preload optimization)
+  void pause() {
+    if (_controller != null && _isInitialized) {
+      _controller!.pause();
+    }
+  }
+  
+  /// Check if video is initialized
+  bool get isInitialized => _isInitialized;
+  
+  /// Check if video is playing
+  bool get isPlaying => _controller?.value.isPlaying ?? false;
+  
+  /// Check if video is buffering
+  bool get isBuffering => _controller?.value.isBuffering ?? false;
+  
+  /// Get current position for external progress bar
+  Duration get currentPosition => _controller?.value.position ?? Duration.zero;
+  
+  /// Get total duration for external progress bar
+  Duration get totalDuration => _controller?.value.duration ?? Duration.zero;
+  
+  /// Seek to position for external progress bar
+  void seekTo(Duration position) {
+    _controller?.seekTo(position);
   }
 
   void _videoListener() {
     if (mounted) {
       setState(() {});
+      // Notify parent of position change for external progress bar
+      widget.onPositionChanged?.call();
     }
   }
 
@@ -177,25 +233,35 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
 
     return Stack(
       children: [
-        // Video player
-        GestureDetector(
-          onTap: _togglePlayPause,
-          onDoubleTap: _handleDoubleTap,
-          onLongPress: _handleLongPress,
-          child: SizedBox.expand(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: _controller!.value.size.width,
-                height: _controller!.value.size.height,
-                child: VideoPlayer(_controller!),
-              ),
+        // Video player (no gesture detector - handled by positioned overlay)
+        SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: _controller!.value.size.width,
+              height: _controller!.value.size.height,
+              child: VideoPlayer(_controller!),
             ),
           ),
         ),
 
-        // Progress bar overlay - show when paused
-        if (!_controller!.value.isPlaying)
+        // Gesture area - excludes bottom 80px for progress bar
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 80, // Leave space for progress bar
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _togglePlayPause,
+            onDoubleTap: _handleDoubleTap,
+            onLongPress: _handleLongPress,
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+
+        // Progress bar overlay - only show if enabled
+        if (widget.showProgressBar)
           Positioned(
             bottom: 0,
             left: 0,
@@ -207,7 +273,7 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.8),
+                    Colors.black.withValues(alpha: 0.5),
                   ],
                 ),
               ),
@@ -216,8 +282,27 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
             ),
           ),
 
-        // Play/Pause indicator
-        if (!_controller!.value.isPlaying)
+        // Buffering indicator - show when video is loading on slow network
+        if (_controller!.value.isBuffering)
+          Center(
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(128),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                ),
+              ),
+            ),
+          ),
+
+        // Play/Pause indicator - only show when paused AND not buffering
+        if (!_controller!.value.isPlaying && !_controller!.value.isBuffering)
           Center(
             child: GestureDetector(
               onTap: _togglePlayPause,
