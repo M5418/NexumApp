@@ -1401,21 +1401,8 @@ void dispose() {
 
                 const SizedBox(width: 8),
 
-                // Send or Voice button
-                if (_isRecording)
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.red),
-                        onPressed: _cancelRecordingInline,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.send, color: Color(0xFFBFAE01)),
-                        onPressed: _stopRecordingAndSend,
-                      ),
-                    ],
-                  )
-                else if (_messageController.text.trim().isNotEmpty)
+                // Send or Voice button (mic button stays visible during recording for release-to-send)
+                if (_messageController.text.trim().isNotEmpty && !_isRecording)
                   IconButton(
                     icon: Icon(
                       Icons.send,
