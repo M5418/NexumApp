@@ -521,25 +521,28 @@ void dispose() {
       _replyToMessage = null;
     });
     
-    // Send message directly without temp bubble
+    // Send message - real-time listener will update UI instantly
     try {
       final convId = await _requireConversationId();
-      await _msgRepo.sendText(
+      
+      // Fire and forget - don't await, let real-time stream handle display
+      _msgRepo.sendText(
         conversationId: convId,
         otherUserId: null,
         text: content,
         replyToMessageId: replyToId,
-      );
+      ).then((_) {
+        // Notify conversation list after send completes
+        ConversationUpdateNotifier().notifyMessageSent(
+          conversationId: convId,
+          messageText: content,
+          messageType: 'text',
+        );
+      }).catchError((e) {
+        if (mounted) _showSnack('Failed to send: $e');
+      });
       
-      // FASTFEED: Notify conversation list instantly
-      ConversationUpdateNotifier().notifyMessageSent(
-        conversationId: convId,
-        messageText: content,
-        messageType: 'text',
-      );
-      
-      // Refresh to get the real message from server
-      await _refreshMessages();
+      // Scroll to bottom immediately for better UX
       _scrollToBottom();
     } catch (e) {
       if (mounted) _showSnack('Failed to send: $e');
@@ -608,24 +611,26 @@ void dispose() {
       }
 
       final convId = await _requireConversationId();
-      await _msgRepo.sendVoice(
+      
+      // Fire and forget - real-time stream handles display
+      _msgRepo.sendVoice(
         conversationId: convId,
         otherUserId: null,
         audioUrl: audioUrl,
         durationSec: durationSec,
         fileSize: sizeBytes,
         replyToMessageId: replyToId,
-      );
-
-      // Notify conversation list
-      ConversationUpdateNotifier().notifyMessageSent(
-        conversationId: convId,
-        messageText: '🎤 Voice message',
-        messageType: 'voice',
-      );
-
-      // Refresh to show the real message
-      if (mounted) await _refreshMessages();
+      ).then((_) {
+        ConversationUpdateNotifier().notifyMessageSent(
+          conversationId: convId,
+          messageText: '🎤 Voice message',
+          messageType: 'voice',
+        );
+      }).catchError((e) {
+        if (mounted) _showSnack('Failed to send voice: $e');
+      });
+      
+      _scrollToBottom();
     } catch (e) {
       if (mounted) _showSnack('Failed to send voice message: $e');
     }
@@ -820,23 +825,28 @@ void dispose() {
       }
 
       final convId = await _requireConversationId();
-      final record = await _msgRepo.sendTextWithAttachments(
+      final replyId = _replyToMessage?.id;
+      setState(() => _replyToMessage = null);
+      
+      // Fire and forget - real-time stream handles display
+      _msgRepo.sendTextWithAttachments(
         conversationId: convId,
         otherUserId: null,
         text: '',
         attachments: attachments,
-        replyToMessageId: _replyToMessage?.id,
-      );
-
-      final msg = _toUiMessage(record);
-      setState(() {
-        _messages.add(msg);
-        _replyToMessage = null;
+        replyToMessageId: replyId,
+      ).then((_) {
+        ConversationUpdateNotifier().notifyMessageSent(
+          conversationId: convId,
+          messageText: '📎 File',
+          messageType: 'file',
+        );
+      }).catchError((e) {
+        if (mounted) _showSnack('Failed to send: $e');
       });
+
       _scrollToBottom();
       _hideSnack();
-      // Force instant refresh
-      await _refreshMessages();
     } catch (e) {
       if (mounted) Navigator.pop(context);
       if (!mounted) return;
@@ -1054,32 +1064,29 @@ void dispose() {
       debugPrint('✅ All ${attachments.length} media files uploaded');
 
       final convId = await _requireConversationId();
-      final record = await _msgRepo.sendTextWithAttachments(
+      final replyId = _replyToMessage?.id;
+      final msgType = attachments.first['type'] ?? 'image';
+      setState(() => _replyToMessage = null);
+      
+      // Fire and forget - real-time stream handles display
+      _msgRepo.sendTextWithAttachments(
         conversationId: convId,
         otherUserId: null,
         text: caption,
         attachments: attachments,
-        replyToMessageId: _replyToMessage?.id,
-      );
-
-      final msg = _toUiMessage(record);
-      setState(() {
-        _messages.add(msg);
-        _replyToMessage = null;
+        replyToMessageId: replyId,
+      ).then((_) {
+        ConversationUpdateNotifier().notifyMessageSent(
+          conversationId: convId,
+          messageText: caption.isNotEmpty ? caption : '📷 Media',
+          messageType: msgType,
+        );
+      }).catchError((e) {
+        if (mounted) _showSnack('Failed to send media: $e');
       });
-      _scrollToBottom();
-      
-      // FASTFEED: Notify conversation list instantly
-      ConversationUpdateNotifier().notifyMessageSent(
-        conversationId: convId,
-        messageText: caption.isNotEmpty ? caption : '📷 Media',
-        messageType: attachments.first['type'] ?? 'image',
-      );
 
-      if (!mounted) return;
-      _hideSnack();
-      // Force instant refresh
-      await _refreshMessages();
+      _scrollToBottom();
+      if (mounted) _hideSnack();
     } catch (e) {
       if (!mounted) return;
       _showSnack('Failed to send media: $e');
