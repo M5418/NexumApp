@@ -91,6 +91,22 @@ void _sanityLogFirebase() {
 Future<void> main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   
+  // Suppress LegacyJavaScriptObject errors on web debug mode
+  // These occur when Flutter's widget inspector tries to debug Firestore JS objects
+  if (kIsWeb) {
+    FlutterError.onError = (FlutterErrorDetails details) {
+      final errorString = details.exception.toString();
+      // Suppress known web debug errors that don't affect functionality
+      if (errorString.contains('LegacyJavaScriptObject') ||
+          errorString.contains('DiagnosticsNode')) {
+        debugPrint('⚠️ Suppressed web debug error: ${details.exception.runtimeType}');
+        return;
+      }
+      // For all other errors, use default handler
+      FlutterError.presentError(details);
+    };
+  }
+  
   // Preserve native splash screen until app is ready (skip on web)
   if (!kIsWeb) {
     FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
