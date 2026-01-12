@@ -69,6 +69,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _sending = false;
   String? _loadError;
   Timer? _pollTimer;
+  StreamSubscription<List<MessageRecordModel>>? _messagesSubscription;
   bool _isRefreshing = false;
   bool _isBlocked = false;
   bool _isBlockedBy = false;
@@ -230,6 +231,8 @@ Future<void> _handleUnblock() async {
       });
       await _loadMessages();
       await _markRead();
+      // Setup real-time listener after we have the conversation ID
+      _setupRealtimeListener();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -298,15 +301,61 @@ Future<void> _handleUnblock() async {
     } catch (_) {}
   }
   void _startPolling() {
-  _pollTimer?.cancel();
-  // Poll every 3 seconds for new messages when we have a conversation ID
-  _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-    if (!mounted) return;
+    _pollTimer?.cancel();
+    // Use real-time stream for instant message updates
+    _setupRealtimeListener();
+  }
+
+  void _setupRealtimeListener() {
     if (_resolvedConversationId == null) return;
-    if (_isLoading || _isRefreshing) return; // avoid overlapping calls
-    await _refreshMessages();
-  });
-}
+    
+    _messagesSubscription?.cancel();
+    _messagesSubscription = _firebaseMsgRepo.messagesStream(_resolvedConversationId!, limit: 50).listen((records) {
+      if (!mounted) return;
+      
+      final mapped = records.map(_toUiMessage).toList();
+      
+      // Check if there are new messages
+      final hasNewMessages = mapped.isNotEmpty && 
+          (_messages.isEmpty || mapped.first.id != _messages.first.id);
+      
+      // Smart merge: Keep optimistic (temp_) messages until server data replaces them
+      final tempMessages = _messages.where((m) => m.id.startsWith('temp_')).toList();
+      final serverIds = mapped.map((m) => m.id).toSet();
+      
+      setState(() {
+        _messages.clear();
+        _messages.addAll(mapped);
+        // Re-add temp messages that aren't yet on server (still sending)
+        for (final temp in tempMessages) {
+          if (!serverIds.contains(temp.id)) {
+            _messages.add(temp);
+          }
+        }
+        _messageReactions.clear();
+        for (final r in records) {
+          if ((r.reaction ?? '').isNotEmpty) {
+            _messageReactions[r.id] = r.reaction!;
+          } else if ((r.myReaction ?? '').isNotEmpty) {
+            _messageReactions[r.id] = r.myReaction!;
+          }
+        }
+      });
+      
+      // Auto-scroll if user was at bottom
+      if (_scrollController.hasClients) {
+        final atBottom = (_scrollController.position.maxScrollExtent - _scrollController.position.pixels) < 120;
+        if (atBottom) _scrollToBottom();
+      }
+      
+      // Mark as read when new messages arrive while user is in the chat
+      if (hasNewMessages) {
+        _markRead();
+      }
+    }, onError: (_) {
+      // Silently handle stream errors
+    });
+  }
 
 Future<void> _refreshMessages() async {
   if (_resolvedConversationId == null) return;
@@ -362,6 +411,8 @@ Future<void> _refreshMessages() async {
 @override
 void dispose() {
   _pollTimer?.cancel();
+  _messagesSubscription?.cancel();
+  _recordingTimer?.cancel();
   _scrollController.dispose();
   _messageController.dispose();
   _audioPlayer?.dispose();

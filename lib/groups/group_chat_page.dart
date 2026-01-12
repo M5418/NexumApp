@@ -89,10 +89,20 @@ class _GroupChatPageState extends State<GroupChatPage> {
     _messagesSubscription?.cancel();
     _messagesSubscription = _groupRepo.streamMessages(_group.id).listen((messages) {
       if (!mounted) return;
+      
+      // Check if there are new messages (more than before or different latest)
+      final hasNewMessages = messages.isNotEmpty && 
+          (_messages.isEmpty || messages.first.id != _messages.first.id);
+      
       setState(() {
         _messages = messages;
         _loading = false;
       });
+      
+      // Mark as read when new messages arrive while user is in the chat
+      if (hasNewMessages) {
+        _markAsRead();
+      }
     }, onError: (e) {
       if (!mounted) return;
       setState(() => _loading = false);
