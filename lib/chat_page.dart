@@ -4,8 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:video_compress/video_compress.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'models/message.dart';
-import 'widgets/message_bubble.dart';
 import 'package:file_picker/file_picker.dart';
 import 'widgets/message_actions_sheet.dart';
 import 'package:provider/provider.dart';
@@ -67,6 +67,12 @@ class _ChatPageState extends State<ChatPage> {
   bool _isRefreshing = false;
   bool _isBlocked = false;
   bool _isBlockedBy = false;
+  
+  // Audio player for voice messages
+  AudioPlayer? _audioPlayer;
+  String? _playingMessageId;
+  bool _isPlaying = false;
+  Duration _currentPosition = Duration.zero;
   
   // Hydrated user profile (fetched if widget.otherUser has incomplete data)
   String? _hydratedName;
@@ -353,8 +359,48 @@ void dispose() {
   _pollTimer?.cancel();
   _scrollController.dispose();
   _messageController.dispose();
+  _audioPlayer?.dispose();
   super.dispose();
 }
+
+  void _initAudioPlayer() {
+    _audioPlayer = AudioPlayer();
+    _audioPlayer!.onPlayerStateChanged.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = state == PlayerState.playing;
+        if (state == PlayerState.completed) {
+          _playingMessageId = null;
+          _currentPosition = Duration.zero;
+        }
+      });
+    });
+    _audioPlayer!.onPositionChanged.listen((position) {
+      if (!mounted) return;
+      setState(() => _currentPosition = position);
+    });
+    _audioPlayer!.onDurationChanged.listen((duration) {
+      // Duration tracked via attachment metadata
+    });
+  }
+
+  Future<void> _playVoiceMessage(String messageId, String url) async {
+    if (_audioPlayer == null) _initAudioPlayer();
+    
+    if (_playingMessageId == messageId && _isPlaying) {
+      await _audioPlayer!.pause();
+    } else if (_playingMessageId == messageId) {
+      await _audioPlayer!.resume();
+    } else {
+      _playingMessageId = messageId;
+      await _audioPlayer!.play(UrlSource(url));
+    }
+  }
+
+  String _formatDuration(Duration d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.inMinutes)}:${two(d.inSeconds.remainder(60))}';
+  }
 
   Message _toUiMessage(MessageRecordModel r) {
     final isFromCurrentUser = r.senderId != widget.otherUser.id;
@@ -1746,6 +1792,262 @@ void dispose() {
     );
   }
 
+  Widget _buildMessageBubble(Message message, bool isDark, String? reaction) {
+    final isMe = message.isFromCurrentUser;
+    final isSending = message.status == MessageStatus.sending;
+    final bubbleColor = isMe
+        ? const Color(0xFFBFAE01)
+        : (isDark ? const Color(0xFF2A2A2A) : Colors.white);
+    final bubbleTextColor = isMe ? Colors.black : (isDark ? Colors.white : Colors.black);
+
+    return GestureDetector(
+      onLongPress: () => _showMessageActions(message),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 12, right: 12),
+        child: Row(
+          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (!isMe)
+              CircleAvatar(
+                radius: 14,
+                backgroundImage: widget.otherUser.avatarUrl != null && widget.otherUser.avatarUrl!.isNotEmpty
+                    ? CachedNetworkImageProvider(widget.otherUser.avatarUrl!)
+                    : null,
+                backgroundColor: Colors.grey[400],
+                child: widget.otherUser.avatarUrl == null || widget.otherUser.avatarUrl!.isEmpty
+                    ? Text(
+                        widget.otherUser.name.isNotEmpty ? widget.otherUser.name[0].toUpperCase() : 'U',
+                        style: const TextStyle(fontSize: 10),
+                      )
+                    : null,
+              ),
+            if (!isMe) const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  // Reply preview
+                  if (message.replyTo != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 4),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[800] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            message.replyTo!.senderName,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFBFAE01),
+                            ),
+                          ),
+                          Text(
+                            message.replyTo!.content,
+                            style: GoogleFonts.inter(fontSize: 11, color: Colors.grey),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Message content
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSending ? bubbleColor.withValues(alpha: 0.7) : bubbleColor,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(16),
+                        topRight: const Radius.circular(16),
+                        bottomLeft: Radius.circular(isMe ? 16 : 4),
+                        bottomRight: Radius.circular(isMe ? 4 : 16),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Attachments
+                        if (message.attachments.isNotEmpty)
+                          ...message.attachments.map((att) {
+                            if (att.type == MediaType.image) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: isSending
+                                      ? Container(
+                                          width: 200,
+                                          height: 150,
+                                          color: Colors.grey[300],
+                                          child: const Center(child: CircularProgressIndicator()),
+                                        )
+                                      : CachedNetworkImage(
+                                          imageUrl: att.url,
+                                          width: 200,
+                                          fit: BoxFit.cover,
+                                          placeholder: (_, __) => Container(
+                                            width: 200,
+                                            height: 150,
+                                            color: Colors.grey[300],
+                                            child: const Center(child: CircularProgressIndicator()),
+                                          ),
+                                        ),
+                                ),
+                              );
+                            } else if (att.type == MediaType.voice) {
+                              final isThisPlaying = _playingMessageId == message.id && _isPlaying;
+                              final duration = att.duration ?? Duration.zero;
+                              final displayDuration = _playingMessageId == message.id ? _currentPosition : duration;
+                              
+                              return GestureDetector(
+                                onTap: isSending ? null : () => _playVoiceMessage(message.id, att.url),
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        isSending ? Icons.upload : (isThisPlaying ? Icons.pause : Icons.play_arrow),
+                                        color: bubbleTextColor,
+                                        size: 24,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            isSending 
+                                                ? Provider.of<LanguageProvider>(context, listen: false).t('chat.sending')
+                                                : 'Voice message',
+                                            style: GoogleFonts.inter(color: bubbleTextColor, fontSize: 13),
+                                          ),
+                                          Text(
+                                            _formatDuration(displayDuration),
+                                            style: GoogleFonts.inter(color: bubbleTextColor.withValues(alpha: 0.7), fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            } else if (att.type == MediaType.video) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Container(
+                                  width: 200,
+                                  height: 150,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[800],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Center(
+                                    child: isSending
+                                        ? const CircularProgressIndicator()
+                                        : const Icon(Icons.play_circle_fill, color: Colors.white, size: 48),
+                                  ),
+                                ),
+                              );
+                            } else if (att.type == MediaType.document) {
+                              return Container(
+                                padding: const EdgeInsets.all(8),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.attach_file, color: bubbleTextColor, size: 20),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        isSending ? 'Uploading...' : (att.fileName ?? 'File'),
+                                        style: GoogleFonts.inter(color: bubbleTextColor),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          }),
+
+                        // Text content
+                        if (message.content.isNotEmpty)
+                          Text(
+                            message.content,
+                            style: GoogleFonts.inter(fontSize: 14, color: bubbleTextColor),
+                          ),
+
+                        // Timestamp and status
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              isSending 
+                                  ? Provider.of<LanguageProvider>(context, listen: false).t('chat.sending')
+                                  : _formatTime(message.timestamp),
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                color: isMe ? Colors.black54 : Colors.grey,
+                              ),
+                            ),
+                            if (isSending) ...[
+                              const SizedBox(width: 4),
+                              SizedBox(
+                                width: 10,
+                                height: 10,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: isMe ? Colors.black54 : Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Reaction
+                  if (reaction != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[800] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(reaction, style: const TextStyle(fontSize: 14)),
+                    ),
+                ],
+              ),
+            ),
+            if (isMe) const SizedBox(width: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   Widget _buildMessageOrSeparator(int index, bool isDark) {
     int messageIndex = index;
     int separatorsPassed = 0;
@@ -1764,24 +2066,7 @@ void dispose() {
         final message = _messages[i];
         final reaction = _messageReactions[message.id];
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 0),
-          child: Column(
-            crossAxisAlignment: message.isFromCurrentUser
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              MessageBubble(
-                message: message,
-                allMessages: _messages,
-                showTimestamp: _shouldShowTimestamp(messageIndex),
-                onReply: () => _replyToMessageHandler(message),
-                onLongPress: () => _showMessageActions(message),
-                reactionEmoji: reaction,
-              ),
-            ],
-          ),
-        );
+        return _buildMessageBubble(message, isDark, reaction);
       }
     }
     return const SizedBox.shrink();
