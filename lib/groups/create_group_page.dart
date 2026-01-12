@@ -67,7 +67,9 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
     setState(() => _loadingConnections = true);
 
     try {
-      // Get mutual connections (users who follow you AND you follow them)
+      final availableUserIds = <String>{};
+
+      // 1. Get mutual connections (users who follow you AND you follow them)
       final followersSnapshot = await FirebaseFirestore.instance
           .collection('follows')
           .where('followedId', isEqualTo: uid)
@@ -78,7 +80,6 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
           .where('followerId', isEqualTo: uid)
           .get();
 
-      // Get IDs
       final followersIds = followersSnapshot.docs
           .map((doc) => doc.data()['followerId']?.toString() ?? '')
           .where((id) => id.isNotEmpty)
@@ -90,9 +91,25 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
           .toSet();
 
       // Mutual connections = intersection of both sets
-      final mutualConnectionIds = followersIds.intersection(followingIds).toList();
+      final mutualConnectionIds = followersIds.intersection(followingIds);
+      availableUserIds.addAll(mutualConnectionIds);
 
-      if (mutualConnectionIds.isEmpty) {
+      // 2. Get users with active conversations
+      final conversationsSnapshot = await FirebaseFirestore.instance
+          .collection('conversations')
+          .where('participants', arrayContains: uid)
+          .get();
+
+      for (final doc in conversationsSnapshot.docs) {
+        final participants = List<String>.from(doc.data()['participants'] ?? []);
+        for (final odId in participants) {
+          if (odId != uid) {
+            availableUserIds.add(odId);
+          }
+        }
+      }
+
+      if (availableUserIds.isEmpty) {
         setState(() {
           _connections = [];
           _loadingConnections = false;
@@ -100,9 +117,9 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
         return;
       }
 
-      // Fetch user profiles for mutual connections
+      // Fetch user profiles for available users
       final connections = <Map<String, dynamic>>[];
-      for (final odId in mutualConnectionIds) {
+      for (final odId in availableUserIds) {
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(odId)

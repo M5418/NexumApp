@@ -52,7 +52,10 @@ class _AddMembersPageState extends State<AddMembersPage> {
     setState(() => _loadingConnections = true);
 
     try {
-      // Get mutual connections (users who follow you AND you follow them)
+      final existingMemberIds = widget.group.memberIds.toSet();
+      final availableUserIds = <String>{};
+
+      // 1. Get mutual connections (users who follow you AND you follow them)
       final followersSnapshot = await FirebaseFirestore.instance
           .collection('follows')
           .where('followedId', isEqualTo: uid)
@@ -63,7 +66,6 @@ class _AddMembersPageState extends State<AddMembersPage> {
           .where('followerId', isEqualTo: uid)
           .get();
 
-      // Get IDs
       final followersIds = followersSnapshot.docs
           .map((doc) => doc.data()['followerId']?.toString() ?? '')
           .where((id) => id.isNotEmpty)
@@ -75,13 +77,28 @@ class _AddMembersPageState extends State<AddMembersPage> {
           .toSet();
 
       // Mutual connections = intersection of both sets
-      final mutualConnectionIds = followersIds.intersection(followingIds).toList();
+      final mutualConnectionIds = followersIds.intersection(followingIds);
+      availableUserIds.addAll(mutualConnectionIds);
+
+      // 2. Get users with active conversations
+      final conversationsSnapshot = await FirebaseFirestore.instance
+          .collection('conversations')
+          .where('participants', arrayContains: uid)
+          .get();
+
+      for (final doc in conversationsSnapshot.docs) {
+        final participants = List<String>.from(doc.data()['participants'] ?? []);
+        for (final odId in participants) {
+          if (odId != uid) {
+            availableUserIds.add(odId);
+          }
+        }
+      }
 
       // Filter out users already in the group
-      final existingMemberIds = widget.group.memberIds.toSet();
-      final availableIds = mutualConnectionIds.where((id) => !existingMemberIds.contains(id)).toList();
+      final filteredIds = availableUserIds.where((id) => !existingMemberIds.contains(id)).toList();
 
-      if (availableIds.isEmpty) {
+      if (filteredIds.isEmpty) {
         setState(() {
           _connections = [];
           _loadingConnections = false;
@@ -89,9 +106,9 @@ class _AddMembersPageState extends State<AddMembersPage> {
         return;
       }
 
-      // Fetch user profiles for available connections
+      // Fetch user profiles for available users
       final connections = <Map<String, dynamic>>[];
-      for (final odId in availableIds) {
+      for (final odId in filteredIds) {
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(odId)
