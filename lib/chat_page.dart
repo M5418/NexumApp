@@ -559,44 +559,10 @@ void dispose() {
     final durationSec = recording.duration.inSeconds;
     final replyToId = _replyToMessage?.id;
     
-    // OPTIMISTIC UI: Show voice message immediately with "Sending..." status
-    final tempId = 'temp_voice_${DateTime.now().millisecondsSinceEpoch}';
-    final optimisticMsg = Message(
-      id: tempId,
-      senderId: uid,
-      senderName: 'You',
-      senderAvatar: null,
-      content: '',
-      type: MessageType.voice,
-      attachments: [
-        MediaAttachment(
-          id: 'temp_att',
-          url: 'uploading',
-          type: MediaType.voice,
-          duration: recording.duration,
-          fileSize: recording.fileSize,
-        ),
-      ],
-      timestamp: DateTime.now(),
-      status: MessageStatus.sending,
-      isFromCurrentUser: true,
-      replyTo: _replyToMessage != null
-          ? ReplyTo(
-              messageId: _replyToMessage!.id,
-              senderName: _replyToMessage!.senderName,
-              content: _replyToMessage!.content,
-              type: _replyToMessage!.type,
-            )
-          : null,
-    );
+    // Clear reply state
+    setState(() => _replyToMessage = null);
     
-    setState(() {
-      _messages.add(optimisticMsg);
-      _replyToMessage = null;
-    });
-    _scrollToBottom();
-    
-    // Upload and send in background
+    // Upload and send in background - NO temp bubble
     try {
       String audioUrl;
       int sizeBytes;
@@ -661,21 +627,10 @@ void dispose() {
         messageType: 'voice',
       );
 
-      // Remove temp message and refresh to get the real one
-      if (mounted) {
-        setState(() {
-          _messages.removeWhere((m) => m.id == tempId);
-        });
-        await _refreshMessages();
-      }
+      // Refresh to show the real message
+      if (mounted) await _refreshMessages();
     } catch (e) {
-      // Remove failed optimistic message
-      if (mounted) {
-        setState(() {
-          _messages.removeWhere((m) => m.id == tempId);
-        });
-        _showSnack('Failed to send voice message: $e');
-      }
+      if (mounted) _showSnack('Failed to send voice message: $e');
     }
   }
 

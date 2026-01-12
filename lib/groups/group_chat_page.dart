@@ -350,41 +350,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
     if (path == null) return;
 
-    final uid = _currentUserId;
-    if (uid == null) return;
-    
-    // OPTIMISTIC UI: Show voice message immediately with "Sending..." status
-    final tempId = 'temp_voice_${DateTime.now().millisecondsSinceEpoch}';
-    final user = fb.FirebaseAuth.instance.currentUser;
-    final optimisticMsg = GroupMessage(
-      id: tempId,
-      groupId: _group.id,
-      senderId: uid,
-      senderName: user?.displayName ?? 'You',
-      senderAvatar: user?.photoURL,
-      content: '',
-      type: 'voice',
-      attachments: [
-        {
-          'type': 'voice',
-          'url': 'uploading',
-          'fileName': 'voice_message.m4a',
-        }
-      ],
-      createdAt: DateTime.now(),
-      isSending: true,
-    );
-    
-    setState(() {
-      _messages.insert(0, optimisticMsg);
-    });
-    
-    // Scroll to bottom
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-    }
-
-    // Upload and send in background
+    // Upload and send in background - NO temp bubble
     try {
       final storagePath = 'groups/${_group.id}/voice/${DateTime.now().millisecondsSinceEpoch}.m4a';
       
@@ -407,23 +373,12 @@ class _GroupChatPageState extends State<GroupChatPage> {
           }
         ],
       );
-      
-      // Remove temp message - real one will come from stream
-      if (mounted) {
-        setState(() {
-          _messages.removeWhere((m) => m.id == tempId);
-        });
-      }
+      // Real message will appear via stream subscription
     } catch (e) {
-      // Remove failed optimistic message
-      if (mounted) {
-        setState(() {
-          _messages.removeWhere((m) => m.id == tempId);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send voice message: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send voice message: $e')),
+      );
     }
   }
 
