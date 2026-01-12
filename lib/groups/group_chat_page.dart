@@ -1298,18 +1298,8 @@ class _GroupChatPageState extends State<GroupChatPage> {
 
   String _formatTime(DateTime time) {
     // Convert to local timezone for proper time display
+    // Show time only (HH:MM) - date is shown in day separator
     final localTime = time.toLocal();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final messageDate = DateTime(localTime.year, localTime.month, localTime.day);
-    final timeStr = '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
-
-    if (messageDate == today) {
-      return timeStr;
-    } else if (messageDate == today.subtract(const Duration(days: 1))) {
-      return 'Yesterday $timeStr';
-    } else {
-      return '${localTime.day}/${localTime.month} $timeStr';
-    }
+    return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
   }
 }
