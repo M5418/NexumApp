@@ -46,6 +46,11 @@ import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
 import 'responsive/responsive_breakpoints.dart';
 import 'core/i18n/language_provider.dart';
+import 'core/performance_monitor.dart';
+import 'core/performance/performance_coordinator.dart';
+import 'local/local_store.dart';
+import 'local/repositories/local_post_repository.dart';
+import 'local/models/post_lite.dart';
 
 class HomeFeedPage extends StatefulWidget {
   final int initialNavIndex;
@@ -87,7 +92,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   bool _isLoadingMore = false;
   bool _hasMorePosts = true;
   PostModel? _lastPost;
-  static const int _postsPerPage = 10;
+  
+  // Performance-adaptive page size (from PerformanceCoordinator)
+  int get _postsPerPage => PerformanceCoordinator().feedPageSize;
 
   final FirebasePostRepository _postRepo = FirebasePostRepository();
   final FirebaseCommentRepository _commentRepo = FirebaseCommentRepository();
@@ -310,8 +317,31 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
   }
 
-  /// INSTANT: Load from Firestore cache (no network wait)
+  /// INSTANT: Load from Isar first (mobile), then Firestore cache (web/fallback)
   Future<void> _loadFromCacheInstantly() async {
+    PerformanceMonitor().startFeedLoad();
+    final stopwatch = Stopwatch()..start();
+    
+    // Try Isar first (mobile-only, instant)
+    if (isIsarSupported) {
+      final isarPosts = LocalPostRepository().getLocalSync(limit: _postsPerPage);
+      if (isarPosts.isNotEmpty && mounted) {
+        final posts = _mapIsarPostsToUI(isarPosts);
+        if (posts.isNotEmpty) {
+          setState(() {
+            _posts = posts;
+            _isInitialLoading = false;
+          });
+          stopwatch.stop();
+          PerformanceMonitor().stopFeedLoad(postCount: posts.length);
+          PerformanceCoordinator().recordFeedLoadTime(stopwatch.elapsedMilliseconds);
+          debugPrint('📱 [FastFeed] Loaded ${posts.length} posts from Isar');
+          return;
+        }
+      }
+    }
+    
+    // Fallback to Firestore cache (web or Isar empty)
     try {
       final models = await _postRepo.getFeedFromCache(limit: _postsPerPage);
       if (models.isNotEmpty && mounted) {
@@ -328,12 +358,67 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             _posts = posts;
             _isInitialLoading = false; // Hide skeletons INSTANTLY
           });
+          stopwatch.stop();
+          PerformanceMonitor().stopFeedLoad(postCount: posts.length);
+          PerformanceCoordinator().recordFeedLoadTime(stopwatch.elapsedMilliseconds);
         }
         // If no valid posts in cache, keep showing skeletons until fresh data loads
       }
     } catch (_) {
       // Cache miss - will load from server
+      stopwatch.stop();
+      PerformanceMonitor().stopFeedLoad(postCount: 0);
+      PerformanceCoordinator().recordFeedLoadTime(stopwatch.elapsedMilliseconds);
     }
+  }
+  
+  /// Convert Isar PostLite models to UI Post objects
+  List<Post> _mapIsarPostsToUI(List<PostLite> isarPosts) {
+    return isarPosts.where((p) => 
+      p.authorName != null && 
+      p.authorName!.isNotEmpty && 
+      p.authorName != 'User'
+    ).map((p) {
+      // Determine media type from stored types
+      MediaType mediaType = MediaType.none;
+      String? videoUrl;
+      if (p.mediaTypes.isNotEmpty) {
+        if (p.mediaTypes.any((t) => t == 'video')) {
+          mediaType = MediaType.video;
+          // Find video URL
+          for (int i = 0; i < p.mediaTypes.length && i < p.mediaUrls.length; i++) {
+            if (p.mediaTypes[i] == 'video') {
+              videoUrl = p.mediaUrls[i];
+              break;
+            }
+          }
+        } else {
+          mediaType = p.mediaUrls.length > 1 ? MediaType.images : MediaType.image;
+        }
+      }
+      
+      return Post(
+        id: p.id,
+        authorId: p.authorId,
+        userName: p.authorName ?? 'User',
+        userAvatarUrl: p.authorPhotoUrl ?? '',
+        text: p.caption ?? '',
+        mediaType: mediaType,
+        imageUrls: p.mediaUrls,
+        videoUrl: videoUrl,
+        counts: PostCounts(
+          likes: p.likeCount,
+          comments: p.commentCount,
+          shares: p.shareCount,
+          reposts: p.repostCount,
+          bookmarks: p.bookmarkCount,
+        ),
+        createdAt: p.createdAt,
+        isBookmarked: false, // Will be loaded in background
+        isRepost: p.repostOf != null && p.repostOf!.isNotEmpty,
+        originalPostId: p.repostOf,
+      );
+    }).toList();
   }
 
   /// BACKGROUND: Load fresh posts from server and update UI
@@ -695,6 +780,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     }
 
     setState(() => _isLoadingMore = true);
+    PerformanceMonitor().startFeedPagination();
 
     try {
       final models = await _postRepo.getFeed(
@@ -723,6 +809,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         _posts.addAll(newPosts);
         _isLoadingMore = false;
       });
+      PerformanceMonitor().stopFeedPagination(postCount: newPosts.length);
       
       // Load like/bookmark status for new posts
       _loadUserInteractionsInBackground(newPosts);
@@ -734,6 +821,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _isLoadingMore = false);
+      PerformanceMonitor().stopFeedPagination(postCount: 0);
     }
   }
 

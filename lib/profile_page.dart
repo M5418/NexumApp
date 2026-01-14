@@ -42,6 +42,7 @@ import 'help_center_page.dart';
 import 'services/profile_cache_service.dart';
 import 'widgets/expandable_photo_viewer.dart';
 import 'story_music_list_page.dart';
+import 'core/performance_monitor.dart';
 
 class ProfilePage extends StatefulWidget {
   final bool hideDesktopTopNav;
@@ -112,6 +113,7 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadingPodcasts = true;
 
     // Apply whatever is already in memory instantly
+    PerformanceMonitor().startProfileLoad();
     _applyProfileCacheSync();
 
     // Listen for cache becoming ready (preloaded during app start/login)
@@ -176,6 +178,7 @@ class _ProfilePageState extends State<ProfilePage> {
       _profile = p;
       _myUserId = (p['id'] ?? p['uid'] ?? '').toString();
       _loadingProfile = false;
+      PerformanceMonitor().stopProfileLoad();
       
       // Load activity and podcasts once we have userId (only once)
       if (_myUserId != null && _myUserId!.isNotEmpty) {

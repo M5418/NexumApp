@@ -14,6 +14,10 @@ import 'my_library_page.dart';
 import 'podcast_search_page.dart';
 import 'podcasts_three_column_page.dart';
 import '../responsive/responsive_breakpoints.dart';
+import '../core/performance_monitor.dart';
+import '../local/local_store.dart';
+import '../local/repositories/local_podcast_repository.dart';
+import '../local/models/podcast_lite.dart';
 
 // Podcast model used across pages (e.g., PodcastDetailsPage imports this).
 class Podcast {
@@ -120,6 +124,26 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
 
   /// INSTANT: Load cached podcasts (no network wait)
   Future<void> _loadFromCacheInstantly() async {
+    PerformanceMonitor().startPodcastsLoad();
+    
+    // ISAR-FIRST: Try Isar local cache first (mobile only)
+    if (isIsarSupported) {
+      final isarPodcasts = LocalPodcastRepository().getLocalSync(limit: 50);
+      if (isarPodcasts.isNotEmpty && mounted) {
+        final mapped = _mapIsarPodcastsToUI(isarPodcasts);
+        setState(() {
+          _top = mapped.take(10).toList();
+          _allPodcasts = mapped;
+          _loadingTop = false;
+          _loadingAll = false;
+        });
+        PerformanceMonitor().stopPodcastsLoad(count: mapped.length);
+        debugPrint('📱 [FastPodcasts] Loaded ${mapped.length} podcasts from Isar');
+        return;
+      }
+    }
+    
+    // Fallback: Firestore cache
     try {
       // Load top podcasts from cache
       final topModels = await _firebasePodcastRepo.listPodcastsFromCache(
@@ -143,10 +167,32 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
           _allPodcasts = allModels.map(Podcast.fromModel).toList();
           _loadingAll = false;
         });
+        PerformanceMonitor().stopPodcastsLoad(count: allModels.length);
+      } else {
+        PerformanceMonitor().stopPodcastsLoad(count: topModels.length);
       }
     } catch (_) {
       // Cache miss - will load from server
+      PerformanceMonitor().stopPodcastsLoad(count: 0);
     }
+  }
+  
+  /// Convert Isar PodcastLite models to UI Podcast objects
+  List<Podcast> _mapIsarPodcastsToUI(List<PodcastLite> isarPodcasts) {
+    return isarPodcasts.map((p) => Podcast(
+      id: p.id,
+      title: p.title,
+      author: p.author,
+      authorId: p.authorId,
+      coverUrl: p.coverUrl,
+      coverThumbUrl: p.coverThumbUrl,
+      audioUrl: p.audioUrl,
+      durationSec: p.durationSeconds,
+      language: p.language,
+      category: p.category,
+      description: p.description,
+      createdAt: p.createdAt,
+    )).toList();
   }
   
   @override

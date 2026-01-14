@@ -1,5 +1,6 @@
 import 'dart:typed_data';
-import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:get_thumbnail_video/video_thumbnail.dart';
+import 'package:get_thumbnail_video/index.dart';
 
 Future<Uint8List?> generateVideoThumbnail(String path) async {
   try {

@@ -1188,7 +1188,6 @@ PODS:
     - abseil/meta/type_traits
     - abseil/xcprivacy
   - abseil/xcprivacy (1.20240722.0)
-  - AEXML (4.6.0)
   - agora_rtc_engine (6.5.3):
     - AgoraIrisRTC_iOS (= 4.5.2-build.1)
     - AgoraRtcEngine_iOS (= 4.5.2)
@@ -1239,6 +1238,9 @@ PODS:
     - GoogleUtilities/Environment (~> 8.0)
     - GoogleUtilities/UserDefaults (~> 8.0)
     - PromisesObjC (~> 2.4)
+  - audio_service (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - audio_session (0.0.1):
     - Flutter
   - audioplayers_darwin (0.0.1):
@@ -1293,13 +1295,6 @@ PODS:
   - DKPhotoGallery/Resource (0.0.19):
     - SDWebImage
     - SwiftyGif
-  - EpubViewerKit (0.1.3):
-    - AEXML (= 4.6.0)
-    - FontBlaster (= 5.1.1)
-    - MenuItemKit (= 4.0.1)
-    - RealmSwift (= 5.5.1)
-    - SSZipArchive (= 2.2.3)
-    - ZFDragableModalTransition (= 0.6)
   - file_picker (0.0.1):
     - DKImagePickerController/PhotoGallery
     - Flutter
@@ -1477,9 +1472,13 @@ PODS:
     - SDWebImageWebPCoder
   - flutter_native_splash (2.4.3):
     - Flutter
+  - flutter_native_video_trimmer (1.0.0):
+    - Flutter
   - flutter_secure_storage (6.0.0):
     - Flutter
-  - FontBlaster (5.1.1)
+  - get_thumbnail_video (0.0.1):
+    - Flutter
+    - libwebp
   - GoogleAdsOnDeviceConversion (2.1.0):
     - GoogleUtilities/Logger (~> 8.1)
     - GoogleUtilities/Network (~> 8.1)
@@ -1652,7 +1651,6 @@ PODS:
   - Mantle (2.2.0):
     - Mantle/extobjc (= 2.2.0)
   - Mantle/extobjc (2.2.0)
-  - MenuItemKit (4.0.1)
   - nanopb (3.30910.0):
     - nanopb/decode (= 3.30910.0)
     - nanopb/encode (= 3.30910.0)
@@ -1670,11 +1668,6 @@ PODS:
   - PromisesObjC (2.4.0)
   - PromisesSwift (2.4.0):
     - PromisesObjC (= 2.4.0)
-  - Realm (5.5.1):
-    - Realm/Headers (= 5.5.1)
-  - Realm/Headers (5.5.1)
-  - RealmSwift (5.5.1):
-    - Realm (= 5.5.1)
   - RecaptchaInterop (101.0.0)
   - record_ios (1.1.0):
     - Flutter
@@ -1690,7 +1683,6 @@ PODS:
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
-  - SSZipArchive (2.2.3)
   - SwiftyGif (5.4.5)
   - url_launcher_ios (0.0.1):
     - Flutter
@@ -1699,16 +1691,10 @@ PODS:
   - video_player_avfoundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - video_thumbnail (0.0.1):
-    - Flutter
-    - libwebp
-  - vocsy_epub_viewer (2.0.0):
-    - EpubViewerKit (~> 0.1.3)
-    - Flutter
-  - ZFDragableModalTransition (0.6)
 
 DEPENDENCIES:
   - agora_rtc_engine (from `.symlinks/plugins/agora_rtc_engine/ios`)
+  - audio_service (from `.symlinks/plugins/audio_service/darwin`)
   - audio_session (from `.symlinks/plugins/audio_session/ios`)
   - audioplayers_darwin (from `.symlinks/plugins/audioplayers_darwin/darwin`)
   - camera_avfoundation (from `.symlinks/plugins/camera_avfoundation/ios`)
@@ -1726,7 +1712,9 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_image_compress_common (from `.symlinks/plugins/flutter_image_compress_common/ios`)
   - flutter_native_splash (from `.symlinks/plugins/flutter_native_splash/ios`)
+  - flutter_native_video_trimmer (from `.symlinks/plugins/flutter_native_video_trimmer/ios`)
   - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
+  - get_thumbnail_video (from `.symlinks/plugins/get_thumbnail_video/ios`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - iris_method_channel (from `.symlinks/plugins/iris_method_channel/ios`)
   - just_audio (from `.symlinks/plugins/just_audio/darwin`)
@@ -1741,13 +1729,10 @@ DEPENDENCIES:
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
   - video_compress (from `.symlinks/plugins/video_compress/ios`)
   - video_player_avfoundation (from `.symlinks/plugins/video_player_avfoundation/darwin`)
-  - video_thumbnail (from `.symlinks/plugins/video_thumbnail/ios`)
-  - vocsy_epub_viewer (from `.symlinks/plugins/vocsy_epub_viewer/ios`)
 
 SPEC REPOS:
   trunk:
     - abseil
-    - AEXML
     - AgoraInfra_iOS
     - AgoraIrisRTC_iOS
     - AgoraRtcEngine_iOS
@@ -1755,7 +1740,6 @@ SPEC REPOS:
     - BoringSSL-GRPC
     - DKImagePickerController
     - DKPhotoGallery
-    - EpubViewerKit
     - Firebase
     - FirebaseAnalytics
     - FirebaseAppCheck
@@ -1776,7 +1760,6 @@ SPEC REPOS:
     - FirebaseSessions
     - FirebaseSharedSwift
     - FirebaseStorage
-    - FontBlaster
     - GoogleAdsOnDeviceConversion
     - GoogleAppMeasurement
     - GoogleDataTransport
@@ -1787,22 +1770,19 @@ SPEC REPOS:
     - leveldb-library
     - libwebp
     - Mantle
-    - MenuItemKit
     - nanopb
     - PromisesObjC
     - PromisesSwift
-    - Realm
-    - RealmSwift
     - RecaptchaInterop
     - SDWebImage
     - SDWebImageWebPCoder
-    - SSZipArchive
     - SwiftyGif
-    - ZFDragableModalTransition
 
 EXTERNAL SOURCES:
   agora_rtc_engine:
     :path: ".symlinks/plugins/agora_rtc_engine/ios"
+  audio_service:
+    :path: ".symlinks/plugins/audio_service/darwin"
   audio_session:
     :path: ".symlinks/plugins/audio_session/ios"
   audioplayers_darwin:
@@ -1837,8 +1817,12 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_image_compress_common/ios"
   flutter_native_splash:
     :path: ".symlinks/plugins/flutter_native_splash/ios"
+  flutter_native_video_trimmer:
+    :path: ".symlinks/plugins/flutter_native_video_trimmer/ios"
   flutter_secure_storage:
     :path: ".symlinks/plugins/flutter_secure_storage/ios"
+  get_thumbnail_video:
+    :path: ".symlinks/plugins/get_thumbnail_video/ios"
   image_picker_ios:
     :path: ".symlinks/plugins/image_picker_ios/ios"
   iris_method_channel:
@@ -1865,19 +1849,15 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/video_compress/ios"
   video_player_avfoundation:
     :path: ".symlinks/plugins/video_player_avfoundation/darwin"
-  video_thumbnail:
-    :path: ".symlinks/plugins/video_thumbnail/ios"
-  vocsy_epub_viewer:
-    :path: ".symlinks/plugins/vocsy_epub_viewer/ios"
 
 SPEC CHECKSUMS:
   abseil: a05cc83bf02079535e17169a73c5be5ba47f714b
-  AEXML: 2fbb73d8724797ed2cde888731e176fa4d44dd83
   agora_rtc_engine: 0c7d50312967c4dc31c3c45e50589ce48f57e08a
   AgoraInfra_iOS: 3691b2b277a1712a35ae96de25af319de0d73d08
   AgoraIrisRTC_iOS: eab58c126439adf5ec99632828a558ea216860da
   AgoraRtcEngine_iOS: 97e2398a2addda9057815a2a583a658e36796ff6
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
+  audio_service: aa99a6ba2ae7565996015322b0bb024e1d25c6fd
   audio_session: 9bb7f6c970f21241b19f5a3658097ae459681ba0
   audioplayers_darwin: 4f9ca89d92d3d21cec7ec580e78ca888e5fb68bd
   BoringSSL-GRPC: dded2a44897e45f28f08ae87a55ee4bcd19bc508
@@ -1887,7 +1867,6 @@ SPEC CHECKSUMS:
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
-  EpubViewerKit: 5f6c8ff9161bba18d6742c59b3c575c19f0623a9
   file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
   Firebase: d99ac19b909cd2c548339c2241ecd0d1599ab02e
   firebase_analytics: 0e25ca1d4001ccedd40b4e5b74c0ec34e18f6425
@@ -1919,8 +1898,9 @@ SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_image_compress_common: 1697a328fd72bfb335507c6bca1a65fa5ad87df1
   flutter_native_splash: c32d145d68aeda5502d5f543ee38c192065986cf
+  flutter_native_video_trimmer: 11f6c679971dc3844519b485b9c878df8675ae3a
   flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
-  FontBlaster: 8897ebdbb4b6ace3ab78c92b665d88c954f19e4a
+  get_thumbnail_video: 1a754d46b860dffefcc57b7290a43089cd5d7e58
   GoogleAdsOnDeviceConversion: 2be6297a4f048459e0ae17fad9bfd2844e10cf64
   GoogleAppMeasurement: 700dce7541804bec33db590a5c496b663fbe2539
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
@@ -1934,7 +1914,6 @@ SPEC CHECKSUMS:
   leveldb-library: cc8b8f8e013647a295ad3f8cd2ddf49a6f19be19
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   Mantle: c5aa8794a29a022dfbbfc9799af95f477a69b62d
-  MenuItemKit: 1459920e984d823e1bcc858b7a964f94e6bfa0f6
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
   pdfx: 77f4dddc48361fbb01486fa2bdee4532cbb97ef3
@@ -1942,23 +1921,17 @@ SPEC CHECKSUMS:
   pointer_interceptor_ios: da06a662d5bfd329602b45b2ab41bc0fb5fdb0f0
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   PromisesSwift: 9d77319bbe72ebf6d872900551f7eeba9bce2851
-  Realm: c2ffe0667f9c98c9ba65f608ba85684d39826145
-  RealmSwift: 5a35c1c35c3e1925e6fcd092c881d5cc4a826bff
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   record_ios: f75fa1d57f840012775c0e93a38a7f3ceea1a374
   SDWebImage: e9c98383c7572d713c1a0d7dd2783b10599b9838
   SDWebImageWebPCoder: 0e06e365080397465cc73a7a9b472d8a3bd0f377
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
-  SSZipArchive: 62d4947b08730e4cda640473b0066d209ff033c9
   SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
   video_compress: f2133a07762889d67f0711ac831faa26f956980e
   video_player_avfoundation: dd410b52df6d2466a42d28550e33e4146928280a
-  video_thumbnail: b637e0ad5f588ca9945f6e2c927f73a69a661140
-  vocsy_epub_viewer: 23f512d1bed22841c6aae0643afe4b998944fbad
-  ZFDragableModalTransition: 0d294eaaba6edfcb9839595de765f9ca06a4b524
 
-PODFILE CHECKSUM: b3c84f775088bc9f87f391591dc5d8357e728347
+PODFILE CHECKSUM: 622369b75317e49fc597770d6592c3eec8c934ca
 
 COCOAPODS: 1.16.2

@@ -36,6 +36,26 @@ target 'Runner' do
 end
 
 post_install do |installer|
+  # Fix duplicate symbols linker error caused by multiple pods linking libc++
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      # Deduplicate ALL linker flags to prevent duplicate symbol errors
+      if config.build_settings['OTHER_LDFLAGS']
+        flags = config.build_settings['OTHER_LDFLAGS']
+        if flags.is_a?(Array)
+          # Remove all duplicate flags and specifically handle -lc++
+          deduped = flags.uniq
+          # Remove -lc++ entirely from pods - let the main target handle it
+          deduped = deduped.reject { |f| f == '-lc++' }
+          config.build_settings['OTHER_LDFLAGS'] = deduped
+        elsif flags.is_a?(String)
+          # Handle string format - remove duplicate -lc++
+          config.build_settings['OTHER_LDFLAGS'] = flags.gsub(/-lc\+\+\s*-lc\+\+/, '-lc++')
+        end
+      end
+    end
+  end
+  
   # permission_handler iOS configuration - REQUIRED for iOS permission dialogs
   installer.pods_project.targets.each do |target|
     if target.name == 'permission_handler_apple'

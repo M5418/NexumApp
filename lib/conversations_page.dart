@@ -31,6 +31,10 @@ import 'responsive/responsive_breakpoints.dart';
 import 'services/community_interest_sync_service.dart';
 import 'services/app_cache_service.dart';
 import 'core/profile_api.dart';
+import 'core/performance_monitor.dart';
+import 'local/local_store.dart';
+import 'local/repositories/local_conversation_repository.dart';
+import 'local/models/conversation_lite.dart';
 
 /// Global notifier for instant conversation list updates when messages are sent
 class ConversationUpdateNotifier extends ChangeNotifier {
@@ -196,8 +200,41 @@ class _ConversationsPageState extends State<ConversationsPage>
     _applyCachedDataSync();
   }
   
+  /// Convert Isar ConversationLite models to UI ChatItem objects
+  List<ChatItem> _mapIsarConversationsToUI(List<ConversationLite> isarConvs) {
+    return isarConvs.map((c) => ChatItem(
+      conversationId: c.id,
+      id: c.otherUserId ?? '',
+      name: c.otherUserName ?? 'User',
+      avatarUrl: c.otherUserPhotoUrl ?? '',
+      lastType: _mapLastType(c.lastMessageType),
+      lastText: _cleanLastMessageText(c.lastMessageText),
+      lastTime: c.lastMessageAt != null ? _formatTime(c.lastMessageAt!) : '',
+      lastMessageAt: c.lastMessageAt,
+      unreadCount: c.unreadCount,
+      muted: c.muted,
+    )).toList();
+  }
+  
   void _applyCachedDataSync() {
-    // Apply cached conversations
+    // ISAR-FIRST: Try Isar local cache first (mobile only)
+    if (isIsarSupported) {
+      final isarConvs = LocalConversationRepository().getLocalSync(limit: 50);
+      if (isarConvs.isNotEmpty) {
+        final mapped = _mapIsarConversationsToUI(isarConvs);
+        if (mapped.isNotEmpty && _chats.isEmpty) {
+          setState(() {
+            _chats.clear();
+            _chats.addAll(mapped);
+            _loadingConversations = false;
+          });
+          debugPrint('📱 [FastConv] Loaded ${mapped.length} conversations from Isar');
+          return;
+        }
+      }
+    }
+    
+    // Fallback: Apply cached conversations from AppCacheService
     if (_appCache.isConversationsLoaded && _appCache.conversations.isNotEmpty) {
       final mapped = _appCache.conversations
           .map((c) => ChatItem(
@@ -409,6 +446,7 @@ class _ConversationsPageState extends State<ConversationsPage>
   // Data loading
   // -----------------------------
   Future<void> _loadConversations() async {
+    PerformanceMonitor().startConversationsLoad();
     try {
       setState(() {
         _loadingConversations = true;
@@ -445,11 +483,13 @@ class _ConversationsPageState extends State<ConversationsPage>
       
       // Update global cache for instant display next time
       _appCache.updateConversations(list);
+      PerformanceMonitor().stopConversationsLoad(count: list.length);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _errorConversations = e.toString();
       });
+      PerformanceMonitor().stopConversationsLoad(count: 0);
     } finally {
       if (mounted) setState(() => _loadingConversations = false);
     }

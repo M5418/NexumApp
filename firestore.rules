@@ -600,5 +600,39 @@ service cloud.firestore {
       allow read: if isOfficeUser() && (request.auth.uid == odId || isAdmin());
       allow write: if isOfficeUser() && request.auth.uid == odId;
     }
+    
+    // Performance telemetry collection - write-only from app
+    // Used by Auto Performance Mode for backend-driven adaptation
+    match /perf_telemetry/{docId} {
+      // No one reads these docs from the app
+      allow read: if false;
+
+      // Only allow creation (no update/delete)
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          "ts", "appVersion", "platform", "metrics"
+        ])
+        && request.resource.data.ts is timestamp
+        && request.resource.data.appVersion is string
+        && request.resource.data.appVersion.size() <= 40
+        && request.resource.data.platform in ["android", "ios", "web"]
+        && request.resource.data.metrics is map
+        && request.resource.data.metrics.keys().hasOnly([
+          "openFeedMsP50", "openFeedMsP95",
+          "openChatMsP95", "videoInitMsP95",
+          "jankRate", "errorRate"
+        ])
+        // Reasonable numeric values
+        && request.resource.data.metrics.openFeedMsP50 is number
+        && request.resource.data.metrics.openFeedMsP95 is number
+        && request.resource.data.metrics.openChatMsP95 is number
+        && request.resource.data.metrics.videoInitMsP95 is number
+        && request.resource.data.metrics.jankRate is number
+        && request.resource.data.metrics.errorRate is number
+        && request.resource.data.metrics.jankRate >= 0 && request.resource.data.metrics.jankRate <= 1
+        && request.resource.data.metrics.errorRate >= 0 && request.resource.data.metrics.errorRate <= 1;
+
+      allow update, delete: if false;
+    }
   }
 }

@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:video_compress/video_compress.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:get_thumbnail_video/video_thumbnail.dart';
+import 'package:get_thumbnail_video/index.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -901,13 +902,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
           try {
             // Try video_thumbnail package first (more reliable)
             final tempDir = await getTemporaryDirectory();
-            thumbnailPath = await VideoThumbnail.thumbnailFile(
+            final xFile = await VideoThumbnail.thumbnailFile(
               video: video.path,
               thumbnailPath: tempDir.path,
               imageFormat: ImageFormat.JPEG,
               maxWidth: 512,
               quality: 75,
             );
+            thumbnailPath = xFile.path;
             debugPrint('✅ Video thumbnail generated: $thumbnailPath');
           } catch (e) {
             debugPrint('⚠️ video_thumbnail failed: $e');

@@ -73,6 +73,22 @@ import 'fix_communities.dart';
 import 'providers/follow_state.dart';
 import 'config/cache_config.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'core/performance_monitor.dart';
+import 'core/write_queue.dart';
+import 'core/delta_sync.dart';
+import 'core/cache_manager.dart';
+import 'core/performance/performance_coordinator.dart';
+import 'core/performance/perf_telemetry_service.dart';
+import 'local/isar_db.dart';
+import 'local/sync/sync_cursor_store.dart';
+import 'local/sync/sync_scheduler.dart';
+import 'local/sync/initial_seeder.dart';
+import 'local/repositories/local_post_repository.dart';
+import 'local/repositories/local_conversation_repository.dart';
+import 'local/repositories/local_podcast_repository.dart';
+import 'local/repositories/local_book_repository.dart';
+import 'local/web/web_local_store.dart';
+import 'local/web/web_cache_warmer.dart';
 
 
 /// Background message handler - must be top-level function
@@ -133,6 +149,49 @@ Future<void> _initApp() async {
   // Configure caching for better performance
   CacheConfig.configureImageCache();
   debugPrint('✅ Image cache configured: 500 images, 200MB');
+  
+  // Initialize performance infrastructure (non-blocking)
+  CacheManager().init().catchError((e) => debugPrint('⚠️ CacheManager init: $e'));
+  PerformanceMonitor().init().catchError((e) => debugPrint('⚠️ PerformanceMonitor init: $e'));
+  WriteQueue().init().catchError((e) => debugPrint('⚠️ WriteQueue init: $e'));
+  DeltaSync().init().catchError((e) => debugPrint('⚠️ DeltaSync init: $e'));
+  
+  // Initialize Auto Performance Mode (non-blocking)
+  PerformanceCoordinator().init().catchError((e) => debugPrint('⚠️ PerformanceCoordinator init: $e'));
+  PerfTelemetryService().init(appVersion: '1.0.0').catchError((e) => debugPrint('⚠️ PerfTelemetry init: $e'));
+  
+  // Initialize local database based on platform
+  if (kIsWeb) {
+    // WEB: Initialize Hive for instant local reads
+    webLocalStore.init().then((_) {
+      debugPrint('✅ Hive (web) database initialized');
+      // Warm cache with latest data from Firestore
+      WebCacheWarmer().warmCache();
+    }).catchError((e) {
+      debugPrint('⚠️ Hive init: $e');
+    });
+  } else {
+    // MOBILE: Initialize Isar for instant local reads
+    IsarDB().init().then((_) {
+      debugPrint('✅ Isar database initialized');
+      // Initialize sync infrastructure
+      SyncCursorStore().init();
+      SyncScheduler().init();
+      
+      // Register sync callbacks for each module
+      SyncScheduler().registerModule('posts', () => LocalPostRepository().syncRemote());
+      SyncScheduler().registerModule('conversations', () => LocalConversationRepository().syncRemote());
+      SyncScheduler().registerModule('podcasts', () => LocalPodcastRepository().syncRemote());
+      SyncScheduler().registerModule('books', () => LocalBookRepository().syncRemote());
+      
+      // Trigger initial seeding after first frame (non-blocking)
+      SyncScheduler().triggerInitialSync();
+      InitialSeeder().seedAllIfNeeded();
+    }).catchError((e) {
+      debugPrint('⚠️ Isar init: $e');
+      return null;
+    });
+  }
   
   // Prevent duplicate Firebase initialization on hot reload
   try {

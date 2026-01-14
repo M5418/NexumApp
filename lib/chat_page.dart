@@ -27,6 +27,8 @@ import 'core/video_utils_stub.dart' if (dart.library.io) 'core/video_utils_io.da
 import 'utils/profile_navigation.dart';
 import 'services/media_compression_service.dart';
 import 'core/i18n/language_provider.dart';
+import 'core/performance_monitor.dart';
+import 'core/performance/performance_coordinator.dart';
 
 class ChatPage extends StatefulWidget {
   final ChatUser otherUser;
@@ -195,8 +197,10 @@ Future<void> _handleUnblock() async {
   /// INSTANT: Load cached messages (no network wait)
   Future<void> _loadFromCacheInstantly() async {
     if (_resolvedConversationId == null) return;
+    PerformanceMonitor().startChatLoad(_resolvedConversationId ?? 'unknown');
+    final stopwatch = Stopwatch()..start();
     try {
-      final records = await _firebaseMsgRepo.listFromCache(_resolvedConversationId!);
+      final records = await _firebaseMsgRepo.listFromCache(_resolvedConversationId ?? '');
       if (records.isNotEmpty && mounted) {
         final mapped = records.map(_toUiMessage).toList();
         setState(() {
@@ -204,17 +208,27 @@ Future<void> _handleUnblock() async {
           _messages.addAll(mapped);
           for (final r in records) {
             if ((r.reaction ?? '').isNotEmpty) {
-              _messageReactions[r.id] = r.reaction!;
+              _messageReactions[r.id] = r.reaction ?? '';
             } else if ((r.myReaction ?? '').isNotEmpty) {
-              _messageReactions[r.id] = r.myReaction!;
+              _messageReactions[r.id] = r.myReaction ?? '';
             }
           }
           _isLoading = false;
         });
         _scrollToBottom();
+        stopwatch.stop();
+        PerformanceMonitor().stopChatLoad(messageCount: mapped.length);
+        PerformanceCoordinator().recordChatLoadTime(stopwatch.elapsedMilliseconds);
+      } else {
+        stopwatch.stop();
+        PerformanceMonitor().stopChatLoad(messageCount: 0);
+        PerformanceCoordinator().recordChatLoadTime(stopwatch.elapsedMilliseconds);
       }
     } catch (_) {
       // Cache miss - will load from server
+      stopwatch.stop();
+      PerformanceMonitor().stopChatLoad(messageCount: 0);
+      PerformanceCoordinator().recordChatLoadTime(stopwatch.elapsedMilliseconds);
     }
   }
 

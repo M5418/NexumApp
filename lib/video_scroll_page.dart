@@ -24,6 +24,11 @@ import 'core/post_events.dart';
 import 'providers/follow_state.dart';
 import 'repositories/interfaces/follow_repository.dart';
 import 'dart:async';
+import 'core/performance_monitor.dart';
+import 'core/performance/performance_coordinator.dart';
+import 'local/local_store.dart';
+import 'local/repositories/local_post_repository.dart';
+import 'local/models/post_lite.dart';
 
 class VideoScrollPage extends StatefulWidget {
   const VideoScrollPage({super.key});
@@ -53,8 +58,12 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
   bool _isLoadingMore = false;
   bool _hasMoreVideos = true;
   PostModel? _lastVideoPost;
-  static const int _videosPerPage = 5; // Load 5 videos at a time
   int _currentVideoIndex = 0;
+  
+  // Performance-adaptive settings (from PerformanceCoordinator)
+  int get _videosPerPage => 5; // Base page size
+  int get _videoPreloadCount => PerformanceCoordinator().videoPreloadCount;
+  bool get _videoAutoplayEnabled => PerformanceCoordinator().videoAutoplayEnabled;
 
   // Cache for loaded posts to avoid reloading
   final Map<String, Post> _postCache = {};
@@ -111,9 +120,31 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
 
   /// INSTANT: Load cached video posts (no network wait)
   Future<void> _loadFromCacheInstantly() async {
+    PerformanceMonitor().startVideoScrollLoad();
+    
+    // ISAR-FIRST: Try Isar local cache first (mobile only)
+    if (isIsarSupported) {
+      final isarPosts = LocalPostRepository().getLocalSync(limit: 50);
+      if (isarPosts.isNotEmpty && mounted) {
+        final videos = _filterIsarVideos(isarPosts);
+        if (videos.isNotEmpty) {
+          setState(() {
+            _videoPosts = videos;
+          });
+          PerformanceMonitor().stopVideoScrollLoad(videoCount: videos.length);
+          debugPrint('📱 [FastVideo] Loaded ${videos.length} videos from Isar');
+          return;
+        }
+      }
+    }
+    
+    // Fallback: Firestore cache
     try {
       final models = await _postRepo.getFeedFromCache(limit: 50);
-      if (models.isEmpty || !mounted) return;
+      if (models.isEmpty || !mounted) {
+        PerformanceMonitor().stopVideoScrollLoad(videoCount: 0);
+        return;
+      }
       
       // Filter for videos and convert fast
       final videos = <Post>[];
@@ -128,12 +159,65 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
         setState(() {
           _videoPosts = videos;
         });
+        PerformanceMonitor().stopVideoScrollLoad(videoCount: videos.length);
         // Track first video view
         if (videos.isNotEmpty) _trackVideoView(videos[0]);
+      } else {
+        PerformanceMonitor().stopVideoScrollLoad(videoCount: 0);
       }
     } catch (_) {
       // Cache miss - will load from server
+      PerformanceMonitor().stopVideoScrollLoad(videoCount: 0);
     }
+  }
+
+  /// Filter Isar posts for videos and convert to UI Post objects
+  List<Post> _filterIsarVideos(List<PostLite> isarPosts) {
+    final videos = <Post>[];
+    for (final p in isarPosts) {
+      if (p.mediaUrls.isEmpty) continue;
+      
+      // Check if any media is a video
+      String? videoUrl;
+      for (int i = 0; i < p.mediaUrls.length; i++) {
+        final url = p.mediaUrls[i].toLowerCase();
+        final isVideo = url.contains('.mp4') || url.contains('.mov') || 
+                        url.contains('.webm') || url.contains('.avi') ||
+                        url.contains('.mkv') || url.contains('/videos/') ||
+                        url.contains('video_') || url.contains('video%2f');
+        if (isVideo) {
+          videoUrl = p.mediaUrls[i];
+          break;
+        }
+      }
+      
+      if (videoUrl == null) continue;
+      
+      videos.add(Post(
+        id: p.id,
+        authorId: p.authorId,
+        userName: p.authorName ?? 'User',
+        userAvatarUrl: p.authorPhotoUrl ?? '',
+        text: p.caption ?? '',
+        mediaType: MediaType.video,
+        imageUrls: p.mediaUrls,
+        videoUrl: videoUrl,
+        counts: PostCounts(
+          likes: p.likeCount,
+          comments: p.commentCount,
+          shares: p.shareCount,
+          reposts: p.repostCount,
+          bookmarks: p.bookmarkCount,
+        ),
+        createdAt: p.createdAt,
+        isBookmarked: false,
+        isRepost: p.repostOf != null && p.repostOf!.isNotEmpty,
+        originalPostId: p.repostOf,
+      ));
+      
+      if (videos.length >= _videosPerPage) break;
+    }
+    return videos;
   }
 
   /// FAST sync check if post has video (no async)
@@ -769,13 +853,22 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
     return _videoPlayers[videoUrl]!;
   }
   
-  /// Preload next 5 videos (initialize to buffer, but with autoPlay true so they play when swiped to)
+  /// Preload next videos (performance-adaptive count)
+  /// Only preload immediate neighbors to minimize memory usage
   void _preloadVideos(int currentIndex) {
-    for (int i = currentIndex + 1; i <= currentIndex + 5 && i < _videoPosts.length; i++) {
+    // Cleanup distant videos first to free memory
+    _cleanupDistantVideos(currentIndex);
+    
+    // Use performance-adaptive preload count (0-2 based on device performance)
+    final preloadCount = _videoPreloadCount;
+    if (preloadCount <= 0) return; // Skip preloading in lite mode
+    
+    for (int i = currentIndex + 1; i <= currentIndex + preloadCount && i < _videoPosts.length; i++) {
       final post = _videoPosts[i];
-      if (post.videoUrl != null && !_videoPlayers.containsKey(post.videoUrl)) {
-        // Create with autoPlay: true so it plays immediately when user swipes to it
-        _getVideoPlayer(post.videoUrl!, post, autoPlay: true);
+      final videoUrl = post.videoUrl;
+      if (videoUrl != null && videoUrl.isNotEmpty && !_videoPlayers.containsKey(videoUrl)) {
+        // Create with autoPlay based on performance mode
+        _getVideoPlayer(videoUrl, post, autoPlay: _videoAutoplayEnabled);
       }
     }
   }

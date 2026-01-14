@@ -12,6 +12,10 @@ import '../responsive/responsive_breakpoints.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../core/admin_config.dart';
 import '../core/i18n/language_provider.dart';
+import '../core/performance_monitor.dart';
+import '../local/local_store.dart';
+import '../local/repositories/local_book_repository.dart';
+import '../local/models/book_lite.dart';
 
 class Book {
   final String id;
@@ -138,6 +142,24 @@ class _BooksHomePageState extends State<BooksHomePage> {
 
   /// INSTANT: Load cached books (no network wait)
   Future<void> _loadFromCacheInstantly() async {
+    PerformanceMonitor().startBooksLoad();
+    
+    // ISAR-FIRST: Try Isar local cache first (mobile only)
+    if (isIsarSupported) {
+      final isarBooks = LocalBookRepository().getLocalSync(limit: 20);
+      if (isarBooks.isNotEmpty && mounted) {
+        final mapped = _mapIsarBooksToUI(isarBooks);
+        setState(() {
+          _books = mapped;
+          _loading = false;
+        });
+        PerformanceMonitor().stopBooksLoad(count: mapped.length);
+        debugPrint('📱 [FastBooks] Loaded ${mapped.length} books from Isar');
+        return;
+      }
+    }
+    
+    // Fallback: Firestore cache
     try {
       final models = await _firebaseBookRepo.listBooksFromCache(
         limit: 20,
@@ -148,10 +170,33 @@ class _BooksHomePageState extends State<BooksHomePage> {
           _books = models.map(Book.fromModel).toList();
           _loading = false;
         });
+        PerformanceMonitor().stopBooksLoad(count: models.length);
+      } else {
+        PerformanceMonitor().stopBooksLoad(count: 0);
       }
     } catch (_) {
       // Cache miss - will load from server
+      PerformanceMonitor().stopBooksLoad(count: 0);
     }
+  }
+  
+  /// Convert Isar BookLite models to UI Book objects
+  List<Book> _mapIsarBooksToUI(List<BookLite> isarBooks) {
+    return isarBooks.map((b) => Book(
+      id: b.id,
+      title: b.title,
+      author: b.author,
+      description: b.description,
+      coverUrl: b.coverUrl,
+      coverThumbUrl: b.coverThumbUrl,
+      epubUrl: b.epubUrl,
+      pdfUrl: b.pdfUrl,
+      audioUrl: b.audioUrl,
+      language: b.language,
+      category: b.category,
+      isPublished: b.isPublished,
+      createdAt: b.createdAt,
+    )).toList();
   }
   
   @override

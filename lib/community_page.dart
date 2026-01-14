@@ -20,6 +20,9 @@ import 'widgets/post_card.dart';
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/segmented_tabs.dart';
 import 'community_create_post_page.dart';
+import 'local/local_store.dart';
+import 'local/repositories/local_community_post_repository.dart';
+import 'local/models/community_post_lite.dart';
 
 class CommunityPage extends StatefulWidget {
   final String communityId;
@@ -98,8 +101,29 @@ class _CommunityPageState extends State<CommunityPage> {
     _loadFreshPosts();
   }
 
-  /// INSTANT: Load from Firestore cache (no network wait)
+  /// INSTANT: Load from Isar first (mobile), then Firestore cache (web/fallback)
   Future<void> _loadFromCacheInstantly() async {
+    // ISAR-FIRST: Try Isar local cache first (mobile only)
+    if (isIsarSupported) {
+      final isarPosts = LocalCommunityPostRepository().getLocalSync(
+        widget.communityId,
+        limit: _postsPerPage,
+      );
+      if (isarPosts.isNotEmpty && mounted) {
+        final posts = _mapIsarPostsToUI(isarPosts);
+        if (posts.isNotEmpty) {
+          setState(() {
+            _posts = posts;
+            _loadingPosts = false;
+          });
+          _buildMediaItems(posts);
+          debugPrint('📱 [FastCommunity] Loaded ${posts.length} posts from Isar');
+          return;
+        }
+      }
+    }
+    
+    // Fallback: Firestore cache
     try {
       final models = await _firebasePostRepo.getCommunityPostsFromCache(
         communityId: widget.communityId,
@@ -116,6 +140,53 @@ class _CommunityPageState extends State<CommunityPage> {
     } catch (_) {
       // Cache miss - will load from server
     }
+  }
+  
+  /// Convert Isar CommunityPostLite models to UI Post objects
+  List<Post> _mapIsarPostsToUI(List<CommunityPostLite> isarPosts) {
+    return isarPosts.where((p) => 
+      p.authorName != null && 
+      p.authorName!.isNotEmpty && 
+      p.authorName != 'User'
+    ).map((p) {
+      MediaType mediaType = MediaType.none;
+      String? videoUrl;
+      if (p.mediaTypes.isNotEmpty) {
+        if (p.mediaTypes.any((t) => t == 'video')) {
+          mediaType = MediaType.video;
+          for (int i = 0; i < p.mediaTypes.length && i < p.mediaUrls.length; i++) {
+            if (p.mediaTypes[i] == 'video') {
+              videoUrl = p.mediaUrls[i];
+              break;
+            }
+          }
+        } else {
+          mediaType = p.mediaUrls.length > 1 ? MediaType.images : MediaType.image;
+        }
+      }
+      
+      return Post(
+        id: p.id,
+        authorId: p.authorId,
+        userName: p.authorName ?? 'User',
+        userAvatarUrl: p.authorPhotoUrl ?? '',
+        text: p.caption ?? '',
+        mediaType: mediaType,
+        imageUrls: p.mediaUrls,
+        videoUrl: videoUrl,
+        counts: PostCounts(
+          likes: p.likeCount,
+          comments: p.commentCount,
+          shares: p.shareCount,
+          reposts: p.repostCount,
+          bookmarks: p.bookmarkCount,
+        ),
+        createdAt: p.createdAt,
+        isBookmarked: false,
+        isRepost: p.repostOf != null && p.repostOf!.isNotEmpty,
+        originalPostId: p.repostOf,
+      );
+    }).toList();
   }
 
   /// BACKGROUND: Load fresh posts from server
