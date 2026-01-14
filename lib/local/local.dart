@@ -4,16 +4,17 @@
 // Web falls back to Firestore cache-only behavior.
 
 export 'local_store.dart';
-export 'isar_db.dart';
+// isar_db.dart is only exported on mobile (contains Isar-specific code)
+export 'isar_db.dart' if (dart.library.io) 'isar_db.dart';
 
-// Models
-export 'models/post_lite.dart';
-export 'models/profile_lite.dart';
-export 'models/conversation_lite.dart';
-export 'models/message_lite.dart';
-export 'models/podcast_lite.dart';
-export 'models/book_lite.dart';
-export 'models/community_post_lite.dart';
+// Models - use conditional exports for web compatibility
+export 'models/post_lite_export.dart';
+export 'models/profile_lite.dart' if (dart.library.io) 'models/profile_lite.dart';
+export 'models/conversation_lite_export.dart';
+export 'models/message_lite.dart' if (dart.library.io) 'models/message_lite.dart';
+export 'models/podcast_lite_export.dart';
+export 'models/book_lite_export.dart';
+export 'models/community_post_lite_export.dart';
 
 // Sync infrastructure
 export 'sync/sync_cursor_store.dart';

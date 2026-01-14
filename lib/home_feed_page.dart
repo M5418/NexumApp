@@ -50,7 +50,6 @@ import 'core/performance_monitor.dart';
 import 'core/performance/performance_coordinator.dart';
 import 'local/local_store.dart';
 import 'local/repositories/local_post_repository.dart';
-import 'local/models/post_lite.dart';
 
 class HomeFeedPage extends StatefulWidget {
   final int initialNavIndex;

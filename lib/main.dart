@@ -79,14 +79,16 @@ import 'core/delta_sync.dart';
 import 'core/cache_manager.dart';
 import 'core/performance/performance_coordinator.dart';
 import 'core/performance/perf_telemetry_service.dart';
-import 'local/isar_db.dart';
-import 'local/sync/sync_cursor_store.dart';
-import 'local/sync/sync_scheduler.dart';
-import 'local/sync/initial_seeder.dart';
+// Mobile-only imports (Isar)
+import 'local/isar_db.dart' if (dart.library.html) 'local/isar_db_stub.dart';
+import 'local/sync/sync_cursor_store.dart' if (dart.library.html) 'local/sync/sync_stub.dart';
+import 'local/sync/sync_scheduler.dart' if (dart.library.html) 'local/sync/sync_stub.dart';
+import 'local/sync/initial_seeder.dart' if (dart.library.html) 'local/sync/sync_stub.dart';
 import 'local/repositories/local_post_repository.dart';
-import 'local/repositories/local_conversation_repository.dart';
-import 'local/repositories/local_podcast_repository.dart';
-import 'local/repositories/local_book_repository.dart';
+import 'local/repositories/local_conversation_repository.dart' if (dart.library.html) 'local/repositories/local_conversation_repository_stub.dart';
+import 'local/repositories/local_podcast_repository.dart' if (dart.library.html) 'local/repositories/local_podcast_repository_stub.dart';
+import 'local/repositories/local_book_repository.dart' if (dart.library.html) 'local/repositories/local_book_repository_stub.dart';
+// Web imports (Hive)
 import 'local/web/web_local_store.dart';
 import 'local/web/web_cache_warmer.dart';
 

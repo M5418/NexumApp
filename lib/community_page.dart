@@ -22,7 +22,6 @@ import 'widgets/segmented_tabs.dart';
 import 'community_create_post_page.dart';
 import 'local/local_store.dart';
 import 'local/repositories/local_community_post_repository.dart';
-import 'local/models/community_post_lite.dart';
 
 class CommunityPage extends StatefulWidget {
   final String communityId;

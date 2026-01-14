@@ -15,7 +15,6 @@ import '../core/i18n/language_provider.dart';
 import '../core/performance_monitor.dart';
 import '../local/local_store.dart';
 import '../local/repositories/local_book_repository.dart';
-import '../local/models/book_lite.dart';
 
 class Book {
   final String id;

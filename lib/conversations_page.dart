@@ -34,7 +34,6 @@ import 'core/profile_api.dart';
 import 'core/performance_monitor.dart';
 import 'local/local_store.dart';
 import 'local/repositories/local_conversation_repository.dart';
-import 'local/models/conversation_lite.dart';
 
 /// Global notifier for instant conversation list updates when messages are sent
 class ConversationUpdateNotifier extends ChangeNotifier {
