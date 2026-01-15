@@ -150,15 +150,20 @@ class FirebaseCommunityRepository implements CommunityRepository {
 
   @override
   Future<CommunityModel?> details(String communityId) async {
-    final d = await _communities.doc(communityId).get();
+    // Sanitize communityId to prevent Firestore crash from slashes
+    final safeId = communityId.replaceAll('/', '-');
+    if (safeId.isEmpty) return null;
+    final d = await _communities.doc(safeId).get();
     if (!d.exists) return null;
     return _fromDoc(d);
   }
 
   @override
   Future<List<CommunityMemberModel>> members(String communityId, {int limit = 200}) async {
+    final safeId = communityId.replaceAll('/', '-');
+    if (safeId.isEmpty) return [];
     try {
-      final q = await _communities.doc(communityId).collection('members').limit(limit).get();
+      final q = await _communities.doc(safeId).collection('members').limit(limit).get();
       return q.docs.map(_memberFrom).toList();
     } catch (e) {
       rethrow;
@@ -175,6 +180,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
     Map<String, String>? nameTranslations,
     Map<String, String>? bioTranslations,
   }) async {
+    final safeId = communityId.replaceAll('/', '-');
+    if (safeId.isEmpty) return;
     try {
       final updates = <String, dynamic>{};
       if (name != null) updates['name'] = name;
@@ -186,7 +193,7 @@ class FirebaseCommunityRepository implements CommunityRepository {
       
       if (updates.isNotEmpty) {
         updates['updatedAt'] = FieldValue.serverTimestamp();
-        await _communities.doc(communityId).update(updates);
+        await _communities.doc(safeId).update(updates);
       }
     } catch (e) {
       rethrow;

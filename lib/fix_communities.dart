@@ -68,7 +68,7 @@ Future<void> fixAllCommunities() async {
     
     // Also create any missing communities
     for (final interest in interestDomains) {
-      final communityId = interest.toLowerCase().replaceAll(' & ', '-').replaceAll(' ', '-');
+      final communityId = interest.toLowerCase().replaceAll(' & ', '-and-').replaceAll('&', '-and-').replaceAll('/', '-').replaceAll(' ', '-');
       final docRef = db.collection('communities').doc(communityId);
       final doc = await docRef.get();
       
