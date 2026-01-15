@@ -280,28 +280,29 @@ class _PostPageState extends State<PostPage> {
     return null;
   }
 
-  // Normalize storage URLs so UI can load images reliably
+  // FAST: Normalize storage URLs - skip network calls for valid URLs
+  String _normalizeUrlSync(String u) {
+    final s = u.trim();
+    if (s.isEmpty) return s;
+    // Auto-upgrade insecure http to https
+    if (s.startsWith('http://')) {
+      return 'https://${s.substring('http://'.length)}';
+    }
+    // Already a valid https URL - use as-is (FAST PATH)
+    if (s.startsWith('https://')) return s;
+    return s;
+  }
+
+  // SLOW: Only call for gs:// URLs that need resolution
   Future<String> _normalizeUrl(String u) async {
     final s = u.trim();
     if (s.isEmpty) return s;
-    // Auto-upgrade insecure http to https when possible
     if (s.startsWith('http://')) {
-      final https = 'https://${s.substring('http://'.length)}';
-      return https;
+      return 'https://${s.substring('http://'.length)}';
     }
-    // For firebase storage http URLs, resolve to a fresh tokened download URL
-    if (s.startsWith('https://') &&
-        (s.contains('firebasestorage.googleapis.com') ||
-         s.contains('firebasestorage.app') ||
-         s.contains('storage.googleapis.com'))) {
-      try {
-        return await fs.FirebaseStorage.instance.refFromURL(s).getDownloadURL();
-      } catch (_) {
-        // fallthrough
-      }
-      return s;
-    }
-    if (s.startsWith('http')) return s;
+    // Already valid https - no network call needed
+    if (s.startsWith('https://')) return s;
+    // Only resolve gs:// or storage paths
     try {
       if (s.startsWith('gs://')) {
         return await fs.FirebaseStorage.instance.refFromURL(s).getDownloadURL();
@@ -313,13 +314,17 @@ class _PostPageState extends State<PostPage> {
     }
   }
 
+  // FAST: Parallel URL normalization
   Future<List<String>> _normalizeUrls(List<String> urls) async {
-    final out = <String>[];
-    for (final u in urls) {
-      final n = await _normalizeUrl(u);
-      if (n.isNotEmpty) out.add(n);
+    if (urls.isEmpty) return [];
+    // Fast path: if all URLs are already https, no async needed
+    final needsAsync = urls.any((u) => !u.startsWith('https://') && !u.startsWith('http://'));
+    if (!needsAsync) {
+      return urls.map(_normalizeUrlSync).where((u) => u.isNotEmpty).toList();
     }
-    return out;
+    // Parallel async for URLs that need resolution
+    final results = await Future.wait(urls.map(_normalizeUrl));
+    return results.where((u) => u.isNotEmpty).toList();
   }
 
   void _applyPost(Post p) {

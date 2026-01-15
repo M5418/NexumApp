@@ -336,10 +336,10 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
         fetchCount++;
         lastPost = models.last;
 
-        // Filter for videos and add to list
+        // Filter for videos and add to list (FAST: sync filtering)
         for (final model in models) {
-          if (await _isVideoPost(model)) {
-            final post = await _toPost(model);
+          if (_isVideoPostSync(model)) {
+            final post = _toPostFast(model);
             videos.add(post);
             _postCache[post.id] = post; // Cache the post
             _lastVideoPost = model; // Track for pagination
@@ -406,9 +406,10 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
         fetchCount++;
         lastPost = models.last;
 
+        // FAST: sync filtering for pagination
         for (final model in models) {
-          if (await _isVideoPost(model)) {
-            final post = await _toPost(model);
+          if (_isVideoPostSync(model)) {
+            final post = _toPostFast(model);
             moreVideos.add(post);
             _postCache[post.id] = post;
             _lastVideoPost = model;

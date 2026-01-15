@@ -78,21 +78,37 @@ class CustomVideoPlayerState extends State<CustomVideoPlayer>
   }
 
   void _initializeVideo() {
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    // FAST: Use videoPlayerOptions for optimized buffering
+    _controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.videoUrl),
+      videoPlayerOptions: VideoPlayerOptions(
+        mixWithOthers: true, // Allow mixing with other audio
+        allowBackgroundPlayback: false, // Save battery
+      ),
+    );
+    
+    // Initialize and start playing as soon as possible
     _controller!.initialize().then((_) {
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-        _controller!.setLooping(true);
-        _controller!.setVolume(_isMuted ? 0.0 : 1.0);
-        if (widget.autoPlay) {
-          _controller!.play();
-        }
-        _controller!.addListener(_videoListener);
-        // Notify parent that video is initialized (for progress bar update)
-        widget.onInitialized?.call();
+      if (!mounted) return;
+      
+      // Set state first for instant UI update
+      setState(() => _isInitialized = true);
+      
+      // Configure playback (non-blocking)
+      _controller!.setLooping(true);
+      _controller!.setVolume(_isMuted ? 0.0 : 1.0);
+      _controller!.addListener(_videoListener);
+      
+      // Auto-play immediately if enabled
+      if (widget.autoPlay) {
+        _controller!.play();
       }
+      
+      // Notify parent
+      widget.onInitialized?.call();
+    }).catchError((e) {
+      // Silent fail - video will show placeholder
+      debugPrint('⚠️ Video init error: $e');
     });
   }
   

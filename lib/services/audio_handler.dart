@@ -44,7 +44,7 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
 
   AudioPlayer get player => _player;
 
-  /// Load and play a podcast
+  /// Load and play a podcast - optimized for fast startup
   Future<void> loadAndPlay({
     required String id,
     required String title,
@@ -64,21 +64,25 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
     mediaItem.add(_currentMediaItem);
     
     try {
-      await _player.setUrl(audioUrl);
+      // FAST: Use preload mode - starts playing while still buffering
+      final duration = await _player.setUrl(
+        audioUrl,
+        preload: true, // Preload for instant playback
+      );
       
-      // Update duration after loading
-      final duration = _player.duration;
+      // Update duration immediately if available
       if (duration != null) {
         _currentMediaItem = _currentMediaItem!.copyWith(duration: duration);
         mediaItem.add(_currentMediaItem);
       }
       
-      // Seek to start position if provided
+      // Seek to start position if provided (non-blocking)
       if (startPosition != null && startPosition > Duration.zero) {
-        await _player.seek(startPosition);
+        _player.seek(startPosition); // Don't await - let it seek while playing
       }
       
-      await play();
+      // Start playing immediately - don't wait for full buffer
+      play(); // Don't await - returns instantly
     } catch (e) {
       // Handle error
       playbackState.add(playbackState.value.copyWith(
