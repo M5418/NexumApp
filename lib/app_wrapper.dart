@@ -62,8 +62,19 @@ class _AppWrapperState extends State<AppWrapper> {
   }
 
   Future<void> _initializeAndPreload() async {
+    // CRITICAL: Remove native splash FIRST to prevent freeze
+    // This must happen before ANY potentially blocking operations
+    if (!kIsWeb) {
+      try {
+        FlutterNativeSplash.remove();
+        debugPrint('✅ Native splash removed');
+      } catch (e) {
+        debugPrint('⚠️ Splash remove error: $e');
+      }
+    }
+    
     try {
-      // Initialize auth with timeout to prevent hanging on web
+      // Initialize auth with timeout to prevent hanging
       await _authService.initialize().timeout(
         const Duration(seconds: 3),
         onTimeout: () {
@@ -89,19 +100,24 @@ class _AppWrapperState extends State<AppWrapper> {
       setState(() => _onboardingChecked = true);
     }
     
-    // Initialize push notifications and splash (skip on web)
+    // Initialize push notifications AFTER splash is removed (can hang on TestFlight)
     if (!kIsWeb) {
-      await _pushService.initialize();
-      
-      // Listen for notification taps
-      _notificationSub = _pushService.onNotificationTap.listen((data) {
-        if (mounted && _authService.isLoggedIn) {
-          _handleNotificationNavigation(data);
-        }
+      // Run push init with timeout to prevent freeze
+      _pushService.initialize().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('⚠️ Push notification init timed out');
+        },
+      ).then((_) {
+        // Listen for notification taps
+        _notificationSub = _pushService.onNotificationTap.listen((data) {
+          if (mounted && _authService.isLoggedIn) {
+            _handleNotificationNavigation(data);
+          }
+        });
+      }).catchError((e) {
+        debugPrint('⚠️ Push notification init error: $e');
       });
-      
-      // Remove native splash screen - app is ready
-      FlutterNativeSplash.remove();
     }
     
     // Continue preloading in background (non-blocking)

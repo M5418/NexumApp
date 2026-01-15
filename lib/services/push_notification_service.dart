@@ -19,26 +19,37 @@ class PushNotificationService {
     if (_isInitialized || kIsWeb) return;
     _isInitialized = true;
 
-    // Handle notification that opened the app from terminated state
-    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-    if (initialMessage != null) {
-      debugPrint('📱 App opened from notification: ${initialMessage.data}');
-      _handleNotificationTap(initialMessage);
+    try {
+      // Handle notification that opened the app from terminated state
+      // Add timeout to prevent freeze on TestFlight/production
+      final initialMessage = await FirebaseMessaging.instance.getInitialMessage().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('⚠️ getInitialMessage timed out');
+          return null;
+        },
+      );
+      if (initialMessage != null) {
+        debugPrint('📱 App opened from notification: ${initialMessage.data}');
+        _handleNotificationTap(initialMessage);
+      }
+
+      // Handle notification tap when app is in background
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        debugPrint('📱 Notification tapped (background): ${message.data}');
+        _handleNotificationTap(message);
+      });
+
+      // Handle foreground notifications
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        debugPrint('📱 Foreground notification: ${message.notification?.title}');
+        _handleForegroundNotification(message);
+      });
+
+      debugPrint('✅ Push notification service initialized');
+    } catch (e) {
+      debugPrint('⚠️ Push notification init error: $e');
     }
-
-    // Handle notification tap when app is in background
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('📱 Notification tapped (background): ${message.data}');
-      _handleNotificationTap(message);
-    });
-
-    // Handle foreground notifications
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('📱 Foreground notification: ${message.notification?.title}');
-      _handleForegroundNotification(message);
-    });
-
-    debugPrint('✅ Push notification service initialized');
   }
 
   void _handleNotificationTap(RemoteMessage message) {
