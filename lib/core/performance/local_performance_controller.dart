@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'performance_flags.dart';
@@ -34,8 +35,8 @@ class LocalPerformanceController {
   static const Duration _evaluationInterval = Duration(seconds: 5);
   static const Duration _metricsWindow = Duration(seconds: 30);
 
-  // Thresholds for downshifting
-  static const double _jankRateThreshold = 0.15; // 15% janky frames
+  // Thresholds for downshifting (relaxed for real-world use)
+  static const double _jankRateThreshold = 0.50; // 50% janky frames (simulators are always janky)
   static const int _feedLoadP95ThresholdMs = 2000; // 2 seconds
   static const int _chatLoadP95ThresholdMs = 1500;
   static const int _videoInitP95ThresholdMs = 3000;
@@ -49,16 +50,34 @@ class LocalPerformanceController {
   // Current adaptive state
   bool _isInLiteMode = false;
 
+  /// Check if running on iOS simulator
+  bool get _isSimulator {
+    if (kIsWeb) return false;
+    try {
+      // iOS simulator detection
+      if (Platform.isIOS) {
+        final env = Platform.environment;
+        return env['SIMULATOR_DEVICE_NAME'] != null;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Initialize the controller and start monitoring
   void init() {
     if (_initialized) return;
     _initialized = true;
 
-    // Start frame timing monitoring
-    SchedulerBinding.instance.addTimingsCallback(_onFrameTimings);
+    // Skip frame timing on simulator - it's unreliable and causes false positives
+    if (!_isSimulator && !kDebugMode) {
+      SchedulerBinding.instance.addTimingsCallback(_onFrameTimings);
+    }
 
-    // Start periodic evaluation
-    _evaluationTimer = Timer.periodic(_evaluationInterval, (_) => _evaluate());
+    // Start periodic evaluation (less frequent in debug mode)
+    final interval = kDebugMode ? const Duration(seconds: 30) : _evaluationInterval;
+    _evaluationTimer = Timer.periodic(interval, (_) => _evaluate());
 
     _debugLog('✅ LocalPerformanceController initialized');
   }
@@ -157,7 +176,8 @@ class LocalPerformanceController {
       }
     }
 
-    if (kDebugMode && (_frameMetrics.isNotEmpty || _feedLoadMetrics.isNotEmpty)) {
+    // Only log on state changes or first few evaluations to avoid spam
+    if (kDebugMode && _consecutiveBadEvaluations <= 3 && _consecutiveGoodEvaluations <= 3) {
       _debugLog('📈 Eval: jank=${(jankRate * 100).toStringAsFixed(1)}%, '
           'feedP95=${feedP95}ms, chatP95=${chatP95}ms, videoP95=${videoP95}ms, '
           'bad=$_consecutiveBadEvaluations, good=$_consecutiveGoodEvaluations');
