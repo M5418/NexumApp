@@ -21,6 +21,7 @@ class WebCacheWarmer {
   static const int _booksLimit = 50;
 
   /// Warm the cache with latest data from Firestore
+  /// Called at app start - warms public data only
   Future<void> warmCache() async {
     if (_isWarming) {
       _debugLog('⏭️ Cache warming already in progress');
@@ -33,27 +34,47 @@ class WebCacheWarmer {
     }
 
     _isWarming = true;
-    _debugLog('🔥 Starting cache warm...');
+    _debugLog('🔥 Starting cache warm (public data)...');
 
     final stopwatch = Stopwatch()..start();
 
     try {
-      // Warm all modules in parallel
+      // Warm public data (no auth required)
       await Future.wait([
         _warmPosts(),
-        _warmProfile(),
-        _warmConversations(),
         _warmPodcasts(),
         _warmBooks(),
       ]);
 
       stopwatch.stop();
-      _debugLog('✅ Cache warm complete in ${stopwatch.elapsedMilliseconds}ms');
+      _debugLog('✅ Public cache warm complete in ${stopwatch.elapsedMilliseconds}ms');
       _debugLog('📊 Stats: ${webLocalStore.getStats()}');
     } catch (e) {
       _debugLog('❌ Cache warm failed: $e');
     } finally {
       _isWarming = false;
+    }
+  }
+  
+  /// Warm user-specific data (profile, conversations)
+  /// Call this after user is authenticated
+  Future<void> warmUserData(String userId) async {
+    if (!webLocalStore.isAvailable) return;
+    
+    _debugLog('👤 Warming user data for $userId...');
+    final stopwatch = Stopwatch()..start();
+    
+    try {
+      await Future.wait([
+        _warmProfile(),
+        _warmConversations(),
+      ]);
+      
+      stopwatch.stop();
+      _debugLog('✅ User data warm complete in ${stopwatch.elapsedMilliseconds}ms');
+      _debugLog('📊 Stats: ${webLocalStore.getStats()}');
+    } catch (e) {
+      _debugLog('⚠️ User data warm failed: $e');
     }
   }
 
@@ -205,9 +226,9 @@ class WebCacheWarmer {
       'authorName': data['authorName'],
       'authorPhotoUrl': data['authorAvatarUrl'] ?? data['authorPhotoUrl'],
       'caption': data['caption'] ?? data['text'] ?? '',
-      'mediaUrls': List<String>.from(data['mediaUrls'] ?? []),
-      'mediaThumbUrls': List<String>.from(data['mediaThumbs'] ?? data['mediaThumbUrls'] ?? []),
-      'mediaTypes': List<String>.from(data['mediaTypes'] ?? []),
+      'mediaUrls': _toStringList(data['mediaUrls']),
+      'mediaThumbUrls': _toStringList(data['mediaThumbs'] ?? data['mediaThumbUrls']),
+      'mediaTypes': _toStringList(data['mediaTypes']),
       'communityId': data['communityId'],
       'likeCount': data['likeCount'] ?? data['likes'] ?? 0,
       'commentCount': data['commentCount'] ?? data['comments'] ?? 0,
@@ -218,6 +239,19 @@ class WebCacheWarmer {
       'createdAt': _timestampToIso(data['createdAt']),
       'updatedAt': _timestampToIso(data['updatedAt']),
     };
+  }
+  
+  /// Safely convert various types to List<String>
+  List<String> _toStringList(dynamic value) {
+    if (value == null) return [];
+    if (value is List) {
+      return value.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+    }
+    if (value is Map) {
+      // Handle case where mediaUrls is a map with index keys
+      return value.values.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+    }
+    return [];
   }
 
   Map<String, dynamic> _profileToMap(String uid, Map<String, dynamic> data) {

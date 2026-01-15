@@ -3,28 +3,28 @@ import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:isar/isar.dart';
 import '../isar_db.dart';
 import '../local_store.dart';
-import '../models/message_lite.dart';
+import '../models/mentorship_message_lite.dart';
 import '../sync/sync_cursor_store.dart';
 
-export '../models/message_lite.dart';
+export '../models/mentorship_message_lite.dart';
 
-/// Local-first repository for Chat Messages.
-class LocalMessageRepository {
-  static final LocalMessageRepository _instance = LocalMessageRepository._internal();
-  factory LocalMessageRepository() => _instance;
-  LocalMessageRepository._internal();
+/// Local-first repository for Mentorship Messages.
+class LocalMentorshipMessageRepository {
+  static final LocalMentorshipMessageRepository _instance = LocalMentorshipMessageRepository._internal();
+  factory LocalMentorshipMessageRepository() => _instance;
+  LocalMentorshipMessageRepository._internal();
 
   final firestore.FirebaseFirestore _db = firestore.FirebaseFirestore.instance;
   final SyncCursorStore _cursorStore = SyncCursorStore();
 
   static const int _syncBatchSize = 100;
 
-  /// Watch local messages for a conversation (instant UI binding)
-  Stream<List<MessageLite>> watchLocal(String conversationId, {int limit = 50}) {
+  /// Watch local messages for a mentorship conversation
+  Stream<List<MentorshipMessageLite>> watchLocal(String conversationId, {int limit = 50}) {
     final db = isarDB.instance;
     if (db == null) return Stream.value([]);
 
-    return db.messageLites
+    return db.mentorshipMessageLites
         .filter()
         .conversationIdEqualTo(conversationId)
         .sortByCreatedAtDesc()
@@ -33,11 +33,11 @@ class LocalMessageRepository {
   }
 
   /// Get local messages synchronously
-  List<MessageLite> getLocalSync(String conversationId, {int limit = 50}) {
+  List<MentorshipMessageLite> getLocalSync(String conversationId, {int limit = 50}) {
     final db = isarDB.instance;
     if (db == null) return [];
 
-    return db.messageLites
+    return db.mentorshipMessageLites
         .filter()
         .conversationIdEqualTo(conversationId)
         .sortByCreatedAtDesc()
@@ -45,14 +45,7 @@ class LocalMessageRepository {
         .findAllSync();
   }
 
-  /// Get a single message by ID
-  MessageLite? getMessageSync(String messageId) {
-    final db = isarDB.instance;
-    if (db == null) return null;
-    return db.messageLites.filter().idEqualTo(messageId).findFirstSync();
-  }
-
-  /// Sync remote messages for a conversation
+  /// Sync remote messages for a mentorship conversation
   Future<void> syncConversation(String conversationId) async {
     if (!isIsarSupported) return;
 
@@ -61,16 +54,16 @@ class LocalMessageRepository {
 
     await _cursorStore.init();
 
-    final cursorKey = 'messages_$conversationId';
+    final cursorKey = 'mentorship_messages_$conversationId';
 
     try {
       final lastSync = _cursorStore.getLastSyncTime(cursorKey);
-      _debugLog('🔄 Syncing messages for $conversationId since: $lastSync');
+      _debugLog('🔄 Syncing mentorship messages for $conversationId since: $lastSync');
 
       firestore.QuerySnapshot<Map<String, dynamic>> snapshot;
 
       if (lastSync != null) {
-        snapshot = await _db.collection('conversations')
+        snapshot = await _db.collection('mentorship_conversations')
             .doc(conversationId)
             .collection('messages')
             .where('createdAt', isGreaterThan: firestore.Timestamp.fromDate(lastSync))
@@ -78,7 +71,7 @@ class LocalMessageRepository {
             .limit(_syncBatchSize)
             .get();
       } else {
-        snapshot = await _db.collection('conversations')
+        snapshot = await _db.collection('mentorship_conversations')
             .doc(conversationId)
             .collection('messages')
             .orderBy('createdAt', descending: true)
@@ -87,16 +80,16 @@ class LocalMessageRepository {
       }
 
       if (snapshot.docs.isEmpty) {
-        _debugLog('✅ Messages already up to date');
+        _debugLog('✅ Mentorship messages already up to date');
         return;
       }
 
-      final messages = <MessageLite>[];
+      final messages = <MentorshipMessageLite>[];
       DateTime? latestUpdate;
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        final msg = MessageLite.fromFirestore(doc.id, data, conversationId);
+        final msg = MentorshipMessageLite.fromFirestore(doc.id, data, conversationId);
         messages.add(msg);
 
         if (latestUpdate == null || msg.createdAt.isAfter(latestUpdate)) {
@@ -105,21 +98,21 @@ class LocalMessageRepository {
       }
 
       await db.writeTxn(() async {
-        await db.messageLites.putAll(messages);
+        await db.mentorshipMessageLites.putAll(messages);
       });
 
       if (latestUpdate != null) {
         await _cursorStore.setLastSyncTime(cursorKey, latestUpdate);
       }
 
-      _debugLog('✅ Synced ${messages.length} messages');
+      _debugLog('✅ Synced ${messages.length} mentorship messages');
     } catch (e) {
-      _debugLog('❌ Message sync failed: $e');
+      _debugLog('❌ Mentorship message sync failed: $e');
     }
   }
 
   /// Create a pending message (optimistic write)
-  Future<MessageLite> createPendingMessage({
+  Future<MentorshipMessageLite> createPendingMessage({
     required String conversationId,
     required String senderId,
     required String type,
@@ -134,14 +127,13 @@ class LocalMessageRepository {
       throw Exception('Isar not available');
     }
 
-    // Generate client-side ID
-    final messageId = _db.collection('conversations')
+    final messageId = _db.collection('mentorship_conversations')
         .doc(conversationId)
         .collection('messages')
         .doc()
         .id;
 
-    final message = MessageLite.pending(
+    final message = MentorshipMessageLite.pending(
       id: messageId,
       conversationId: conversationId,
       senderId: senderId,
@@ -154,10 +146,10 @@ class LocalMessageRepository {
     );
 
     await db.writeTxn(() async {
-      await db.messageLites.put(message);
+      await db.mentorshipMessageLites.put(message);
     });
 
-    _debugLog('📝 Created pending message: $messageId');
+    _debugLog('📝 Created pending mentorship message: $messageId');
     return message;
   }
 
@@ -166,7 +158,7 @@ class LocalMessageRepository {
     final db = isarDB.instance;
     if (db == null) return;
 
-    final msg = db.messageLites.filter().idEqualTo(messageId).findFirstSync();
+    final msg = db.mentorshipMessageLites.filter().idEqualTo(messageId).findFirstSync();
     if (msg == null) return;
 
     msg.syncStatus = status;
@@ -176,35 +168,7 @@ class LocalMessageRepository {
     }
 
     await db.writeTxn(() async {
-      await db.messageLites.put(msg);
-    });
-
-    _debugLog('📝 Updated message $messageId status: $status');
-  }
-
-  /// Get pending messages for retry
-  List<MessageLite> getPendingMessages(String conversationId) {
-    final db = isarDB.instance;
-    if (db == null) return [];
-
-    return db.messageLites
-        .filter()
-        .conversationIdEqualTo(conversationId)
-        .and()
-        .group((q) => q
-            .syncStatusEqualTo('pending')
-            .or()
-            .syncStatusEqualTo('failed'))
-        .findAllSync();
-  }
-
-  /// Delete local message
-  Future<void> deleteLocal(String messageId) async {
-    final db = isarDB.instance;
-    if (db == null) return;
-
-    await db.writeTxn(() async {
-      await db.messageLites.filter().idEqualTo(messageId).deleteFirst();
+      await db.mentorshipMessageLites.put(msg);
     });
   }
 
@@ -212,7 +176,7 @@ class LocalMessageRepository {
   int getLocalCount(String conversationId) {
     final db = isarDB.instance;
     if (db == null) return 0;
-    return db.messageLites
+    return db.mentorshipMessageLites
         .filter()
         .conversationIdEqualTo(conversationId)
         .countSync();
@@ -220,7 +184,7 @@ class LocalMessageRepository {
 
   void _debugLog(String message) {
     if (kDebugMode) {
-      debugPrint('[LocalMessageRepo] $message');
+      debugPrint('[LocalMentorshipMsgRepo] $message');
     }
   }
 }

@@ -29,6 +29,8 @@ import 'services/media_compression_service.dart';
 import 'core/i18n/language_provider.dart';
 import 'core/performance_monitor.dart';
 import 'core/performance/performance_coordinator.dart';
+import 'local/local_store.dart';
+import 'local/repositories/local_message_repository.dart';
 
 class ChatPage extends StatefulWidget {
   final ChatUser otherUser;
@@ -72,6 +74,7 @@ class _ChatPageState extends State<ChatPage> {
   String? _loadError;
   Timer? _pollTimer;
   StreamSubscription<List<MessageRecordModel>>? _messagesSubscription;
+  // ignore: unused_field
   bool _isRefreshing = false;
   bool _isBlocked = false;
   bool _isBlockedBy = false;
@@ -199,6 +202,27 @@ Future<void> _handleUnblock() async {
     if (_resolvedConversationId == null) return;
     PerformanceMonitor().startChatLoad(_resolvedConversationId ?? 'unknown');
     final stopwatch = Stopwatch()..start();
+    
+    // ISAR-FIRST: Try Isar local cache first (mobile only)
+    if (isIsarSupported) {
+      final isarMsgs = LocalMessageRepository().getLocalSync(_resolvedConversationId!, limit: 50);
+      if (isarMsgs.isNotEmpty && mounted) {
+        final mapped = isarMsgs.map(_mapIsarMessageToUI).toList();
+        setState(() {
+          _messages.clear();
+          _messages.addAll(mapped);
+          _isLoading = false;
+        });
+        _scrollToBottom();
+        stopwatch.stop();
+        PerformanceMonitor().stopChatLoad(messageCount: mapped.length);
+        PerformanceCoordinator().recordChatLoadTime(stopwatch.elapsedMilliseconds);
+        debugPrint('📱 [FastChat] Loaded ${mapped.length} messages from Isar');
+        return;
+      }
+    }
+    
+    // Fallback: Firestore cache
     try {
       final records = await _firebaseMsgRepo.listFromCache(_resolvedConversationId ?? '');
       if (records.isNotEmpty && mounted) {
@@ -229,6 +253,34 @@ Future<void> _handleUnblock() async {
       stopwatch.stop();
       PerformanceMonitor().stopChatLoad(messageCount: 0);
       PerformanceCoordinator().recordChatLoadTime(stopwatch.elapsedMilliseconds);
+    }
+  }
+  
+  /// Convert Isar MessageLite to UI Message
+  Message _mapIsarMessageToUI(MessageLite m) {
+    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid ?? '';
+    final isFromMe = m.senderId == currentUserId;
+    
+    return Message(
+      id: m.id,
+      senderId: m.senderId,
+      senderName: m.senderName ?? (isFromMe ? 'You' : widget.otherUser.name),
+      senderAvatar: isFromMe ? null : widget.otherUser.avatarUrl,
+      content: m.text ?? '',
+      type: _mapMessageType(m.type),
+      timestamp: m.createdAt,
+      status: MessageStatus.sent,
+      isFromCurrentUser: isFromMe,
+    );
+  }
+  
+  MessageType _mapMessageType(String type) {
+    switch (type) {
+      case 'image': return MessageType.image;
+      case 'video': return MessageType.video;
+      case 'voice': return MessageType.voice;
+      case 'file': return MessageType.file;
+      default: return MessageType.text;
     }
   }
 
@@ -361,6 +413,7 @@ Future<void> _handleUnblock() async {
     });
   }
 
+// ignore: unused_element
 Future<void> _refreshMessages() async {
   if (_resolvedConversationId == null) return;
   try {
@@ -2261,6 +2314,7 @@ void dispose() {
         local1.day == local2.day;
   }
 
+  // ignore: unused_element
   bool _shouldShowTimestamp(int index) => true;
 
   int _getDaySeparatorCount() {

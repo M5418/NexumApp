@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
@@ -12,6 +13,12 @@ import 'sync_cursor_store.dart';
 
 /// Seeds Isar database from existing Firestore data on first run.
 /// Runs AFTER first frame to avoid blocking UI.
+/// 
+/// Production hardening:
+/// - Timeouts on all Firestore operations
+/// - Small batches with yields to avoid blocking
+/// - Cancellation support on dispose/background
+/// - Seed complete flag only after success
 class InitialSeeder {
   static final InitialSeeder _instance = InitialSeeder._internal();
   factory InitialSeeder() => _instance;
@@ -21,12 +28,25 @@ class InitialSeeder {
   final SyncCursorStore _cursorStore = SyncCursorStore();
   
   bool _isSeeding = false;
+  bool _cancelled = false;
 
   /// Seed limits (fetch newest N items first)
   static const int _postsLimit = 200;
   static const int _conversationsLimit = 100;
   static const int _podcastsLimit = 100;
   static const int _booksLimit = 100;
+
+  /// Batch size for processing (yield between batches)
+  static const int _batchSize = 50;
+
+  /// Timeout for Firestore operations
+  static const Duration _queryTimeout = Duration(seconds: 30);
+
+  /// Cancel ongoing seeding (call on dispose/background)
+  void cancel() {
+    _cancelled = true;
+    _debugLog('🛑 Seeding cancelled');
+  }
 
   /// Run initial seeding for all modules (non-blocking)
   Future<void> seedAllIfNeeded() async {
@@ -41,21 +61,31 @@ class InitialSeeder {
     }
 
     _isSeeding = true;
+    _cancelled = false;
     _debugLog('🌱 Starting initial seed check...');
 
     try {
       await _cursorStore.init();
-      
-      // Seed each module if not already seeded
-      await Future.wait([
-        _seedPostsIfNeeded(),
-        _seedProfileIfNeeded(),
-        _seedConversationsIfNeeded(),
-        _seedPodcastsIfNeeded(),
-        _seedBooksIfNeeded(),
-      ]);
+    } catch (e) {
+      _debugLog('⚠️ Cursor store init failed: $e');
+      _isSeeding = false;
+      return;
+    }
 
-      _debugLog('✅ Initial seeding complete');
+    try {
+      // Seed sequentially to avoid overwhelming device
+      // Check cancellation between each module
+      if (!_cancelled) await _seedPostsIfNeeded();
+      if (!_cancelled) await _seedProfileIfNeeded();
+      if (!_cancelled) await _seedConversationsIfNeeded();
+      if (!_cancelled) await _seedPodcastsIfNeeded();
+      if (!_cancelled) await _seedBooksIfNeeded();
+
+      if (_cancelled) {
+        _debugLog('⚠️ Seeding was cancelled');
+      } else {
+        _debugLog('✅ Initial seeding complete');
+      }
     } catch (e) {
       _debugLog('❌ Initial seeding failed: $e');
     } finally {
@@ -63,7 +93,13 @@ class InitialSeeder {
     }
   }
 
+  /// Yield to allow UI to remain responsive
+  Future<void> _yieldToUI() async {
+    await Future<void>.delayed(Duration.zero);
+  }
+
   Future<void> _seedPostsIfNeeded() async {
+    if (_cancelled) return;
     if (_cursorStore.isSeeded('posts')) {
       _debugLog('⏭️ Posts already seeded');
       return;
@@ -75,11 +111,16 @@ class InitialSeeder {
     try {
       _debugLog('🌱 Seeding posts from Firestore...');
       
-      // Fetch newest posts, ordered by createdAt (backward compatible)
+      // Fetch newest posts with timeout
       final snapshot = await _db.collection('posts')
           .orderBy('createdAt', descending: true)
           .limit(_postsLimit)
-          .get();
+          .get()
+          .timeout(_queryTimeout, onTimeout: () {
+            throw TimeoutException('Posts query timed out');
+          });
+
+      if (_cancelled) return;
 
       if (snapshot.docs.isEmpty) {
         _debugLog('📭 No posts to seed');
@@ -87,36 +128,53 @@ class InitialSeeder {
         return;
       }
 
-      // Convert to PostLite and batch write
+      // Convert to PostLite in batches with yields
       final posts = <PostLite>[];
       DateTime? latestUpdate;
 
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final post = PostLite.fromFirestore(doc.id, data);
-        posts.add(post);
+      for (int i = 0; i < snapshot.docs.length; i++) {
+        if (_cancelled) return;
+        
+        try {
+          final doc = snapshot.docs[i];
+          final data = doc.data();
+          final post = PostLite.fromFirestore(doc.id, data);
+          posts.add(post);
 
-        // Track latest timestamp for cursor
-        final updatedAt = post.updatedAt ?? post.createdAt;
-        if (latestUpdate == null || updatedAt.isAfter(latestUpdate)) {
-          latestUpdate = updatedAt;
+          // Track latest timestamp for cursor
+          final updatedAt = post.updatedAt ?? post.createdAt;
+          if (latestUpdate == null || updatedAt.isAfter(latestUpdate)) {
+            latestUpdate = updatedAt;
+          }
+        } catch (e) {
+          _debugLog('⚠️ Skipping invalid post: $e');
+        }
+
+        // Yield every batch to keep UI responsive
+        if (i > 0 && i % _batchSize == 0) {
+          await _yieldToUI();
         }
       }
+
+      if (_cancelled || posts.isEmpty) return;
 
       // Batch write to Isar
       await db.writeTxn(() async {
         await db.postLites.putAll(posts);
       });
 
-      // Update cursor and mark seeded
+      // Update cursor and mark seeded ONLY after successful write
       if (latestUpdate != null) {
         await _cursorStore.setLastSyncTime('posts', latestUpdate);
       }
       await _cursorStore.markSeeded('posts');
 
       _debugLog('✅ Seeded ${posts.length} posts');
+    } on TimeoutException {
+      _debugLog('⏱️ Posts seeding timed out');
     } catch (e) {
       _debugLog('❌ Failed to seed posts: $e');
+      // Don't mark as seeded on failure - will retry next time
     }
   }
 

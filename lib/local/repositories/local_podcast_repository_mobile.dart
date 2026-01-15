@@ -7,6 +7,8 @@ import '../models/podcast_lite.dart';
 import '../sync/sync_cursor_store.dart';
 import '../web/web_local_store.dart';
 
+export '../models/podcast_lite.dart';
+
 /// Local-first repository for Podcasts.
 class LocalPodcastRepository {
   static final LocalPodcastRepository _instance = LocalPodcastRepository._internal();

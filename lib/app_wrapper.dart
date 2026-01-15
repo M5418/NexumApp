@@ -28,6 +28,7 @@ import 'repositories/models/post_model.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'services/profile_cache_service.dart';
 import 'services/app_cache_service.dart';
+import 'local/web/web_cache_warmer.dart';
 import 'core/admin_config.dart';
 
 class AppWrapper extends StatefulWidget {
@@ -48,16 +49,40 @@ class _AppWrapperState extends State<AppWrapper> {
   void initState() {
     super.initState();
     _initializeAndPreload();
+    
+    // Failsafe: Force onboarding check after 3 seconds on web
+    if (kIsWeb) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && !_onboardingChecked) {
+          debugPrint('⏰ Forcing onboarding check on web');
+          setState(() => _onboardingChecked = true);
+        }
+      });
+    }
   }
 
   Future<void> _initializeAndPreload() async {
-    // Initialize auth - this is fast, no artificial delays
-    await _authService.initialize();
-    
-    // Initialize onboarding service if user is logged in
-    final currentUser = fb.FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      await _onboardingService.initialize(currentUser.uid);
+    try {
+      // Initialize auth with timeout to prevent hanging on web
+      await _authService.initialize().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('⚠️ Auth initialization timed out');
+        },
+      );
+      
+      // Initialize onboarding service if user is logged in
+      final currentUser = fb.FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await _onboardingService.initialize(currentUser.uid).timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            debugPrint('⚠️ Onboarding initialization timed out');
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ Initialization error: $e');
     }
     
     if (mounted) {
@@ -168,11 +193,22 @@ class _AppWrapperState extends State<AppWrapper> {
     return ListenableBuilder(
       listenable: _authService,
       builder: (context, child) {
+        // Not logged in - show sign in page
         if (!_authService.isLoggedIn) {
           return const SignInPage();
         }
         
-        // User is logged in - check onboarding status
+        // On web, skip onboarding check and show home feed directly
+        if (kIsWeb) {
+          // Warm user-specific cache data now that we're authenticated
+          final userId = fb.FirebaseAuth.instance.currentUser?.uid;
+          if (userId != null) {
+            WebCacheWarmer().warmUserData(userId);
+          }
+          return const HomeFeedPage();
+        }
+        
+        // Mobile: User is logged in - check onboarding status
         if (!_onboardingChecked) {
           // Still loading onboarding status - show loading indicator
           return const Scaffold(

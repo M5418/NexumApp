@@ -23,6 +23,7 @@ import 'widgets/share_bottom_sheet.dart';
 import 'widgets/comment_bottom_sheet.dart';
 import 'utils/profile_navigation.dart';
 import 'core/time_utils.dart';
+// ignore: unused_import
 import 'core/post_events.dart';
 import 'repositories/firebase/firebase_translate_repository.dart';
 import 'core/i18n/language_provider.dart';
@@ -631,6 +632,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     );
   }
 
+  // ignore: unused_element
   Future<List<Comment>> _loadCommentsForPost(String postId) async {
     final list = await _commentRepo.getComments(postId: postId, limit: 200);
     final uids = list.map((m) => m.authorId).toSet().toList();

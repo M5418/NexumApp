@@ -6,6 +6,8 @@ import '../local_store.dart';
 import '../models/community_post_lite.dart';
 import '../sync/sync_cursor_store.dart';
 
+export '../models/community_post_lite.dart';
+
 /// Local-first repository for Community Posts.
 class LocalCommunityPostRepository {
   static final LocalCommunityPostRepository _instance = LocalCommunityPostRepository._internal();

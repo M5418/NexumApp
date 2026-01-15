@@ -1637,6 +1637,7 @@ class _VideoScrollPageState extends State<VideoScrollPage> with TickerProviderSt
   );
 }
 
+  // ignore: unused_element
   Future<List<Comment>> _loadCommentsForPost(String postId) async {
     final list = await _commentRepo.getComments(postId: postId, limit: 200);
     final uids = list.map((m) => m.authorId).toSet().toList();

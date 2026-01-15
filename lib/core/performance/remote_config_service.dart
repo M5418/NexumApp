@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, debugPrint, ValueNotifier;
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'performance_flags.dart';
 
 /// Service for Firebase Remote Config integration.
 /// Fetches performance flags from backend and exposes them via ValueNotifier.
+/// Note: Remote Config has issues on web - uses defaults only on that platform.
 class RemoteConfigService {
   static final RemoteConfigService _instance = RemoteConfigService._internal();
   factory RemoteConfigService() => _instance;
@@ -37,8 +38,16 @@ class RemoteConfigService {
 
   /// Initialize Remote Config with local defaults.
   /// Does NOT block on network fetch - returns immediately with defaults.
+  /// On web, skips Firebase Remote Config due to compatibility issues.
   Future<void> init() async {
     if (_initialized) return;
+
+    // Skip Remote Config on web due to compatibility issues
+    if (kIsWeb) {
+      _initialized = true;
+      _debugLog('ℹ️ RemoteConfigService using defaults on web');
+      return;
+    }
 
     try {
       _remoteConfig = FirebaseRemoteConfig.instance;

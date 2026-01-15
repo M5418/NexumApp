@@ -26,6 +26,8 @@ import '../core/audio_recorder.dart';
 import '../core/video_utils_stub.dart' if (dart.library.io) '../core/video_utils_io.dart';
 import '../core/i18n/language_provider.dart';
 import '../services/media_compression_service.dart';
+import '../local/local_store.dart';
+import '../local/repositories/local_mentorship_message_repository.dart';
 // removed ApiClient usage
 
 class MentorshipChatPage extends StatefulWidget {
@@ -180,6 +182,22 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   // -----------------------------------
 
   Future<void> _load() async {
+    // ISAR-FIRST: Try Isar local cache first (mobile only)
+    if (isIsarSupported && _convId != null) {
+      final isarMsgs = LocalMentorshipMessageRepository().getLocalSync(_convId!, limit: 50);
+      if (isarMsgs.isNotEmpty && mounted) {
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(isarMsgs.map(_mapIsarMentorshipMessageToUI));
+        });
+        _toBottom();
+        debugPrint('📱 [FastMentorship] Loaded ${isarMsgs.length} messages from Isar');
+        // Continue to load fresh data in background
+      }
+    }
+    
+    // Load from Firestore
     final snap = await _messagesCol(_convId!).orderBy('createdAt').limit(50).get();
     setState(() {
       _messages
@@ -198,6 +216,32 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
       }
     });
     _toBottom();
+  }
+  
+  /// Convert Isar MentorshipMessageLite to UI Message
+  Message _mapIsarMentorshipMessageToUI(MentorshipMessageLite m) {
+    final mine = m.senderId != widget.mentorUserId;
+    return Message(
+      id: m.id,
+      senderId: m.senderId,
+      senderName: mine ? 'You' : widget.mentorName,
+      senderAvatar: mine ? null : widget.mentorAvatar,
+      content: m.text ?? '',
+      type: _mapMentorshipMessageType(m.type),
+      timestamp: m.createdAt,
+      status: MessageStatus.sent,
+      isFromCurrentUser: mine,
+    );
+  }
+  
+  MessageType _mapMentorshipMessageType(String type) {
+    switch (type) {
+      case 'image': return MessageType.image;
+      case 'video': return MessageType.video;
+      case 'voice': return MessageType.voice;
+      case 'file': return MessageType.file;
+      default: return MessageType.text;
+    }
   }
 
   Message _toUiDoc(Map<String, dynamic> d, String id) {

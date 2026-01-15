@@ -50,6 +50,7 @@ import 'core/performance_monitor.dart';
 import 'core/performance/performance_coordinator.dart';
 import 'local/local_store.dart';
 import 'local/repositories/local_post_repository.dart';
+import 'local/repositories/local_story_repository.dart';
 
 class HomeFeedPage extends StatefulWidget {
   final int initialNavIndex;
@@ -484,6 +485,22 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   /// INSTANT: Load cached stories (no network wait)
   Future<void> _loadStoriesFromCacheInstantly() async {
+    // ISAR-FIRST: Try Isar local cache first (mobile only)
+    if (isIsarSupported) {
+      final isarStories = LocalStoryRepository().getLocalSync(limit: 50);
+      if (isarStories.isNotEmpty && mounted) {
+        final rings = _mapIsarStoriesToRings(isarStories);
+        if (rings.isNotEmpty) {
+          setState(() {
+            _storyRings = _sortStoryRings(rings);
+          });
+          debugPrint('📱 [FastStories] Loaded ${rings.length} story rings from Isar');
+          return;
+        }
+      }
+    }
+    
+    // Fallback: Firestore cache
     try {
       final storyRepo = context.read<StoryRepository>();
       // Use the cache method if available (FirebaseStoryRepository)
@@ -499,6 +516,49 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     } catch (_) {
       // Cache miss - will load from server
     }
+  }
+  
+  /// Convert Isar StoryLite models to StoryRingModel (grouped by author)
+  List<StoryRingModel> _mapIsarStoriesToRings(List<StoryLite> stories) {
+    final Map<String, List<StoryLite>> byAuthor = {};
+    for (final s in stories) {
+      byAuthor.putIfAbsent(s.authorId, () => []).add(s);
+    }
+    
+    return byAuthor.entries.map((e) {
+      final authorStories = e.value;
+      final first = authorStories.first;
+      final hasUnseen = authorStories.any((s) => !s.viewed);
+      
+      return StoryRingModel(
+        userId: first.authorId,
+        userName: first.authorName ?? 'User',
+        userAvatar: first.authorPhotoUrl,
+        hasUnseen: hasUnseen,
+        lastStoryAt: authorStories.map((s) => s.createdAt).reduce((a, b) => a.isAfter(b) ? a : b),
+        thumbnailUrl: first.mediaThumbUrl ?? first.mediaUrl,
+        storyCount: authorStories.length,
+        stories: authorStories.map((s) => StoryModel(
+          id: s.id,
+          userId: s.authorId,
+          userName: s.authorName ?? 'User',
+          userAvatar: s.authorPhotoUrl,
+          mediaType: s.type,
+          mediaUrl: s.mediaUrl,
+          thumbnailUrl: s.mediaThumbUrl,
+          durationSec: s.durationSeconds ?? 5,
+          createdAt: s.createdAt,
+          expiresAt: s.expiresAt,
+          viewed: s.viewed,
+          viewsCount: s.viewCount,
+          liked: false,
+          likesCount: 0,
+          commentsCount: 0,
+          viewerIds: const [],
+          mentionedUserIds: const [],
+        )).toList(),
+      );
+    }).toList();
   }
 
   /// Sort story rings: Your Story | Unseen | All Seen
@@ -1492,6 +1552,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     );
   }
 
+  // ignore: unused_element
   Future<List<Comment>> _loadCommentsForPost(String postId) async {
     final list = await _commentRepo.getComments(postId: postId, limit: 200);
     final uids = list.map((m) => m.authorId).toSet().toList();

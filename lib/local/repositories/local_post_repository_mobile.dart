@@ -7,6 +7,8 @@ import '../models/post_lite.dart';
 import '../sync/sync_cursor_store.dart';
 import '../web/web_local_store.dart';
 
+export '../models/post_lite.dart';
+
 /// Local-first repository for Posts.
 /// Reads from Isar (mobile) or Hive (web) instantly, syncs with Firestore in background.
 class LocalPostRepository {
@@ -90,13 +92,23 @@ class LocalPostRepository {
   }
 
   /// Sync remote posts (delta sync)
+  /// 
+  /// Production hardening:
+  /// - Fallback to createdAt if updatedAt is missing
+  /// - Safe parsing with defaults
+  /// - Never crashes on null/absent fields
   Future<void> syncRemote() async {
     if (!isIsarSupported) return;
 
     final db = isarDB.instance;
     if (db == null) return;
 
-    await _cursorStore.init();
+    try {
+      await _cursorStore.init();
+    } catch (e) {
+      _debugLog('⚠️ Cursor store init failed: $e');
+      // Continue without cursor - will do full sync
+    }
 
     try {
       final lastSync = _cursorStore.getLastSyncTime(_module);
@@ -105,12 +117,22 @@ class LocalPostRepository {
       firestore.QuerySnapshot<Map<String, dynamic>> snapshot;
       
       if (lastSync != null) {
-        // Delta sync: fetch only updated docs
-        snapshot = await _db.collection('posts')
-            .where('updatedAt', isGreaterThan: firestore.Timestamp.fromDate(lastSync))
-            .orderBy('updatedAt')
-            .limit(_syncBatchSize)
-            .get();
+        // Delta sync: try updatedAt first, fallback to createdAt
+        try {
+          snapshot = await _db.collection('posts')
+              .where('updatedAt', isGreaterThan: firestore.Timestamp.fromDate(lastSync))
+              .orderBy('updatedAt')
+              .limit(_syncBatchSize)
+              .get();
+        } catch (e) {
+          // Fallback: use createdAt if updatedAt index doesn't exist
+          _debugLog('⚠️ updatedAt query failed, falling back to createdAt: $e');
+          snapshot = await _db.collection('posts')
+              .where('createdAt', isGreaterThan: firestore.Timestamp.fromDate(lastSync))
+              .orderBy('createdAt', descending: true)
+              .limit(_syncBatchSize)
+              .get();
+        }
       } else {
         // Full sync: fetch by createdAt (backward compatible)
         snapshot = await _db.collection('posts')
@@ -128,14 +150,24 @@ class LocalPostRepository {
       DateTime? latestUpdate;
 
       for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final post = PostLite.fromFirestore(doc.id, data);
-        posts.add(post);
+        try {
+          final data = doc.data();
+          final post = PostLite.fromFirestore(doc.id, data);
+          posts.add(post);
 
-        final updatedAt = post.updatedAt ?? post.createdAt;
-        if (latestUpdate == null || updatedAt.isAfter(latestUpdate)) {
-          latestUpdate = updatedAt;
+          // Safe timestamp extraction with fallback
+          final docTime = _safeExtractTimestamp(data);
+          if (docTime != null && (latestUpdate == null || docTime.isAfter(latestUpdate))) {
+            latestUpdate = docTime;
+          }
+        } catch (e) {
+          _debugLog('⚠️ Skipping invalid post ${doc.id}: $e');
         }
+      }
+
+      if (posts.isEmpty) {
+        _debugLog('⚠️ No valid posts to sync');
+        return;
       }
 
       // Batch upsert to Isar
@@ -151,7 +183,27 @@ class LocalPostRepository {
       _debugLog('✅ Synced ${posts.length} posts');
     } catch (e) {
       _debugLog('❌ Post sync failed: $e');
+      // Don't rethrow - graceful degradation
     }
+  }
+
+  /// Safely extract timestamp from document, preferring updatedAt over createdAt
+  DateTime? _safeExtractTimestamp(Map<String, dynamic> data) {
+    try {
+      final updatedAt = data['updatedAt'];
+      if (updatedAt != null) {
+        if (updatedAt is firestore.Timestamp) return updatedAt.toDate();
+        if (updatedAt is DateTime) return updatedAt;
+      }
+      final createdAt = data['createdAt'];
+      if (createdAt != null) {
+        if (createdAt is firestore.Timestamp) return createdAt.toDate();
+        if (createdAt is DateTime) return createdAt;
+      }
+    } catch (e) {
+      _debugLog('⚠️ Failed to extract timestamp: $e');
+    }
+    return null;
   }
 
   /// Optimistic create: write to Isar immediately, queue Firestore write

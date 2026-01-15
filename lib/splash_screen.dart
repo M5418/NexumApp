@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -19,13 +20,31 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   final AuthService _authService = AuthService();
+  bool _hasNavigated = false;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('🎬 Splash screen initState');
     // Hide all system UI for full-screen bezel-to-bezel experience
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
-    _initializeAndPreload();
+    
+    // On web, navigate immediately after a brief delay (skip preloading)
+    // On mobile, do full preloading
+    if (kIsWeb) {
+      debugPrint('🌐 Web detected - using fast splash');
+      Future.delayed(const Duration(milliseconds: 500), () {
+        debugPrint('⏰ Web splash timer fired');
+        _safeNavigate();
+      });
+    } else {
+      _initializeAndPreload();
+      // Failsafe: Force navigation after 3 seconds no matter what
+      Future.delayed(const Duration(seconds: 3), () {
+        debugPrint('⏰ Splash failsafe triggered');
+        _safeNavigate();
+      });
+    }
   }
 
   @override
@@ -40,13 +59,20 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _initializeAndPreload() async {
     try {
-      // Run auth initialization and preloading in parallel
+      // Run auth initialization and preloading in parallel with timeout
       // Standard splash duration: 500ms minimum for branding visibility
+      // Timeout after 5 seconds to prevent hanging on web
       await Future.wait([
         _initAuth(),
         _preloadHomeFeed(),
         Future.delayed(const Duration(milliseconds: 500)),
-      ]);
+      ]).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('⚠️ Splash initialization timed out, proceeding anyway');
+          return [];
+        },
+      );
     } catch (e) {
       debugPrint('⚠️ Splash initialization error: $e');
     }
@@ -54,7 +80,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
     
     // Navigate immediately
-    _navigateToNextScreen();
+    _safeNavigate();
   }
 
   Future<void> _initAuth() async {
@@ -110,6 +136,13 @@ class _SplashScreenState extends State<SplashScreen> {
     } catch (e) {
       debugPrint('⚠️ Preload error (non-critical): $e');
     }
+  }
+
+  void _safeNavigate() {
+    if (_hasNavigated || !mounted) return;
+    _hasNavigated = true;
+    debugPrint('🚀 Navigating from splash...');
+    _navigateToNextScreen();
   }
 
   void _navigateToNextScreen() {

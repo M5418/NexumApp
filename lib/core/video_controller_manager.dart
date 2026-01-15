@@ -1,8 +1,16 @@
+import 'dart:async';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Global manager for video controllers to enable seamless playback
 /// across different pages (e.g., home feed -> post page)
+/// 
+/// Production hardening:
+/// - Only 1 active controller (optional warm)
+/// - try/catch around init and dispose
+/// - Thumbnail fallback on init failure
+/// - Safe disposal scheduling (not during build)
 class VideoControllerManager {
   static final VideoControllerManager _instance = VideoControllerManager._internal();
   factory VideoControllerManager() => _instance;
@@ -11,38 +19,75 @@ class VideoControllerManager {
   // Cache of video controllers by URL
   final Map<String, _CachedController> _controllers = {};
   
+  // URLs that failed to initialize (use thumbnail instead)
+  final Set<String> _failedUrls = {};
+  
   // Maximum number of controllers to keep in cache
-  static const int _maxCacheSize = 5;
+  static const int _maxCacheSize = 3;
+  
+  // Timeout for controller initialization
+  static const Duration _initTimeout = Duration(seconds: 10);
+
+  /// Check if a URL has failed and should show thumbnail only
+  bool shouldShowThumbnailOnly(String videoUrl) => _failedUrls.contains(videoUrl);
 
   /// Get or create a controller for the given video URL
   /// If a controller already exists and is initialized, it will be reused
-  Future<VideoPlayerController> getController(String videoUrl) async {
-    // Check if we already have a controller for this URL
-    if (_controllers.containsKey(videoUrl)) {
-      final cached = _controllers[videoUrl]!;
-      cached.lastAccessed = DateTime.now();
-      cached.refCount++;
-      return cached.controller;
+  /// Returns null if initialization fails (caller should show thumbnail)
+  Future<VideoPlayerController?> getController(String videoUrl) async {
+    // Check if this URL has failed before
+    if (_failedUrls.contains(videoUrl)) {
+      _debugLog('⚠️ Skipping failed URL: $videoUrl');
+      return null;
     }
 
-    // Create new controller
-    final controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-    
-    // Initialize it
-    await controller.initialize();
-    controller.setLooping(true);
-    
-    // Cache it
-    _controllers[videoUrl] = _CachedController(
-      controller: controller,
-      lastAccessed: DateTime.now(),
-      refCount: 1,
-    );
-    
-    // Cleanup old controllers if cache is too large
-    _cleanupIfNeeded();
-    
-    return controller;
+    // Check if we already have a controller for this URL
+    if (_controllers.containsKey(videoUrl)) {
+      final cached = _controllers[videoUrl];
+      if (cached != null) {
+        cached.lastAccessed = DateTime.now();
+        cached.refCount++;
+        return cached.controller;
+      }
+    }
+
+    // Create new controller with crash protection
+    try {
+      final controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      
+      // Initialize with timeout
+      final stopwatch = Stopwatch()..start();
+      await controller.initialize().timeout(
+        _initTimeout,
+        onTimeout: () {
+          throw TimeoutException('Video init timed out');
+        },
+      );
+      stopwatch.stop();
+      _debugLog('🎬 Controller init: ${stopwatch.elapsedMilliseconds}ms');
+      
+      try {
+        controller.setLooping(true);
+      } catch (e) {
+        _debugLog('⚠️ Failed to set looping: $e');
+      }
+      
+      // Cache it
+      _controllers[videoUrl] = _CachedController(
+        controller: controller,
+        lastAccessed: DateTime.now(),
+        refCount: 1,
+      );
+      
+      // Cleanup old controllers if cache is too large
+      _cleanupIfNeeded();
+      
+      return controller;
+    } catch (e) {
+      _debugLog('❌ Controller init failed: $e');
+      _failedUrls.add(videoUrl);
+      return null;
+    }
   }
 
   /// Get an existing controller if available (non-blocking)
@@ -109,34 +154,78 @@ class VideoControllerManager {
   /// Dispose all controllers (call on app shutdown)
   void disposeAll() {
     for (final cached in _controllers.values) {
-      cached.controller.dispose();
+      _safeDispose(cached.controller);
     }
     _controllers.clear();
+    _failedUrls.clear();
+  }
+
+  /// Safely dispose a controller (schedule if during build)
+  void _safeDispose(VideoPlayerController controller) {
+    try {
+      // Schedule disposal to avoid disposing during build
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        try {
+          controller.dispose();
+        } catch (e) {
+          _debugLog('⚠️ Controller dispose failed: $e');
+        }
+      });
+    } catch (e) {
+      // Fallback: try immediate dispose
+      try {
+        controller.dispose();
+      } catch (e2) {
+        _debugLog('⚠️ Immediate dispose failed: $e2');
+      }
+    }
   }
 
   /// Preload a video controller in the background
   void preload(String videoUrl) {
     if (_controllers.containsKey(videoUrl)) return;
+    if (_failedUrls.contains(videoUrl)) return;
     
-    // Create and initialize in background
-    final controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-    controller.initialize().then((_) {
-      if (!_controllers.containsKey(videoUrl)) {
-        controller.setLooping(true);
-        _controllers[videoUrl] = _CachedController(
-          controller: controller,
-          lastAccessed: DateTime.now(),
-          refCount: 0,
-        );
-        _cleanupIfNeeded();
-      } else {
-        // Already added by another call, dispose this one
-        controller.dispose();
-      }
-    }).catchError((e) {
-      debugPrint('Failed to preload video: $e');
-      controller.dispose();
-    });
+    // Create and initialize in background with crash protection
+    try {
+      final controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      controller.initialize().timeout(_initTimeout).then((_) {
+        if (!_controllers.containsKey(videoUrl)) {
+          try {
+            controller.setLooping(true);
+          } catch (e) {
+            _debugLog('⚠️ Failed to set looping on preload: $e');
+          }
+          _controllers[videoUrl] = _CachedController(
+            controller: controller,
+            lastAccessed: DateTime.now(),
+            refCount: 0,
+          );
+          _cleanupIfNeeded();
+        } else {
+          // Already added by another call, dispose this one
+          _safeDispose(controller);
+        }
+      }).catchError((e) {
+        _debugLog('⚠️ Failed to preload video: $e');
+        _failedUrls.add(videoUrl);
+        _safeDispose(controller);
+      });
+    } catch (e) {
+      _debugLog('❌ Failed to create preload controller: $e');
+      _failedUrls.add(videoUrl);
+    }
+  }
+
+  /// Clear failed URLs cache (allow retry)
+  void clearFailedUrls() {
+    _failedUrls.clear();
+  }
+
+  void _debugLog(String message) {
+    if (kDebugMode) {
+      debugPrint('[VideoControllerManager] $message');
+    }
   }
 }
 

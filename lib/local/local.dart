@@ -11,7 +11,7 @@ export 'isar_db.dart' if (dart.library.io) 'isar_db.dart';
 export 'models/post_lite_export.dart';
 export 'models/profile_lite.dart' if (dart.library.io) 'models/profile_lite.dart';
 export 'models/conversation_lite_export.dart';
-export 'models/message_lite.dart' if (dart.library.io) 'models/message_lite.dart';
+// MessageLite is exported via local_message_repository.dart (conditional export)
 export 'models/podcast_lite_export.dart';
 export 'models/book_lite_export.dart';
 export 'models/community_post_lite_export.dart';

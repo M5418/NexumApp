@@ -118,8 +118,10 @@ Future<void> main() async {
     if (kIsWeb && (errorString.contains('LegacyJavaScriptObject') ||
         errorString.contains('DiagnosticsNode') ||
         errorString.contains('Assertion failed') ||
+        errorString.contains('FirebaseException') ||
+        errorString.contains('JavaScriptObject') ||
         stackString.contains('window.dart'))) {
-      return; // Silently ignore web debug assertions
+      return; // Silently ignore web debug assertions and Firebase issues
     }
     debugPrint('Unhandled error: $error');
   });
@@ -136,8 +138,10 @@ Future<void> _initApp() async {
       if (errorString.contains('LegacyJavaScriptObject') ||
           errorString.contains('DiagnosticsNode') ||
           errorString.contains('Assertion failed') ||
+          errorString.contains('FirebaseException') ||
+          errorString.contains('JavaScriptObject') ||
           stackString.contains('window.dart')) {
-        return; // Silently ignore web debug assertions
+        return; // Silently ignore web debug assertions and Firebase issues
       }
       FlutterError.presentError(details);
     };
@@ -160,7 +164,10 @@ Future<void> _initApp() async {
   
   // Initialize Auto Performance Mode (non-blocking)
   PerformanceCoordinator().init().catchError((e) => debugPrint('⚠️ PerformanceCoordinator init: $e'));
-  PerfTelemetryService().init(appVersion: '1.0.0').catchError((e) => debugPrint('⚠️ PerfTelemetry init: $e'));
+  // Skip PerfTelemetryService on web - it causes blocking issues
+  if (!kIsWeb) {
+    PerfTelemetryService().init(appVersion: '1.0.0').catchError((e) => debugPrint('⚠️ PerfTelemetry init: $e'));
+  }
   
   // Initialize local database based on platform
   if (kIsWeb) {
@@ -378,6 +385,7 @@ class MyApp extends StatelessWidget {
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
+          debugPrint('🎯 MaterialApp building...');
           return MaterialApp(
             title: 'Nexum',
             theme: themeProvider.lightTheme,
@@ -385,7 +393,12 @@ class MyApp extends StatelessWidget {
             // Drive theme from in-app toggle
             themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
             navigatorObservers: kIsWeb ? [] : [AnalyticsRouteObserver()],
-            home: const AppWrapper(),
+            home: Builder(
+              builder: (context) {
+                debugPrint('🏠 MaterialApp home builder called');
+                return const AppWrapper();
+              },
+            ),
             onGenerateRoute: (settings) {
               // Handle /post route for video tap navigation
               if (settings.name == '/post') {

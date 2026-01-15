@@ -1,9 +1,10 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, debugPrint;
 import 'package:firebase_performance/firebase_performance.dart';
 
 /// Centralized performance monitoring for the app.
 /// Provides traces for module loads, pagination, media fetches, and chat operations.
 /// Debug-only timing logs are guarded to avoid production overhead.
+/// Note: Firebase Performance is not supported on web - skipped on that platform.
 class PerformanceMonitor {
   static final PerformanceMonitor _instance = PerformanceMonitor._internal();
   factory PerformanceMonitor() => _instance;
@@ -14,7 +15,14 @@ class PerformanceMonitor {
   final Map<String, Stopwatch> _debugTimers = {};
 
   /// Initialize performance monitoring (call once at app startup)
+  /// Skipped on web as Firebase Performance is not supported there.
   Future<void> init() async {
+    // Firebase Performance is not supported on web
+    if (kIsWeb) {
+      _debugLog('ℹ️ Performance monitoring skipped on web');
+      return;
+    }
+    
     try {
       _performance = FirebasePerformance.instance;
       // Enable data collection (respects user consent settings)

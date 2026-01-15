@@ -7,6 +7,8 @@ import '../models/book_lite.dart';
 import '../sync/sync_cursor_store.dart';
 import '../web/web_local_store.dart';
 
+export '../models/book_lite.dart';
+
 /// Local-first repository for Books.
 class LocalBookRepository {
   static final LocalBookRepository _instance = LocalBookRepository._internal();
