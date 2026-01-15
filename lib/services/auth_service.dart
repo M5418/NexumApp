@@ -107,9 +107,10 @@ class AuthService extends ChangeNotifier {
       
       if (token != null && token.isNotEmpty) {
         await _fbUsers.updateFCMToken(token);
-        await _fbNotifs.subscribeTopic('direct:user:${fu.uid}');
-        await _fbNotifs.subscribeTopic('feed:new-post');
-        await _fbNotifs.subscribeTopic('system:announcements');
+        // FCM topics can only contain alphanumeric characters and underscores
+        await _fbNotifs.subscribeTopic('direct_user_${fu.uid}');
+        await _fbNotifs.subscribeTopic('feed_new_post');
+        await _fbNotifs.subscribeTopic('system_announcements');
       }
     } catch (e) {
       debugPrint('Messaging setup error (non-critical): $e');
@@ -240,10 +241,10 @@ class AuthService extends ChangeNotifier {
           await _fbUsers.removeFCMToken(t);
         }
         if (uid != null && uid.isNotEmpty) {
-          await _fbNotifs.unsubscribeTopic('direct:user:$uid');
+          await _fbNotifs.unsubscribeTopic('direct_user_$uid');
         }
-        await _fbNotifs.unsubscribeTopic('feed:new-post');
-        await _fbNotifs.unsubscribeTopic('system:announcements');
+        await _fbNotifs.unsubscribeTopic('feed_new_post');
+        await _fbNotifs.unsubscribeTopic('system_announcements');
       } catch (_) {}
       try {
         await _fbAuth.signOut();

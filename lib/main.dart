@@ -152,11 +152,22 @@ Future<void> _initApp() async {
     FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   }
   
+  // CRITICAL: Initialize Firebase FIRST before anything that depends on it
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    debugPrint('✅ Firebase initialized');
+  } catch (e) {
+    // App already initialized (hot restart), ignore
+    debugPrint('Firebase already initialized: $e');
+  }
+  
   // Configure caching for better performance
   CacheConfig.configureImageCache();
   debugPrint('✅ Image cache configured: 500 images, 200MB');
   
-  // Initialize performance infrastructure (non-blocking)
+  // Initialize performance infrastructure (non-blocking) - AFTER Firebase
   CacheManager().init().catchError((e) => debugPrint('⚠️ CacheManager init: $e'));
   PerformanceMonitor().init().catchError((e) => debugPrint('⚠️ PerformanceMonitor init: $e'));
   WriteQueue().init().catchError((e) => debugPrint('⚠️ WriteQueue init: $e'));
@@ -200,16 +211,6 @@ Future<void> _initApp() async {
       debugPrint('⚠️ Isar init: $e');
       return null;
     });
-  }
-  
-  // Prevent duplicate Firebase initialization on hot reload
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    // App already initialized (hot restart), ignore
-    debugPrint('Firebase already initialized: $e');
   }
   
   // Set up Firebase Messaging background handler
