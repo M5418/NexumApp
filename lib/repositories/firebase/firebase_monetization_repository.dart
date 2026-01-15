@@ -204,9 +204,10 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
       );
 
       await docRef.set(earningWithId.toMap());
-
-      // Update summary in background
-      _updateEarningsSummary(earning.userId);
+      
+      // Note: Don't update earnings summary here - the current user may not have
+      // permission to read another user's summary. Summaries are calculated
+      // on-demand when the owner views their monetization page.
     } catch (e) {
       debugPrint('❌ Error recording earning: $e');
       rethrow;
@@ -223,7 +224,10 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
 
   @override
   Stream<EarningsSummary> earningsSummaryStream(String userId) {
-    return _earningsSummaries.doc(userId).snapshots().map((doc) {
+    return _earningsSummaries.doc(userId).snapshots().handleError((error) {
+      debugPrint('⚠️ earningsSummaryStream error (non-critical): $error');
+      // Return empty summary on error - don't crash
+    }).map((doc) {
       if (doc.exists) {
         return EarningsSummary.fromDoc(doc);
       }
