@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import '../repositories/interfaces/monetization_repository.dart';
 import '../repositories/models/monetization_models.dart';
 
@@ -57,6 +57,9 @@ class ContentAnalyticsService {
     required String contentType,
     required String userId,
   }) async {
+    // Skip analytics in debug mode to prevent Firestore crashes on simulator
+    if (kDebugMode) return;
+    
     // Validate IDs to prevent Firestore crash
     if (contentId.isEmpty || userId.isEmpty) {
       debugPrint('⚠️ trackView: skipping - empty contentId or userId');
