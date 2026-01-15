@@ -397,6 +397,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         }
       }
       
+      // Use mediaThumbUrls for images (fast loading), fallback to mediaUrls
+      final imageUrls = p.mediaThumbUrls.isNotEmpty ? p.mediaThumbUrls : p.mediaUrls;
+      
       return Post(
         id: p.id,
         authorId: p.authorId,
@@ -404,7 +407,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         userAvatarUrl: p.authorPhotoUrl ?? '',
         text: p.caption ?? '',
         mediaType: mediaType,
-        imageUrls: p.mediaUrls,
+        imageUrls: imageUrls,
         videoUrl: videoUrl,
         counts: PostCounts(
           likes: p.likeCount,
