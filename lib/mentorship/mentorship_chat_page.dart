@@ -142,19 +142,19 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
     try {
       _isRefreshing = true;
 
-      final bool wasAtBottom = _scroll.hasClients &&
-          (_scroll.position.maxScrollExtent - _scroll.position.pixels) < 120;
+      // With reversed ListView, no need to track scroll position
 
       final snap = await _messagesCol(_convId!)
-          .orderBy('createdAt')
+          .orderBy('createdAt', descending: true)
           .limit(50)
           .get();
       if (!mounted) return;
 
+      final msgs = snap.docs.map((d) => _toUiDoc(d.data(), d.id)).toList();
       setState(() {
         _messages
           ..clear()
-          ..addAll(snap.docs.map((d) => _toUiDoc(d.data(), d.id)));
+          ..addAll(msgs);
         _reactions.clear();
         for (final d in snap.docs) {
           final data = d.data();
@@ -168,9 +168,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
         }
       });
 
-      if (wasAtBottom) {
-        _toBottom();
-      }
+      // With reversed ListView, no need to scroll
 
       await _mentorRepo.markConversationRead(_convId!);
     } catch (_) {
@@ -186,23 +184,27 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
     if (isIsarSupported && _convId != null) {
       final isarMsgs = LocalMentorshipMessageRepository().getLocalSync(_convId!, limit: 50);
       if (isarMsgs.isNotEmpty && mounted) {
+        final msgs = isarMsgs.map(_mapIsarMentorshipMessageToUI).toList();
+        // Sort newest first for reversed ListView
+        msgs.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         setState(() {
           _messages
             ..clear()
-            ..addAll(isarMsgs.map(_mapIsarMentorshipMessageToUI));
+            ..addAll(msgs);
         });
-        _toBottom();
+        // No scroll needed - reversed ListView starts at bottom
         debugPrint('📱 [FastMentorship] Loaded ${isarMsgs.length} messages from Isar');
         // Continue to load fresh data in background
       }
     }
     
-    // Load from Firestore
-    final snap = await _messagesCol(_convId!).orderBy('createdAt').limit(50).get();
+    // Load from Firestore (descending for reversed ListView)
+    final snap = await _messagesCol(_convId!).orderBy('createdAt', descending: true).limit(50).get();
+    final msgs = snap.docs.map((d) => _toUiDoc(d.data(), d.id)).toList();
     setState(() {
       _messages
         ..clear()
-        ..addAll(snap.docs.map((d) => _toUiDoc(d.data(), d.id)));
+        ..addAll(msgs);
       _reactions.clear();
       for (final d in snap.docs) {
         final data = d.data();
@@ -747,10 +749,11 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   }
 
   void _toBottom() {
+    // With reversed ListView, position 0 is the newest message (visual bottom)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         _scroll.animateTo(
-          _scroll.position.maxScrollExtent,
+          0, // For reversed ListView, 0 is the bottom (newest messages)
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -886,6 +889,7 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
             }
             return ListView.builder(
               controller: _scroll,
+              reverse: true, // Start from bottom (latest messages)
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: _messages.length + _daySeparators(),
               itemBuilder: (ctx, idx) => _itemOrSeparator(idx, isDark),
@@ -913,31 +917,33 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
   }
 
   int _daySeparators() {
+    // Count separators for reversed list (newest first)
     int c = 0;
     for (int i = 0; i < _messages.length; i++) {
-      if (i == 0 ||
-          !_sameDay(_messages[i].timestamp, _messages[i - 1].timestamp)) {
+      final isLastOfDay = i == _messages.length - 1 || 
+          !_sameDay(_messages[i].timestamp, _messages[i + 1].timestamp);
+      if (isLastOfDay) {
         c++;
       }
     }
     return c;
   }
 
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
+  bool _sameDay(DateTime a, DateTime b) {
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+  }
 
   Widget _itemOrSeparator(int index, bool isDark) {
-    int msgIdx = index, passed = 0;
+    // With reversed ListView (newest first), separators appear after last message of each day
+    int messageIndex = 0;
+    
     for (int i = 0; i < _messages.length; i++) {
-      if (i == 0 ||
-          !_sameDay(_messages[i].timestamp, _messages[i - 1].timestamp)) {
-        if (msgIdx == i + passed) {
-          return _daySep(_messages[i].timestamp, isDark);
-        }
-        passed++;
-        msgIdx--;
-      }
-      if (msgIdx == i) {
+      final isLastOfDay = i == _messages.length - 1 || 
+          !_sameDay(_messages[i].timestamp, _messages[i + 1].timestamp);
+      
+      if (index == messageIndex) {
         final m = _messages[i];
         final reaction = _reactions[m.id];
         return Padding(
@@ -998,18 +1004,33 @@ class _MentorshipChatPageState extends State<MentorshipChatPage> {
           ),
         );
       }
+      messageIndex++;
+      
+      if (isLastOfDay) {
+        if (index == messageIndex) {
+          return _daySep(_messages[i].timestamp, isDark);
+        }
+        messageIndex++;
+      }
     }
     return const SizedBox.shrink();
   }
 
   Widget _daySep(DateTime date, bool isDark) {
-    final now = DateTime.now(),
-        today = DateTime(now.year, now.month, now.day),
-        d = DateTime(date.year, date.month, date.day);
+    final localDate = date.toLocal();
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final yesterdayMidnight = todayMidnight.subtract(const Duration(days: 1));
+    final messageDateMidnight = DateTime(localDate.year, localDate.month, localDate.day);
+    
     String txt;
-    if (d == today) {
+    if (messageDateMidnight.year == todayMidnight.year &&
+        messageDateMidnight.month == todayMidnight.month &&
+        messageDateMidnight.day == todayMidnight.day) {
       txt = 'Today';
-    } else if (d == today.subtract(const Duration(days: 1))) {
+    } else if (messageDateMidnight.year == yesterdayMidnight.year &&
+               messageDateMidnight.month == yesterdayMidnight.month &&
+               messageDateMidnight.day == yesterdayMidnight.day) {
       txt = 'Yesterday';
     } else {
       const months = [

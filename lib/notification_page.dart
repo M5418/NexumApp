@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'repositories/interfaces/notification_repository.dart';
 import 'core/i18n/language_provider.dart';
-import 'repositories/firebase/firebase_notification_repository.dart';
+import 'providers/notification_provider.dart';
 
 // Navigation targets
 import 'post_page.dart';
@@ -26,36 +26,13 @@ class NotificationPage extends StatefulWidget {
 }
 
 class _NotificationPageState extends State<NotificationPage> {
-  final _repo = FirebaseNotificationRepository();
-  bool _loading = true;
-  String? _error;
-  List<NotificationModel> _items = const [];
-
   @override
   void initState() {
     super.initState();
-    _fetch();
-  }
-
-  Future<void> _fetch() async {
-    setState(() {
-      _loading = true;
-      _error = null;
+    // Refresh notifications when page opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationProvider>().refresh();
     });
-    try {
-      final list = await _repo.getNotifications(limit: 50);
-      setState(() {
-        _items = list;
-      });
-    } catch (e) {
-      setState(() {
-        _error = 'Failed to load notifications';
-      });
-    } finally {
-      setState(() {
-        _loading = false;
-      });
-    }
   }
 
   bool _isToday(DateTime d) {
@@ -112,11 +89,9 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 
   Future<void> _handleTap(NotificationModel n) async {
-    // Mark as read (non-blocking)
-    try {
-      if (!n.isRead) await _repo.markAsRead(n.id);
-    } catch (_) {
-      // ignore
+    // Mark as read via provider
+    if (!n.isRead) {
+      context.read<NotificationProvider>().markAsRead(n.id);
     }
 
     if (!mounted) return;
@@ -319,12 +294,19 @@ class _NotificationPageState extends State<NotificationPage> {
         isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF1F4F8);
     final cardColor = isDark ? const Color(0xFF000000) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
+    final lang = context.watch<LanguageProvider>();
+    final notifProvider = context.watch<NotificationProvider>();
+    
+    final items = notifProvider.notifications;
+    final isLoading = notifProvider.isLoading;
+    final error = notifProvider.error;
 
     final today =
-        _items.where((n) => _isToday(n.createdAt)).map(_toUIItem).toList();
+        items.where((n) => _isToday(n.createdAt)).map(_toUIItem).toList();
     final yesterday =
-        _items.where((n) => !_isToday(n.createdAt)).map(_toUIItem).toList();
+        items.where((n) => !_isToday(n.createdAt)).map(_toUIItem).toList();
     final hasAny = today.isNotEmpty || yesterday.isNotEmpty;
+    final hasUnread = items.any((n) => !n.isRead);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -336,7 +318,7 @@ class _NotificationPageState extends State<NotificationPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          Provider.of<LanguageProvider>(context).t('notifications.title'),
+          lang.t('notifications.title'),
           style: GoogleFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -345,6 +327,18 @@ class _NotificationPageState extends State<NotificationPage> {
         ),
         centerTitle: true,
         actions: [
+          if (hasUnread)
+            TextButton(
+              onPressed: () => notifProvider.markAllAsRead(),
+              child: Text(
+                lang.t('notifications.mark_all_read'),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFBFAE01),
+                ),
+              ),
+            ),
           IconButton(
             icon: Icon(
               Icons.more_horiz,
@@ -355,10 +349,10 @@ class _NotificationPageState extends State<NotificationPage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _fetch,
-        child: _loading
+        onRefresh: () async => notifProvider.refresh(),
+        child: isLoading && items.isEmpty
             ? const Center(child: CircularProgressIndicator())
-            : _error != null
+            : error != null && items.isEmpty
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
@@ -366,7 +360,7 @@ class _NotificationPageState extends State<NotificationPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            _error!,
+                            error,
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               color: isDark ? Colors.white : Colors.black,
@@ -375,8 +369,8 @@ class _NotificationPageState extends State<NotificationPage> {
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton(
-                            onPressed: _fetch,
-                            child: Text(Provider.of<LanguageProvider>(context).t('notifications.retry')),
+                            onPressed: () => notifProvider.refresh(),
+                            child: Text(lang.t('notifications.retry')),
                           ),
                         ],
                       ),
@@ -388,7 +382,7 @@ class _NotificationPageState extends State<NotificationPage> {
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 720),
                           child: SingleChildScrollView(
-                            physics: const BouncingScrollPhysics(),
+                            physics: const AlwaysScrollableScrollPhysics(),
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                               child: Container(
@@ -411,24 +405,28 @@ class _NotificationPageState extends State<NotificationPage> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             const SizedBox(height: 10),
-                                            _SectionHeader(
-                                                label: Provider.of<LanguageProvider>(context, listen: false).t('common.today'), isDark: isDark),
-                                            ...today.map((n) =>
-                                                _NotificationTile(
-                                                    item: n, isDark: isDark)),
-                                            const SizedBox(height: 6),
-                                            _SectionHeader(
-                                                label: Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday'),
-                                                isDark: isDark),
-                                            ...yesterday.map((n) =>
-                                                _NotificationTile(
-                                                    item: n, isDark: isDark)),
+                                            if (today.isNotEmpty) ...[
+                                              _SectionHeader(
+                                                  label: lang.t('common.today'), isDark: isDark),
+                                              ...today.map((n) =>
+                                                  _NotificationTile(
+                                                      item: n, isDark: isDark)),
+                                            ],
+                                            if (yesterday.isNotEmpty) ...[
+                                              const SizedBox(height: 6),
+                                              _SectionHeader(
+                                                  label: lang.t('common.earlier'),
+                                                  isDark: isDark),
+                                              ...yesterday.map((n) =>
+                                                  _NotificationTile(
+                                                      item: n, isDark: isDark)),
+                                            ],
                                           ],
                                         )
                                       : Padding(
                                           padding: const EdgeInsets.all(16),
                                           child: Text(
-                                            Provider.of<LanguageProvider>(context).t('notifications.no_notifications'),
+                                            lang.t('notifications.no_notifications'),
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               color: isDark
@@ -445,7 +443,7 @@ class _NotificationPageState extends State<NotificationPage> {
                         ),
                       )
                     : SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
+                        physics: const AlwaysScrollableScrollPhysics(),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                           child: Container(
@@ -468,22 +466,26 @@ class _NotificationPageState extends State<NotificationPage> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         const SizedBox(height: 10),
-                                        _SectionHeader(
-                                            label: Provider.of<LanguageProvider>(context, listen: false).t('common.today'), isDark: isDark),
-                                        ...today.map((n) => _NotificationTile(
-                                            item: n, isDark: isDark)),
-                                        const SizedBox(height: 6),
-                                        _SectionHeader(
-                                            label: Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday'), isDark: isDark),
-                                        ...yesterday.map((n) =>
-                                            _NotificationTile(
-                                                item: n, isDark: isDark)),
+                                        if (today.isNotEmpty) ...[
+                                          _SectionHeader(
+                                              label: lang.t('common.today'), isDark: isDark),
+                                          ...today.map((n) => _NotificationTile(
+                                              item: n, isDark: isDark)),
+                                        ],
+                                        if (yesterday.isNotEmpty) ...[
+                                          const SizedBox(height: 6),
+                                          _SectionHeader(
+                                              label: lang.t('common.earlier'), isDark: isDark),
+                                          ...yesterday.map((n) =>
+                                              _NotificationTile(
+                                                  item: n, isDark: isDark)),
+                                        ],
                                       ],
                                     )
                                   : Padding(
                                       padding: const EdgeInsets.all(16),
                                       child: Text(
-                                        Provider.of<LanguageProvider>(context).t('notifications.no_notifications'),
+                                        lang.t('notifications.no_notifications'),
                                         style: GoogleFonts.inter(
                                           fontSize: 14,
                                           color: isDark
@@ -532,47 +534,66 @@ class _NotificationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final secondary =
         isDark ? const Color(0xFF999999) : const Color(0xFF666666);
+    final unreadBgColor = isDark 
+        ? const Color(0xFF1A1A1A) 
+        : const Color(0xFFFFFBE6); // Light yellow tint for unread
 
     return InkWell(
       onTap: item.onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _StackedAvatars(urls: item.avatarUrls),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _NotificationText(item: item, isDark: isDark),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.timeLabel,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: secondary,
-                      fontWeight: FontWeight.w400,
-                    ),
+      child: Container(
+        color: item.isRead ? Colors.transparent : unreadBgColor,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Unread indicator dot
+              if (!item.isRead)
+                Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFBFAE01),
+                    shape: BoxShape.circle,
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (item.trailingImageUrl != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  item.trailingImageUrl!,
-                  width: 44,
-                  height: 44,
-                  fit: BoxFit.cover,
+                )
+              else
+                const SizedBox(width: 14), // Space for alignment
+              _StackedAvatars(urls: item.avatarUrls),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _NotificationText(item: item, isDark: isDark),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.timeLabel,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: secondary,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
                 ),
-              )
-            else if (item.trailingChipLabel != null)
-              _ConnectedChip(label: item.trailingChipLabel!, isDark: isDark),
-          ],
+              ),
+              const SizedBox(width: 8),
+              if (item.trailingImageUrl != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    item.trailingImageUrl!,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              else if (item.trailingChipLabel != null)
+                _ConnectedChip(label: item.trailingChipLabel!, isDark: isDark),
+            ],
+          ),
         ),
       ),
     );

@@ -40,7 +40,6 @@ import 'video_scroll_page.dart';
 import 'livestream/livestream_list_page.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'repositories/firebase/firebase_notification_repository.dart';
 import 'repositories/interfaces/block_repository.dart';
 import 'core/post_events.dart';
 import 'core/profile_api.dart'; // Feed preferences
@@ -51,6 +50,7 @@ import 'core/performance/performance_coordinator.dart';
 import 'local/local_store.dart';
 import 'local/repositories/local_post_repository.dart';
 import 'local/repositories/local_story_repository.dart';
+import 'providers/notification_provider.dart';
 
 class HomeFeedPage extends StatefulWidget {
   final int initialNavIndex;
@@ -71,9 +71,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   String? _currentUserId;
   int _desktopSectionIndex =
       0; // 0=Home, 1=Connections, 2=Conversations, 3=Profile
-
-  // Unread notifications badge
-  int _unreadCount = 0;
 
   // Live updates between feed and post page
   StreamSubscription<PostUpdateEvent>? _postEventsSub;
@@ -118,7 +115,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       _loadFeedPrefs().then((_) {
         if (mounted) setState(() => _posts = _applyFeedFilters(_posts));
       });
-      _loadUnreadCount();
       _loadStoriesInBackground();
       _loadSuggestedUsers();
     }();
@@ -250,21 +246,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       });
     } catch (_) {
       // Use defaults
-    }
-  }
-
-  Future<void> _loadUnreadCount() async {
-    try {
-      final c = await FirebaseNotificationRepository().getUnreadCount();
-      if (!mounted) return;
-      setState(() {
-        _unreadCount = c;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _unreadCount = 0;
-      });
     }
   }
 
@@ -2061,7 +2042,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                   const Spacer(),
                   BadgeIcon(
                     icon: Icons.notifications_outlined,
-                    badgeCount: _unreadCount,
+                    badgeCount: context.watch<NotificationProvider>().unreadCount,
                     iconColor: const Color(0xFF666666),
                     onTap: () async {
                       final size = MediaQuery.of(context).size;
@@ -2109,8 +2090,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                               builder: (_) => const NotificationPage()),
                         );
                       }
-                      if (!mounted) return;
-                      await _loadUnreadCount();
                     },
                   ),
                 ],
@@ -2606,7 +2585,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       color: const Color(0xFFBFAE01),
       child: NotificationListener<ScrollNotification>(
         onNotification: (ScrollNotification notification) {
-          // No need to manage reaction picker with HomePostCard
+          // No need to manage reaction picker with PostCard
           return false;
         },
         child: CustomScrollView(
@@ -2665,7 +2644,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                           ),
                           BadgeIcon(
                             icon: Icons.notifications_outlined,
-                            badgeCount: _unreadCount,
+                            badgeCount: context.watch<NotificationProvider>().unreadCount,
                             iconColor: const Color(0xFF666666),
                             onTap: () async {
                               await Navigator.push(
@@ -2675,7 +2654,6 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                   builder: (_) => const NotificationPage(),
                                 ),
                               );
-                              await _loadUnreadCount();
                             },
                           ),
                         ],

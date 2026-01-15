@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 
-import 'player_page.dart';
+import 'podcast_details_page.dart';
 import 'podcasts_home_page.dart' show Podcast;
+import '../repositories/interfaces/podcast_repository.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -25,10 +27,26 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = false;
+      _loading = true;
       _error = null;
-      _items = [];
     });
+    
+    try {
+      final repo = context.read<PodcastRepository>();
+      final models = await repo.getBookmarkedPodcasts();
+      
+      if (!mounted) return;
+      setState(() {
+        _items = models.map(Podcast.fromModel).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Failed to load favorites: $e';
+        _loading = false;
+      });
+    }
   }
 
   String _mmss(int? sec) {
@@ -61,7 +79,36 @@ class _FavoritesPageState extends State<FavoritesPage> {
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFBFAE01)))
           : _error != null
               ? Center(child: Text(_error!, style: GoogleFonts.inter(color: Colors.red)))
-              : GridView.builder(
+              : _items.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.star_border,
+                            size: 64,
+                            color: isDark ? Colors.white30 : Colors.black26,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No favorites yet',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              color: isDark ? Colors.white70 : const Color(0xFF666666),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Podcasts you favorite will appear here',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: isDark ? Colors.white54 : const Color(0xFF999999),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GridView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _items.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -74,9 +121,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
                     final e = _items[i];
                     return GestureDetector(
                       onTap: () {
-                        if ((e.audioUrl ?? '').isNotEmpty) {
-                          Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: e)));
-                        }
+                        // Navigate to podcast details page
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            settings: const RouteSettings(name: 'podcast_details'),
+                            builder: (_) => PodcastDetailsPage(podcast: e),
+                          ),
+                        );
                       },
                       child: Container(
                         decoration: BoxDecoration(

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
-import 'player_page.dart';
+import 'podcast_details_page.dart';
+import '../repositories/interfaces/playlist_repository.dart';
+import '../repositories/interfaces/podcast_repository.dart';
 
 class FavoritePlaylistPage extends StatefulWidget {
   final String playlistId;
@@ -28,11 +31,48 @@ class _FavoritePlaylistPageState extends State<FavoritePlaylistPage> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = false;
+      _loading = true;
       _error = null;
-      _name = 'My Playlist';
-      _items = [];
     });
+    
+    try {
+      final playlistRepo = context.read<PlaylistRepository>();
+      final podcastRepo = context.read<PodcastRepository>();
+      
+      // Get the playlist details
+      final playlist = await playlistRepo.getPlaylist(widget.playlistId);
+      if (playlist == null) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'Playlist not found';
+          _loading = false;
+        });
+        return;
+      }
+      
+      _name = playlist.name;
+      
+      // Load all podcasts in the playlist
+      final podcasts = <Podcast>[];
+      for (final podcastId in playlist.podcastIds) {
+        final model = await podcastRepo.getPodcast(podcastId);
+        if (model != null) {
+          podcasts.add(Podcast.fromModel(model));
+        }
+      }
+      
+      if (!mounted) return;
+      setState(() {
+        _items = podcasts;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Failed to load playlist: $e';
+        _loading = false;
+      });
+    }
   }
 
   String _mmss(int? sec) {
@@ -103,28 +143,64 @@ class _FavoritePlaylistPageState extends State<FavoritePlaylistPage> {
                       ),
                     ),
 
-                    // Items (restored episode row design)
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                      sliver: SliverList.builder(
-                        itemCount: _items.length,
-                        itemBuilder: (context, i) {
-                          final e = _items[i];
-                          return _EpisodeRow(
-                            title: e.title,
-                            subtitle: e.author ?? 'Unknown',
-                            // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
-                            coverUrl: e.listCoverUrl ?? '',
-                            durationLabel: _mmss(e.durationSec),
-                            onPlay: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(settings: const RouteSettings(name: 'podcast_player'), builder: (_) => PlayerPage(podcast: e)),
-                            ),
-                            isDark: isDark,
-                          );
-                        },
+                    // Empty state or items
+                    if (_items.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.playlist_add,
+                                size: 64,
+                                color: isDark ? Colors.white30 : Colors.black26,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Playlist is empty',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  color: isDark ? Colors.white70 : const Color(0xFF666666),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Add podcasts to this playlist',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  color: isDark ? Colors.white54 : const Color(0xFF999999),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                        sliver: SliverList.builder(
+                          itemCount: _items.length,
+                          itemBuilder: (context, i) {
+                            final e = _items[i];
+                            return _EpisodeRow(
+                              title: e.title,
+                              subtitle: e.author ?? 'Unknown',
+                              // FASTFEED: Use listCoverUrl (thumbnail) for fast loading
+                              coverUrl: e.listCoverUrl ?? '',
+                              durationLabel: _mmss(e.durationSec),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  settings: const RouteSettings(name: 'podcast_details'),
+                                  builder: (_) => PodcastDetailsPage(podcast: e),
+                                ),
+                              ),
+                              isDark: isDark,
+                            );
+                          },
+                        ),
                       ),
-                    ),
                   ],
                 ),
     );
@@ -136,21 +212,21 @@ class _EpisodeRow extends StatelessWidget {
   final String subtitle;
   final String coverUrl;
   final String durationLabel;
-  final VoidCallback onPlay;
+  final VoidCallback onTap;
   final bool isDark;
   const _EpisodeRow({
     required this.title,
     required this.subtitle,
     required this.coverUrl,
     required this.durationLabel,
-    required this.onPlay,
+    required this.onTap,
     required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPlay,
+      onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(10),
@@ -237,7 +313,7 @@ class _EpisodeRow extends StatelessWidget {
                 Icons.play_circle_fill,
                 color: Color(0xFFBFAE01),
               ),
-              onPressed: onPlay,
+              onPressed: onTap,
             ),
           ],
         ),

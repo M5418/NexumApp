@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../repositories/interfaces/podcast_repository.dart';
 import '../repositories/firebase/firebase_podcast_repository.dart';
 import '../core/i18n/language_provider.dart';
+import '../widgets/floating_mini_player.dart';
 import 'podcast_details_page.dart';
 import 'create_podcast_page.dart';
 import 'player_page.dart';
@@ -338,15 +339,17 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
         ],
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
       ),
-      body: RefreshIndicator(
-        color: const Color(0xFFBFAE01),
-        onRefresh: () async {
-          await _loadTop();
-          await _loadAllPodcasts();
-        },
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            color: const Color(0xFFBFAE01),
+            onRefresh: () async {
+              await _loadTop();
+              await _loadAllPodcasts();
+            },
+            child: ListView(
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 80),
+              children: [
             // Quick actions grid (4 items, pill style)
             GridView(
               shrinkWrap: true,
@@ -453,6 +456,15 @@ class _PodcastsHomePageState extends State<PodcastsHomePage> {
               )),
           ],
         ),
+      ),
+          // Floating mini-player at bottom
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: FloatingMiniPlayer(),
+          ),
+        ],
       ),
     );
   }

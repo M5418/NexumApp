@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../repositories/interfaces/playlist_repository.dart';
 import '../repositories/firebase/firebase_playlist_repository.dart';
 import 'my_episodes_page.dart';
+import 'podcast_drafts_page.dart';
 import 'favorite_playlist_page.dart';
 
 class MyLibraryPage extends StatefulWidget {
@@ -188,11 +189,13 @@ class _MyLibraryPageState extends State<MyLibraryPage> {
                           _ActionCard(
                             icon: Icons.drafts_outlined,
                             label: 'Drafts',
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Drafts coming soon', style: GoogleFonts.inter())),
-                              );
-                            },
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                settings: const RouteSettings(name: 'podcast_drafts'),
+                                builder: (_) => const PodcastDraftsPage(),
+                              ),
+                            ),
                             isDark: isDark,
                           ),
                           _ActionCard(

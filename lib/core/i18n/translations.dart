@@ -410,6 +410,7 @@ class Translations {
       'common.link_copied': 'Link copied to clipboard',
       'common.yesterday': 'Yesterday',
       'common.today': 'Today',
+      'common.earlier': 'Earlier',
       'common.just_now': 'Just now',
       'common.unknown': 'Unknown',
       'common.unknown_author': 'Unknown Author',
@@ -1823,6 +1824,7 @@ class Translations {
       'common.link_copied': 'Lien copié dans le presse-papiers',
       'common.yesterday': 'Hier',
       'common.today': 'Aujourd\'hui',
+      'common.earlier': 'Plus tôt',
       'common.just_now': 'À l\'instant',
       'common.unknown': 'Inconnu',
       'common.unknown_author': 'Auteur inconnu',
@@ -2129,6 +2131,7 @@ class Translations {
       // Notifications
       'notifications.title': 'Notifications',
       'notifications.no_notifications': 'Aucune notification',
+      'notifications.mark_all_read': 'Tout marquer comme lu',
       'notifications.retry': 'Réessayer',
 
       // Activity
@@ -3312,6 +3315,7 @@ class Translations {
       'common.link_copied': 'Link copiado para a área de transferência',
       'common.yesterday': 'Ontem',
       'common.today': 'Hoje',
+      'common.earlier': 'Mais cedo',
       'common.just_now': 'Agora mesmo',
       'common.unknown': 'Desconhecido',
       'common.unknown_author': 'Autor desconhecido',
@@ -3593,6 +3597,7 @@ class Translations {
       // Notifications
       'notifications.title': 'Notificações',
       'notifications.no_notifications': 'Sem notificações',
+      'notifications.mark_all_read': 'Marcar tudo como lido',
       'notifications.retry': 'Tentar novamente',
 
       // Activity
@@ -4429,6 +4434,7 @@ class Translations {
       'common.link_copied': 'Enlace copiado al portapapeles',
       'common.yesterday': 'Ayer',
       'common.today': 'Hoy',
+      'common.earlier': 'Antes',
       'common.just_now': 'Ahora mismo',
       'common.unknown': 'Desconocido',
       'common.unknown_author': 'Autor desconocido',
@@ -4704,6 +4710,7 @@ class Translations {
       // Notifications
       'notifications.title': 'Notificaciones',
       'notifications.no_notifications': 'Sin notificaciones',
+      'notifications.mark_all_read': 'Marcar todo como leído',
       'notifications.retry': 'Reintentar',
 
       // Activity
@@ -5538,6 +5545,7 @@ class Translations {
       'common.link_copied': 'Link in Zwischenablage kopiert',
       'common.yesterday': 'Gestern',
       'common.today': 'Heute',
+      'common.earlier': 'Früher',
       'common.just_now': 'Gerade eben',
       'common.unknown': 'Unbekannt',
       'common.unknown_author': 'Unbekannter Autor',
@@ -5813,6 +5821,7 @@ class Translations {
       // Notifications
       'notifications.title': 'Benachrichtigungen',
       'notifications.no_notifications': 'Keine Benachrichtigungen',
+      'notifications.mark_all_read': 'Alle als gelesen markieren',
       'notifications.retry': 'Wiederholen',
 
       // Activity

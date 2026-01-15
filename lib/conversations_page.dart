@@ -26,7 +26,7 @@ import 'core/admin_config.dart';
 import 'package:provider/provider.dart';
 import 'repositories/interfaces/conversation_repository.dart';
 import 'repositories/interfaces/community_repository.dart';
-import 'repositories/firebase/firebase_notification_repository.dart';
+import 'providers/notification_provider.dart';
 import 'responsive/responsive_breakpoints.dart';
 import 'services/community_interest_sync_service.dart';
 import 'services/app_cache_service.dart';
@@ -94,9 +94,6 @@ class _ConversationsPageState extends State<ConversationsPage>
   late ConversationRepository _convRepo;
   late CommunityRepository _commRepo;
 
-  // Notifications badge
-  int _unreadNotifications = 0;
-
   // Chats state
   bool _loadingConversations = false;
   String? _errorConversations;
@@ -163,7 +160,6 @@ class _ConversationsPageState extends State<ConversationsPage>
     _loadConversations();
     _loadGroups();
     _loadCommunities();
-    _loadUnreadNotifications();
     
     // Subscribe to real-time conversation updates for unread badges
     _subscribeToConversations();
@@ -368,17 +364,6 @@ class _ConversationsPageState extends State<ConversationsPage>
       }
     } catch (e) {
       // Silent fail - don't block community loading
-    }
-  }
-
-  Future<void> _loadUnreadNotifications() async {
-    try {
-      final c = await FirebaseNotificationRepository().getUnreadCount();
-      if (!mounted) return;
-      setState(() => _unreadNotifications = c);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _unreadNotifications = 0);
     }
   }
 
@@ -1059,7 +1044,7 @@ Widget _buildDesktopBody(bool isDark) {
                   const Spacer(),
                   BadgeIcon(
                     icon: Icons.notifications_outlined,
-                    badgeCount: _unreadNotifications,
+                    badgeCount: context.watch<NotificationProvider>().unreadCount,
                     iconColor: const Color(0xFF666666),
                          onTap: () async {
                     // Desktop top-right popup
@@ -1102,7 +1087,6 @@ Widget _buildDesktopBody(bool isDark) {
                       );
                     }
                     if (!mounted) return;
-                    await _loadUnreadNotifications();
                   },
                   ),
                 ],
@@ -1171,14 +1155,13 @@ Widget _buildDesktopBody(bool isDark) {
           padding: const EdgeInsets.only(right: 8),
           child: BadgeIcon(
             icon: Icons.notifications_outlined,
-            badgeCount: _unreadNotifications,
+            badgeCount: context.watch<NotificationProvider>().unreadCount,
             iconColor: iconColor,
             onTap: () async {
               await Navigator.push(
                 context,
                 MaterialPageRoute(settings: const RouteSettings(name: 'notifications'), builder: (_) => const NotificationPage()),
               );
-              await _loadUnreadNotifications();
             },
           ),
         ),

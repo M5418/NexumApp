@@ -141,216 +141,198 @@ class _MessageInviteCardState extends State<MessageInviteCard> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? Colors.black : Colors.white;
+    final backgroundColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final secondaryTextColor = isDark ? Colors.white70 : const Color(0xFF666666);
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = (screenWidth * 0.9).clamp(0.0, 360.0);
+    final screenHeight = MediaQuery.of(context).size.height;
+    
+    // Card dimensions - responsive
+    final cardWidth = (screenWidth * 0.9).clamp(300.0, 400.0);
 
-    return Container(
-      width: cardWidth,
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Top drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: const Color(0xFF666666).withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
+    return Center(
+      child: Container(
+        width: cardWidth,
+        constraints: BoxConstraints(
+          maxHeight: screenHeight * 0.75,
+        ),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
             ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Header with cover image and user info
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                color: cardColor,
-                child: Column(
-                  children: [
-                    // Cover image with overlapping avatar
-                    SizedBox(
-                      height:
-                          220, // Increased to accommodate overlapping avatar and text
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          // Cover image
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(25),
-                            child: CachedNetworkImage(
-                              imageUrl: widget.coverUrl,
-                              width: double.infinity,
-                              height: 140,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: const Color(
-                                  0xFF666666,
-                                ).withValues(alpha: 0.2),
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: const Color(
-                                  0xFF666666,
-                                ).withValues(alpha: 0.2),
-                                child: const Icon(
-                                  Icons.image,
-                                  color: Color(0xFF666666),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // Avatar overlapping at bottom-left
-                          Positioned(
-                            left: 20,
-                            top: 95, // Position to overlap cover image
-                            child: Container(
-                              width: 90,
-                              height: 90,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: cardColor, width: 4),
-                              ),
-                              child: ClipOval(
-                                child: CachedNetworkImage(
-                                  imageUrl: widget.avatarUrl,
-                                  width: 90,
-                                  height: 90,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    color: const Color(
-                                      0xFF666666,
-                                    ).withValues(alpha: 0.2),
-                                    child: const Icon(
-                                      Icons.person,
-                                      color: Color(0xFF666666),
-                                      size: 40,
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      Container(
-                                        color: const Color(
-                                          0xFF666666,
-                                        ).withValues(alpha: 0.2),
-                                        child: const Icon(
-                                          Icons.person,
-                                          color: Color(0xFF666666),
-                                          size: 40,
-                                        ),
-                                      ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // User info positioned to the right of avatar
-                          Positioned(
-                            left: 130,
-                            top: 125,
-                            right: 20,
-                            bottom: 20,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  widget.fullName,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white : Colors.black,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  widget.bio,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                    color: const Color(0xFF666666),
-                                  ),
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+          ],
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Close button at top right
+              Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12, right: 12),
+                  child: GestureDetector(
+                    onTap: widget.onClose,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
                       ),
+                      child: Icon(
+                        Icons.close,
+                        size: 18,
+                        color: secondaryTextColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Avatar - centered and prominent
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFBFAE01),
+                    width: 3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFBFAE01).withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
+                child: ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: widget.avatarUrl,
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: isDark ? Colors.grey[800] : Colors.grey[200],
+                      child: Icon(
+                        Icons.person,
+                        color: secondaryTextColor,
+                        size: 50,
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: isDark ? Colors.grey[800] : Colors.grey[200],
+                      child: Icon(
+                        Icons.person,
+                        color: secondaryTextColor,
+                        size: 50,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Message input field
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Stack(
-              children: [
-                TextField(
-                  controller: _messageController,
-                  minLines: 3,
-                  maxLines: 5,
+              
+              const SizedBox(height: 16),
+              
+              // User name
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  widget.fullName,
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: textColor,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Bio
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  widget.bio.isNotEmpty ? widget.bio : 'No bio available',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
+                    color: secondaryTextColor,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Divider
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                height: 1,
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // "Send Connection Request" label
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Send Connection Request',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 12),
+              
+              // Message input field
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: TextField(
+                  controller: _messageController,
+                  minLines: 3,
+                  maxLines: 4,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: textColor,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Invitation message (required)',
+                    hintText: 'Write a message to introduce yourself...',
                     hintStyle: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
-                      color: const Color(0xFF666666),
+                      color: secondaryTextColor.withValues(alpha: 0.6),
                     ),
+                    filled: true,
+                    fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF666666),
-                        width: 1,
-                      ),
+                      borderSide: BorderSide.none,
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF666666),
-                        width: 1,
-                      ),
+                      borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -359,47 +341,61 @@ class _MessageInviteCardState extends State<MessageInviteCard> {
                         width: 2,
                       ),
                     ),
-                    contentPadding: const EdgeInsets.fromLTRB(16, 16, 60, 16),
+                    contentPadding: const EdgeInsets.all(16),
                   ),
                 ),
-
-                // Send button positioned at bottom-right
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF666666),
-                        width: 1,
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Send button - full width
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _sendInvitation,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFBFAE01),
+                      foregroundColor: Colors.black,
+                      disabledBackgroundColor: const Color(0xFFBFAE01).withValues(alpha: 0.5),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      color: cardColor,
                     ),
-                    child: IconButton(
-                      onPressed: _isLoading ? null : _sendInvitation,
-                      icon: _isLoading
-                          ? const CircularProgressIndicator(
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Color(0xFF666666),
-                            )
-                          : const Icon(
-                              Icons.send,
-                              color: Color(0xFF666666),
-                              size: 20,
+                              color: Colors.black,
                             ),
-                      padding: EdgeInsets.zero,
-                    ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.send_rounded, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Send Invitation',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              
+              const SizedBox(height: 24),
+            ],
           ),
-
-          const SizedBox(height: 24),
-        ],
+        ),
       ),
     );
   }

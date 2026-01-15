@@ -208,12 +208,14 @@ Future<void> _handleUnblock() async {
       final isarMsgs = LocalMessageRepository().getLocalSync(_resolvedConversationId!, limit: 50);
       if (isarMsgs.isNotEmpty && mounted) {
         final mapped = isarMsgs.map(_mapIsarMessageToUI).toList();
+        // Sort newest first for reversed ListView
+        mapped.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         setState(() {
           _messages.clear();
           _messages.addAll(mapped);
           _isLoading = false;
         });
-        _scrollToBottom();
+        // No scroll needed - reversed ListView starts at bottom
         stopwatch.stop();
         PerformanceMonitor().stopChatLoad(messageCount: mapped.length);
         PerformanceCoordinator().recordChatLoadTime(stopwatch.elapsedMilliseconds);
@@ -227,6 +229,8 @@ Future<void> _handleUnblock() async {
       final records = await _firebaseMsgRepo.listFromCache(_resolvedConversationId ?? '');
       if (records.isNotEmpty && mounted) {
         final mapped = records.map(_toUiMessage).toList();
+        // Sort newest first for reversed ListView
+        mapped.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         setState(() {
           _messages.clear();
           _messages.addAll(mapped);
@@ -239,7 +243,7 @@ Future<void> _handleUnblock() async {
           }
           _isLoading = false;
         });
-        _scrollToBottom();
+        // No scroll needed - reversed ListView starts at bottom
         stopwatch.stop();
         PerformanceMonitor().stopChatLoad(messageCount: mapped.length);
         PerformanceCoordinator().recordChatLoadTime(stopwatch.elapsedMilliseconds);
@@ -334,6 +338,8 @@ Future<void> _handleUnblock() async {
       
       final records = await _msgRepo.list(_resolvedConversationId!);
       final mapped = records.map(_toUiMessage).toList();
+      // Sort newest first for reversed ListView
+      mapped.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       
       if (!mounted) return;
       setState(() {
@@ -349,7 +355,7 @@ Future<void> _handleUnblock() async {
         }
         _isLoading = false;
       });
-      _scrollToBottom();
+      // No need to scroll - reversed ListView starts at bottom automatically
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -380,6 +386,8 @@ Future<void> _handleUnblock() async {
       if (!mounted) return;
       
       final mapped = records.map(_toUiMessage).toList();
+      // Sort newest first for reversed ListView
+      mapped.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       
       // Check if there are new messages
       final hasNewMessages = mapped.isNotEmpty && 
@@ -398,11 +406,8 @@ Future<void> _handleUnblock() async {
         }
       });
       
-      // Auto-scroll if user was at bottom
-      if (_scrollController.hasClients) {
-        final atBottom = (_scrollController.position.maxScrollExtent - _scrollController.position.pixels) < 120;
-        if (atBottom) _scrollToBottom();
-      }
+      // With reversed ListView, new messages appear at top (index 0) automatically
+      // No need to scroll
       
       // Mark as read when new messages arrive while user is in the chat
       if (hasNewMessages) {
@@ -425,6 +430,8 @@ Future<void> _refreshMessages() async {
 
     final records = await _msgRepo.list(_resolvedConversationId!, limit: 50);
     final mapped = records.map(_toUiMessage).toList();
+    // Sort newest first for reversed ListView
+    mapped.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
     if (!mounted) return;
     
@@ -704,10 +711,11 @@ void dispose() {
   }
 
   void _scrollToBottom() {
+    // With reversed ListView, position 0 is the newest message (visual bottom)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0, // For reversed ListView, 0 is the bottom (newest messages)
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -1701,6 +1709,7 @@ void dispose() {
 
                 return ListView.builder(
                   controller: _scrollController,
+                  reverse: true, // Start from bottom (latest messages)
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: _messages.length + _getDaySeparatorCount(),
                   itemBuilder: (context, index) {
@@ -2237,24 +2246,29 @@ void dispose() {
   }
 
   Widget _buildMessageOrSeparator(int index, bool isDark) {
-    int messageIndex = index;
-    int separatorsPassed = 0;
-
+    // With reversed ListView (newest first), we need to show date separators
+    // AFTER the last message of each day (which appears BEFORE in the reversed list)
+    int messageIndex = 0;
+    
     for (int i = 0; i < _messages.length; i++) {
-      if (i == 0 ||
-          !_isSameDay(_messages[i].timestamp, _messages[i - 1].timestamp)) {
-        if (messageIndex == i + separatorsPassed) {
-          return _buildDaySeparator(_messages[i].timestamp, isDark);
-        }
-        separatorsPassed++;
-        messageIndex--;
-      }
-
-      if (messageIndex == i) {
+      // Check if this message is the last of its day (next message is different day or end of list)
+      final isLastOfDay = i == _messages.length - 1 || 
+          !_isSameDay(_messages[i].timestamp, _messages[i + 1].timestamp);
+      
+      if (index == messageIndex) {
+        // Return the message
         final message = _messages[i];
         final reaction = _messageReactions[message.id];
-
         return _buildMessageBubble(message, isDark, reaction);
+      }
+      messageIndex++;
+      
+      if (isLastOfDay) {
+        if (index == messageIndex) {
+          // Return the date separator (shows the date of the messages above it)
+          return _buildDaySeparator(_messages[i].timestamp, isDark);
+        }
+        messageIndex++;
       }
     }
     return const SizedBox.shrink();
@@ -2262,15 +2276,24 @@ void dispose() {
 
   Widget _buildDaySeparator(DateTime date, bool isDark) {
     // Convert to local timezone for proper date display
+    // Use DateTime.now() which is already in local timezone
     final localDate = date.toLocal();
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final messageDate = DateTime(localDate.year, localDate.month, localDate.day);
+    
+    // Create date-only objects for comparison (midnight of each day in local time)
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final yesterdayMidnight = todayMidnight.subtract(const Duration(days: 1));
+    final messageDateMidnight = DateTime(localDate.year, localDate.month, localDate.day);
 
     String dateText;
-    if (messageDate == today) {
+    // Compare dates properly
+    if (messageDateMidnight.year == todayMidnight.year &&
+        messageDateMidnight.month == todayMidnight.month &&
+        messageDateMidnight.day == todayMidnight.day) {
       dateText = Provider.of<LanguageProvider>(context, listen: false).t('common.today');
-    } else if (messageDate == today.subtract(const Duration(days: 1))) {
+    } else if (messageDateMidnight.year == yesterdayMidnight.year &&
+               messageDateMidnight.month == yesterdayMidnight.month &&
+               messageDateMidnight.day == yesterdayMidnight.day) {
       dateText = Provider.of<LanguageProvider>(context, listen: false).t('common.yesterday');
     } else {
       final lang = Provider.of<LanguageProvider>(context, listen: false);
@@ -2318,10 +2341,14 @@ void dispose() {
   bool _shouldShowTimestamp(int index) => true;
 
   int _getDaySeparatorCount() {
+    // Count separators for reversed list (newest first)
+    // Separator appears after the last message of each day
     int count = 0;
     for (int i = 0; i < _messages.length; i++) {
-      if (i == 0 ||
-          !_isSameDay(_messages[i].timestamp, _messages[i - 1].timestamp)) {
+      // Check if this message is the last of its day
+      final isLastOfDay = i == _messages.length - 1 || 
+          !_isSameDay(_messages[i].timestamp, _messages[i + 1].timestamp);
+      if (isLastOfDay) {
         count++;
       }
     }

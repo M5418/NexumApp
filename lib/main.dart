@@ -58,6 +58,7 @@ import 'repositories/interfaces/bookmark_repository.dart';
 import 'repositories/firebase/firebase_bookmark_repository.dart';
 import 'repositories/interfaces/block_repository.dart';
 import 'repositories/firebase/firebase_block_repository.dart';
+import 'providers/podcast_player_provider.dart';
 import 'repositories/interfaces/mute_repository.dart';
 import 'repositories/firebase/firebase_mute_repository.dart';
 import 'repositories/interfaces/analytics_repository.dart';
@@ -71,6 +72,7 @@ import 'services/content_analytics_service.dart';
 import 'services/analytics_route_observer.dart';
 import 'fix_communities.dart';
 import 'providers/follow_state.dart';
+import 'providers/notification_provider.dart';
 import 'config/cache_config.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/performance_monitor.dart';
@@ -342,6 +344,8 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => PodcastPlayerProvider()),
         Provider<AuthRepository>(create: (_) => FirebaseAuthRepository()),
         Provider<StorageRepository>(create: (_) => FirebaseStorageRepository()),
         Provider<UserRepository>(create: (_) => FirebaseUserRepository()),

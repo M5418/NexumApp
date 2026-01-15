@@ -258,13 +258,16 @@ class FirebasePostRepository implements PostRepository {
   @override
   Future<List<PostModel>> getUserPosts({required String uid, int limit = 20, PostModel? lastPost}) async {
     try {
+      debugPrint('🔍 [FirebasePostRepo] getUserPosts for uid: $uid, limit: $limit');
       Query<Map<String, dynamic>> q = _posts.where('authorId', isEqualTo: uid).orderBy('createdAt', descending: true).limit(limit);
       if (lastPost?.snapshot != null) {
         q = q.startAfterDocument(lastPost!.snapshot!);
       }
       final snap = await q.get();
+      debugPrint('🔍 [FirebasePostRepo] Got ${snap.docs.length} docs from Firestore');
       return snap.docs.map(_fromDoc).toList();
     } catch (e) {
+      debugPrint('❌ [FirebasePostRepo] getUserPosts error: $e');
       rethrow;
     }
   }

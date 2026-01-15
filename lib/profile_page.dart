@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'services/community_interest_sync_service.dart';
 import 'widgets/post_card.dart';
-import 'widgets/home_post_card.dart';
 import 'widgets/comment_bottom_sheet.dart';
 import 'models/post.dart';
 import 'settings_page.dart';
@@ -43,6 +42,7 @@ import 'services/profile_cache_service.dart';
 import 'widgets/expandable_photo_viewer.dart';
 import 'story_music_list_page.dart';
 import 'core/performance_monitor.dart';
+import 'post_page.dart';
 
 class ProfilePage extends StatefulWidget {
   final bool hideDesktopTopNav;
@@ -75,8 +75,8 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isLoadingMorePosts = false;
   final ScrollController _postsScrollController = ScrollController();
 
-  // Media grid: image URLs from my posts with post IDs
-  List<Map<String, String>> _mediaItems = []; // {imageUrl, postId}
+  // Media grid: image URLs from my posts with post IDs and image count
+  List<Map<String, dynamic>> _mediaItems = []; // {imageUrl, postId, imageCount, isVideo}
   bool _loadingMedia = false;
 
   // Podcasts: created by me
@@ -193,14 +193,24 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     }
 
-    // If we have posts preloaded, show them instantly
+    // If we have posts preloaded, show them instantly BUT also refresh in background
     final models = _profileCache.currentUserPosts;
     if (models.isNotEmpty) {
       // Do not block UI; hydrate then setState when ready
       _applyCachedPosts(models);
+      // Always refresh from server in background to get latest posts
+      if (_myUserId != null && _myUserId!.isNotEmpty && !_postsLoadTriggered) {
+        _postsLoadTriggered = true;
+        _loadMyPosts();
+      }
     } else if (_profileCache.isPostsLoaded) {
       _loadingMyPosts = false;
       _loadingMedia = false;
+      // Still try to load fresh posts
+      if (_myUserId != null && _myUserId!.isNotEmpty && !_postsLoadTriggered) {
+        _postsLoadTriggered = true;
+        _loadMyPosts();
+      }
     } else if (_myUserId != null && _myUserId!.isNotEmpty && !_postsLoadTriggered) {
       // Fallback: Load posts from network if cache is empty
       _postsLoadTriggered = true;
@@ -265,7 +275,12 @@ class _ProfilePageState extends State<ProfilePage> {
             (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
             orElse: () => m.mediaUrls.isNotEmpty ? m.mediaUrls.first : '',
           );
-          imageUrls = [];
+          // Get video thumbnail from mediaThumbs
+          final videoThumb = m.mediaThumbs.firstWhere(
+            (t) => t.type == 'video',
+            orElse: () => m.mediaThumbs.first,
+          );
+          imageUrls = [videoThumb.thumbUrl];
         } else {
           mediaType = m.mediaThumbs.length == 1 ? MediaType.image : MediaType.images;
           videoUrl = null;
@@ -281,6 +296,7 @@ class _ProfilePageState extends State<ProfilePage> {
             (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
             orElse: () => m.mediaUrls.first,
           );
+          // No thumbnail available - use empty (will show placeholder)
           imageUrls = [];
         } else {
           mediaType = m.mediaUrls.length == 1 ? MediaType.image : MediaType.images;
@@ -315,18 +331,42 @@ class _ProfilePageState extends State<ProfilePage> {
         isRepost: false,
         repostedBy: null,
         originalPostId: null,
+        taggedUsers: m.taggedUsers.map((t) => TaggedUser(
+          id: t.id,
+          name: t.name,
+          avatarUrl: t.avatarUrl,
+        )).toList(),
       ));
     }
     return result;
   }
 
   /// Extract media items from posts for media grid
-  List<Map<String, String>> _extractMediaItems(List<Post> posts) {
-    final items = <Map<String, String>>[];
+  /// Groups multi-image posts into single items with count indicator
+  List<Map<String, dynamic>> _extractMediaItems(List<Post> posts) {
+    final items = <Map<String, dynamic>>[];
     for (final p in posts) {
       if (p.isRepost) continue;
-      for (final url in p.imageUrls) {
-        items.add({'imageUrl': url, 'postId': p.id});
+      
+      // Include posts with images (single or multiple) - ONE item per post
+      if ((p.mediaType == MediaType.image || p.mediaType == MediaType.images) && 
+          p.imageUrls.isNotEmpty) {
+        items.add({
+          'imageUrl': p.imageUrls.first,
+          'postId': p.id,
+          'imageCount': p.imageUrls.length,
+          'isVideo': false,
+        });
+      }
+      // Include posts with video
+      if (p.mediaType == MediaType.video && p.videoUrl != null && p.videoUrl!.isNotEmpty) {
+        final thumbUrl = p.imageUrls.isNotEmpty ? p.imageUrls.first : p.videoUrl!;
+        items.add({
+          'imageUrl': thumbUrl,
+          'postId': p.id,
+          'imageCount': 1,
+          'isVideo': true,
+        });
       }
     }
     return items;
@@ -677,12 +717,8 @@ class _ProfilePageState extends State<ProfilePage> {
     final repostAuthor = asMap(p['repost_author']);
     RepostedBy? repostedBy;
     if (repostAuthor.isNotEmpty) {
-      // Only show "reposted this" when this repost row belongs to me
-      final isRepostRowByMe =
-          (_myUserId != null) &&
-          (p['user_id'] != null) &&
-          p['repost_of'] != null &&
-          p['user_id'].toString() == _myUserId;
+      // Get reposter user ID
+      final reposterId = (repostAuthor['id'] ?? repostAuthor['uid'] ?? repostAuthor['user_id'] ?? p['user_id'] ?? '').toString();
       // Build full name for reposter
       final repostFirstName = (repostAuthor['firstName'] ?? repostAuthor['first_name'] ?? '').toString().trim();
       final repostLastName = (repostAuthor['lastName'] ?? repostAuthor['last_name'] ?? '').toString().trim();
@@ -691,11 +727,11 @@ class _ProfilePageState extends State<ProfilePage> {
           : (repostAuthor['name'] ?? repostAuthor['displayName'] ?? repostAuthor['username'] ?? 'User').toString();
       
       repostedBy = RepostedBy(
+        userId: reposterId.isNotEmpty ? reposterId : null,
         userName: repostName,
         userAvatarUrl:
             (repostAuthor['avatarUrl'] ?? repostAuthor['avatar_url'] ?? '')
                 .toString(),
-        actionType: isRepostRowByMe ? 'reposted this' : null,
       );
     }
 
@@ -708,6 +744,20 @@ class _ProfilePageState extends State<ProfilePage> {
                 p['content'] ??
                 '')
             .toString();
+
+    // Tagged users
+    List<TaggedUser> taggedUsers = [];
+    final taggedList = contentSource['taggedUsers'] ?? p['taggedUsers'] ?? p['tagged_users'];
+    if (taggedList is List) {
+      taggedUsers = taggedList.map((t) {
+        final tagMap = asMap(t);
+        return TaggedUser(
+          id: (tagMap['id'] ?? tagMap['uid'] ?? '').toString(),
+          name: (tagMap['name'] ?? tagMap['displayName'] ?? tagMap['username'] ?? '').toString(),
+          avatarUrl: (tagMap['avatarUrl'] ?? tagMap['avatar_url'] ?? '').toString(),
+        );
+      }).where((t) => t.id.isNotEmpty).toList();
+    }
 
     return Post(
       id: (p['id'] ?? '').toString(),
@@ -742,6 +792,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ? null
           : (p['repost_of'] ?? original['id'] ?? original['post_id'])
                 .toString(),
+      taggedUsers: taggedUsers,
     );
   }
 
@@ -768,7 +819,9 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final postRepo = FirebasePostRepository();
       final userRepo = FirebaseUserRepository();
+      debugPrint('🔍 [ProfilePage] Loading posts for user: $_myUserId');
       final postModels = await postRepo.getUserPosts(uid: _myUserId!, limit: 50);
+      debugPrint('🔍 [ProfilePage] Got ${postModels.length} post models from Firestore');
       
       if (!mounted) return;
 
@@ -873,14 +926,29 @@ class _ProfilePageState extends State<ProfilePage> {
       final posts = newItems.map(_mapRawPostToModel).toList();
 
       // Build media grid: one thumbnail per post that has media
-      // For multi-image posts, show only the first image
-      final mediaItems = <Map<String, String>>[];
+      // For multi-image posts, show only the first image with indicator
+      final mediaItems = <Map<String, dynamic>>[];
       for (final post in posts) {
-        // Include all posts with images (single or multiple)
+        // Include posts with images (single or multiple)
         if ((post.mediaType == MediaType.image || post.mediaType == MediaType.images) && 
             post.imageUrls.isNotEmpty) {
-          // Always use the first image as thumbnail
-          mediaItems.add({'imageUrl': post.imageUrls.first, 'postId': post.id});
+          mediaItems.add({
+            'imageUrl': post.imageUrls.first,
+            'postId': post.id,
+            'imageCount': post.imageUrls.length,
+            'isVideo': false,
+          });
+        }
+        // Include posts with video
+        if (post.mediaType == MediaType.video && post.videoUrl != null && post.videoUrl!.isNotEmpty) {
+          // Use first image as thumbnail if available, otherwise use video URL
+          final thumbUrl = post.imageUrls.isNotEmpty ? post.imageUrls.first : post.videoUrl!;
+          mediaItems.add({
+            'imageUrl': thumbUrl,
+            'postId': post.id,
+            'imageCount': 1,
+            'isVideo': true,
+          });
         }
       }
       
@@ -3595,31 +3663,33 @@ class _ProfilePageState extends State<ProfilePage> {
                     );
                   },
                 ),
-                ListTile(
-                  leading: Icon(
-                    Ionicons.musical_notes_outline,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                    size: 22,
-                  ),
-                  title: Text(
-                    Provider.of<LanguageProvider>(context, listen: false).t('story_music.title'),
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                // Story Music - Admin only
+                if (AdminConfig.isAdmin(_myUserId))
+                  ListTile(
+                    leading: Icon(
+                      Ionicons.musical_notes_outline,
                       color: isDark ? Colors.white70 : Colors.black87,
+                      size: 22,
                     ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        settings: const RouteSettings(name: 'story_music'),
-                        builder: (context) => const StoryMusicListPage(),
+                    title: Text(
+                      Provider.of<LanguageProvider>(context, listen: false).t('story_music.title'),
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white70 : Colors.black87,
                       ),
-                    );
-                  },
-                ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          settings: const RouteSettings(name: 'story_music'),
+                          builder: (context) => const StoryMusicListPage(),
+                        ),
+                      );
+                    },
+                  ),
                 const SizedBox(height: 20),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -4012,7 +4082,7 @@ class _ProfilePageState extends State<ProfilePage> {
               arguments: {'postId': post.id},
             );
           },
-          child: HomePostCard(
+          child: PostCard(
             post: post,
             isDarkMode: isDark,
             onReactionChanged: (postId, reaction) {},
@@ -4180,36 +4250,110 @@ class _ProfilePageState extends State<ProfilePage> {
       mainAxisSpacing: 2,
       crossAxisSpacing: 2,
       children: _mediaItems.map((item) {
+        final imageUrl = item['imageUrl'] as String? ?? '';
+        final postId = item['postId'] as String? ?? '';
+        final imageCount = item['imageCount'] as int? ?? 1;
+        final isVideo = item['isVideo'] as bool? ?? false;
+        
         return GestureDetector(
           onTap: () {
-            Navigator.pushNamed(
+            Navigator.push(
               context,
-              '/post',
-              arguments: {'postId': item['postId']},
+              MaterialPageRoute(
+                settings: const RouteSettings(name: 'post_detail'),
+                builder: (_) => PostPage(postId: postId),
+              ),
             );
           },
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: CachedNetworkImage(
-              imageUrl: item['imageUrl']!,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
-                child: const Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Show image or video placeholder
+                if (imageUrl.isNotEmpty)
+                  CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                      child: Icon(
+                        isVideo ? Icons.videocam : Icons.broken_image_outlined,
+                        color: isDark ? Colors.white30 : Colors.black26,
+                        size: 32,
+                      ),
+                    ),
+                  )
+                else
+                  // No thumbnail - show placeholder
+                  Container(
+                    color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                    child: Icon(
+                      isVideo ? Icons.videocam : Icons.image,
+                      color: isDark ? Colors.white30 : Colors.black26,
+                      size: 32,
+                    ),
                   ),
-                ),
-              ),
-              errorWidget: (context, url, error) => Container(
-                color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  color: isDark ? Colors.white30 : Colors.black26,
-                  size: 32,
-                ),
-              ),
+                // Multi-image indicator (top-right)
+                if (imageCount > 1)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.collections,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '$imageCount',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Video indicator (center)
+                if (isVideo)
+                  Positioned.fill(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         );

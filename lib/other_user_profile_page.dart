@@ -4,8 +4,7 @@ import 'package:ionicons/ionicons.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 
-import 'widgets/home_post_card.dart';
-import 'widgets/activity_post_card.dart';
+import 'widgets/post_card.dart';
 import 'widgets/message_invite_card.dart';
 import 'widgets/comment_bottom_sheet.dart';
 import 'core/post_events.dart';
@@ -24,6 +23,7 @@ import 'models/message.dart' hide MediaType;
 import 'widgets/report_bottom_sheet.dart';
 import 'chat_page.dart';
 import 'shared_media_page.dart';
+import 'post_page.dart';
 import 'widgets/expandable_photo_viewer.dart';
 import 'core/admin_config.dart';
 
@@ -90,7 +90,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   bool _isLoadingMorePosts = false;
   final ScrollController _postsScrollController = ScrollController();
 
-  List<String> _mediaImageUrls = [];
+  List<Map<String, dynamic>> _mediaItems = []; // {imageUrl, postId, imageCount, isVideo}
   bool _loadingMedia = false;
   
   // Author profile cache for hydration (same pattern as home feed)
@@ -188,20 +188,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         // Hydrate author data before displaying
         final hydratedModels = await _hydrateAllAuthorData(models);
         
-        // Filter to only show posts with valid author data after hydration
-        final validModels = hydratedModels.where((m) => 
-          m.authorName != null && m.authorName!.isNotEmpty && m.authorName != 'User'
-        ).toList();
-        
-        if (validModels.isNotEmpty) {
-          final posts = _mapPostModelsFast(validModels);
-          final mediaUrls = <String>[];
-          for (final p in posts) {
-            if (!p.isRepost) mediaUrls.addAll(p.imageUrls);
-          }
+        if (hydratedModels.isNotEmpty) {
+          final posts = _mapPostModelsFast(hydratedModels);
+          final mediaItems = _extractMediaItems(posts);
           setState(() {
             _userPosts = posts;
-            _mediaImageUrls = mediaUrls;
+            _mediaItems = mediaItems;
             _loadingPosts = false;
             _loadingMedia = false;
           });
@@ -213,8 +205,15 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   /// FAST: Convert PostModels to Posts synchronously using denormalized data
   List<Post> _mapPostModelsFast(List<PostModel> models) {
     final result = <Post>[];
+    debugPrint('🔍 [_mapPostModelsFast] Processing ${models.length} models');
     for (final m in models) {
-      if (m.repostOf != null && m.repostOf!.isNotEmpty) continue;
+      // Skip reposts - they go to Activity tab
+      if (m.repostOf != null && m.repostOf!.isNotEmpty) {
+        debugPrint('🔍 [_mapPostModelsFast] Skipping repost: ${m.id}');
+        continue;
+      }
+      
+      debugPrint('🔍 [_mapPostModelsFast] Post ${m.id}: mediaUrls=${m.mediaUrls.length}, mediaThumbs=${m.mediaThumbs.length}');
       
       // Use denormalized data or check cache
       String authorName = m.authorName ?? 'User';
@@ -239,7 +238,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
             (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
             orElse: () => m.mediaUrls.isNotEmpty ? m.mediaUrls.first : '',
           );
-          imageUrls = [];
+          // Get video thumbnail from mediaThumbs
+          final videoThumb = m.mediaThumbs.firstWhere(
+            (t) => t.type == 'video',
+            orElse: () => m.mediaThumbs.first,
+          );
+          imageUrls = [videoThumb.thumbUrl];
         } else {
           mediaType = m.mediaThumbs.length == 1 ? MediaType.image : MediaType.images;
           videoUrl = null;
@@ -255,6 +259,7 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
             (u) => u.toLowerCase().contains('.mp4') || u.toLowerCase().contains('.mov'),
             orElse: () => m.mediaUrls.first,
           );
+          // No thumbnail available - use empty (will show placeholder)
           imageUrls = [];
         } else {
           mediaType = m.mediaUrls.length == 1 ? MediaType.image : MediaType.images;
@@ -266,6 +271,13 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         videoUrl = null;
         imageUrls = [];
       }
+      
+      // Convert taggedUsers from PostModel to TaggedUser
+      final taggedUsers = m.taggedUsers.map((t) => TaggedUser(
+        id: t.id,
+        name: t.name,
+        avatarUrl: t.avatarUrl,
+      )).toList();
       
       result.add(Post(
         id: m.id,
@@ -289,9 +301,46 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
         isRepost: false,
         repostedBy: null,
         originalPostId: null,
+        taggedUsers: taggedUsers,
       ));
     }
     return result;
+  }
+  
+  /// Extract media items from posts for media grid
+  /// Groups multi-image posts into single items with count indicator
+  List<Map<String, dynamic>> _extractMediaItems(List<Post> posts) {
+    final items = <Map<String, dynamic>>[];
+    debugPrint('🔍 [_extractMediaItems] Processing ${posts.length} posts');
+    for (final post in posts) {
+      if (post.isRepost) continue;
+      
+      // Include posts with images (single or multiple)
+      if ((post.mediaType == MediaType.image || post.mediaType == MediaType.images) && 
+          post.imageUrls.isNotEmpty) {
+        debugPrint('🔍 [_extractMediaItems] Post ${post.id}: ${post.imageUrls.length} images, mediaType: ${post.mediaType}');
+        items.add({
+          'imageUrl': post.imageUrls.first,
+          'postId': post.id,
+          'imageCount': post.imageUrls.length,
+          'isVideo': false,
+        });
+      }
+      // Include posts with video
+      if (post.mediaType == MediaType.video && post.videoUrl != null && post.videoUrl!.isNotEmpty) {
+        // Use first image as thumbnail if available, otherwise use video URL
+        final thumbUrl = post.imageUrls.isNotEmpty ? post.imageUrls.first : post.videoUrl!;
+        debugPrint('🔍 [_extractMediaItems] Post ${post.id}: VIDEO');
+        items.add({
+          'imageUrl': thumbUrl,
+          'postId': post.id,
+          'imageCount': 1,
+          'isVideo': true,
+        });
+      }
+    }
+    debugPrint('🔍 [_extractMediaItems] Extracted ${items.length} media items');
+    return items;
   }
   
   @override
@@ -408,45 +457,46 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
   }
 
   Future<void> _loadUserPosts() async {
-    // Skip if cache already loaded posts
+    // Always load fresh posts from server, but show cached data first if available
     if (_userPosts.isNotEmpty) {
       setState(() {
         _loadingPosts = false;
         _loadingMedia = false;
       });
-      // Still refresh in background
-      _refreshUserPostsInBackground();
-      return;
+    } else {
+      setState(() {
+        _loadingPosts = true;
+        _errorPosts = null;
+        _loadingMedia = true;
+      });
     }
-    
-    setState(() {
-      _loadingPosts = true;
-      _errorPosts = null;
-      _loadingMedia = true;
-    });
 
     try {
       final postRepo = FirebasePostRepository();
+      debugPrint('🔍 [OtherUserProfile] Loading posts for user: ${widget.userId}');
       final models = await postRepo.getUserPosts(uid: widget.userId, limit: 50);
+      debugPrint('🔍 [OtherUserProfile] Got ${models.length} post models from Firestore');
       
       if (!mounted) return;
       
       // Hydrate author data BEFORE displaying
       final hydratedModels = await _hydrateAllAuthorData(models);
+      debugPrint('🔍 [OtherUserProfile] Hydrated ${hydratedModels.length} models');
       
       final posts = _mapPostModelsFast(hydratedModels);
-      final mediaUrls = <String>[];
-      for (final p in posts) {
-        if (!p.isRepost) mediaUrls.addAll(p.imageUrls);
-      }
+      debugPrint('🔍 [OtherUserProfile] Mapped to ${posts.length} posts');
+      final mediaItems = _extractMediaItems(posts);
+      debugPrint('🔍 [OtherUserProfile] Extracted ${mediaItems.length} media items');
       
       setState(() {
         _userPosts = posts;
-        _mediaImageUrls = mediaUrls;
+        _mediaItems = mediaItems;
         _loadingPosts = false;
         _loadingMedia = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('❌ [OtherUserProfile] Error loading posts: $e');
+      debugPrint('Stack: $stack');
       if (!mounted) return;
       setState(() {
         _errorPosts = Provider.of<LanguageProvider>(context, listen: false).t('other.posts_failed');
@@ -531,95 +581,6 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
       
       return updated;
     }).toList();
-  }
-  
-  /// Background refresh for posts (non-blocking)
-  Future<void> _refreshUserPostsInBackground() async {
-    try {
-      final postRepo = FirebasePostRepository();
-      final models = await postRepo.getUserPosts(uid: widget.userId, limit: 50);
-      
-      if (!mounted) return;
-      
-      // Hydrate author data before displaying
-      final hydratedModels = await _hydrateAllAuthorData(models);
-      
-      final posts = _mapPostModelsFast(hydratedModels);
-      final mediaUrls = <String>[];
-      for (final p in posts) {
-        if (!p.isRepost) mediaUrls.addAll(p.imageUrls);
-      }
-      
-      setState(() {
-        _userPosts = posts;
-        _mediaImageUrls = mediaUrls;
-      });
-      
-      // Load like/bookmark status in background
-      _loadUserInteractionsInBackground(posts);
-    } catch (_) {}
-  }
-
-  /// BACKGROUND: Load like/bookmark status for posts (non-blocking)
-  Future<void> _loadUserInteractionsInBackground(List<Post> posts) async {
-    final currentUserId = fb.FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId == null || posts.isEmpty) return;
-    
-    try {
-      // Get unique post IDs (use originalPostId for reposts)
-      final postIds = posts.map((p) => p.originalPostId ?? p.id).toSet().toList();
-      
-      // Check like/bookmark status for each post in parallel
-      final results = await Future.wait(postIds.map((postId) async {
-        try {
-          final liked = await _postRepo.hasUserLikedPost(postId: postId, uid: currentUserId);
-          final bookmarked = await _postRepo.hasUserBookmarkedPost(postId: postId, uid: currentUserId);
-          return {'postId': postId, 'liked': liked, 'bookmarked': bookmarked};
-        } catch (_) {
-          return {'postId': postId, 'liked': false, 'bookmarked': false};
-        }
-      }));
-      
-      if (!mounted) return;
-      
-      // Build lookup map
-      final statusMap = <String, Map<String, bool>>{};
-      for (final r in results) {
-        statusMap[r['postId'] as String] = {
-          'liked': r['liked'] as bool,
-          'bookmarked': r['bookmarked'] as bool,
-        };
-      }
-      
-      // Update posts with actual status
-      setState(() {
-        _userPosts = _userPosts.map((p) {
-          final effectiveId = p.originalPostId ?? p.id;
-          final status = statusMap[effectiveId];
-          if (status != null) {
-            return p.copyWith(
-              userReaction: status['liked'] == true ? ReactionType.like : null,
-              isBookmarked: status['bookmarked'] ?? false,
-            );
-          }
-          return p;
-        }).toList();
-        
-        _activityPosts = _activityPosts.map((p) {
-          final effectiveId = p.originalPostId ?? p.id;
-          final status = statusMap[effectiveId];
-          if (status != null) {
-            return p.copyWith(
-              userReaction: status['liked'] == true ? ReactionType.like : null,
-              isBookmarked: status['bookmarked'] ?? false,
-            );
-          }
-          return p;
-        }).toList();
-      });
-    } catch (e) {
-      debugPrint('⚠️ [OtherProfile] Failed to load user interactions: $e');
-    }
   }
 
   Future<void> _loadActivity() async {
@@ -711,6 +672,13 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
           }
         }
 
+        // Convert taggedUsers from original post
+        final taggedUsers = original.taggedUsers.map((t) => TaggedUser(
+          id: t.id,
+          name: t.name,
+          avatarUrl: t.avatarUrl,
+        )).toList();
+
         posts.add(
           Post(
             id: model.id,
@@ -733,10 +701,12 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
             isBookmarked: false,
             isRepost: true,
             repostedBy: RepostedBy(
+              userId: widget.userId,
               userName: widget.userName,
               userAvatarUrl: widget.userAvatarUrl,
             ),
             originalPostId: ogId,
+            taggedUsers: taggedUsers,
           ),
         );
       }
@@ -1687,22 +1657,14 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
               arguments: {'postId': post.id},
             );
           },
-          child: ActivityPostCard(
+          child: PostCard(
             post: post,
             isDarkMode: Theme.of(context).brightness == Brightness.dark,
-            onReactionChanged: (postId, reaction) {
-              // Handle reaction change
-            },
-            onBookmarkToggle: (postId) {
-              // Handle bookmark toggle
-            },
-            onShare: (postId) {
-              // Handle share
-            },
+            onReactionChanged: (postId, reaction) {},
+            onBookmarkToggle: (postId) {},
+            onShare: (postId) {},
             onComment: (postId) => _openCommentsSheet(postId),
-            onRepost: (postId) {
-              // Handle repost
-            },
+            onRepost: (postId) {},
           ),
         );
       },
@@ -1755,22 +1717,14 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
               arguments: {'postId': post.id},
             );
           },
-          child: HomePostCard(
+          child: PostCard(
             post: post,
             isDarkMode: Theme.of(context).brightness == Brightness.dark,
-            onReactionChanged: (postId, reaction) {
-              // Handle reaction change
-            },
-            onBookmarkToggle: (postId) {
-              // Handle bookmark toggle
-            },
-            onShare: (postId) {
-              // Handle share
-            },
+            onReactionChanged: (postId, reaction) {},
+            onBookmarkToggle: (postId) {},
+            onShare: (postId) {},
             onComment: (postId) => _openCommentsSheet(postId),
-            onRepost: (postId) {
-              // Handle repost
-            },
+            onRepost: (postId) {},
           ),
         );
       },
@@ -1879,18 +1833,143 @@ class _OtherUserProfilePageState extends State<OtherUserProfilePage> {
     if (_loadingMedia) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_mediaImageUrls.isEmpty) {
-      return Center(child: Text(Provider.of<LanguageProvider>(context).t('profile.no_media')));
+    if (_mediaItems.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              size: 64,
+              color: isDark ? Colors.white30 : Colors.black26,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              Provider.of<LanguageProvider>(context).t('profile.no_media'),
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: isDark ? Colors.white70 : const Color(0xFF666666),
+              ),
+            ),
+          ],
+        ),
+      );
     }
     return GridView.count(
       primary: false,
       crossAxisCount: 3,
       mainAxisSpacing: 2,
       crossAxisSpacing: 2,
-      children: _mediaImageUrls.map((imageUrl) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(imageUrl, fit: BoxFit.cover),
+      children: _mediaItems.map((item) {
+        final imageUrl = item['imageUrl'] as String? ?? '';
+        final postId = item['postId'] as String? ?? '';
+        final imageCount = item['imageCount'] as int? ?? 1;
+        final isVideo = item['isVideo'] as bool? ?? false;
+        
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: 'post_detail'),
+                builder: (_) => PostPage(postId: postId),
+              ),
+            );
+          },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Show image or video placeholder
+                if (imageUrl.isNotEmpty)
+                  Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFBFAE01)),
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                      child: Icon(
+                        isVideo ? Icons.videocam : Icons.broken_image_outlined,
+                        color: isDark ? Colors.white30 : Colors.black26,
+                        size: 32,
+                      ),
+                    ),
+                  )
+                else
+                  // No thumbnail - show placeholder
+                  Container(
+                    color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                    child: Icon(
+                      isVideo ? Icons.videocam : Icons.image,
+                      color: isDark ? Colors.white30 : Colors.black26,
+                      size: 32,
+                    ),
+                  ),
+                // Multi-image indicator (top-right)
+                if (imageCount > 1)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.collections,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '$imageCount',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Video indicator (center)
+                if (isVideo)
+                  Positioned.fill(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         );
       }).toList(),
     );

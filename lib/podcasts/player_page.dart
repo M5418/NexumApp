@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:provider/provider.dart';
 
 import 'podcasts_home_page.dart' show Podcast;
 import 'add_to_playlist_sheet.dart';
 import '../services/audio_handler.dart';
+import '../providers/podcast_player_provider.dart';
 
 class PlayerPage extends StatefulWidget {
   final Podcast podcast;
@@ -59,6 +61,10 @@ class _PlayerPageState extends State<PlayerPage> {
     }
 
     try {
+      // Use the global PodcastPlayerProvider to play
+      final playerProvider = context.read<PodcastPlayerProvider>();
+      await playerProvider.play(widget.podcast);
+      
       // Initialize audio service for background playback
       _audioHandler = await PodcastAudioService.init();
       
@@ -81,15 +87,6 @@ class _PlayerPageState extends State<PlayerPage> {
           });
         }
       });
-      
-      // Load and play the podcast with background support
-      await _audioHandler!.loadAndPlay(
-        id: widget.podcast.id,
-        title: widget.podcast.title,
-        artist: widget.podcast.author ?? 'Unknown',
-        audioUrl: url,
-        artUri: widget.podcast.coverUrl,
-      );
 
       if (mounted) {
         setState(() {

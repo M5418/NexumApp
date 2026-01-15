@@ -27,8 +27,7 @@ import 'services/app_cache_service.dart';
 import 'theme_provider.dart';
 import 'core/i18n/language_provider.dart';
 import 'dart:convert';
-import 'widgets/home_post_card.dart';
-import 'widgets/activity_post_card.dart';
+import 'widgets/post_card.dart';
 import 'models/post.dart';
 import 'models/message.dart' hide MediaType;
 import 'chat_page.dart';
@@ -1890,7 +1889,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       padding: const EdgeInsets.only(top: 10, bottom: 20),
       itemCount: _activityPosts.length,
       itemBuilder: (context, index) {
-        return ActivityPostCard(
+        return PostCard(
           post: _activityPosts[index],
           onReactionChanged: (postId, reaction) {},
           onBookmarkToggle: (postId) {},
@@ -1917,7 +1916,7 @@ class _RightProfilePanelState extends State<_RightProfilePanel> {
       padding: const EdgeInsets.only(top: 10, bottom: 20),
       itemCount: _userPosts.length,
       itemBuilder: (context, index) {
-        return HomePostCard(
+        return PostCard(
           post: _userPosts[index],
           onReactionChanged: (postId, reaction) {},
           onBookmarkToggle: (postId) {},

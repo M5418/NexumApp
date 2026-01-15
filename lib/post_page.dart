@@ -264,7 +264,10 @@ class _PostPageState extends State<PostPage> {
     if (mediaUrls.isEmpty) return MediaType.none;
     final hasVideo = mediaUrls.any((u) {
       final l = u.toLowerCase();
-      return l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm');
+      // Check if URL contains video extension (handles Firebase Storage URLs with query params)
+      return l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
+             l.contains('.avi') || l.contains('.mkv') ||
+             l.contains('/videos/') || l.contains('video_') || l.contains('video%2f');
     });
     if (hasVideo) return MediaType.video;
     return mediaUrls.length > 1 ? MediaType.images : MediaType.image;
@@ -273,7 +276,10 @@ class _PostPageState extends State<PostPage> {
   String? _videoUrlFromMedia(List<String> mediaUrls) {
     for (final u in mediaUrls) {
       final l = u.toLowerCase();
-      if (l.endsWith('.mp4') || l.endsWith('.mov') || l.endsWith('.webm')) {
+      // Check if URL contains video extension (handles Firebase Storage URLs with query params)
+      if (l.contains('.mp4') || l.contains('.mov') || l.contains('.webm') ||
+          l.contains('.avi') || l.contains('.mkv') ||
+          l.contains('/videos/') || l.contains('video_') || l.contains('video%2f')) {
         return u;
       }
     }

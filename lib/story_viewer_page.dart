@@ -9,6 +9,8 @@ import 'package:video_player/video_player.dart';
 import 'core/i18n/language_provider.dart';
 import 'utils/profile_navigation.dart';
 import 'repositories/interfaces/story_repository.dart';
+import 'local/local_store.dart';
+import 'local/repositories/local_story_repository.dart';
 
 import 'widgets/share_bottom_sheet.dart';
 import 'widgets/report_bottom_sheet.dart';
@@ -224,6 +226,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
   @override
   void initState() {
     super.initState();
+    _loadFromCacheInstantly();
     _initFromBackend();
     
     // Pause story when typing, resume when done
@@ -244,6 +247,98 @@ class _StoryViewerPageState extends State<StoryViewerPage>
     _progressController?.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  /// ISAR-FIRST: Load stories from local cache instantly for fast UI
+  void _loadFromCacheInstantly() {
+    if (!isIsarSupported) return;
+    
+    try {
+      final users = <StoryUser>[];
+      for (final ring in widget.rings) {
+        final userId = (ring['userId'] ?? '').toString();
+        if (userId.isEmpty) continue;
+        
+        // Get cached stories for this user
+        final cachedStories = LocalStoryRepository().getByAuthorSync(userId, limit: 20);
+        if (cachedStories.isEmpty) continue;
+        
+        final items = <StoryItem>[];
+        final ids = <String?>[];
+        
+        for (final s in cachedStories) {
+          switch (s.type) {
+            case 'image':
+              items.add(StoryItem.image(
+                imageUrl: s.mediaUrl,
+                viewed: s.viewed,
+              ));
+              ids.add(s.id);
+              break;
+            case 'video':
+              items.add(StoryItem.video(
+                videoUrl: s.mediaUrl,
+                viewed: s.viewed,
+              ));
+              ids.add(s.id);
+              break;
+            case 'text':
+              Color? bg;
+              final hex = s.backgroundColor;
+              if (hex != null && hex.isNotEmpty) bg = _parseHexColor(hex);
+              items.add(StoryItem.text(
+                text: s.text,
+                backgroundColor: bg,
+                viewed: s.viewed,
+              ));
+              ids.add(s.id);
+              break;
+            default:
+              items.add(StoryItem.image(imageUrl: s.mediaUrl, viewed: s.viewed));
+              ids.add(s.id);
+          }
+        }
+        
+        if (items.isNotEmpty) {
+          users.add(StoryUser(
+            userId: userId,
+            name: (ring['label'] ?? '').toString(),
+            handle: '@',
+            avatarUrl: (ring['imageUrl'] ?? '').toString(),
+            items: items,
+            itemIds: ids,
+          ));
+        }
+      }
+      
+      if (users.isNotEmpty && mounted) {
+        _users = users;
+        _frames = _flattenFrames(_users);
+        _currentIndex = _initialFrameIndexFromRingIndex(
+          widget.initialRingIndex,
+          widget.rings,
+          _users,
+          _frames,
+        );
+        
+        setState(() {
+          _loading = false;
+          if (_frames.isNotEmpty) {
+            _liked = _frames[_currentIndex].item.liked;
+          }
+        });
+        
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _frames.isEmpty) return;
+          _pageController.jumpToPage(_currentIndex);
+          _startPlaybackForFrame(_frames[_currentIndex]);
+        });
+        
+        debugPrint('📱 [FastStory] Loaded ${_frames.length} stories from Isar cache');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [FastStory] Cache load failed: $e');
+    }
   }
 
   Future<void> _initFromBackend() async {
@@ -684,6 +779,7 @@ class _StoryViewerPageState extends State<StoryViewerPage>
               : SafeArea(
                   bottom: false,
                   child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
                     onVerticalDragStart: (_) {
                       _isDragging = true;
                       _pauseStory();
@@ -736,6 +832,8 @@ class _StoryViewerPageState extends State<StoryViewerPage>
                             PageView.builder(
                               controller: _pageController,
                               itemCount: _frames.length,
+                              scrollDirection: Axis.horizontal,
+                              physics: const ClampingScrollPhysics(),
                               onPageChanged: (i) async {
                                 setState(() {
                                   _currentIndex = i;
