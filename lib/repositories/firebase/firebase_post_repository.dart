@@ -514,6 +514,7 @@ class FirebasePostRepository implements PostRepository {
 
   @override
   Stream<PostModel?> postStream(String postId) {
+    if (postId.isEmpty) return Stream.value(null);
     // Try regular posts stream first, then fallback to community posts
     return _posts.doc(postId).snapshots().asyncMap((d) async {
       if (d.exists) return _fromDoc(d);

@@ -688,6 +688,7 @@ class FirebaseStoryRepository implements StoryRepository {
 
   @override
   Stream<List<StoryViewerModel>> storyViewersStream(String storyId) {
+    if (storyId.isEmpty) return Stream.value([]);
     return _stories.doc(storyId).snapshots().asyncMap((doc) async {
       if (!doc.exists) return [];
       

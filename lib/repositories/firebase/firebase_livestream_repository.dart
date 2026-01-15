@@ -393,6 +393,7 @@ class FirebaseLiveStreamRepository implements LiveStreamRepository {
 
   @override
   Stream<LiveStreamModel?> liveStreamStream(String streamId) {
+    if (streamId.isEmpty) return Stream.value(null);
     return _streams.doc(streamId).snapshots().map((doc) {
       if (!doc.exists) return null;
       return LiveStreamModel.fromDoc(doc);

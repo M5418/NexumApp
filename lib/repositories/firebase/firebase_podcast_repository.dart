@@ -464,6 +464,7 @@ class FirebasePodcastRepository implements PodcastRepository {
   // Streams
   @override
   Stream<PodcastModel?> podcastStream(String podcastId) {
+    if (podcastId.isEmpty) return Stream.value(null);
     return _podcasts.doc(podcastId).snapshots().map((doc) {
       if (!doc.exists) return null;
       return _podcastFromDoc(doc);

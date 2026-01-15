@@ -454,6 +454,7 @@ class FirebaseBookRepository implements BookRepository {
 
   @override
   Stream<BookModel?> bookStream(String bookId) {
+    if (bookId.isEmpty) return Stream.value(null);
     return _books.doc(bookId).snapshots().map((doc) {
       if (!doc.exists) return null;
       return _bookFromDoc(doc);

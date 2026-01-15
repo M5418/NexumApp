@@ -57,6 +57,11 @@ class ContentAnalyticsService {
     required String contentType,
     required String userId,
   }) async {
+    // Validate IDs to prevent Firestore crash
+    if (contentId.isEmpty || userId.isEmpty) {
+      debugPrint('⚠️ trackView: skipping - empty contentId or userId');
+      return;
+    }
     try {
       // Update impressions count
       await _monetizationRepo.updateContentStats(
@@ -208,6 +213,7 @@ class ContentAnalyticsService {
     required double amount,
     required String source,
   }) async {
+    if (contentId.isEmpty || userId.isEmpty) return;
     try {
       final earning = Earning(
         id: '', // Will be set by repo
