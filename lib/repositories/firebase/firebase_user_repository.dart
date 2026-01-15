@@ -47,6 +47,7 @@ class FirebaseUserRepository implements UserRepository {
 
   @override
   Future<UserProfile?> getUserProfile(String uid) async {
+    if (uid.isEmpty) return null;
     final doc = await _users.doc(uid).get();
     return _fromDoc(doc);
   }
@@ -218,6 +219,7 @@ class FirebaseUserRepository implements UserRepository {
 
   @override
   Stream<UserProfile?> userProfileStream(String uid) {
+    if (uid.isEmpty) return Stream.value(null);
     return _users.doc(uid).snapshots().map(_fromDoc);
   }
 }

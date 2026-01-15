@@ -26,6 +26,7 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
 
   @override
   Future<MonetizationProfile?> getMonetizationProfile(String userId) async {
+    if (userId.isEmpty) return null;
     try {
       final doc = await _monetizationProfiles.doc(userId).get();
       if (!doc.exists) return null;
@@ -51,6 +52,7 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
 
   @override
   Future<void> checkEligibilityRequirements(String userId) async {
+    if (userId.isEmpty) return;
     try {
       // Get user data
       final userDoc = await _users.doc(userId).get();
@@ -92,6 +94,7 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
 
   @override
   Stream<MonetizationProfile?> monetizationProfileStream(String userId) {
+    if (userId.isEmpty) return Stream.value(null);
     return _monetizationProfiles.doc(userId).snapshots().map((doc) {
       if (!doc.exists) return null;
       return MonetizationProfile.fromDoc(doc);
@@ -102,6 +105,9 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
 
   @override
   Future<EarningsSummary> getEarningsSummary(String userId) async {
+    if (userId.isEmpty) {
+      return EarningsSummary(userId: '', lastUpdated: DateTime.now());
+    }
     try {
       final doc = await _earningsSummaries.doc(userId).get();
       if (doc.exists) {
@@ -224,6 +230,9 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
 
   @override
   Stream<EarningsSummary> earningsSummaryStream(String userId) {
+    if (userId.isEmpty) {
+      return Stream.value(EarningsSummary(userId: '', lastUpdated: DateTime.now()));
+    }
     return _earningsSummaries.doc(userId).snapshots().handleError((error) {
       debugPrint('⚠️ earningsSummaryStream error (non-critical): $error');
       // Return empty summary on error - don't crash
@@ -390,6 +399,7 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
 
   @override
   Future<bool> isPremiumUser(String userId) async {
+    if (userId.isEmpty) return false;
     try {
       final userDoc = await _users.doc(userId).get();
       if (!userDoc.exists) return false;
@@ -404,6 +414,7 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
 
   @override
   Stream<bool> premiumStatusStream(String userId) {
+    if (userId.isEmpty) return Stream.value(false);
     return _users.doc(userId).snapshots().map((doc) {
       if (!doc.exists) return false;
       final data = doc.data()!;
@@ -480,6 +491,12 @@ class FirebaseMonetizationRepository implements MonetizationRepository {
     int? bookmarks,
     double? earnings,
   }) async {
+    // Validate IDs to prevent Firestore crash with empty document references
+    if (contentId.isEmpty || userId.isEmpty) {
+      debugPrint('⚠️ updateContentStats: skipping - empty contentId or userId');
+      return;
+    }
+    
     try {
       final docRef = _contentStats.doc(contentId);
       final doc = await docRef.get();
